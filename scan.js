@@ -1,45 +1,31 @@
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  var endpoint = req.query.endpoint || '';
+  var key = req.query.key || process.env.API_FOOTBALL_KEY || '';
+
+  if (!endpoint) return res.status(400).json({ error: 'Missing endpoint' });
+  if (!key) return res.status(400).json({ error: 'Missing key' });
+
+  var params = [];
+  for (var k in req.query) {
+    if (k !== 'endpoint' && k !== 'key') {
+      params.push(k + '=' + req.query[k]);
+    }
   }
 
-  const { endpoint, ...params } = req.query;
-
-  if (!endpoint) {
-    return res.status(400).json({ error: 'Missing endpoint' });
-  }
-
-  // API key — from env variable or query param (env is safer)
-  const apiKey = process.env.API_FOOTBALL_KEY || params.key;
-
-  if (!apiKey) {
-    return res.status(400).json({ error: 'Missing API key' });
-  }
-
-  // Build URL
-  const queryParams = new URLSearchParams();
-  Object.entries(params).forEach(([k, v]) => {
-    if (k !== 'key') queryParams.append(k, v);
-  });
-
-  const url = `https://v3.football.api-sports.io/${endpoint}${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+  var url = 'https://v3.football.api-sports.io/' + endpoint;
+  if (params.length > 0) url += '?' + params.join('&');
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        'x-apisports-key': apiKey,
-        'x-rapidapi-host': 'v3.football.api-sports.io'
-      }
+    var response = await fetch(url, {
+      headers: { 'x-apisports-key': key }
     });
-
-    const data = await response.json();
+    var data = await response.json();
     return res.status(200).json(data);
-
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
