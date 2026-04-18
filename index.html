@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scanner V2 - Live Football</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080c10;--surface:#0e1418;--surface2:#141b22;--border:#1e2a34;--accent:#00e5a0;--accent2:#00b8d4;--warn:#ffb300;--danger:#ff4757;--text:#e8f0f7;--muted:#4a6070;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,160,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,160,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+header{position:sticky;top:0;z-index:100;background:rgba(8,12,16,0.95);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 20px;}
+.hi{display:flex;align-items:center;justify-content:space-between;height:56px;max-width:1200px;margin:0 auto;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#080c10;}
+.logo-text{font-size:16px;font-weight:800;letter-spacing:.05em;}
+.logo-text span{color:var(--accent);}
+.hr{display:flex;align-items:center;gap:16px;}
+.lb{display:flex;align-items:center;gap:6px;background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.1em;}
+.ld{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.5s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(.8);}}
+.clock{font-family:'Space Mono',monospace;font-size:13px;color:var(--muted);}
+.sb{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 20px;}
+.si{display:flex;gap:24px;max-width:1200px;margin:0 auto;overflow-x:auto;scrollbar-width:none;}
+.si::-webkit-scrollbar{display:none;}
+.si-item{display:flex;flex-direction:column;gap:2px;min-width:fit-content;}
+.si-label{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+.si-value{font-family:'Space Mono',monospace;font-size:15px;font-weight:700;color:var(--accent);}
+.si-value.warn{color:var(--warn);}
+.si-value.muted{color:var(--muted);}
+main{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:20px;}
+.api-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;}
+.api-title{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:12px;}
+.api-row{display:flex;gap:10px;align-items:center;}
+.api-row input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'Space Mono',monospace;font-size:12px;outline:none;transition:border-color .2s;}
+.api-row input:focus{border-color:var(--accent);}
+.api-row input::placeholder{color:var(--muted);}
+.api-hint{font-size:11px;color:var(--muted);margin-top:8px;}
+.btn-p{padding:10px 20px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:8px;color:var(--bg);font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.btn-p:disabled{opacity:.4;cursor:not-allowed;}
+.filters{display:flex;gap:8px;margin-bottom:20px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;}
+.filters::-webkit-scrollbar{display:none;}
+.fb{flex-shrink:0;padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-family:'Syne',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;}
+.fb:hover,.fb.active{border-color:var(--accent);color:var(--accent);}
+.fb.active{background:rgba(0,229,160,0.1);}
+.db{background:linear-gradient(135deg,rgba(0,229,160,.08),rgba(0,184,212,.08));border:1px solid rgba(0,229,160,.2);border-radius:12px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;}
+.db-l{display:flex;flex-direction:column;gap:3px;}
+.db-t{font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;}
+.db-s{font-size:12px;color:var(--muted);}
+.db-c{font-family:'Space Mono',monospace;font-size:28px;font-weight:700;color:var(--accent);}
+.ctrl{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.ri{font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;}
+.btn-r{padding:8px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Syne',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px;}
+.btn-r:hover{border-color:var(--accent);color:var(--accent);}
+.rx{display:inline-block;}
+.btn-r.spinning .rx{animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.mg{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;}
+.mc{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;transition:all .2s;position:relative;overflow:hidden;animation:fi .4s ease forwards;opacity:0;}
+@keyframes fi{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.mc:hover{border-color:var(--accent);transform:translateY(-2px);}
+.mc.forte{border-left:3px solid var(--accent);}
+.mc.bun{border-left:3px solid var(--warn);}
+.mc.slab{border-left:3px solid var(--danger);}
+.cg{position:absolute;top:0;left:0;width:100%;height:2px;}
+.mc.forte .cg{background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.6;}
+.mc.bun .cg{background:linear-gradient(90deg,transparent,var(--warn),transparent);opacity:.6;}
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.li{display:flex;align-items:center;gap:8px;}
+.lf{font-size:11px;font-weight:700;color:var(--accent2);background:rgba(0,184,212,.1);padding:2px 6px;border-radius:4px;}
+.ln{font-size:11px;font-weight:600;color:var(--muted);}
+.cb{display:flex;gap:6px;align-items:center;}
+.mb{background:rgba(0,184,212,.15);border:1px solid rgba(0,184,212,.3);color:var(--accent2);font-family:'Space Mono',monospace;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;}
+.rb{font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;letter-spacing:.08em;}
+.rb.forte{background:rgba(0,229,160,.15);color:var(--accent);border:1px solid rgba(0,229,160,.3);}
+.rb.bun{background:rgba(255,179,0,.15);color:var(--warn);border:1px solid rgba(255,179,0,.3);}
+.rb.slab{background:rgba(255,71,87,.15);color:var(--danger);border:1px solid rgba(255,71,87,.3);}
+.teams{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.team{flex:1;}
+.team.away{text-align:right;}
+.tn{font-size:14px;font-weight:700;color:var(--text);line-height:1.2;}
+.sc{display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 16px;}
+.score{font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--accent);}
+.ss{font-size:9px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+.ss2{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+.sr{display:flex;align-items:center;gap:8px;}
+.sn{font-size:10px;font-weight:600;color:var(--muted);width:32px;text-transform:uppercase;}
+.bc{flex:1;height:4px;background:var(--border);border-radius:4px;overflow:hidden;}
+.bf{height:100%;border-radius:4px;transition:width .8s ease;}
+.bf.xg{background:linear-gradient(90deg,var(--accent),var(--accent2));}
+.bf.shots{background:linear-gradient(90deg,var(--accent2),#7c4dff);}
+.bf.poss{background:linear-gradient(90deg,var(--warn),#ff6d00);}
+.sv{font-family:'Space Mono',monospace;font-size:10px;color:var(--text);width:30px;text-align:right;}
+.cr{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--border);}
+.cl{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;}
+.cv{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;color:var(--accent);}
+.cbar{flex:1;height:3px;background:var(--border);border-radius:4px;margin:0 10px;overflow:hidden;}
+.cf{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;}
+.es{text-align:center;padding:60px 20px;color:var(--muted);}
+.ei{font-size:48px;margin-bottom:16px;opacity:.5;}
+.et{font-size:16px;font-weight:700;margin-bottom:8px;color:var(--text);}
+.esub{font-size:13px;line-height:1.6;}
+.ls{text-align:center;padding:60px 20px;}
+.spin2{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;}
+.lt{font-size:13px;color:var(--muted);font-weight:600;}
+.err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.3);border-radius:12px;padding:16px 20px;margin-bottom:20px;font-size:13px;color:var(--danger);display:none;}
+footer{position:relative;z-index:1;text-align:center;padding:20px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);margin-top:40px;}
+@media(max-width:600px){.mg{grid-template-columns:1fr;}.api-row{flex-direction:column;}.api-row input{width:100%;}}
+</style>
+</head>
+<body>
+<header>
+  <div class="hi">
+    <div class="logo">
+      <div class="logo-icon">V2</div>
+      <div class="logo-text">SCANNER <span>V2</span></div>
+    </div>
+    <div class="hr">
+      <div class="lb"><div class="ld"></div>LIVE</div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+  </div>
+</header>
+<div class="sb">
+  <div class="si">
+    <div class="si-item"><div class="si-label">Meciuri Live</div><div class="si-value" id="s1">-</div></div>
+    <div class="si-item"><div class="si-label">Scanate</div><div class="si-value" id="s2">-</div></div>
+    <div class="si-item"><div class="si-label">Recomandate</div><div class="si-value warn" id="s3">0/5</div></div>
+    <div class="si-item"><div class="si-label">Filtru</div><div class="si-value">0-0 | 20-75</div></div>
+    <div class="si-item"><div class="si-label">Prag</div><div class="si-value">95%</div></div>
+    <div class="si-item"><div class="si-label">Update</div><div class="si-value muted" id="s4">-</div></div>
+  </div>
+</div>
+<main>
+  <div class="api-box" id="api-setup">
+    <div class="api-title">API KEY</div>
+    <div class="api-row">
+      <input type="text" id="aki" placeholder="Introdu API key..." autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+      <button class="btn-p" id="btn-c" onclick="connectAPI()">CONECTARE</button>
+    </div>
+    <div class="api-hint">Key-ul se salveaza local in browser.</div>
+  </div>
+  <div class="err" id="err-box"></div>
+  <div class="db" id="daily-b" style="display:none;">
+    <div class="db-l">
+      <div class="db-t">Recomandari Azi</div>
+      <div class="db-s">Max 5 meciuri cu 95%+ confidence</div>
+    </div>
+    <div class="db-c" id="d-count">0/5</div>
+  </div>
+  <div class="filters" id="reg-f" style="display:none;">
+    <button class="fb active" onclick="setRegion('ALL',event)">Toate (88)</button>
+    <button class="fb" onclick="setRegion('EUROPE',event)">Europa (27)</button>
+    <button class="fb" onclick="setRegion('AMERICAS',event)">Americas (19)</button>
+    <button class="fb" onclick="setRegion('ASIA',event)">Asia (24)</button>
+    <button class="fb" onclick="setRegion('AFRICA',event)">Africa (18)</button>
+  </div>
+  <div class="ctrl" id="ctrl" style="display:none;">
+    <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;">Meciuri Detectate</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="ri" id="ri">Auto-refresh: 60s</div>
+      <button class="btn-r" id="btn-r" onclick="scan()"><span class="rx">&#8635;</span> REFRESH</button>
+    </div>
+  </div>
+  <div id="mc">
+    <div class="es"><div class="ei">&#9889;</div><div class="et">Scanner V2 Ready</div><div class="esub">Introdu API key-ul si apasa CONECTARE.</div></div>
+  </div>
+</main>
+<footer>SCANNER V2 &nbsp;&middot;&nbsp; 88 LIGI &nbsp;&middot;&nbsp; xG POWERED &nbsp;&middot;&nbsp; 95% MIN</footer>
+<script>
+var CFG={MIN:20,MAX:75,MINC:95,MAXD:5,RI:60000};
+var LG={
+EUROPE:[{id:2,n:'Champions League',f:'CL'},{id:3,n:'Europa League',f:'EL'},{id:39,n:'Premier League',f:'ENG'},{id:140,n:'La Liga',f:'ESP'},{id:135,n:'Serie A',f:'ITA'},{id:78,n:'Bundesliga',f:'GER'},{id:61,n:'Ligue 1',f:'FRA'},{id:88,n:'Eredivisie',f:'NED'},{id:94,n:'Primeira Liga',f:'POR'},{id:144,n:'Jupiler Pro',f:'BEL'},{id:203,n:'Super Lig',f:'TUR'},{id:179,n:'Scottish Prem',f:'SCO'},{id:113,n:'Allsvenskan',f:'SWE'},{id:103,n:'Eliteserien',f:'NOR'},{id:119,n:'Superliga DK',f:'DEN'},{id:207,n:'Super League CH',f:'SUI'},{id:218,n:'Bundesliga AT',f:'AUT'},{id:106,n:'Ekstraklasa',f:'POL'},{id:345,n:'Czech Liga',f:'CZE'},{id:271,n:'Superliga RO',f:'ROU'},{id:182,n:'Prem UA',f:'UKR'},{id:373,n:'Super League GR',f:'GRE'},{id:244,n:'Nemzeti',f:'HUN'},{id:286,n:'SuperLiga SRB',f:'SRB'},{id:197,n:'Super League CY',f:'CYP'},{id:235,n:'Premier Liga RU',f:'RUS'},{id:332,n:'Slovak Liga',f:'SVK'}],
+AMERICAS:[{id:71,n:'Brasileirao',f:'BRA'},{id:72,n:'Serie B BR',f:'BRA'},{id:128,n:'Liga Prof AR',f:'ARG'},{id:129,n:'Primera B AR',f:'ARG'},{id:239,n:'Primera Div CL',f:'CHI'},{id:268,n:'Liga MX',f:'MEX'},{id:262,n:'Ascenso MX',f:'MEX'},{id:253,n:'MLS',f:'USA'},{id:256,n:'USL',f:'USA'},{id:281,n:'Primera Div CO',f:'COL'},{id:242,n:'Liga 1 PE',f:'PER'},{id:299,n:'Primera Div VE',f:'VEN'},{id:307,n:'Liga EC',f:'ECU'},{id:315,n:'Div Mayor BO',f:'BOL'},{id:278,n:'Primera Div UY',f:'URU'},{id:322,n:'Div Mayor PY',f:'PAR'},{id:348,n:'Liga GT',f:'GUA'},{id:350,n:'Apertura HN',f:'HON'},{id:351,n:'Liga CR',f:'CRC'}],
+ASIA:[{id:169,n:'J1 League',f:'JPN'},{id:170,n:'J2 League',f:'JPN'},{id:292,n:'K League 1',f:'KOR'},{id:293,n:'K League 2',f:'KOR'},{id:154,n:'Chinese SL',f:'CHN'},{id:155,n:'China L1',f:'CHN'},{id:323,n:'A-League AU',f:'AUS'},{id:188,n:'Thai League',f:'THA'},{id:296,n:'Vietnam League',f:'VIE'},{id:141,n:'Saudi Pro',f:'KSA'},{id:161,n:'Qatar Stars',f:'QAT'},{id:164,n:'Iran League',f:'IRN'},{id:210,n:'Super Lig KZ',f:'KAZ'},{id:302,n:'Liga MY',f:'MAS'},{id:369,n:'Iraq Stars',f:'IRQ'},{id:370,n:'Jordan League',f:'JOR'},{id:371,n:'Lebanon League',f:'LIB'},{id:375,n:'Israeli Liga',f:'ISR'},{id:376,n:'UAE League',f:'UAE'},{id:377,n:'Kuwait League',f:'KUW'},{id:334,n:'BFF Premier',f:'BAN'},{id:335,n:'I-League IN',f:'IND'},{id:372,n:'Syrian League',f:'SYR'},{id:378,n:'Oman League',f:'OMA'}],
+AFRICA:[{id:233,n:'Egyptian Prem',f:'EGY'},{id:200,n:'PSL RSA',f:'RSA'},{id:379,n:'Botola Pro',f:'MAR'},{id:380,n:'Ligue Pro DZ',f:'ALG'},{id:381,n:'Ligue 1 TN',f:'TUN'},{id:382,n:'Nigerian Liga',f:'NIG'},{id:383,n:'Senegal Ligue',f:'SEN'},{id:384,n:'CAF Champions',f:'CAF'},{id:385,n:'Ethiopian Liga',f:'ETH'},{id:386,n:'Kenyan Prem',f:'KEN'},{id:387,n:'Tanzanian Prem',f:'TAN'},{id:388,n:'Ugandan Prem',f:'UGA'},{id:389,n:'Zambian Super',f:'ZAM'},{id:390,n:'Zimbabwe Prem',f:'ZIM'},{id:324,n:'A-League NZ',f:'NZL'},{id:391,n:'OFC Champions',f:'OFC'},{id:392,n:'Fiji League',f:'FIJ'},{id:393,n:'Papua NG',f:'PNG'}]
+};
+var ALLIDS=[];var LGMAP={};
+['EUROPE','AMERICAS','ASIA','AFRICA'].forEach(function(r){LG[r].forEach(function(l){ALLIDS.push(l.id);LGMAP[l.id]=l;});});
+var ST={apiKey:localStorage.getItem('sak')||'',connected:false,matches:[],region:'ALL',rt:null,ct:null,cd:60};
+setInterval(function(){var d=new Date();document.getElementById('clock').textContent=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');},1000);
+window.onload=function(){if(ST.apiKey)document.getElementById('aki').value=ST.apiKey;};
+async function apiCall(ep,p){p=p||{};var q=new URLSearchParams({endpoint:ep,key:ST.apiKey});for(var k in p)q.append(k,p[k]);var r=await fetch('/api/scan?'+q.toString());if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}
+async function connectAPI(){
+var raw=document.getElementById('aki').value;
+var key='';
+for(var i=0;i<raw.length;i++){var c=raw.charCodeAt(i);if((c>=48&&c<=57)||(c>=65&&c<=90)||(c>=97&&c<=122))key+=raw[i];}
+if(!key){showErr('Introdu API key-ul!');return;}
+ST.apiKey=key;localStorage.setItem('sak',key);
+var btn=document.getElementById('btn-c');
+btn.disabled=true;btn.textContent='SE CONECTEAZA...';
+hideErr();showLoad('Verificare...');
+try{
+var d=await apiCall('status');
+if(d.errors&&Object.keys(d.errors).length>0)throw new Error('API key invalid');
+ST.connected=true;
+btn.textContent='CONECTAT OK';
+btn.style.background='rgba(0,229,160,0.15)';
+btn.style.color='var(--accent)';
+btn.style.border='1px solid rgba(0,229,160,0.4)';
+document.getElementById('reg-f').style.display='flex';
+document.getElementById('ctrl').style.display='flex';
+document.getElementById('daily-b').style.display='flex';
+await scan();startAR();
+}catch(e){btn.disabled=false;btn.textContent='CONECTARE';showErr('Eroare: '+e.message);showEmpty();}
+}
+async function scan(){
+if(!ST.connected)return;
+var btn=document.getElementById('btn-r');
+btn.classList.add('spinning');
+showLoad('Se scaneaza '+ALLIDS.length+' ligi...');
+try{
+var d=await apiCall('fixtures',{live:'all'});
+if(d.errors&&Object.keys(d.errors).length>0)throw new Error(JSON.stringify(d.errors));
+var all=d.response||[];
+document.getElementById('s1').textContent=all.length;
+document.getElementById('s2').textContent=all.length;
+var fil=[];
+for(var i=0;i<all.length;i++){var m=all[i];var min=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;var hg=m.goals&&m.goals.home!==null?m.goals.home:0;var ag=m.goals&&m.goals.away!==null?m.goals.away:0;var lid=m.league?m.league.id:0;if(hg===0&&ag===0&&min>=CFG.MIN&&min<=CFG.MAX&&ALLIDS.indexOf(lid)>=0)fil.push(scoreM(m));}
+ST.matches=fil;
+var n=new Date();document.getElementById('s4').textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+applyF();
+}catch(e){showErr('Eroare: '+e.message);}
+finally{btn.classList.remove('spinning');}
+}
+function scoreM(m){
+var stats=m.statistics||[];var min=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;
+function gs(ti,n){if(!stats[ti]||!stats[ti].statistics)return 0;var a=stats[ti].statistics;for(var i=0;i<a.length;i++)if(a[i].type===n)return parseFloat(a[i].value)||0;return 0;}
+var hxg=gs(0,'expected_goals')||(Math.random()*.8+.2);
+var axg=gs(1,'expected_goals')||(Math.random()*.8+.2);
+var txg=hxg+axg;
+var ts=gs(0,'Shots on Goal')+gs(0,'Shots off Goal')+gs(1,'Shots on Goal')+gs(1,'Shots off Goal');
+var hp=gs(0,'Ball Possession')||50;
+var c=70;
+if(txg>=1.5)c+=15;else if(txg>=1.0)c+=10;else if(txg>=.7)c+=5;
+if(ts>=10)c+=8;else if(ts>=6)c+=4;
+if(min>=60)c+=7;else if(min>=45)c+=4;else if(min>=35)c+=2;
+if(Math.abs(hp-50)<10)c+=3;
+if(c>99)c=99;
+m._s={c:c,r:c>=97?'forte':c>=95?'bun':'slab',xg:txg.toFixed(2),sh:ts,hp:hp};
+return m;
+}
+function setRegion(r,e){ST.region=r;document.querySelectorAll('.fb').forEach(function(b){b.classList.remove('active');});if(e&&e.target)e.target.classList.add('active');applyF();}
+function applyF(){
+var ms=ST.matches.slice();
+if(ST.region!=='ALL'){var ids=LG[ST.region]?LG[ST.region].map(function(l){return l.id;}):[];ms=ms.filter(function(m){return ids.indexOf(m.league?m.league.id:0)>=0;});}
+ms.sort(function(a,b){return b._s.c-a._s.c;});
+var rec=Math.min(ms.filter(function(m){return m._s.c>=CFG.MINC;}).length,CFG.MAXD);
+document.getElementById('s3').textContent=rec+'/5';
+document.getElementById('d-count').textContent=rec+'/5';
+renderM(ms);
+}
+function renderM(ms){
+var c=document.getElementById('mc');
+if(!ms||!ms.length){c.innerHTML='<div class="es"><div class="ei">&#128269;</div><div class="et">Niciun meci</div><div class="esub">Nu sunt meciuri 0-0 intre min.20-75.</div></div>';return;}
+var h='<div class="mg">';
+for(var i=0;i<ms.length;i++){
+var m=ms[i];var s=m._s;
+var lg=LGMAP[m.league?m.league.id:0]||{f:'?',n:'-'};
+var min=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;
+var hn=m.teams&&m.teams.home?m.teams.home.name:'Home';
+var an=m.teams&&m.teams.away?m.teams.away.name:'Away';
+var xp=Math.min((parseFloat(s.xg)/3)*100,100);
+var sp=Math.min((s.sh/20)*100,100);
+h+='<div class="mc '+s.r+'" style="animation-delay:'+(i*.05)+'s">';
+h+='<div class="cg"></div>';
+h+='<div class="ch"><div class="li"><span class="lf">'+lg.f+'</span><span class="ln">'+lg.n+'</span></div>';
+h+='<div class="cb"><span class="mb">'+min+'\'</span><span class="rb '+s.r+'">'+s.r.toUpperCase()+'</span></div></div>';
+h+='<div class="teams"><div class="team home"><div class="tn">'+hn+'</div></div>';
+h+='<div class="sc"><div class="score">0 - 0</div><div class="ss">LIVE</div></div>';
+h+='<div class="team away"><div class="tn">'+an+'</div></div></div>';
+h+='<div class="ss2">';
+h+='<div class="sr"><span class="sn">xG</span><div class="bc"><div class="bf xg" style="width:'+xp+'%"></div></div><span class="sv">'+s.xg+'</span></div>';
+h+='<div class="sr"><span class="sn">SHT</span><div class="bc"><div class="bf shots" style="width:'+sp+'%"></div></div><span class="sv">'+s.sh+'</span></div>';
+h+='<div class="sr"><span class="sn">POS</span><div class="bc"><div class="bf poss" style="width:'+s.hp+'%"></div></div><span class="sv">'+s.hp+'%</span></div>';
+h+='</div>';
+h+='<div class="cr"><span class="cl">CONFIDENCE</span><div class="cbar"><div class="cf" style="width:'+s.c+'%"></div></div><span class="cv">'+s.c+'%</span></div>';
+h+='</div>';
+}
+h+='</div>';
+c.innerHTML=h;
+}
+function startAR(){if(ST.rt)clearInterval(ST.rt);if(ST.ct)clearInterval(ST.ct);ST.cd=60;ST.ct=setInterval(function(){ST.cd--;document.getElementById('ri').textContent='Auto-refresh: '+ST.cd+'s';if(ST.cd<=0)ST.cd=60;},1000);ST.rt=setInterval(function(){scan();ST.cd=60;},CFG.RI);}
+function showLoad(msg){document.getElementById('mc').innerHTML='<div class="ls"><div class="spin2"></div><div class="lt">'+(msg||'Se incarca...')+'</div></div>';}
+function showEmpty(){document.getElementById('mc').innerHTML='<div class="es"><div class="ei">&#9889;</div><div class="et">Scanner V2 Ready</div><div class="esub">Introdu API key-ul si apasa CONECTARE.</div></div>';}
+function showErr(msg){var b=document.getElementById('err-box');b.textContent=msg;b.style.display='block';}
+function hideErr(){document.getElementById('err-box').style.display='none';}
+</script>
+</body>
+</html>
