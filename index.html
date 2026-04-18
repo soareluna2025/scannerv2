@@ -561,7 +561,7 @@ async function apiCall(endpoint, params = {}) {
 }
 
 async function connectAPI() {
-  const key = document.getElementById('api-key-input').value.trim();
+  const key = document.getElementById('api-key-input')..trim().replace(/[^a-zA-Z0-9]/g, '');
   if (!key) { showError('Introdu API key-ul!'); return; }
 
   state.apiKey = key;
