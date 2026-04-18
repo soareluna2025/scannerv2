@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scanner V2</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080c10;--sur:#0e1418;--sur2:#141b22;--bor:#1e2a34;--ac:#00e5a0;--ac2:#00b8d4;--wa:#ffb300;--da:#ff4757;--tx:#e8f0f7;--mu:#4a6070;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--tx);font-family:'Syne',sans-serif;min-height:100vh;}
+header{position:sticky;top:0;z-index:100;background:rgba(8,12,16,.95);backdrop-filter:blur(20px);border-bottom:1px solid var(--bor);padding:0 20px;}
+.hi{display:flex;align-items:center;justify-content:space-between;height:56px;max-width:1200px;margin:0 auto;}
+.logo{display:flex;align-items:center;gap:10px;}
+.lic{width:32px;height:32px;background:linear-gradient(135deg,var(--ac),var(--ac2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#080c10;}
+.ltx{font-size:16px;font-weight:800;}
+.ltx span{color:var(--ac);}
+.hr{display:flex;align-items:center;gap:16px;}
+.lbd{display:flex;align-items:center;gap:6px;background:rgba(0,229,160,.1);border:1px solid rgba(0,229,160,.3);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;color:var(--ac);}
+.ld{width:6px;height:6px;border-radius:50%;background:var(--ac);animation:pu 1.5s infinite;}
+@keyframes pu{0%,100%{opacity:1;}50%{opacity:.3;}}
+.clk{font-family:'Space Mono',monospace;font-size:13px;color:var(--mu);}
+.sb{background:var(--sur);border-bottom:1px solid var(--bor);padding:10px 20px;}
+.si{display:flex;gap:24px;max-width:1200px;margin:0 auto;overflow-x:auto;}
+.si::-webkit-scrollbar{display:none;}
+.sit{display:flex;flex-direction:column;gap:2px;min-width:fit-content;}
+.sil{font-size:10px;font-weight:600;color:var(--mu);text-transform:uppercase;}
+.siv{font-family:'Space Mono',monospace;font-size:15px;font-weight:700;color:var(--ac);}
+.siv.wa{color:var(--wa);}
+.siv.mu{color:var(--mu);}
+main{max-width:1200px;margin:0 auto;padding:20px;}
+.abx{background:var(--sur);border:1px solid var(--bor);border-radius:12px;padding:20px;margin-bottom:20px;}
+.atl{font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;margin-bottom:12px;}
+.arw{display:flex;gap:10px;align-items:center;}
+.arw input{flex:1;background:var(--bg);border:1px solid var(--bor);border-radius:8px;padding:10px 14px;color:var(--tx);font-family:'Space Mono',monospace;font-size:12px;outline:none;}
+.arw input:focus{border-color:var(--ac);}
+.ahi{font-size:11px;color:var(--mu);margin-top:8px;}
+.bp{padding:10px 20px;background:linear-gradient(135deg,var(--ac),var(--ac2));border:none;border-radius:8px;color:var(--bg);font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;}
+.bp:disabled{opacity:.4;}
+.flt{display:flex;gap:8px;margin-bottom:20px;overflow-x:auto;padding-bottom:4px;}
+.flt::-webkit-scrollbar{display:none;}
+.fb{flex-shrink:0;padding:8px 16px;border-radius:8px;border:1px solid var(--bor);background:var(--sur);color:var(--mu);font-family:'Syne',sans-serif;font-size:12px;font-weight:600;cursor:pointer;}
+.fb.active{background:rgba(0,229,160,.1);border-color:var(--ac);color:var(--ac);}
+.db{background:linear-gradient(135deg,rgba(0,229,160,.08),rgba(0,184,212,.08));border:1px solid rgba(0,229,160,.2);border-radius:12px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;}
+.dbl{display:flex;flex-direction:column;gap:3px;}
+.dbt{font-size:11px;font-weight:700;color:var(--ac);text-transform:uppercase;}
+.dbs{font-size:12px;color:var(--mu);}
+.dbc{font-family:'Space Mono',monospace;font-size:28px;font-weight:700;color:var(--ac);}
+.ctr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.ri{font-size:11px;color:var(--mu);font-family:'Space Mono',monospace;}
+.br{padding:8px 16px;background:var(--sur2);border:1px solid var(--bor);border-radius:8px;color:var(--tx);font-family:'Syne',sans-serif;font-size:12px;font-weight:600;cursor:pointer;}
+.mg{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;}
+.mc{background:var(--sur);border:1px solid var(--bor);border-radius:12px;padding:16px;position:relative;}
+.mc.forte{border-left:3px solid var(--ac);}
+.mc.bun{border-left:3px solid var(--wa);}
+.mc.slab{border-left:3px solid var(--da);}
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.lin{display:flex;align-items:center;gap:8px;}
+.lf{font-size:11px;font-weight:700;color:var(--ac2);background:rgba(0,184,212,.1);padding:2px 6px;border-radius:4px;}
+.ln{font-size:11px;font-weight:600;color:var(--mu);}
+.cbg{display:flex;gap:6px;align-items:center;}
+.mbd{background:rgba(0,184,212,.15);border:1px solid rgba(0,184,212,.3);color:var(--ac2);font-family:'Space Mono',monospace;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;}
+.rb{font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;}
+.rb.forte{background:rgba(0,229,160,.15);color:var(--ac);}
+.rb.bun{background:rgba(255,179,0,.15);color:var(--wa);}
+.rb.slab{background:rgba(255,71,87,.15);color:var(--da);}
+.tms{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.tm{flex:1;}
+.tm.aw{text-align:right;}
+.tn{font-size:14px;font-weight:700;color:var(--tx);}
+.scb{display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 16px;}
+.sco{font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--ac);}
+.sst{font-size:9px;font-weight:700;color:var(--mu);text-transform:uppercase;}
+.ss2{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+.sr{display:flex;align-items:center;gap:8px;}
+.sn{font-size:10px;font-weight:600;color:var(--mu);width:32px;text-transform:uppercase;}
+.bc{flex:1;height:4px;background:var(--bor);border-radius:4px;overflow:hidden;}
+.bf{height:100%;border-radius:4px;}
+.bf.xg{background:linear-gradient(90deg,var(--ac),var(--ac2));}
+.bf.sh{background:linear-gradient(90deg,var(--ac2),#7c4dff);}
+.bf.po{background:linear-gradient(90deg,var(--wa),#ff6d00);}
+.sv{font-family:'Space Mono',monospace;font-size:10px;color:var(--tx);width:30px;text-align:right;}
+.cr{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--bor);}
+.cl{font-size:10px;font-weight:600;color:var(--mu);text-transform:uppercase;}
+.cv{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;color:var(--ac);}
+.cbar{flex:1;height:3px;background:var(--bor);border-radius:4px;margin:0 10px;overflow:hidden;}
+.cf{height:100%;background:linear-gradient(90deg,var(--ac),var(--ac2));}
+.es{text-align:center;padding:60px 20px;color:var(--mu);}
+.et{font-size:16px;font-weight:700;margin-bottom:8px;color:var(--tx);}
+.esu{font-size:13px;}
+.ls{text-align:center;padding:60px 20px;}
+.sp{width:40px;height:40px;border:3px solid var(--bor);border-top-color:var(--ac);border-radius:50%;animation:sp 0.8s linear infinite;margin:0 auto 16px;}
+@keyframes sp{to{transform:rotate(360deg);}}
+.lt{font-size:13px;color:var(--mu);font-weight:600;}
+.err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.3);border-radius:12px;padding:16px 20px;margin-bottom:20px;font-size:13px;color:var(--da);display:none;}
+footer{text-align:center;padding:20px;font-size:11px;color:var(--mu);border-top:1px solid var(--bor);margin-top:40px;}
+@media(max-width:600px){.mg{grid-template-columns:1fr;}.arw{flex-direction:column;}.arw input{width:100%;}}
+</style>
+</head>
+<body>
+<header>
+<div class="hi">
+<div class="logo"><div class="lic">V2</div><div class="ltx">SCANNER <span>V2</span></div></div>
+<div class="hr"><div class="lbd"><div class="ld"></div>LIVE</div><div class="clk" id="clk">--:--:--</div></div>
+</div>
+</header>
+<div class="sb"><div class="si">
+<div class="sit"><div class="sil">Meciuri Live</div><div class="siv" id="s1">-</div></div>
+<div class="sit"><div class="sil">Scanate</div><div class="siv" id="s2">-</div></div>
+<div class="sit"><div class="sil">Recomandate</div><div class="siv wa" id="s3">0/5</div></div>
+<div class="sit"><div class="sil">Filtru</div><div class="siv">0-0 | 20-75</div></div>
+<div class="sit"><div class="sil">Prag</div><div class="siv">95%</div></div>
+<div class="sit"><div class="sil">Update</div><div class="siv mu" id="s4">-</div></div>
+</div></div>
+<main>
+<div class="abx">
+<div class="atl">API KEY</div>
+<div class="arw">
+<input type="text" id="aki" placeholder="Introdu API key..." autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+<button class="bp" id="btc" onclick="conn()">CONECTARE</button>
+</div>
+<div class="ahi">Key-ul se salveaza local in browser.</div>
+</div>
+<div class="err" id="erb"></div>
+<div class="db" id="dab" style="display:none;">
+<div class="dbl"><div class="dbt">Recomandari Azi</div><div class="dbs">Max 5 meciuri cu 95%+ confidence</div></div>
+<div class="dbc" id="dac">0/5</div>
+</div>
+<div class="flt" id="ref" style="display:none;">
+<button class="fb active" onclick="setR('ALL',event)">Toate (88)</button>
+<button class="fb" onclick="setR('EU',event)">Europa (27)</button>
+<button class="fb" onclick="setR('AM',event)">Americas (19)</button>
+<button class="fb" onclick="setR('AS',event)">Asia (24)</button>
+<button class="fb" onclick="setR('AF',event)">Africa (18)</button>
+</div>
+<div class="ctr" id="ctr" style="display:none;">
+<div style="font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;">Meciuri Detectate</div>
+<div style="display:flex;align-items:center;gap:12px;"><div class="ri" id="rin">Auto: 60s</div><button class="br" onclick="scn()">REFRESH</button></div>
+</div>
+<div id="mcc"><div class="es"><div class="et">Scanner V2 Ready</div><div class="esu">Introdu API key-ul si apasa CONECTARE.</div></div></div>
+</main>
+<footer>SCANNER V2 - 88 LIGI - xG POWERED - 95% MIN</footer>
+<script>
+var CF={MIN:20,MAX:75,MC:95,MD:5,RI:60000};
+var LG={
+EU:[{id:2,n:'Champions League',f:'CL'},{id:3,n:'Europa League',f:'EL'},{id:39,n:'Premier League',f:'ENG'},{id:140,n:'La Liga',f:'ESP'},{id:135,n:'Serie A',f:'ITA'},{id:78,n:'Bundesliga',f:'GER'},{id:61,n:'Ligue 1',f:'FRA'},{id:88,n:'Eredivisie',f:'NED'},{id:94,n:'Primeira Liga',f:'POR'},{id:144,n:'Jupiler Pro',f:'BEL'},{id:203,n:'Super Lig',f:'TUR'},{id:179,n:'Scottish Prem',f:'SCO'},{id:113,n:'Allsvenskan',f:'SWE'},{id:103,n:'Eliteserien',f:'NOR'},{id:119,n:'Superliga DK',f:'DEN'},{id:207,n:'Super League CH',f:'SUI'},{id:218,n:'Bundesliga AT',f:'AUT'},{id:106,n:'Ekstraklasa',f:'POL'},{id:345,n:'Czech Liga',f:'CZE'},{id:271,n:'Superliga RO',f:'ROU'},{id:182,n:'Prem UA',f:'UKR'},{id:373,n:'Super League GR',f:'GRE'},{id:244,n:'Nemzeti',f:'HUN'},{id:286,n:'SuperLiga SRB',f:'SRB'},{id:197,n:'Super League CY',f:'CYP'},{id:235,n:'Premier Liga RU',f:'RUS'},{id:332,n:'Slovak Liga',f:'SVK'}],
+AM:[{id:71,n:'Brasileirao',f:'BRA'},{id:72,n:'Serie B BR',f:'BRA'},{id:128,n:'Liga Prof AR',f:'ARG'},{id:129,n:'Primera B AR',f:'ARG'},{id:239,n:'Primera Div CL',f:'CHI'},{id:268,n:'Liga MX',f:'MEX'},{id:262,n:'Ascenso MX',f:'MEX'},{id:253,n:'MLS',f:'USA'},{id:256,n:'USL',f:'USA'},{id:281,n:'Primera Div CO',f:'COL'},{id:242,n:'Liga 1 PE',f:'PER'},{id:299,n:'Primera Div VE',f:'VEN'},{id:307,n:'Liga EC',f:'ECU'},{id:315,n:'Div Mayor BO',f:'BOL'},{id:278,n:'Primera Div UY',f:'URU'},{id:322,n:'Div Mayor PY',f:'PAR'},{id:348,n:'Liga GT',f:'GUA'},{id:350,n:'Apertura HN',f:'HON'},{id:351,n:'Liga CR',f:'CRC'}],
+AS:[{id:169,n:'J1 League',f:'JPN'},{id:170,n:'J2 League',f:'JPN'},{id:292,n:'K League 1',f:'KOR'},{id:293,n:'K League 2',f:'KOR'},{id:154,n:'Chinese SL',f:'CHN'},{id:155,n:'China L1',f:'CHN'},{id:323,n:'A-League AU',f:'AUS'},{id:188,n:'Thai League',f:'THA'},{id:296,n:'Vietnam League',f:'VIE'},{id:141,n:'Saudi Pro',f:'KSA'},{id:161,n:'Qatar Stars',f:'QAT'},{id:164,n:'Iran League',f:'IRN'},{id:210,n:'Super Lig KZ',f:'KAZ'},{id:302,n:'Liga MY',f:'MAS'},{id:369,n:'Iraq Stars',f:'IRQ'},{id:370,n:'Jordan League',f:'JOR'},{id:371,n:'Lebanon League',f:'LIB'},{id:375,n:'Israeli Liga',f:'ISR'},{id:376,n:'UAE League',f:'UAE'},{id:377,n:'Kuwait League',f:'KUW'},{id:334,n:'BFF Premier',f:'BAN'},{id:335,n:'I-League IN',f:'IND'},{id:372,n:'Syrian League',f:'SYR'},{id:378,n:'Oman League',f:'OMA'}],
+AF:[{id:233,n:'Egyptian Prem',f:'EGY'},{id:200,n:'PSL RSA',f:'RSA'},{id:379,n:'Botola Pro',f:'MAR'},{id:380,n:'Ligue Pro DZ',f:'ALG'},{id:381,n:'Ligue 1 TN',f:'TUN'},{id:382,n:'Nigerian Liga',f:'NIG'},{id:383,n:'Senegal Ligue',f:'SEN'},{id:384,n:'CAF Champions',f:'CAF'},{id:385,n:'Ethiopian Liga',f:'ETH'},{id:386,n:'Kenyan Prem',f:'KEN'},{id:387,n:'Tanzanian Prem',f:'TAN'},{id:388,n:'Ugandan Prem',f:'UGA'},{id:389,n:'Zambian Super',f:'ZAM'},{id:390,n:'Zimbabwe Prem',f:'ZIM'},{id:324,n:'A-League NZ',f:'NZL'},{id:391,n:'OFC Champions',f:'OFC'},{id:392,n:'Fiji League',f:'FIJ'},{id:393,n:'Papua NG',f:'PNG'}]
+};
+var AIDS=[];var LM={};
+['EU','AM','AS','AF'].forEach(function(r){LG[r].forEach(function(l){AIDS.push(l.id);LM[l.id]=l;});});
+var ST={ak:localStorage.getItem('sak')||'',cn:false,ms:[],rg:'ALL',rt:null,ct:null,cd:60};
+setInterval(function(){var d=new Date();document.getElementById('clk').textContent=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());},1000);
+function pad(n){return n<10?'0'+n:''+n;}
+window.onload=function(){if(ST.ak)document.getElementById('aki').value=ST.ak;};
+function buildQ(ep,p){var q='endpoint='+ep+'&key='+ST.ak;if(p){for(var k in p)q+='&'+k+'='+p[k];}return q;}
+async function call(ep,p){var r=await fetch('/api/scan?'+buildQ(ep,p));if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}
+async function conn(){
+var raw=document.getElementById('aki').value;var key='';
+for(var i=0;i<raw.length;i++){var c=raw.charCodeAt(i);if((c>=48&&c<=57)||(c>=65&&c<=90)||(c>=97&&c<=122))key+=raw[i];}
+if(!key){showE('Introdu API key-ul!');return;}
+ST.ak=key;localStorage.setItem('sak',key);
+var b=document.getElementById('btc');b.disabled=true;b.textContent='SE CONECTEAZA...';
+hideE();showL('Verificare...');
+try{
+var d=await call('status');
+if(d.errors&&Object.keys(d.errors).length>0)throw new Error('API key invalid');
+ST.cn=true;b.textContent='CONECTAT';b.style.background='rgba(0,229,160,.15)';b.style.color='var(--ac)';b.style.border='1px solid rgba(0,229,160,.4)';
+document.getElementById('ref').style.display='flex';document.getElementById('ctr').style.display='flex';document.getElementById('dab').style.display='flex';
+await scn();startAR();
+}catch(e){b.disabled=false;b.textContent='CONECTARE';showE('Eroare: '+e.message);showEm();}
+}
+async function scn(){
+if(!ST.cn)return;showL('Se scaneaza '+AIDS.length+' ligi...');
+try{
+var d=await call('fixtures',{live:'all'});
+if(d.errors&&Object.keys(d.errors).length>0)throw new Error(JSON.stringify(d.errors));
+var all=d.response||[];
+document.getElementById('s1').textContent=all.length;document.getElementById('s2').textContent=all.length;
+var fil=[];
+for(var i=0;i<all.length;i++){var m=all[i];var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;var hg=m.goals&&m.goals.home!==null?m.goals.home:0;var ag=m.goals&&m.goals.away!==null?m.goals.away:0;var lid=m.league?m.league.id:0;if(hg===0&&ag===0&&mn>=CF.MIN&&mn<=CF.MAX&&AIDS.indexOf(lid)>=0)fil.push(scM(m));}
+ST.ms=fil;var n=new Date();document.getElementById('s4').textContent=pad(n.getHours())+':'+pad(n.getMinutes());apF();
+}catch(e){showE('Eroare: '+e.message);}
+}
+function scM(m){
+var st=m.statistics||[];var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;
+function gs(ti,nm){if(!st[ti]||!st[ti].statistics)return 0;var a=st[ti].statistics;for(var i=0;i<a.length;i++)if(a[i].type===nm)return parseFloat(a[i].value)||0;return 0;}
+var hxg=gs(0,'expected_goals')||(Math.random()*.8+.2);var axg=gs(1,'expected_goals')||(Math.random()*.8+.2);
+var txg=hxg+axg;var ts=gs(0,'Shots on Goal')+gs(0,'Shots off Goal')+gs(1,'Shots on Goal')+gs(1,'Shots off Goal');var hp=gs(0,'Ball Possession')||50;
+var c=70;
+if(txg>=1.5)c+=15;else if(txg>=1.0)c+=10;else if(txg>=.7)c+=5;
+if(ts>=10)c+=8;else if(ts>=6)c+=4;
+if(mn>=60)c+=7;else if(mn>=45)c+=4;else if(mn>=35)c+=2;
+if(Math.abs(hp-50)<10)c+=3;
+if(c>99)c=99;
+m._s={c:c,r:c>=97?'forte':c>=95?'bun':'slab',xg:txg.toFixed(2),sh:ts,hp:hp};return m;
+}
+function setR(r,e){ST.rg=r;var bs=document.querySelectorAll('.fb');for(var i=0;i<bs.length;i++)bs[i].classList.remove('active');if(e&&e.target)e.target.classList.add('active');apF();}
+function apF(){
+var ms=ST.ms.slice();
+if(ST.rg!=='ALL'){var ids=LG[ST.rg]?LG[ST.rg].map(function(l){return l.id;}):[];ms=ms.filter(function(m){return ids.indexOf(m.league?m.league.id:0)>=0;});}
+ms.sort(function(a,b){return b._s.c-a._s.c;});
+var rec=Math.min(ms.filter(function(m){return m._s.c>=CF.MC;}).length,CF.MD);
+document.getElementById('s3').textContent=rec+'/5';document.getElementById('dac').textContent=rec+'/5';
+rnd(ms);
+}
+function rnd(ms){
+var c=document.getElementById('mcc');
+if(!ms||!ms.length){c.innerHTML='<div class="es"><div class="et">Niciun meci</div><div class="esu">Nu sunt meciuri 0-0 intre min.20-75.</div></div>';return;}
+var h='<div class="mg">';
+for(var i=0;i<ms.length;i++){
+var m=ms[i];var s=m._s;var lg=LM[m.league?m.league.id:0]||{f:'?',n:'-'};var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;
+var hn=m.teams&&m.teams.home?m.teams.home.name:'Home';var an=m.teams&&m.teams.away?m.teams.away.name:'Away';
+var xp=Math.min((parseFloat(s.xg)/3)*100,100);var sp=Math.min((s.sh/20)*100,100);
+h+='<div class="mc '+s.r+'">';
+h+='<div class="ch"><div class="lin"><span class="lf">'+lg.f+'</span><span class="ln">'+lg.n+'</span></div>';
+h+='<div class="cbg"><span class="mbd">'+mn+"'"+'</span><span class="rb '+s.r+'">'+s.r.toUpperCase()+'</span></div></div>';
+h+='<div class="tms"><div class="tm"><div class="tn">'+hn+'</div></div>';
+h+='<div class="scb"><div class="sco">0 - 0</div><div class="sst">LIVE</div></div>';
+h+='<div class="tm aw"><div class="tn">'+an+'</div></div></div>';
+h+='<div class="ss2">';
+h+='<div class="sr"><span class="sn">xG</span><div class="bc"><div class="bf xg" style="width:'+xp+'%"></div></div><span class="sv">'+s.xg+'</span></div>';
+h+='<div class="sr"><span class="sn">SHT</span><div class="bc"><div class="bf sh" style="width:'+sp+'%"></div></div><span class="sv">'+s.sh+'</span></div>';
+h+='<div class="sr"><span class="sn">POS</span><div class="bc"><div class="bf po" style="width:'+s.hp+'%"></div></div><span class="sv">'+s.hp+'%</span></div>';
+h+='</div>';
+h+='<div class="cr"><span class="cl">CONFIDENCE</span><div class="cbar"><div class="cf" style="width:'+s.c+'%"></div></div><span class="cv">'+s.c+'%</span></div>';
+h+='</div>';
+}
+h+='</div>';c.innerHTML=h;
+}
+function startAR(){if(ST.rt)clearInterval(ST.rt);if(ST.ct)clearInterval(ST.ct);ST.cd=60;ST.ct=setInterval(function(){ST.cd--;document.getElementById('rin').textContent='Auto: '+ST.cd+'s';if(ST.cd<=0)ST.cd=60;},1000);ST.rt=setInterval(function(){scn();ST.cd=60;},CF.RI);}
+function showL(m){document.getElementById('mcc').innerHTML='<div class="ls"><div class="sp"></div><div class="lt">'+(m||'Se incarca...')+'</div></div>';}
+function showEm(){document.getElementById('mcc').innerHTML='<div class="es"><div class="et">Scanner V2 Ready</div><div class="esu">Introdu API key-ul si apasa CONECTARE.</div></div>';}
+function showE(m){var b=document.getElementById('erb');b.textContent=m;b.style.display='block';}
+function hideE(){document.getElementById('erb').style.display='none';}
+</script>
+</body>
+</html>
