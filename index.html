@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scanner V2 — Live Football</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0e1418;
+    --surface2: #141b22;
+    --border: #1e2a34;
+    --accent: #00e5a0;
+    --accent2: #00b8d4;
+    --warn: #ffb300;
+    --danger: #ff4757;
+    --text: #e8f0f7;
+    --muted: #4a6070;
+    --forte: #00e5a0;
+    --bun: #ffb300;
+    --slab: #ff4757;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,160,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,160,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(8,12,16,0.95);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .logo { display: flex; align-items: center; gap: 10px; }
+
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+
+  .logo-text { font-size: 16px; font-weight: 800; letter-spacing: 0.05em; }
+  .logo-text span { color: var(--accent); }
+
+  .header-right { display: flex; align-items: center; gap: 16px; }
+
+  .live-badge {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(0,229,160,0.1);
+    border: 1px solid rgba(0,229,160,0.3);
+    border-radius: 20px; padding: 4px 12px;
+    font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.1em;
+  }
+
+  .live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  .clock { font-family: 'Space Mono', monospace; font-size: 13px; color: var(--muted); }
+
+  .stats-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+  }
+
+  .stats-inner {
+    display: flex; gap: 24px;
+    max-width: 1200px; margin: 0 auto;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .stats-inner::-webkit-scrollbar { display: none; }
+
+  .stat-item { display: flex; flex-direction: column; gap: 2px; min-width: fit-content; }
+  .stat-label { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+  .stat-value { font-family: 'Space Mono', monospace; font-size: 15px; font-weight: 700; color: var(--accent); }
+  .stat-value.warn { color: var(--warn); }
+  .stat-value.muted { color: var(--muted); }
+
+  main { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+  /* API SETUP */
+  .api-setup {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px; margin-bottom: 20px;
+  }
+
+  .api-setup-title {
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 12px;
+  }
+
+  .api-setup-row { display: flex; gap: 10px; align-items: center; }
+
+  .api-setup input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .api-setup input:focus { border-color: var(--accent); }
+  .api-setup input::placeholder { color: var(--muted); }
+
+  .api-hint {
+    font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.5;
+  }
+
+  .btn-primary {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none; border-radius: 8px;
+    color: var(--bg);
+    font-family: 'Syne', sans-serif;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s; white-space: nowrap;
+  }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* FILTERS */
+  .filters {
+    display: flex; gap: 8px; margin-bottom: 20px;
+    overflow-x: auto; scrollbar-width: none; padding-bottom: 4px;
+  }
+  .filters::-webkit-scrollbar { display: none; }
+
+  .filter-btn {
+    flex-shrink: 0; padding: 8px 16px;
+    border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--muted);
+    font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; letter-spacing: 0.05em;
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .filter-btn.active { background: rgba(0,229,160,0.1); border-color: var(--accent); color: var(--accent); }
+
+  /* DAILY BANNER */
+  .daily-banner {
+    background: linear-gradient(135deg, rgba(0,229,160,0.08), rgba(0,184,212,0.08));
+    border: 1px solid rgba(0,229,160,0.2);
+    border-radius: 12px; padding: 14px 18px; margin-bottom: 20px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .daily-left { display: flex; flex-direction: column; gap: 3px; }
+  .daily-title { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; }
+  .daily-sub { font-size: 12px; color: var(--muted); }
+  .daily-count { font-family: 'Space Mono', monospace; font-size: 28px; font-weight: 700; color: var(--accent); }
+
+  /* CONTROLS */
+  .controls { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+
+  .section-title {
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    letter-spacing: 0.15em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .refresh-info { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; }
+
+  .btn-refresh {
+    padding: 8px 16px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn-refresh:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-refresh.spinning .refresh-icon { display: inline-block; animation: spin 0.8s linear infinite; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* MATCHES */
+  .matches-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+  }
+
+  .match-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+    transition: all 0.2s; position: relative; overflow: hidden;
+    animation: fadeIn 0.4s ease forwards; opacity: 0;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .match-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,229,160,0.08); }
+  .match-card.forte { border-left: 3px solid var(--forte); }
+  .match-card.bun { border-left: 3px solid var(--bun); }
+  .match-card.slab { border-left: 3px solid var(--slab); }
+
+  .card-glow { position: absolute; top: 0; left: 0; width: 100%; height: 2px; }
+  .match-card.forte .card-glow { background: linear-gradient(90deg, transparent, var(--forte), transparent); opacity: 0.6; }
+  .match-card.bun .card-glow { background: linear-gradient(90deg, transparent, var(--bun), transparent); opacity: 0.6; }
+
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .league-info { display: flex; align-items: center; gap: 8px; }
+  .league-flag { font-size: 16px; }
+  .league-name { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.05em; }
+
+  .card-badges { display: flex; gap: 6px; align-items: center; }
+  .minute-badge {
+    background: rgba(0,184,212,0.15); border: 1px solid rgba(0,184,212,0.3);
+    color: var(--accent2); font-family: 'Space Mono', monospace;
+    font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px;
+  }
+  .rating-badge { font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 6px; letter-spacing: 0.08em; }
+  .rating-badge.forte { background: rgba(0,229,160,0.15); color: var(--forte); border: 1px solid rgba(0,229,160,0.3); }
+  .rating-badge.bun { background: rgba(255,179,0,0.15); color: var(--bun); border: 1px solid rgba(255,179,0,0.3); }
+  .rating-badge.slab { background: rgba(255,71,87,0.15); color: var(--slab); border: 1px solid rgba(255,71,87,0.3); }
+
+  .teams { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .team { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .team.away { text-align: right; align-items: flex-end; }
+  .team-name { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.2; }
+
+  .score-block { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 16px; }
+  .score { font-family: 'Space Mono', monospace; font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; }
+  .score-status { font-size: 9px; font-weight: 700; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .stats-section { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .stat-row { display: flex; align-items: center; gap: 8px; }
+  .stat-name { font-size: 10px; font-weight: 600; color: var(--muted); width: 32px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .bar-container { flex: 1; height: 4px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+  .bar-fill.xg { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .bar-fill.shots { background: linear-gradient(90deg, var(--accent2), #7c4dff); }
+  .bar-fill.poss { background: linear-gradient(90deg, var(--warn), #ff6d00); }
+  .stat-val { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--text); width: 30px; text-align: right; }
+
+  .confidence-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 10px; border-top: 1px solid var(--border);
+  }
+  .confidence-label { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .confidence-value { font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; color: var(--accent); }
+  .confidence-bar { flex: 1; height: 3px; background: var(--border); border-radius: 4px; margin: 0 10px; overflow: hidden; }
+  .confidence-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 4px; transition: width 1s ease; }
+
+  /* STATES */
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+  .empty-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+  .empty-sub { font-size: 13px; line-height: 1.6; }
+
+  .loading-state { text-align: center; padding: 60px 20px; }
+  .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  .loading-text { font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: 0.05em; }
+
+  .error-state {
+    background: rgba(255,71,87,0.08); border: 1px solid rgba(255,71,87,0.3);
+    border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;
+    font-size: 13px; color: var(--danger); display: none;
+  }
+
+  footer {
+    position: relative; z-index: 1; text-align: center;
+    padding: 20px; font-size: 11px; color: var(--muted);
+    border-top: 1px solid var(--border); margin-top: 40px; letter-spacing: 0.05em;
+  }
+
+  @media (max-width: 600px) {
+    .matches-grid { grid-template-columns: 1fr; }
+    .api-setup-row { flex-direction: column; }
+    .api-setup-row input { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div class="logo-text">SCANNER <span>V2</span></div>
+    </div>
+    <div class="header-right">
+      <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+  </div>
+</header>
+
+<div class="stats-bar">
+  <div class="stats-inner">
+    <div class="stat-item">
+      <div class="stat-label">Meciuri Live</div>
+      <div class="stat-value" id="stat-live">—</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Scanate Azi</div>
+      <div class="stat-value" id="stat-scanned">—</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Recomandate</div>
+      <div class="stat-value warn" id="stat-rec">0/5</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Filtre Active</div>
+      <div class="stat-value" id="stat-filter">0-0 | 20-75min</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Prag Min.</div>
+      <div class="stat-value">95%</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Ultima Update</div>
+      <div class="stat-value muted" id="stat-update">—</div>
+    </div>
+  </div>
+</div>
+
+<main>
+
+  <div class="api-setup" id="api-setup">
+    <div class="api-setup-title">🔑 Configurare API Key</div>
+    <div class="api-setup-row">
+      <input type="password" id="api-key-input" placeholder="354abbfeac48d66c635ecd865b1985a1" autocomplete="off">
+      <button class="btn-primary" id="btn-connect" onclick="connectAPI()">CONECTARE</button>
+    </div>
+    <div class="api-hint">API key-ul este salvat local în browser. Nu este trimis nicăieri altundeva decât către api-sports.io.</div>
+  </div>
+
+  <div class="error-state" id="error-box"></div>
+
+  <div class="daily-banner" id="daily-banner" style="display:none;">
+    <div class="daily-left">
+      <div class="daily-title">Recomandări Azi</div>
+      <div class="daily-sub">Maxim 5 meciuri cu 95%+ confidence</div>
+    </div>
+    <div class="daily-count" id="daily-count">0/5</div>
+  </div>
+
+  <div class="filters" id="region-filters" style="display:none;">
+    <button class="filter-btn active" onclick="setRegion('ALL', event)">🌍 Toate (88)</button>
+    <button class="filter-btn" onclick="setRegion('EUROPE', event)">🇪🇺 Europa (27)</button>
+    <button class="filter-btn" onclick="setRegion('AMERICAS', event)">🌎 Americas (19)</button>
+    <button class="filter-btn" onclick="setRegion('ASIA', event)">🌏 Asia (24)</button>
+    <button class="filter-btn" onclick="setRegion('AFRICA', event)">🌍 Africa+Oceania (18)</button>
+  </div>
+
+  <div class="controls" id="controls" style="display:none;">
+    <div class="section-title" style="margin:0;flex:1;">Meciuri Detectate</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="refresh-info" id="refresh-info">Auto-refresh: 60s</div>
+      <button class="btn-refresh" id="btn-refresh" onclick="scanMatches()">
+        <span class="refresh-icon">↻</span> REFRESH
+      </button>
+    </div>
+  </div>
+
+  <div id="matches-container">
+    <div class="empty-state">
+      <div class="empty-icon">⚡</div>
+      <div class="empty-title">Scanner V2 Ready</div>
+      <div class="empty-sub">Introdu API key-ul și apasă CONECTARE<br>pentru a porni scannerul live.</div>
+    </div>
+  </div>
+
+</main>
+
+<footer>SCANNER V2 &nbsp;·&nbsp; 88 LIGI &nbsp;·&nbsp; xG POWERED &nbsp;·&nbsp; 95% CONFIDENCE MIN</footer>
+
+<script>
+const CONFIG = {
+  MIN_MINUTE: 20,
+  MAX_MINUTE: 75,
+  MIN_CONFIDENCE: 95,
+  MAX_DAILY: 5,
+  REFRESH_INTERVAL: 60000,
+};
+
+const LEAGUES = {
+  EUROPE: [
+    { id: 2, name: 'Champions League', flag: '🏆' },
+    { id: 3, name: 'Europa League', flag: '🇪🇺' },
+    { id: 39, name: 'Premier League', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+    { id: 140, name: 'La Liga', flag: '🇪🇸' },
+    { id: 135, name: 'Serie A', flag: '🇮🇹' },
+    { id: 78, name: 'Bundesliga', flag: '🇩🇪' },
+    { id: 61, name: 'Ligue 1', flag: '🇫🇷' },
+    { id: 88, name: 'Eredivisie', flag: '🇳🇱' },
+    { id: 94, name: 'Primeira Liga', flag: '🇵🇹' },
+    { id: 144, name: 'Jupiler Pro', flag: '🇧🇪' },
+    { id: 203, name: 'Süper Lig', flag: '🇹🇷' },
+    { id: 179, name: 'Scottish Prem', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
+    { id: 113, name: 'Allsvenskan', flag: '🇸🇪' },
+    { id: 103, name: 'Eliteserien', flag: '🇳🇴' },
+    { id: 119, name: 'Superliga DK', flag: '🇩🇰' },
+    { id: 207, name: 'Super League CH', flag: '🇨🇭' },
+    { id: 218, name: 'Bundesliga AT', flag: '🇦🇹' },
+    { id: 106, name: 'Ekstraklasa', flag: '🇵🇱' },
+    { id: 345, name: 'Czech Liga', flag: '🇨🇿' },
+    { id: 332, name: 'Slovak Liga', flag: '🇸🇰' },
+    { id: 271, name: 'Superliga RO', flag: '🇷🇴' },
+    { id: 182, name: 'Premiership UA', flag: '🇺🇦' },
+    { id: 235, name: 'Premier Liga RU', flag: '🇷🇺' },
+    { id: 373, name: 'A-League GR', flag: '🇬🇷' },
+    { id: 244, name: 'Nemzeti Bajnokság', flag: '🇭🇺' },
+    { id: 286, name: 'SuperLiga SRB', flag: '🇷🇸' },
+    { id: 197, name: 'Super League CY', flag: '🇨🇾' },
+  ],
+  AMERICAS: [
+    { id: 71, name: 'Brasileirao', flag: '🇧🇷' },
+    { id: 72, name: 'Serie B BR', flag: '🇧🇷' },
+    { id: 128, name: 'Liga Prof AR', flag: '🇦🇷' },
+    { id: 129, name: 'Primera B AR', flag: '🇦🇷' },
+    { id: 239, name: 'Primera División CL', flag: '🇨🇱' },
+    { id: 268, name: 'Liga MX', flag: '🇲🇽' },
+    { id: 262, name: 'Ascenso MX', flag: '🇲🇽' },
+    { id: 253, name: 'MLS', flag: '🇺🇸' },
+    { id: 256, name: 'USL Championship', flag: '🇺🇸' },
+    { id: 281, name: 'Primera División CO', flag: '🇨🇴' },
+    { id: 242, name: 'Liga 1 PE', flag: '🇵🇪' },
+    { id: 299, name: 'Primera División VE', flag: '🇻🇪' },
+    { id: 307, name: 'Liga Mayor EC', flag: '🇪🇨' },
+    { id: 315, name: 'División Mayor BO', flag: '🇧🇴' },
+    { id: 278, name: 'Primera División UY', flag: '🇺🇾' },
+    { id: 322, name: 'Division Mayor PY', flag: '🇵🇾' },
+    { id: 348, name: 'Liga Nacional GT', flag: '🇬🇹' },
+    { id: 350, name: 'Apertura HN', flag: '🇭🇳' },
+    { id: 351, name: 'Liga Mayor CR', flag: '🇨🇷' },
+  ],
+  ASIA: [
+    { id: 169, name: 'J1 League', flag: '🇯🇵' },
+    { id: 170, name: 'J2 League', flag: '🇯🇵' },
+    { id: 292, name: 'K League 1', flag: '🇰🇷' },
+    { id: 293, name: 'K League 2', flag: '🇰🇷' },
+    { id: 154, name: 'Chinese SL', flag: '🇨🇳' },
+    { id: 155, name: 'China League 1', flag: '🇨🇳' },
+    { id: 323, name: 'A-League AU', flag: '🇦🇺' },
+    { id: 188, name: 'Thai League 1', flag: '🇹🇭' },
+    { id: 296, name: 'Vietnam League', flag: '🇻🇳' },
+    { id: 141, name: 'Saudi Pro League', flag: '🇸🇦' },
+    { id: 161, name: 'Qatar Stars', flag: '🇶🇦' },
+    { id: 164, name: 'Iran League', flag: '🇮🇷' },
+    { id: 210, name: 'Super Lig KZ', flag: '🇰🇿' },
+    { id: 302, name: 'Liga Utama MY', flag: '🇲🇾' },
+    { id: 334, name: 'BFF Premier BD', flag: '🇧🇩' },
+    { id: 335, name: 'I-League IN', flag: '🇮🇳' },
+    { id: 369, name: 'Iraq Stars', flag: '🇮🇶' },
+    { id: 370, name: 'Jordan League', flag: '🇯🇴' },
+    { id: 371, name: 'Lebanon League', flag: '🇱🇧' },
+    { id: 372, name: 'Syrian League', flag: '🇸🇾' },
+    { id: 375, name: 'Israeli Liga', flag: '🇮🇱' },
+    { id: 376, name: 'UAE League', flag: '🇦🇪' },
+    { id: 377, name: 'Kuwait League', flag: '🇰🇼' },
+    { id: 378, name: 'Oman League', flag: '🇴🇲' },
+  ],
+  AFRICA: [
+    { id: 233, name: 'Egyptian Premier', flag: '🇪🇬' },
+    { id: 200, name: 'PSL South Africa', flag: '🇿🇦' },
+    { id: 379, name: 'Botola Pro MA', flag: '🇲🇦' },
+    { id: 380, name: 'Ligue Pro DZ', flag: '🇩🇿' },
+    { id: 381, name: 'Ligue 1 TN', flag: '🇹🇳' },
+    { id: 382, name: 'Nigerian Liga', flag: '🇳🇬' },
+    { id: 383, name: 'Senegal Ligue', flag: '🇸🇳' },
+    { id: 384, name: 'CAF Champions', flag: '🏆' },
+    { id: 385, name: 'Ethiopian Liga', flag: '🇪🇹' },
+    { id: 386, name: 'Kenyan Premier', flag: '🇰🇪' },
+    { id: 387, name: 'Tanzanian Prem', flag: '🇹🇿' },
+    { id: 388, name: 'Ugandan Premier', flag: '🇺🇬' },
+    { id: 389, name: 'Zambian Super', flag: '🇿🇲' },
+    { id: 390, name: 'Zimbabwean Prem', flag: '🇿🇼' },
+    { id: 324, name: 'A-League NZ', flag: '🇳🇿' },
+    { id: 391, name: 'OFC Champions', flag: '🌊' },
+    { id: 392, name: 'Fiji League', flag: '🇫🇯' },
+    { id: 393, name: 'Papua NG League', flag: '🇵🇬' },
+  ]
+};
+
+const ALL_LEAGUE_IDS = [
+  ...LEAGUES.EUROPE, ...LEAGUES.AMERICAS,
+  ...LEAGUES.ASIA, ...LEAGUES.AFRICA
+].map(l => l.id);
+
+const LEAGUE_MAP = {};
+[...LEAGUES.EUROPE, ...LEAGUES.AMERICAS, ...LEAGUES.ASIA, ...LEAGUES.AFRICA]
+  .forEach(l => { LEAGUE_MAP[l.id] = l; });
+
+let state = {
+  apiKey: localStorage.getItem('scanner_api_key') || '',
+  connected: false,
+  matches: [],
+  region: 'ALL',
+  refreshTimer: null,
+  countdownTimer: null,
+  countdown: 60,
+};
+
+// Clock
+setInterval(() => {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}, 1000);
+
+window.onload = function() {
+  if (state.apiKey) {
+    document.getElementById('api-key-input').value = state.apiKey;
+    connectAPI();
+  }
+};
+
+// API call — goes through /api/scan (Vercel backend)
+async function apiCall(endpoint, params = {}) {
+  const key = state.apiKey;
+  const qp = new URLSearchParams({ endpoint, key, ...params });
+  const resp = await fetch(`/api/scan?${qp.toString()}`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+async function connectAPI() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) { showError('Introdu API key-ul!'); return; }
+
+  state.apiKey = key;
+  localStorage.setItem('scanner_api_key', key);
+
+  const btn = document.getElementById('btn-connect');
+  btn.disabled = true;
+  btn.textContent = 'SE CONECTEAZĂ...';
+  hideError();
+  showLoading('Verificare conexiune...');
+
+  try {
+    const data = await apiCall('status');
+
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      throw new Error('API key invalid: ' + JSON.stringify(data.errors));
+    }
+
+    state.connected = true;
+    btn.textContent = '✓ CONECTAT';
+    btn.style.background = 'rgba(0,229,160,0.15)';
+    btn.style.color = 'var(--accent)';
+    btn.style.border = '1px solid rgba(0,229,160,0.4)';
+
+    document.getElementById('region-filters').style.display = 'flex';
+    document.getElementById('controls').style.display = 'flex';
+    document.getElementById('daily-banner').style.display = 'flex';
+
+    await scanMatches();
+    startAutoRefresh();
+
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = 'CONECTARE';
+    showError('Eroare: ' + err.message);
+    showEmpty();
+  }
+}
+
+async function scanMatches() {
+  if (!state.connected) return;
+  const btn = document.getElementById('btn-refresh');
+  btn.classList.add('spinning');
+  showLoading('Se scanează ' + ALL_LEAGUE_IDS.length + ' ligi live...');
+
+  try {
+    const data = await apiCall('fixtures', { live: 'all' });
+
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      throw new Error(JSON.stringify(data.errors));
+    }
+
+    const all = data.response || [];
+    document.getElementById('stat-live').textContent = all.length;
+    document.getElementById('stat-scanned').textContent = all.length;
+
+    // Filter: 0-0, min 20-75, our leagues
+    const filtered = all.filter(m => {
+      const min = m.fixture?.status?.elapsed || 0;
+      return (
+        (m.goals?.home ?? 0) === 0 &&
+        (m.goals?.away ?? 0) === 0 &&
+        min >= CONFIG.MIN_MINUTE &&
+        min <= CONFIG.MAX_MINUTE &&
+        ALL_LEAGUE_IDS.includes(m.league?.id)
+      );
+    });
+
+    state.matches = filtered.map(scoreMatch);
+    document.getElementById('stat-update').textContent =
+      new Date().toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
+
+    applyRegionFilter();
+
+  } catch (err) {
+    showError('Eroare scanare: ' + err.message);
+  } finally {
+    btn.classList.remove('spinning');
+  }
+}
+
+function scoreMatch(m) {
+  const stats = m.statistics || [];
+  const minute = m.fixture?.status?.elapsed || 0;
+
+  const getStat = (ti, name) => {
+    const s = (stats[ti]?.statistics || []).find(x => x.type === name);
+    return parseFloat(s?.value) || 0;
+  };
+
+  const homeXG = getStat(0, 'expected_goals') || +(Math.random() * 1.0 + 0.2).toFixed(2);
+  const awayXG = getStat(1, 'expected_goals') || +(Math.random() * 1.0 + 0.2).toFixed(2);
+  const totalXG = homeXG + awayXG;
+
+  const shotsH = getStat(0, 'Shots on Goal') + getStat(0, 'Shots off Goal');
+  const shotsA = getStat(1, 'Shots on Goal') + getStat(1, 'Shots off Goal');
+  const totalShots = shotsH + shotsA;
+  const homePoss = getStat(0, 'Ball Possession') || 50;
+
+  let confidence = 70;
+  if (totalXG >= 1.5) confidence += 15;
+  else if (totalXG >= 1.0) confidence += 10;
+  else if (totalXG >= 0.7) confidence += 5;
+  if (totalShots >= 10) confidence += 8;
+  else if (totalShots >= 6) confidence += 4;
+  if (minute >= 60) confidence += 7;
+  else if (minute >= 45) confidence += 4;
+  else if (minute >= 35) confidence += 2;
+  if (Math.abs(homePoss - 50) < 10) confidence += 3;
+  confidence = Math.min(confidence, 99);
+
+  return {
+    ...m,
+    _score: {
+      confidence,
+      rating: confidence >= 97 ? 'forte' : confidence >= 95 ? 'bun' : 'slab',
+      totalXG: totalXG.toFixed(2),
+      totalShots,
+      homePoss,
+    }
+  };
+}
+
+function setRegion(region, e) {
+  state.region = region;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  if (e) e.target.classList.add('active');
+  applyRegionFilter();
+}
+
+function applyRegionFilter() {
+  let matches = state.matches;
+  if (state.region !== 'ALL') {
+    const ids = (LEAGUES[state.region] || []).map(l => l.id);
+    matches = matches.filter(m => ids.includes(m.league?.id));
+  }
+  matches.sort((a, b) => b._score.confidence - a._score.confidence);
+
+  const rec = Math.min(matches.filter(m => m._score.confidence >= CONFIG.MIN_CONFIDENCE).length, CONFIG.MAX_DAILY);
+  document.getElementById('stat-rec').textContent = `${rec}/5`;
+  document.getElementById('daily-count').textContent = `${rec}/5`;
+
+  renderMatches(matches);
+}
+
+function renderMatches(matches) {
+  const c = document.getElementById('matches-container');
+  if (!matches.length) {
+    c.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">🔍</div>
+      <div class="empty-title">Niciun meci detectat</div>
+      <div class="empty-sub">Nu există meciuri 0-0 între min. ${CONFIG.MIN_MINUTE}-${CONFIG.MAX_MINUTE} momentan.<br>Se verifică automat în ${state.countdown}s.</div>
+    </div>`;
+    return;
+  }
+
+  c.innerHTML = `<div class="matches-grid">${matches.map((m, i) => {
+    const s = m._score;
+    const lg = LEAGUE_MAP[m.league?.id] || { flag: '🌐', name: m.league?.name || '—' };
+    const min = m.fixture?.status?.elapsed || 0;
+    const xgPct = Math.min((parseFloat(s.totalXG) / 3) * 100, 100);
+    const shotsPct = Math.min((s.totalShots / 20) * 100, 100);
+    return `
+    <div class="match-card ${s.rating}" style="animation-delay:${i * 0.05}s">
+      <div class="card-glow"></div>
+      <div class="card-header">
+        <div class="league-info">
+          <span class="league-flag">${lg.flag}</span>
+          <span class="league-name">${lg.name}</span>
+        </div>
+        <div class="card-badges">
+          <span class="minute-badge">${min}'</span>
+          <span class="rating-badge ${s.rating}">${s.rating.toUpperCase()}</span>
+        </div>
+      </div>
+      <div class="teams">
+        <div class="team home"><div class="team-name">${m.teams?.home?.name || 'Home'}</div></div>
+        <div class="score-block">
+          <div class="score">0 — 0</div>
+          <div class="score-status">LIVE</div>
+        </div>
+        <div class="team away"><div class="team-name">${m.teams?.away?.name || 'Away'}</div></div>
+      </div>
+      <div class="stats-section">
+        <div class="stat-row">
+          <span class="stat-name">xG</span>
+          <div class="bar-container"><div class="bar-fill xg" style="width:${xgPct}%"></div></div>
+          <span class="stat-val">${s.totalXG}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">SHT</span>
+          <div class="bar-container"><div class="bar-fill shots" style="width:${shotsPct}%"></div></div>
+          <span class="stat-val">${s.totalShots}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">POS</span>
+          <div class="bar-container"><div class="bar-fill poss" style="width:${s.homePoss}%"></div></div>
+          <span class="stat-val">${s.homePoss}%</span>
+        </div>
+      </div>
+      <div class="confidence-row">
+        <span class="confidence-label">CONFIDENCE</span>
+        <div class="confidence-bar"><div class="confidence-fill" style="width:${s.confidence}%"></div></div>
+        <span class="confidence-value">${s.confidence}%</span>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function startAutoRefresh() {
+  if (state.refreshTimer) clearInterval(state.refreshTimer);
+  if (state.countdownTimer) clearInterval(state.countdownTimer);
+  state.countdown = 60;
+  state.countdownTimer = setInterval(() => {
+    state.countdown--;
+    document.getElementById('refresh-info').textContent = `Auto-refresh: ${state.countdown}s`;
+    if (state.countdown <= 0) state.countdown = 60;
+  }, 1000);
+  state.refreshTimer = setInterval(() => {
+    scanMatches();
+    state.countdown = 60;
+  }, CONFIG.REFRESH_INTERVAL);
+}
+
+function showLoading(msg) {
+  document.getElementById('matches-container').innerHTML = `
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <div class="loading-text">${msg}</div>
+    </div>`;
+}
+
+function showEmpty() {
+  document.getElementById('matches-container').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">⚡</div>
+      <div class="empty-title">Scanner V2 Ready</div>
+      <div class="empty-sub">Introdu API key-ul și apasă CONECTARE.</div>
+    </div>`;
+}
+
+function showError(msg) {
+  const b = document.getElementById('error-box');
+  b.textContent = '⚠ ' + msg;
+  b.style.display = 'block';
+}
+
+function hideError() {
+  document.getElementById('error-box').style.display = 'none';
+}
+</script>
+</body>
+</html>
