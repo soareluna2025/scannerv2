@@ -12,7 +12,7 @@ if (!key) return res.status(500).json({ error: ‘API key not configured on serv
 
 var params = [];
 for (var k in req.query) {
-if (k !== ‘endpoint’) params.push(k + ‘=’ + req.query[k]);
+if (k !== ‘endpoint’ && k !== ‘key’) params.push(k + ‘=’ + encodeURIComponent(req.query[k]));
 }
 
 var url = ‘https://v3.football.api-sports.io/’ + endpoint;

@@ -155,7 +155,7 @@ var ST={ak:localStorage.getItem('sak')||'',cn:false,ms:[],rg:'ALL',rt:null,ct:nu
 setInterval(function(){var d=new Date();document.getElementById('clk').textContent=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());},1000);
 function pad(n){return n<10?'0'+n:''+n;}
 window.onload=function(){if(ST.ak)document.getElementById('aki').value=ST.ak;};
-function buildQ(ep,p){var q='endpoint='+ep+'&key='+ST.ak;if(p){for(var k in p)q+='&'+k+'='+p[k];}return q;}
+function buildQ(ep,p){var q='endpoint='+encodeURIComponent(ep);if(p){for(var k in p)q+='&'+encodeURIComponent(k)+'='+encodeURIComponent(p[k]);}return q;}
 async function call(ep,p){var r=await fetch('/api/scan?'+buildQ(ep,p));if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}
 async function conn(){
 var raw=document.getElementById('aki').value;var key='';
@@ -187,15 +187,16 @@ ST.ms=fil;var n=new Date();document.getElementById('s4').textContent=pad(n.getHo
 function scM(m){
 var st=m.statistics||[];var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;
 function gs(ti,nm){if(!st[ti]||!st[ti].statistics)return 0;var a=st[ti].statistics;for(var i=0;i<a.length;i++)if(a[i].type===nm)return parseFloat(a[i].value)||0;return 0;}
-var hxg=gs(0,'expected_goals')||(Math.random()*.8+.2);var axg=gs(1,'expected_goals')||(Math.random()*.8+.2);
+var hxg=gs(0,'expected_goals');var axg=gs(1,'expected_goals');
+var hasXG=hxg>0||axg>0;
 var txg=hxg+axg;var ts=gs(0,'Shots on Goal')+gs(0,'Shots off Goal')+gs(1,'Shots on Goal')+gs(1,'Shots off Goal');var hp=gs(0,'Ball Possession')||50;
 var c=70;
-if(txg>=1.5)c+=15;else if(txg>=1.0)c+=10;else if(txg>=.7)c+=5;
+if(hasXG){if(txg>=1.5)c+=15;else if(txg>=1.0)c+=10;else if(txg>=.7)c+=5;}
 if(ts>=10)c+=8;else if(ts>=6)c+=4;
 if(mn>=60)c+=7;else if(mn>=45)c+=4;else if(mn>=35)c+=2;
 if(Math.abs(hp-50)<10)c+=3;
 if(c>99)c=99;
-m._s={c:c,r:c>=97?'forte':c>=95?'bun':'slab',xg:txg.toFixed(2),sh:ts,hp:hp};return m;
+m._s={c:c,r:c>=97?'forte':c>=95?'bun':'slab',xg:hasXG?txg.toFixed(2):'N/A',sh:ts,hp:hp};return m;
 }
 function setR(r,e){ST.rg=r;var bs=document.querySelectorAll('.fb');for(var i=0;i<bs.length;i++)bs[i].classList.remove('active');if(e&&e.target)e.target.classList.add('active');apF();}
 function apF(){
@@ -213,7 +214,7 @@ var h='<div class="mg">';
 for(var i=0;i<ms.length;i++){
 var m=ms[i];var s=m._s;var lg=LM[m.league?m.league.id:0]||{f:'?',n:'-'};var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;
 var hn=m.teams&&m.teams.home?m.teams.home.name:'Home';var an=m.teams&&m.teams.away?m.teams.away.name:'Away';
-var xp=Math.min((parseFloat(s.xg)/3)*100,100);var sp=Math.min((s.sh/20)*100,100);
+var xp=s.xg==='N/A'?0:Math.min((parseFloat(s.xg)/3)*100,100);var sp=Math.min((s.sh/20)*100,100);
 h+='<div class="mc '+s.r+'">';
 h+='<div class="ch"><div class="lin"><span class="lf">'+lg.f+'</span><span class="ln">'+lg.n+'</span></div>';
 h+='<div class="cbg"><span class="mbd">'+mn+"'"+'</span><span class="rb '+s.r+'">'+s.r.toUpperCase()+'</span></div></div>';
@@ -230,7 +231,7 @@ h+='</div>';
 }
 h+='</div>';c.innerHTML=h;
 }
-function startAR(){if(ST.rt)clearInterval(ST.rt);if(ST.ct)clearInterval(ST.ct);ST.cd=60;ST.ct=setInterval(function(){ST.cd--;document.getElementById('rin').textContent='Auto: '+ST.cd+'s';if(ST.cd<=0)ST.cd=60;},1000);ST.rt=setInterval(function(){scn();ST.cd=60;},CF.RI);}
+function startAR(){if(ST.rt)clearInterval(ST.rt);if(ST.ct)clearInterval(ST.ct);ST.cd=CF.RI/1000;ST.ct=setInterval(function(){ST.cd--;if(ST.cd<0)ST.cd=CF.RI/1000;document.getElementById('rin').textContent='Auto: '+ST.cd+'s';},1000);ST.rt=setInterval(function(){scn();ST.cd=CF.RI/1000;},CF.RI);}
 function showL(m){document.getElementById('mcc').innerHTML='<div class="ls"><div class="sp"></div><div class="lt">'+(m||'Se incarca...')+'</div></div>';}
 function showEm(){document.getElementById('mcc').innerHTML='<div class="es"><div class="et">Scanner V2 Ready</div><div class="esu">Introdu API key-ul si apasa CONECTARE.</div></div>';}
 function showE(m){var b=document.getElementById('erb');b.textContent=m;b.style.display='block';}
