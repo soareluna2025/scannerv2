@@ -109,7 +109,7 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--mu);border-top:
 <div class="sit"><div class="sil">Meciuri Live</div><div class="siv" id="s1">-</div></div>
 <div class="sit"><div class="sil">Scanate</div><div class="siv" id="s2">-</div></div>
 <div class="sit"><div class="sil">Recomandate</div><div class="siv wa" id="s3">0/5</div></div>
-<div class="sit"><div class="sil">Filtru</div><div class="siv">0-0 | 20-75</div></div>
+<div class="sit"><div class="sil">Filtru</div><div class="siv">TOATE LIVE</div></div>
 <div class="sit"><div class="sil">Prag</div><div class="siv">95%</div></div>
 <div class="sit"><div class="sil">Update</div><div class="siv mu" id="s4">-</div></div>
 </div></div>
@@ -192,7 +192,7 @@ var all=d.response||[];
 if(!Array.isArray(all))throw new Error('Format invalid de la server');
 document.getElementById('s1').textContent=all.length;document.getElementById('s2').textContent=all.length;
 var fil=[];
-for(var i=0;i<all.length;i++){var m=all[i];var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;var hg=m.goals&&m.goals.home!==null?m.goals.home:0;var ag=m.goals&&m.goals.away!==null?m.goals.away:0;var lid=m.league?m.league.id:0;if(hg===0&&ag===0&&mn>=CF.MIN&&mn<=CF.MAX&&AIDS.indexOf(lid)>=0)fil.push(scM(m));}
+for(var i=0;i<all.length;i++){var m=all[i];fil.push(scM(m));}
 ST.ms=fil;var n=new Date();document.getElementById('s4').textContent=pad(n.getHours())+':'+pad(n.getMinutes());apF();
 }catch(e){showE('Eroare: '+e.message);}
 }
