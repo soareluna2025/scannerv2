@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Scanner V2</title>
+<title>AlohaScan</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#080c10;--sur:#0e1418;--sur2:#141b22;--bor:#1e2a34;--ac:#00e5a0;--ac2:#00b8d4;--wa:#ffb300;--da:#ff4757;--tx:#e8f0f7;--mu:#4a6070;}
@@ -101,7 +101,7 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--mu);border-top:
 <body>
 <header>
 <div class="hi">
-<div class="logo"><div class="lic">V2</div><div class="ltx">SCANNER <span>V2</span></div></div>
+<div class="logo"><div class="lic">AS</div><div class="ltx">ALOHA<span>SCAN</span></div></div>
 <div class="hr"><div class="lbd"><div class="ld"></div>LIVE</div><div class="clk" id="clk">--:--:--</div></div>
 </div>
 </header>
@@ -138,9 +138,9 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--mu);border-top:
 <div style="font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;">Meciuri Detectate</div>
 <div style="display:flex;align-items:center;gap:12px;"><div class="ri" id="rin">Auto: 60s</div><button class="br" onclick="scn()">REFRESH</button></div>
 </div>
-<div id="mcc"><div class="es"><div class="et">Scanner V2 Ready</div><div class="esu">Introdu API key-ul si apasa CONECTARE.</div></div></div>
+<div id="mcc"><div class="es"><div class="et">AlohaScan Ready</div><div class="esu">Introdu API key-ul si apasa CONECTARE.</div></div></div>
 </main>
-<footer>SCANNER V2 - 88 LIGI - xG POWERED - 95% MIN</footer>
+<footer>ALOHASCAN - 88 LIGI - xG POWERED - 95% MIN</footer>
 <script>
 var CF={MIN:20,MAX:75,MC:95,MD:5,RI:300000};
 var LG={
@@ -245,7 +245,7 @@ h+='</div>';c.innerHTML=h;
 }
 function startAR(){if(ST.rt)clearInterval(ST.rt);if(ST.ct)clearInterval(ST.ct);ST.cd=CF.RI/1000;ST.ct=setInterval(function(){ST.cd--;if(ST.cd<0)ST.cd=CF.RI/1000;document.getElementById('rin').textContent='Auto: '+ST.cd+'s';},1000);ST.rt=setInterval(function(){scn();ST.cd=CF.RI/1000;},CF.RI);}
 function showL(m){document.getElementById('mcc').innerHTML='<div class="ls"><div class="sp"></div><div class="lt">'+(m||'Se incarca...')+'</div></div>';}
-function showEm(){document.getElementById('mcc').innerHTML='<div class="es"><div class="et">Scanner V2 Ready</div><div class="esu">Introdu API key-ul si apasa CONECTARE.</div></div>';}
+function showEm(){document.getElementById('mcc').innerHTML='<div class="es"><div class="et">AlohaScan Ready</div><div class="esu">Introdu API key-ul si apasa CONECTARE.</div></div>';}
 function showE(m){var b=document.getElementById('erb');b.textContent=m;b.style.display='block';}
 function hideE(){document.getElementById('erb').style.display='none';}
 </script>
