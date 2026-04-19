@@ -1,9 +1,9 @@
 export default async function handler(req, res) {
-  const API_KEY = process.env.API_KEY;
+  const API_KEY = process.env.API_FOOTBALL_KEY;
 
   try {
     const r = await fetch(
-      "https://api-football.com/v3/fixtures?live=all",
+      "https://v3.football.api-sports.io/fixtures?live=all",
       {
         headers: {
           "x-apisports-key": API_KEY
