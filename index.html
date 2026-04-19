@@ -86,6 +86,8 @@ main{max-width:1200px;margin:0 auto;padding:20px;}
 .cv{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;color:var(--ac);}
 .cbar{flex:1;height:3px;background:var(--bor);border-radius:4px;margin:0 10px;overflow:hidden;}
 .cf{height:100%;background:linear-gradient(90deg,var(--ac),var(--ac2));}
+.lg{width:18px;height:18px;object-fit:contain;border-radius:2px;vertical-align:middle;margin-right:4px;}
+.tl{width:28px;height:28px;object-fit:contain;border-radius:4px;}
 .es{text-align:center;padding:60px 20px;color:var(--mu);}
 .et{font-size:16px;font-weight:700;margin-bottom:8px;color:var(--tx);}
 .esu{font-size:13px;}
@@ -214,16 +216,17 @@ var c=document.getElementById('mcc');
 if(!ms||!ms.length){c.innerHTML='<div class="es"><div class="et">Niciun meci live</div><div class="esu">Nu sunt meciuri in desfasurare momentan.</div></div>';return;}
 var h='<div class="mg">';
 for(var i=0;i<ms.length;i++){
-var m=ms[i];var s=m._s;var lg={f:m.league&&m.league.f?m.league.f:'?',n:m.league&&m.league.name?m.league.name:'-'};var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;
+var m=ms[i];var s=m._s;var lg={f:m.league&&m.league.f?m.league.f:'?',n:m.league&&m.league.name?m.league.name:'-',logo:m.league&&m.league.logo?m.league.logo:''};var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;
 var hn=m.teams&&m.teams.home?m.teams.home.name:'Home';var an=m.teams&&m.teams.away?m.teams.away.name:'Away';
+var hl=m.teams&&m.teams.home&&m.teams.home.logo?m.teams.home.logo:'';var al=m.teams&&m.teams.away&&m.teams.away.logo?m.teams.away.logo:'';
 var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;
 var xp=s.xg==='N/A'?0:Math.min((parseFloat(s.xg)/3)*100,100);var sp=Math.min((s.sh/20)*100,100);
 h+='<div class="mc '+s.r+'">';
-h+='<div class="ch"><div class="lin"><span class="lf">'+lg.f+'</span><span class="ln">'+lg.n+'</span></div>';
+h+='<div class="ch"><div class="lin">'+(lg.logo?'<img class="lg" src="'+lg.logo+'" onerror="this.style.display=\'none\'">'  :'<span class="lf">'+lg.f+'</span>')+'<span class="ln">'+lg.n+'</span></div>';
 h+='<div class="cbg"><span class="mbd">'+mn+"'"+'</span><span class="rb '+s.r+'">'+s.r.toUpperCase()+'</span></div></div>';
-h+='<div class="tms"><div class="tm"><div class="tn">'+hn+'</div></div>';
+h+='<div class="tms"><div class="tm">'+(hl?'<img class="tl" src="'+hl+'" onerror="this.style.display=\'none\'">':'')+'<div class="tn">'+hn+'</div></div>';
 h+='<div class="scb"><div class="sco">'+hg+' - '+ag+'</div><div class="sst">LIVE</div></div>';
-h+='<div class="tm aw"><div class="tn">'+an+'</div></div></div>';
+h+='<div class="tm aw"><div class="tn">'+an+'</div>'+(al?'<img class="tl" src="'+al+'" onerror="this.style.display=\'none\'">':'')+'</div></div>';
 h+='<div class="ss2">';
 h+='<div class="sr"><span class="sn">xG</span><div class="bc"><div class="bf xg" style="width:'+xp+'%"></div></div><span class="sv">'+s.xg+'</span></div>';
 h+='<div class="sr"><span class="sn">SHT</span><div class="bc"><div class="bf sh" style="width:'+sp+'%"></div></div><span class="sv">'+s.sh+'</span></div>';

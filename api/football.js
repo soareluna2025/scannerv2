@@ -15,10 +15,10 @@ export default async function handler(req, res) {
           combined.push({
             _src: 'fd',
             fixture: { status: { elapsed: m.minute || 0 } },
-            league: { id: m.competition.id, name: m.competition.name, f: m.competition.code || '?' },
+            league: { id: m.competition.id, name: m.competition.name, f: m.competition.code || '?', logo: m.competition.emblem || '' },
             teams: {
-              home: { name: m.homeTeam.shortName || m.homeTeam.name },
-              away: { name: m.awayTeam.shortName || m.awayTeam.name }
+              home: { name: m.homeTeam.shortName || m.homeTeam.name, logo: m.homeTeam.crest || '' },
+              away: { name: m.awayTeam.shortName || m.awayTeam.name, logo: m.awayTeam.crest || '' }
             },
             goals: {
               home: m.score.fullTime.home !== null ? m.score.fullTime.home : 0,
