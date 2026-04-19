@@ -94,6 +94,9 @@ main{max-width:1200px;margin:0 auto;padding:20px;}
 @keyframes sp{to{transform:rotate(360deg);}}
 .lt{font-size:13px;color:var(--mu);font-weight:600;}
 .err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.3);border-radius:12px;padding:16px 20px;margin-bottom:20px;font-size:13px;color:var(--da);display:none;}
+.ai{margin-top:8px;padding:8px 10px;background:rgba(0,229,160,.06);border:1px solid rgba(0,229,160,.15);border-radius:8px;font-size:11px;color:var(--ac);line-height:1.5;}
+.ail{font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;margin-right:4px;}
+.aia{font-size:10px;color:var(--mu);font-style:italic;}
 footer{text-align:center;padding:20px;font-size:11px;color:var(--mu);border-top:1px solid var(--bor);margin-top:40px;}
 @media(max-width:600px){.mg{grid-template-columns:1fr;}.arw{flex-direction:column;}.arw input{width:100%;}}
 </style>
@@ -191,7 +194,20 @@ document.getElementById('s1').textContent=all.length;document.getElementById('s2
 var fil=[];
 for(var i=0;i<all.length;i++){var m=all[i];var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;var hg=m.goals&&m.goals.home!==null?m.goals.home:0;var ag=m.goals&&m.goals.away!==null?m.goals.away:0;var lid=m.league?m.league.id:0;if(hg===0&&ag===0&&mn>=CF.MIN&&mn<=CF.MAX&&AIDS.indexOf(lid)>=0)fil.push(scM(m));}
 ST.ms=fil;var n=new Date();document.getElementById('s4').textContent=pad(n.getHours())+':'+pad(n.getMinutes());apF();
+anlz();
 }catch(e){showE('Eroare: '+e.message);}
+}
+async function anlz(){
+if(!ST.ms.length)return;
+try{
+var r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({matches:ST.ms})});
+if(!r.ok)return;
+var ad=await r.json();
+if(Array.isArray(ad.analysis)){
+ad.analysis.forEach(function(a){if(ST.ms[a.id])ST.ms[a.id]._ai=a.insight;});
+apF();
+}
+}catch(e){}
 }
 function scM(m){
 var st=m.statistics||[];var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;
@@ -236,6 +252,7 @@ h+='<div class="sr"><span class="sn">SHT</span><div class="bc"><div class="bf sh
 h+='<div class="sr"><span class="sn">POS</span><div class="bc"><div class="bf po" style="width:'+s.hp+'%"></div></div><span class="sv">'+s.hp+'%</span></div>';
 h+='</div>';
 h+='<div class="cr"><span class="cl">CONFIDENCE</span><div class="cbar"><div class="cf" style="width:'+s.c+'%"></div></div><span class="cv">'+s.c+'%</span></div>';
+if(m._ai){h+='<div class="ai"><span class="ail">AI</span>'+m._ai+'</div>';}else{h+='<div class="ai aia">Se analizeaza...</div>';}
 h+='</div>';
 }
 h+='</div>';c.innerHTML=h;
