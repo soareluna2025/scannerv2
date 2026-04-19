@@ -156,7 +156,15 @@ setInterval(function(){var d=new Date();document.getElementById('clk').textConte
 function pad(n){return n<10?'0'+n:''+n;}
 window.onload=function(){if(ST.ak)document.getElementById('aki').value=ST.ak;};
 function buildQ(ep,p){var q='endpoint='+encodeURIComponent(ep);if(p){for(var k in p)q+='&'+encodeURIComponent(k)+'='+encodeURIComponent(p[k]);}return q;}
-async function call(ep,p){var r=await fetch('/api/scan?'+buildQ(ep,p));if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}
+async function apiFetch(url){
+var r=await fetch(url);
+if(!r.ok)throw new Error('HTTP '+r.status);
+var ct=r.headers.get('content-type')||'';
+if(!ct.includes('application/json'))throw new Error('Raspuns invalid de la server (non-JSON)');
+var d=await r.json();
+if(d.error)throw new Error(d.error);
+return d;
+}
 async function conn(){
 var raw=document.getElementById('aki').value;var key='';
 for(var i=0;i<raw.length;i++){var c=raw.charCodeAt(i);if((c>=48&&c<=57)||(c>=65&&c<=90)||(c>=97&&c<=122))key+=raw[i];}
@@ -165,7 +173,7 @@ ST.ak=key;localStorage.setItem('sak',key);
 var b=document.getElementById('btc');b.disabled=true;b.textContent='SE CONECTEAZA...';
 hideE();showL('Verificare...');
 try{
-var d=await call('status');
+var d=await apiFetch('/api/scan?'+buildQ('status'));
 if(d.errors&&Object.keys(d.errors).length>0)throw new Error('API key invalid');
 ST.cn=true;b.textContent='CONECTAT';b.style.background='rgba(0,229,160,.15)';b.style.color='var(--ac)';b.style.border='1px solid rgba(0,229,160,.4)';
 document.getElementById('ref').style.display='flex';document.getElementById('ctr').style.display='flex';document.getElementById('dab').style.display='flex';
@@ -175,9 +183,8 @@ await scn();startAR();
 async function scn(){
 if(!ST.cn)return;showL('Se scaneaza '+AIDS.length+' ligi...');
 try{
-var d=await call('fixtures',{live:'all'});
-if(d.errors&&Object.keys(d.errors).length>0)throw new Error(JSON.stringify(d.errors));
-var all=d.response||[];
+var all=await apiFetch('/api/fixtures');
+if(!Array.isArray(all))throw new Error('Format invalid de la server');
 document.getElementById('s1').textContent=all.length;document.getElementById('s2').textContent=all.length;
 var fil=[];
 for(var i=0;i<all.length;i++){var m=all[i];var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;var hg=m.goals&&m.goals.home!==null?m.goals.home:0;var ag=m.goals&&m.goals.away!==null?m.goals.away:0;var lid=m.league?m.league.id:0;if(hg===0&&ag===0&&mn>=CF.MIN&&mn<=CF.MAX&&AIDS.indexOf(lid)>=0)fil.push(scM(m));}
