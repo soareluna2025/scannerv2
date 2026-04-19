@@ -158,12 +158,15 @@ window.onload=function(){if(ST.ak)document.getElementById('aki').value=ST.ak;};
 function buildQ(ep,p){var q='endpoint='+encodeURIComponent(ep);if(p){for(var k in p)q+='&'+encodeURIComponent(k)+'='+encodeURIComponent(p[k]);}return q;}
 async function apiFetch(url){
 var r=await fetch(url);
-if(!r.ok)throw new Error('HTTP '+r.status);
 var ct=r.headers.get('content-type')||'';
-if(!ct.includes('application/json'))throw new Error('Raspuns invalid de la server (non-JSON)');
+if(ct.includes('application/json')){
 var d=await r.json();
 if(d.error)throw new Error(d.error);
+if(!r.ok)throw new Error('HTTP '+r.status);
 return d;
+}
+if(!r.ok)throw new Error('HTTP '+r.status+' (verifica API_KEY in Vercel)');
+throw new Error('Raspuns invalid de la server (non-JSON)');
 }
 async function conn(){
 var raw=document.getElementById('aki').value;var key='';
