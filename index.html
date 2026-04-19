@@ -140,22 +140,35 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--mu);border-top:
 .clsn{color:var(--tx);font-weight:600;}
 .clspt{font-family:'Space Mono',monospace;color:var(--ac);font-weight:700;}
 .clst tr:last-child td{border-bottom:none;}
-.msel{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px;}
-.msel::-webkit-scrollbar{display:none;}
-.mchip{flex-shrink:0;padding:6px 16px;border-radius:20px;border:1px solid var(--bor);background:var(--sur);color:var(--mu);font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;}
-.mchip.active{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#080c10;border-color:transparent;}
-.mkbx{display:flex;flex-direction:column;gap:5px;margin:10px 0;}
-.mkr{display:flex;align-items:center;gap:8px;}
-.mkl{font-size:10px;font-weight:700;color:var(--mu);width:46px;text-transform:uppercase;}
-.mkb{flex:1;height:6px;background:var(--bor);border-radius:4px;overflow:hidden;}
-.mkf{height:100%;border-radius:4px;transition:width .6s ease;}
-.mkf.hi{background:linear-gradient(90deg,var(--ac),var(--ac2));}
-.mkf.md{background:linear-gradient(90deg,var(--wa),#ff8c00);}
-.mkf.lo{background:linear-gradient(90deg,var(--da),#ff7f50);}
-.mkv{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;width:34px;text-align:right;}
-.mkv.hi{color:var(--ac);}
-.mkv.md{color:var(--wa);}
-.mkv.lo{color:var(--da);}
+#msel{display:flex;align-items:center;overflow-x:auto;margin-bottom:14px;background:var(--sur);border:1px solid var(--bor);border-radius:10px;padding:4px 6px;gap:2px;}
+#msel::-webkit-scrollbar{display:none;}
+.mksep{width:1px;height:18px;background:var(--bor);margin:0 6px;flex-shrink:0;}
+.mkglbl{font-size:9px;font-weight:700;color:var(--mu);text-transform:uppercase;padding:0 4px;flex-shrink:0;letter-spacing:.5px;}
+.mktab{flex-shrink:0;padding:5px 11px;border:none;background:none;color:var(--mu);font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;border-radius:6px;transition:all .2s;white-space:nowrap;}
+.mktab.active{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#080c10;}
+.mktab:not(.active):hover{background:var(--sur2);color:var(--tx);}
+.mkdisp{margin:10px 0;}
+.mkdmain{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.mkdlbl{font-size:11px;font-weight:700;min-width:72px;}
+.mkdlbl.hi{color:var(--ac);}
+.mkdlbl.md{color:var(--wa);}
+.mkdlbl.lo{color:var(--mu);}
+.mkdbar{flex:1;height:8px;background:var(--bor);border-radius:4px;overflow:hidden;}
+.mkdbf{height:100%;border-radius:4px;transition:width .6s ease;}
+.mkdbf.hi{background:linear-gradient(90deg,var(--ac),var(--ac2));}
+.mkdbf.md{background:linear-gradient(90deg,var(--wa),#ff8c00);}
+.mkdbf.lo{background:linear-gradient(90deg,var(--da),#ff7f50);}
+.mkdpct{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;width:38px;text-align:right;}
+.mkdpct.hi{color:var(--ac);}
+.mkdpct.md{color:var(--wa);}
+.mkdpct.lo{color:var(--mu);}
+.mkrow{display:flex;align-items:center;gap:4px;margin-bottom:3px;flex-wrap:wrap;}
+.mkrlbl{font-size:9px;font-weight:700;color:var(--mu);text-transform:uppercase;width:46px;flex-shrink:0;}
+.mkpill{font-family:'Space Mono',monospace;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;}
+.mkpill.hi{color:var(--ac);background:rgba(0,229,160,.1);}
+.mkpill.md{color:var(--wa);background:rgba(255,179,0,.1);}
+.mkpill.lo{color:var(--mu);background:var(--sur2);}
+.mkpill.sel{outline:1px solid currentColor;}
 .immbdg{font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.5px;}
 .immbdg.HIGH{background:rgba(255,71,87,.2);color:var(--da);animation:pu 1s infinite;}
 .immbdg.MEDIUM{background:rgba(255,179,0,.2);color:var(--wa);}
@@ -203,11 +216,26 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--mu);border-top:
 <div style="font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;">Meciuri Detectate</div>
 <div style="display:flex;align-items:center;gap:12px;"><div class="ri" id="rin">Auto: 60s</div><button class="br" onclick="scn()">REFRESH</button></div>
 </div>
-<div class="msel" id="msel" style="display:none;">
-<button class="mchip active" onclick="setMK('over05',this)">Over 0.5</button>
-<button class="mchip" onclick="setMK('over15',this)">Over 1.5</button>
-<button class="mchip" onclick="setMK('over25',this)">Over 2.5</button>
-<button class="mchip" onclick="setMK('gg',this)">GG</button>
+<div id="msel" style="display:none;">
+<button class="mktab active" onclick="setMK('all',this)">TOATE LIVE</button>
+<div class="mksep"></div>
+<span class="mkglbl">TOTAL</span>
+<button class="mktab" onclick="setMK('over05',this)">Ov 0.5</button>
+<button class="mktab" onclick="setMK('over15',this)">Ov 1.5</button>
+<button class="mktab" onclick="setMK('over25',this)">Ov 2.5</button>
+<button class="mktab" onclick="setMK('gg',this)">GG</button>
+<div class="mksep"></div>
+<span class="mkglbl">GAZDE</span>
+<button class="mktab" onclick="setMK('home05',this)">0.5</button>
+<button class="mktab" onclick="setMK('home15',this)">1.5</button>
+<button class="mktab" onclick="setMK('home25',this)">2.5</button>
+<button class="mktab" onclick="setMK('home35',this)">3.5</button>
+<div class="mksep"></div>
+<span class="mkglbl">OASPEȚI</span>
+<button class="mktab" onclick="setMK('away05',this)">0.5</button>
+<button class="mktab" onclick="setMK('away15',this)">1.5</button>
+<button class="mktab" onclick="setMK('away25',this)">2.5</button>
+<button class="mktab" onclick="setMK('away35',this)">3.5</button>
 </div>
 <div id="mcc"><div class="es"><div class="et">AlohaScan Ready</div><div class="esu">Introdu API key-ul si apasa CONECTARE.</div></div></div>
 </main>
@@ -267,7 +295,7 @@ AF:[{id:233,n:'Egyptian Prem',f:'EGY'},{id:200,n:'PSL RSA',f:'RSA'},{id:379,n:'B
 var AIDS=[];var LM={};
 ['EU','AM','AS','AF'].forEach(function(r){LG[r].forEach(function(l){AIDS.push(l.id);LM[l.id]=l;});});
 var ST={cn:false,ms:[],rg:'ALL',rt:null,ct:null,cd:300,tab:'live',cE:{},cP:{},cS:{}};
-var TS={};var MK='over05';
+var TS={};var MK='all';
 setInterval(function(){var d=new Date();document.getElementById('clk').textContent=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());},1000);
 function pad(n){return n<10?'0'+n:''+n;}
 function buildQ(ep,p){var q='endpoint='+encodeURIComponent(ep);if(p){for(var k in p)q+='&'+encodeURIComponent(k)+'='+encodeURIComponent(p[k]);}return q;}
@@ -369,6 +397,7 @@ xgSpike=Math.max(0,(rXg-oXg)/Math.max(oXg,0.1));
 prsAcc=Math.max(0,(rPrs-oPrs)/Math.max(oPrs,0.05));}
 var f={};
 f.xgTotal=Math.min(txg/3,1);
+f.hxg=Math.min(hxg/1.5,1);f.axg=Math.min(axg/1.5,1);
 f.xgRate=mn>0?Math.min(txg/(mn/90*2.5),1):0;
 f.shots=Math.min(tSh/25,1);
 f.shotsOnTarget=Math.min(tSOT/10,1);
@@ -414,9 +443,18 @@ var lr=lb*remFrac+f.xgSpike*.3+f.prsAcc*.2;
 function P(l,k){if(l<=0)return k===0?1:0;var p=Math.exp(-l);for(var i=0;i<k;i++)p=p*l/(i+1);return p;}
 function mkt(need,l){if(need<=0)return 100;var pF=0;for(var k=0;k<need;k++)pF+=P(l,k);return Math.round(Math.max(5,Math.min(98,(1-pF)*100)));}
 var need05=Math.max(0,1-totalG),need15=Math.max(0,2-totalG),need25=Math.max(0,3-totalG);
-var lh=lr/2;
-var pGGh=hg>0?1:(1-P(lh,0)),pGGa=ag>0?1:(1-P(lh,0));
-return{over05:mkt(need05,lr),over15:mkt(need15,lr),over25:mkt(need25,lr),gg:Math.round(Math.max(5,Math.min(96,pGGh*pGGa*100))),la:lr.toFixed(2)};
+var lhxg=f.hxg>0?f.hxg*1.5:0,laxg=f.axg>0?f.axg*1.5:0;
+var lhf=f.homeFormGoals*1.5,laf=f.awayFormGoals*1.5;
+var lhb=lhxg>0?lhxg*.6+lhf*.4:lhf;if(lhb<.3)lhb=.75;
+var lab=laxg>0?laxg*.6+laf*.4:laf;if(lab<.3)lab=.65;
+var lhr=lhb*remFrac+f.xgSpike*.1,lar=lab*remFrac+f.prsAcc*.1;
+var pGGh=hg>0?1:(1-P(lhr,0)),pGGa=ag>0?1:(1-P(lar,0));
+return{
+over05:mkt(need05,lr),over15:mkt(need15,lr),over25:mkt(need25,lr),
+gg:Math.round(Math.max(5,Math.min(96,pGGh*pGGa*100))),
+home05:mkt(Math.max(0,1-hg),lhr),home15:mkt(Math.max(0,2-hg),lhr),home25:mkt(Math.max(0,3-hg),lhr),home35:mkt(Math.max(0,4-hg),lhr),
+away05:mkt(Math.max(0,1-ag),lar),away15:mkt(Math.max(0,2-ag),lar),away25:mkt(Math.max(0,3-ag),lar),away35:mkt(Math.max(0,4-ag),lar),
+la:lr.toFixed(2)};
 }
 function detectImminent(f){
 var sc=f.xgSpike*30+f.prsAcc*20+f.shotsOnTarget*15+f.timeUrgency*10+f.corners*5;
@@ -433,13 +471,18 @@ var mainP=mk[MK]||mk.over05;
 m._s={c:f.conf,r:mainP>=75?'forte':mainP>=50?'bun':'slab',xg:txg>0?txg.toFixed(2):'N/A',sh:tSh,hp:hp,mk:mk,imm:imm,f:f};
 return m;
 }
-function setMK(mk,el){MK=mk;var cs=document.querySelectorAll('.mchip');for(var i=0;i<cs.length;i++)cs[i].classList.remove('active');if(el)el.classList.add('active');apF();}
+function setMK(mk,el){MK=mk;var cs=document.querySelectorAll('.mktab');for(var i=0;i<cs.length;i++)cs[i].classList.remove('active');if(el)el.classList.add('active');apF();}
 function setR(r,e){ST.rg=r;var bs=document.querySelectorAll('.fb');for(var i=0;i<bs.length;i++)bs[i].classList.remove('active');if(e&&e.target)e.target.classList.add('active');apF();}
 function apF(){
 var ms=ST.ms.slice();
 if(ST.rg!=='ALL'){var ids=LG[ST.rg]?LG[ST.rg].map(function(l){return l.id;}):[];ms=ms.filter(function(m){return ids.indexOf(m.league?m.league.id:0)>=0;});}
-ms.sort(function(a,b){var pa=a._s&&a._s.mk?a._s.mk[MK]||0:0;var pb=b._s&&b._s.mk?b._s.mk[MK]||0:0;return pb-pa;});
-var rec=Math.min(ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk[MK]>=CF.MC;}).length,CF.MD);
+if(MK==='all'){
+ms.sort(function(a,b){return(b._s?b._s.c:0)-(a._s?a._s.c:0);});
+}else{
+ms=ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk[MK]>=60;});
+ms.sort(function(a,b){return(b._s.mk[MK]||0)-(a._s.mk[MK]||0);});
+}
+var rec=MK==='all'?Math.min(ms.filter(function(m){return m._s&&m._s.c>=CF.MC;}).length,CF.MD):Math.min(ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk[MK]>=CF.MC;}).length,CF.MD);
 document.getElementById('s3').textContent=rec+'/5';document.getElementById('dac').textContent=rec+'/5';
 rnd(ms);
 }
@@ -467,11 +510,12 @@ h+='</div>';
 if(s.mk){
 var mk=s.mk;
 function mkCls(v){return v>=75?'hi':v>=50?'md':'lo';}
-h+='<div class="mkbx">';
-[['over05','Over 0.5'],['over15','Over 1.5'],['over25','Over 2.5'],['gg','GG']].forEach(function(mp){
-var v=mk[mp[0]]||0;var cl=mkCls(v);
-h+='<div class="mkr"><span class="mkl">'+mp[1]+'</span><div class="mkb"><div class="mkf '+cl+'" style="width:'+v+'%"></div></div><span class="mkv '+cl+'">'+v+'%</span></div>';
-});
+function mkPills(grp,items){h+='<div class="mkrow"><span class="mkrlbl">'+grp+'</span>';items.forEach(function(kl){var v=mk[kl[0]]||0;var cl=mkCls(v);var sel=MK===kl[0]?' sel':'';h+='<span class="mkpill '+cl+sel+'">'+kl[1]+' '+v+'%</span>';});h+='</div>';}
+h+='<div class="mkdisp">';
+if(MK!=='all'){var actV=mk[MK]||0;var actCl=mkCls(actV);var MKLBL={over05:'Over 0.5',over15:'Over 1.5',over25:'Over 2.5',gg:'GG',home05:'Gazde 0.5',home15:'Gazde 1.5',home25:'Gazde 2.5',home35:'Gazde 3.5',away05:'Oaspeti 0.5',away15:'Oaspeti 1.5',away25:'Oaspeti 2.5',away35:'Oaspeti 3.5'};h+='<div class="mkdmain"><span class="mkdlbl '+actCl+'">'+(MKLBL[MK]||MK)+'</span><div class="mkdbar"><div class="mkdbf '+actCl+'" style="width:'+actV+'%"></div></div><span class="mkdpct '+actCl+'">'+actV+'%</span></div>';}
+mkPills('TOTAL',[['over05','0.5'],['over15','1.5'],['over25','2.5'],['gg','GG']]);
+mkPills('GAZDE',[['home05','0.5'],['home15','1.5'],['home25','2.5'],['home35','3.5']]);
+mkPills('OASPETI',[['away05','0.5'],['away15','1.5'],['away25','2.5'],['away35','3.5']]);
 h+='</div>';
 h+='<div class="cr"><span class="cl">CONF</span><div class="cbar"><div class="cf" style="width:'+s.c+'%"></div></div><span class="cv">'+s.c+'%</span><span class="immbdg '+s.imm+'" style="margin-left:8px">'+s.imm+'</span></div>';
 }else{
