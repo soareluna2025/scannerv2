@@ -176,8 +176,8 @@ ST.ak=key;localStorage.setItem('sak',key);
 var b=document.getElementById('btc');b.disabled=true;b.textContent='SE CONECTEAZA...';
 hideE();showL('Verificare...');
 try{
-var d=await apiFetch('/api/scan?'+buildQ('status'));
-if(d.errors&&Object.keys(d.errors).length>0)throw new Error('API key invalid');
+var d=await apiFetch('/api/fixtures');
+if(!Array.isArray(d.response||d))throw new Error('Raspuns API invalid');
 ST.cn=true;b.textContent='CONECTAT';b.style.background='rgba(0,229,160,.15)';b.style.color='var(--ac)';b.style.border='1px solid rgba(0,229,160,.4)';
 document.getElementById('ref').style.display='flex';document.getElementById('ctr').style.display='flex';document.getElementById('dab').style.display='flex';
 await scn();startAR();
