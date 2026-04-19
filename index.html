@@ -216,27 +216,7 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--mu);border-top:
 <div style="font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;">Meciuri Detectate</div>
 <div style="display:flex;align-items:center;gap:12px;"><div class="ri" id="rin">Auto: 60s</div><button class="br" onclick="scn()">REFRESH</button></div>
 </div>
-<div id="msel" style="display:none;">
-<button class="mktab active" onclick="setMK('all',this)">TOATE LIVE</button>
-<div class="mksep"></div>
-<span class="mkglbl">TOTAL</span>
-<button class="mktab" onclick="setMK('over05',this)">Ov 0.5</button>
-<button class="mktab" onclick="setMK('over15',this)">Ov 1.5</button>
-<button class="mktab" onclick="setMK('over25',this)">Ov 2.5</button>
-<button class="mktab" onclick="setMK('gg',this)">GG</button>
-<div class="mksep"></div>
-<span class="mkglbl">GAZDE</span>
-<button class="mktab" onclick="setMK('home05',this)">0.5</button>
-<button class="mktab" onclick="setMK('home15',this)">1.5</button>
-<button class="mktab" onclick="setMK('home25',this)">2.5</button>
-<button class="mktab" onclick="setMK('home35',this)">3.5</button>
-<div class="mksep"></div>
-<span class="mkglbl">OASPEȚI</span>
-<button class="mktab" onclick="setMK('away05',this)">0.5</button>
-<button class="mktab" onclick="setMK('away15',this)">1.5</button>
-<button class="mktab" onclick="setMK('away25',this)">2.5</button>
-<button class="mktab" onclick="setMK('away35',this)">3.5</button>
-</div>
+<div id="msel" style="display:none;"></div>
 <div id="mcc"><div class="es"><div class="et">AlohaScan Ready</div><div class="esu">Introdu API key-ul si apasa CONECTARE.</div></div></div>
 </main>
 </div>
@@ -295,7 +275,7 @@ AF:[{id:233,n:'Egyptian Prem',f:'EGY'},{id:200,n:'PSL RSA',f:'RSA'},{id:379,n:'B
 var AIDS=[];var LM={};
 ['EU','AM','AS','AF'].forEach(function(r){LG[r].forEach(function(l){AIDS.push(l.id);LM[l.id]=l;});});
 var ST={cn:false,ms:[],rg:'ALL',rt:null,ct:null,cd:300,tab:'live',cE:{},cP:{},cS:{}};
-var TS={};var MK='all';
+var TS={};var SF='all';
 setInterval(function(){var d=new Date();document.getElementById('clk').textContent=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());},1000);
 function pad(n){return n<10?'0'+n:''+n;}
 function buildQ(ep,p){var q='endpoint='+encodeURIComponent(ep);if(p){for(var k in p)q+='&'+encodeURIComponent(k)+'='+encodeURIComponent(p[k]);}return q;}
@@ -331,7 +311,8 @@ if(!Array.isArray(all))throw new Error('Format invalid de la server');
 document.getElementById('s1').textContent=all.length;document.getElementById('s2').textContent=all.length;
 var fil=[];
 for(var i=0;i<all.length;i++){var m=all[i];fil.push(scM(m));}
-ST.ms=fil;var n=new Date();document.getElementById('s4').textContent=pad(n.getHours())+':'+pad(n.getMinutes());apF();
+ST.ms=fil;var n=new Date();document.getElementById('s4').textContent=pad(n.getHours())+':'+pad(n.getMinutes());
+buildScoreTabs(fil);apF();
 enrich();anlz();
 }catch(e){showE('Eroare: '+e.message);}
 }
@@ -471,18 +452,24 @@ var mainP=mk[MK]||mk.over05;
 m._s={c:f.conf,r:mainP>=75?'forte':mainP>=50?'bun':'slab',xg:txg>0?txg.toFixed(2):'N/A',sh:tSh,hp:hp,mk:mk,imm:imm,f:f};
 return m;
 }
-function setMK(mk,el){MK=mk;var cs=document.querySelectorAll('.mktab');for(var i=0;i<cs.length;i++)cs[i].classList.remove('active');if(el)el.classList.add('active');apF();}
+function setScore(score,el){SF=score;var cs=document.querySelectorAll('#msel .mktab');for(var i=0;i<cs.length;i++)cs[i].classList.remove('active');if(el)el.classList.add('active');apF();}
+function buildScoreTabs(matches){
+var el=document.getElementById('msel');if(!el)return;
+var sc={};
+matches.forEach(function(m){var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;var k=hg+'-'+ag;sc[k]=(sc[k]||0)+1;});
+var keys=Object.keys(sc).sort(function(a,b){var aP=a.split('-').map(Number),bP=b.split('-').map(Number);var aT=aP[0]+aP[1],bT=bP[0]+bP[1];return aT!==bT?aT-bT:bP[0]-aP[0];});
+var h='<button class="mktab'+(SF==='all'?' active':'')+'" onclick="setScore(\'all\',this)">TOATE ('+matches.length+')</button>';
+if(keys.length)h+='<div class="mksep"></div>';
+keys.forEach(function(k){h+='<button class="mktab'+(SF===k?' active':'')+'" onclick="setScore(\''+k+'\',this)">'+k+' <span style="opacity:.5;font-size:9px">('+sc[k]+')</span></button>';});
+el.innerHTML=h;el.style.display='flex';
+}
 function setR(r,e){ST.rg=r;var bs=document.querySelectorAll('.fb');for(var i=0;i<bs.length;i++)bs[i].classList.remove('active');if(e&&e.target)e.target.classList.add('active');apF();}
 function apF(){
 var ms=ST.ms.slice();
 if(ST.rg!=='ALL'){var ids=LG[ST.rg]?LG[ST.rg].map(function(l){return l.id;}):[];ms=ms.filter(function(m){return ids.indexOf(m.league?m.league.id:0)>=0;});}
-if(MK==='all'){
-ms.sort(function(a,b){return(b._s?b._s.c:0)-(a._s?a._s.c:0);});
-}else{
-ms=ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk[MK]>=60;});
-ms.sort(function(a,b){return(b._s.mk[MK]||0)-(a._s.mk[MK]||0);});
-}
-var rec=MK==='all'?Math.min(ms.filter(function(m){return m._s&&m._s.c>=CF.MC;}).length,CF.MD):Math.min(ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk[MK]>=CF.MC;}).length,CF.MD);
+if(SF!=='all'){var sp=SF.split('-').map(Number);ms=ms.filter(function(m){var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;return hg===sp[0]&&ag===sp[1];});}
+ms.sort(function(a,b){var pa=a._s&&a._s.mk?a._s.mk.over05||0:0;var pb=b._s&&b._s.mk?b._s.mk.over05||0:0;return pb-pa;});
+var rec=Math.min(ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk.over05>=CF.MC;}).length,CF.MD);
 document.getElementById('s3').textContent=rec+'/5';document.getElementById('dac').textContent=rec+'/5';
 rnd(ms);
 }
@@ -510,9 +497,12 @@ h+='</div>';
 if(s.mk){
 var mk=s.mk;
 function mkCls(v){return v>=75?'hi':v>=50?'md':'lo';}
-function mkPills(grp,items){h+='<div class="mkrow"><span class="mkrlbl">'+grp+'</span>';items.forEach(function(kl){var v=mk[kl[0]]||0;var cl=mkCls(v);var sel=MK===kl[0]?' sel':'';h+='<span class="mkpill '+cl+sel+'">'+kl[1]+' '+v+'%</span>';});h+='</div>';}
+function mkPills(grp,items){h+='<div class="mkrow"><span class="mkrlbl">'+grp+'</span>';items.forEach(function(kl){var v=mk[kl[0]]||0;var cl=mkCls(v);h+='<span class="mkpill '+cl+'">'+kl[1]+' '+v+'%</span>';});h+='</div>';}
+var tg=hg+ag;var mKey=tg>=2?'over25':tg>=1?'over15':'over05';
+var mLbl=tg>=2?'Over 2.5':tg>=1?'Over 1.5':'Over 0.5';
+var actV=mk[mKey]||0;var actCl=mkCls(actV);
 h+='<div class="mkdisp">';
-if(MK!=='all'){var actV=mk[MK]||0;var actCl=mkCls(actV);var MKLBL={over05:'Over 0.5',over15:'Over 1.5',over25:'Over 2.5',gg:'GG',home05:'Gazde 0.5',home15:'Gazde 1.5',home25:'Gazde 2.5',home35:'Gazde 3.5',away05:'Oaspeti 0.5',away15:'Oaspeti 1.5',away25:'Oaspeti 2.5',away35:'Oaspeti 3.5'};h+='<div class="mkdmain"><span class="mkdlbl '+actCl+'">'+(MKLBL[MK]||MK)+'</span><div class="mkdbar"><div class="mkdbf '+actCl+'" style="width:'+actV+'%"></div></div><span class="mkdpct '+actCl+'">'+actV+'%</span></div>';}
+h+='<div class="mkdmain"><span class="mkdlbl '+actCl+'">'+mLbl+'</span><div class="mkdbar"><div class="mkdbf '+actCl+'" style="width:'+actV+'%"></div></div><span class="mkdpct '+actCl+'">'+actV+'%</span></div>';
 mkPills('TOTAL',[['over05','0.5'],['over15','1.5'],['over25','2.5'],['gg','GG']]);
 mkPills('GAZDE',[['home05','0.5'],['home15','1.5'],['home25','2.5'],['home35','3.5']]);
 mkPills('OASPETI',[['away05','0.5'],['away15','1.5'],['away25','2.5'],['away35','3.5']]);
