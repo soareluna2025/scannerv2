@@ -128,11 +128,7 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--mu);border-top:
 <div class="dbc" id="dac">0/5</div>
 </div>
 <div class="flt" id="ref" style="display:none;">
-<button class="fb active" onclick="setR('ALL',event)">Toate (88)</button>
-<button class="fb" onclick="setR('EU',event)">Europa (27)</button>
-<button class="fb" onclick="setR('AM',event)">Americas (19)</button>
-<button class="fb" onclick="setR('AS',event)">Asia (24)</button>
-<button class="fb" onclick="setR('AF',event)">Africa (18)</button>
+<button class="fb active" onclick="setR('ALL',event)">Toate</button>
 </div>
 <div class="ctr" id="ctr" style="display:none;">
 <div style="font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;">Meciuri Detectate</div>
@@ -176,18 +172,17 @@ ST.ak=key;localStorage.setItem('sak',key);
 var b=document.getElementById('btc');b.disabled=true;b.textContent='SE CONECTEAZA...';
 hideE();showL('Verificare...');
 try{
-var d=await apiFetch('/api/fixtures');
-if(!Array.isArray(d.response||d))throw new Error('Raspuns API invalid');
+var d=await apiFetch('/api/football');
+if(!Array.isArray(d.response))throw new Error('Raspuns API invalid');
 ST.cn=true;b.textContent='CONECTAT';b.style.background='rgba(0,229,160,.15)';b.style.color='var(--ac)';b.style.border='1px solid rgba(0,229,160,.4)';
 document.getElementById('ref').style.display='flex';document.getElementById('ctr').style.display='flex';document.getElementById('dab').style.display='flex';
 await scn();startAR();
 }catch(e){b.disabled=false;b.textContent='CONECTARE';showE('Eroare: '+e.message);showEm();}
 }
 async function scn(){
-if(!ST.cn)return;showL('Se scaneaza '+AIDS.length+' ligi...');
+if(!ST.cn)return;showL('Se scaneaza meciuri live...');
 try{
-var d=await apiFetch('/api/fixtures');
-if(d.errors&&Object.keys(d.errors).length>0)throw new Error(JSON.stringify(d.errors));
+var d=await apiFetch('/api/football');
 var all=d.response||[];
 if(!Array.isArray(all))throw new Error('Format invalid de la server');
 document.getElementById('s1').textContent=all.length;document.getElementById('s2').textContent=all.length;
@@ -221,17 +216,18 @@ rnd(ms);
 }
 function rnd(ms){
 var c=document.getElementById('mcc');
-if(!ms||!ms.length){c.innerHTML='<div class="es"><div class="et">Niciun meci</div><div class="esu">Nu sunt meciuri 0-0 intre min.20-75.</div></div>';return;}
+if(!ms||!ms.length){c.innerHTML='<div class="es"><div class="et">Niciun meci live</div><div class="esu">Nu sunt meciuri in desfasurare momentan.</div></div>';return;}
 var h='<div class="mg">';
 for(var i=0;i<ms.length;i++){
-var m=ms[i];var s=m._s;var lg=LM[m.league?m.league.id:0]||{f:'?',n:'-'};var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;
+var m=ms[i];var s=m._s;var lg={f:m.league&&m.league.f?m.league.f:'?',n:m.league&&m.league.name?m.league.name:'-'};var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;
 var hn=m.teams&&m.teams.home?m.teams.home.name:'Home';var an=m.teams&&m.teams.away?m.teams.away.name:'Away';
+var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;
 var xp=s.xg==='N/A'?0:Math.min((parseFloat(s.xg)/3)*100,100);var sp=Math.min((s.sh/20)*100,100);
 h+='<div class="mc '+s.r+'">';
 h+='<div class="ch"><div class="lin"><span class="lf">'+lg.f+'</span><span class="ln">'+lg.n+'</span></div>';
 h+='<div class="cbg"><span class="mbd">'+mn+"'"+'</span><span class="rb '+s.r+'">'+s.r.toUpperCase()+'</span></div></div>';
 h+='<div class="tms"><div class="tm"><div class="tn">'+hn+'</div></div>';
-h+='<div class="scb"><div class="sco">0 - 0</div><div class="sst">LIVE</div></div>';
+h+='<div class="scb"><div class="sco">'+hg+' - '+ag+'</div><div class="sst">LIVE</div></div>';
 h+='<div class="tm aw"><div class="tn">'+an+'</div></div></div>';
 h+='<div class="ss2">';
 h+='<div class="sr"><span class="sn">xG</span><div class="bc"><div class="bf xg" style="width:'+xp+'%"></div></div><span class="sv">'+s.xg+'</span></div>';
