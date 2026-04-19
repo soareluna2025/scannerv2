@@ -372,31 +372,25 @@ var lg=document.getElementById('pred-lg').value;
 var el=document.getElementById('pred-list');
 el.innerHTML='<div class="ls"><div class="sp"></div><div class="lt">Se incarca...</div></div>';
 try{
-var d=await apiFetch('/api/scan?endpoint=fixtures&league='+lg+'&next=10&season=2024');
-var fxs=d.response||[];
-if(!fxs.length){el.innerHTML='<div class="es"><div class="et">Niciun meci programat</div></div>';return;}
-var preds={};
-await Promise.all(fxs.slice(0,5).map(async function(fx){
-var fid=fx.fixture.id;
-if(ST.cP[fid]){preds[fid]=ST.cP[fid];return;}
-try{var pd=await apiFetch('/api/scan?endpoint=predictions&fixture='+fid);
-if(pd.response&&pd.response[0]){ST.cP[fid]=pd.response[0];preds[fid]=pd.response[0];}}catch(e){}
-}));
+var d=await apiFetch('/api/predictions?league='+lg+'&season=2024');
+var items=d.predictions||[];
+if(!items.length){el.innerHTML='<div class="es"><div class="et">Niciun meci programat</div><div class="esu">Incearca alta liga sau sezon.</div></div>';return;}
 var h='';
-fxs.forEach(function(fx){
-var p=preds[fx.fixture.id];var dt=new Date(fx.fixture.date);
+items.forEach(function(item){
+var fx=item.fixture;var p=item.prediction;var dt=new Date(fx.fixture.date);
 var ds=pad(dt.getDate())+'.'+pad(dt.getMonth()+1)+' '+pad(dt.getHours())+':'+pad(dt.getMinutes());
 h+='<div class="pdc"><div class="pdh"><div><div class="pdi">'+fx.league.name+' &bull; '+ds+'</div><div class="pdm">'+fx.teams.home.name+' vs '+fx.teams.away.name+'</div></div>';
 if(p&&p.predictions){
 var w=p.predictions.winner?p.predictions.winner.name:'-';var pct=p.predictions.percent||{};
 h+='<div><div class="pdw">'+w+'</div><div class="pdpct">'+(pct.home||'-')+' / '+(pct.draw||'-')+' / '+(pct.away||'-')+'</div></div>';
-}h+='</div>';
+}else{h+='<div style="font-size:10px;color:var(--mu)">Fara predictie</div>';}
+h+='</div>';
 if(p&&p.predictions){
 var pr=p.predictions;h+='<div class="pdst">';
-if(pr.goals&&pr.goals.home!=null)h+='<div class="pds">Goluri gazde: <span class="pdsv">'+pr.goals.home+'</span></div>';
-if(pr.goals&&pr.goals.away!=null)h+='<div class="pds">Goluri oaspeti: <span class="pdsv">'+pr.goals.away+'</span></div>';
-if(pr.under_over)h+='<div class="pds">Over/Under: <span class="pdsv">'+pr.under_over+'</span></div>';
-if(p.predictions.advice)h+='<div class="pds" style="width:100%;font-style:italic;color:var(--ac2)">'+p.predictions.advice+'</div>';
+if(pr.goals&&pr.goals.home!=null)h+='<div class="pds">Gazde: <span class="pdsv">'+pr.goals.home+' goluri</span></div>';
+if(pr.goals&&pr.goals.away!=null)h+='<div class="pds">Oaspeti: <span class="pdsv">'+pr.goals.away+' goluri</span></div>';
+if(pr.under_over)h+='<div class="pds">O/U: <span class="pdsv">'+pr.under_over+'</span></div>';
+if(p.predictions.advice)h+='<div class="pds" style="width:100%;color:var(--ac2)">'+p.predictions.advice+'</div>';
 h+='</div>';}
 h+='</div>';});
 el.innerHTML=h||'<div class="es"><div class="et">Fara predictii</div></div>';
@@ -408,7 +402,7 @@ el.innerHTML='<div class="ls"><div class="sp"></div><div class="lt">Se incarca..
 var ck=lg+'_2024';
 try{
 if(ST.cS[ck]){rndCls(ST.cS[ck],el);return;}
-var d=await apiFetch('/api/scan?endpoint=standings&league='+lg+'&season=2024');
+var d=await apiFetch('/api/standings?league='+lg+'&season=2024');
 var data=d.response||[];
 if(!data.length){el.innerHTML='<div class="es"><div class="et">Nu sunt date</div></div>';return;}
 ST.cS[ck]=data;rndCls(data,el);
