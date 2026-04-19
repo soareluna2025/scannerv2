@@ -115,12 +115,11 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--mu);border-top:
 </div></div>
 <main>
 <div class="abx">
-<div class="atl">API KEY</div>
+<div class="atl">ALOHASCAN</div>
 <div class="arw">
-<input type="text" id="aki" placeholder="Introdu API key..." autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
-<button class="bp" id="btc" onclick="conn()">CONECTARE</button>
+<button class="bp" id="btc" onclick="conn()" style="width:100%">CONECTARE</button>
 </div>
-<div class="ahi">Key-ul se salveaza local in browser.</div>
+<div class="ahi">Date live in timp real - football-data.org</div>
 </div>
 <div class="err" id="erb"></div>
 <div class="db" id="dab" style="display:none;">
@@ -165,10 +164,6 @@ if(!r.ok)throw new Error('HTTP '+r.status+' (verifica API_KEY in Vercel)');
 throw new Error('Raspuns invalid de la server (non-JSON)');
 }
 async function conn(){
-var raw=document.getElementById('aki').value;var key='';
-for(var i=0;i<raw.length;i++){var c=raw.charCodeAt(i);if((c>=48&&c<=57)||(c>=65&&c<=90)||(c>=97&&c<=122))key+=raw[i];}
-if(!key){showE('Introdu API key-ul!');return;}
-ST.ak=key;localStorage.setItem('sak',key);
 var b=document.getElementById('btc');b.disabled=true;b.textContent='SE CONECTEAZA...';
 hideE();showL('Verificare...');
 try{
