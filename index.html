@@ -566,7 +566,7 @@ async function scn(){
     var n=new Date();document.getElementById('s4').textContent=pad(n.getHours())+':'+pad(n.getMinutes());
     buildSTabs(fil);apF();enrich();anlz();trackPredictions();agUpdateStats();
     if(supa){
-      ST.ms.forEach(function(m){var s=m._s||{};var mk=s.mk||{};if((mk.over05||0)>=75)saveMatchSnapshot(m);});
+      ST.ms.forEach(function(m){saveMatchSnapshot(m);});
       resolveOutcomes();
       if(!window._snapCount)window._snapCount=0;
       if(++window._snapCount%10===0)calculateLeaguePatterns();
