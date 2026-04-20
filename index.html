@@ -238,6 +238,38 @@ main{padding:0;}
 
 footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1px solid var(--bor);margin-top:20px;text-transform:uppercase;letter-spacing:.8px;}
 
+/* RECS VIEW */
+#recs-view{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:500;overflow-y:auto;display:none;max-width:480px;margin:0 auto;}
+.rv-hdr{background:#0f1522;border-bottom:1px solid var(--bor);padding:0 16px;display:flex;align-items:center;gap:12px;height:52px;position:sticky;top:0;z-index:10;}
+.rv-title{font-size:15px;font-weight:800;color:var(--tx);flex:1;}
+.rv-section-lbl{padding:7px 16px;font-size:9px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center;gap:8px;background:var(--bg);}
+.rv-section-lbl::after{content:'';flex:1;height:1px;background:var(--bor);}
+.rv-badge-live{display:inline-flex;align-items:center;gap:3px;background:rgba(255,61,90,.12);border:1px solid rgba(255,61,90,.28);border-radius:4px;padding:2px 7px;font-size:9px;font-weight:700;color:var(--da);white-space:nowrap;}
+.rv-badge-pre{display:inline-flex;align-items:center;gap:3px;background:rgba(77,104,128,.12);border:1px solid rgba(77,104,128,.28);border-radius:4px;padding:2px 7px;font-size:9px;font-weight:700;color:var(--mu2);white-space:nowrap;}
+.rv-card{background:var(--sur);border-bottom:1px solid rgba(35,45,68,.7);padding:12px 16px;}
+.rv-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.rv-card-teams{flex:1;}
+.rv-card-team{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
+.rv-card-team:last-child{margin-bottom:0;}
+.rv-tname{font-size:13px;font-weight:500;color:var(--tx);flex:1;}
+.rv-tscore{font-size:15px;font-weight:800;color:var(--tx);min-width:16px;text-align:right;}
+.rv-tscore.leading{color:var(--ac);}
+.rv-card-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.rv-league{font-size:10px;color:var(--mu);flex:1;}
+.rv-conf{font-size:11px;font-weight:700;color:var(--wa);}
+.rv-rating{font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;letter-spacing:.3px;}
+.rv-rating.forte{background:rgba(0,212,168,.12);color:var(--ac);}
+.rv-rating.bun{background:rgba(240,165,0,.12);color:var(--wa);}
+.rv-ngp{margin-top:8px;}
+.rv-ngp-lbl{display:flex;justify-content:space-between;margin-bottom:3px;}
+.rv-ngp-t{font-size:9px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.4px;}
+.rv-ngp-pct{font-size:12px;font-weight:800;}
+.rv-track{height:4px;background:var(--bor);border-radius:4px;overflow:hidden;}
+.rv-fill{height:100%;border-radius:4px;}
+.rv-empty{text-align:center;padding:60px 20px;}
+.rv-empty-t{font-size:15px;font-weight:700;margin-bottom:6px;}
+.rv-empty-s{font-size:12px;color:var(--mu);}
+
 /* MINUTE FILTER */
 .mf-wrap{padding:0 16px 10px;}
 .mf-presets{display:flex;gap:6px;margin-bottom:8px;}
@@ -267,6 +299,16 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
 
 </head>
 <body>
+
+<!-- RECS VIEW -->
+
+<div id="recs-view">
+  <div class="rv-hdr">
+    <button class="btn-back" onclick="closeRecs()">← Înapoi</button>
+    <span class="rv-title">Recomandări Azi</span>
+  </div>
+  <div id="rv-body"></div>
+</div>
 
 <!-- DETAIL VIEW -->
 
@@ -301,7 +343,7 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
   <div class="sbar" id="sbar" style="display:none">
     <div class="si"><div class="sl">Live</div><div class="sv g" id="s1">-</div></div>
     <div class="si"><div class="sl">Scanate</div><div class="sv" id="s2">-</div></div>
-    <div class="si"><div class="sl">Recomandate</div><div class="sv w" id="s3">0/5</div></div>
+    <div class="si"><div class="sl">Recomandate</div><div class="sv w" id="s3">0/20</div></div>
     <div class="si"><div class="sl">Prag</div><div class="sv">95%</div></div>
     <div class="si"><div class="sl">Update</div><div class="sv d" id="s4">-</div></div>
   </div>
@@ -323,9 +365,9 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
 
   <div class="err-box" id="erb"></div>
 
-  <div class="recs" id="dab" style="display:none">
-    <div><div class="recs-l">Recomandări Azi</div><div class="recs-s">Max 5 meciuri · 95%+ confidence</div></div>
-    <div class="recs-n" id="dac">0/5</div>
+  <div class="recs" id="dab" style="display:none;cursor:pointer" onclick="openRecs()">
+    <div><div class="recs-l">Recomandări Azi</div><div class="recs-s">Max 20 meciuri · 95%+ confidence</div></div>
+    <div class="recs-n" id="dac">0/20</div>
   </div>
 
   <div class="filters" id="ref" style="display:none">
@@ -402,7 +444,7 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
 </div>
 
 <script>
-var CF={MIN:20,MAX:75,MC:75,MD:5,RI:300000};
+var CF={MIN:20,MAX:75,MC:75,MD:20,RI:300000};
 var LG={
 EU:[{id:2,n:'Champions League',f:'🏆'},{id:3,n:'Europa League',f:'🇪🇺'},{id:39,n:'Premier League',f:'🏴󠁧󠁢󠁥󠁮󠁧󠁿'},{id:140,n:'La Liga',f:'🇪🇸'},{id:135,n:'Serie A',f:'🇮🇹'},{id:78,n:'Bundesliga',f:'🇩🇪'},{id:61,n:'Ligue 1',f:'🇫🇷'},{id:88,n:'Eredivisie',f:'🇳🇱'},{id:94,n:'Primeira Liga',f:'🇵🇹'},{id:144,n:'Jupiler Pro',f:'🇧🇪'},{id:203,n:'Super Lig',f:'🇹🇷'},{id:179,n:'Scottish Prem',f:'🏴󠁧󠁢󠁳󠁣󠁴󠁿'},{id:113,n:'Allsvenskan',f:'🇸🇪'},{id:103,n:'Eliteserien',f:'🇳🇴'},{id:119,n:'Superliga DK',f:'🇩🇰'},{id:207,n:'Super League CH',f:'🇨🇭'},{id:218,n:'Bundesliga AT',f:'🇦🇹'},{id:106,n:'Ekstraklasa',f:'🇵🇱'},{id:345,n:'Czech Liga',f:'🇨🇿'},{id:271,n:'Superliga RO',f:'🇷🇴'},{id:182,n:'Prem UA',f:'🇺🇦'},{id:373,n:'Super League GR',f:'🇬🇷'},{id:244,n:'Nemzeti',f:'🇭🇺'},{id:286,n:'SuperLiga SRB',f:'🇷🇸'},{id:197,n:'Super League CY',f:'🇨🇾'},{id:235,n:'Premier Liga RU',f:'🇷🇺'},{id:332,n:'Slovak Liga',f:'🇸🇰'}],
 AM:[{id:71,n:'Brasileirao',f:'🇧🇷'},{id:72,n:'Serie B BR',f:'🇧🇷'},{id:128,n:'Liga Prof AR',f:'🇦🇷'},{id:129,n:'Primera B AR',f:'🇦🇷'},{id:239,n:'Primera Div CL',f:'🇨🇱'},{id:268,n:'Liga MX',f:'🇲🇽'},{id:262,n:'Ascenso MX',f:'🇲🇽'},{id:253,n:'MLS',f:'🇺🇸'},{id:256,n:'USL',f:'🇺🇸'},{id:281,n:'Primera Div CO',f:'🇨🇴'},{id:242,n:'Liga 1 PE',f:'🇵🇪'},{id:299,n:'Primera Div VE',f:'🇻🇪'},{id:307,n:'Liga EC',f:'🇪🇨'},{id:315,n:'Div Mayor BO',f:'🇧🇴'},{id:278,n:'Primera Div UY',f:'🇺🇾'},{id:322,n:'Div Mayor PY',f:'🇵🇾'},{id:348,n:'Liga GT',f:'🇬🇹'},{id:350,n:'Apertura HN',f:'🇭🇳'},{id:351,n:'Liga CR',f:'🇨🇷'}],
@@ -645,10 +687,12 @@ function apF(){
   var ms=ST.ms.slice();
   if(ST.rg!=='ALL'){var ids=LG[ST.rg]?LG[ST.rg].map(function(l){return l.id;}):[];ms=ms.filter(function(m){return ids.indexOf(m.league?m.league.id:0)>=0;});}
   if(SF!=='all'){var sp=SF.split('-').map(Number);ms=ms.filter(function(m){var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;return hg===sp[0]&&ag===sp[1];});}
+  var FINISHED_ST=['FT','AET','PEN','SUSP','INT','PST','CAN','WO','ABD','AWD','WO'];
+  ms=ms.filter(function(m){var st=(m.fixture&&m.fixture.status&&(m.fixture.status.short||m.fixture.status.long||'')||'').toUpperCase();return FINISHED_ST.indexOf(st)<0;});
   ms=ms.filter(function(m){var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;return mn>=MF.min&&mn<=MF.max;});
   ms.sort(function(a,b){var pa=a._s?a._s.ng||0:0;var pb=b._s?b._s.ng||0:0;return pb-pa;});
   var rec=Math.min(ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk.over05>=CF.MC;}).length,CF.MD);
-  document.getElementById('s3').textContent=rec+'/5';document.getElementById('dac').textContent=rec+'/5';
+  document.getElementById('s3').textContent=rec+'/'+CF.MD;document.getElementById('dac').textContent=rec+'/'+CF.MD;
   rnd(ms);
 }
 
@@ -936,6 +980,135 @@ function showL(m){document.getElementById('mcc').innerHTML='<div class="loading"
 function showEm(){document.getElementById('mcc').innerHTML='<div class="empty"><div class="empty-t">AlohaScan Ready</div><div class="empty-s">Apasă CONECTARE pentru meciuri live.</div></div>';}
 function showE(m){var b=document.getElementById('erb');b.textContent=m;b.style.display='block';}
 function hideE(){document.getElementById('erb').style.display='none';}
+
+// ===== RECOMANDĂRI AZI VIEW =====
+function openRecs(){
+  document.getElementById('recs-view').style.display='block';
+  document.getElementById('main-app').style.display='none';
+  document.getElementById('detail-view').style.display='none';
+  window.scrollTo(0,0);
+  renderRecs();
+}
+
+function closeRecs(){
+  document.getElementById('recs-view').style.display='none';
+  document.getElementById('main-app').style.display='block';
+}
+
+function renderRecs(){
+  var body=document.getElementById('rv-body');
+  var FINISHED=['FT','AET','PEN','SUSP','INT','PST','CAN','WO','ABD','AWD'];
+
+  // LIVE: meciuri cu confidence >= MC, neterminate
+  var live=(ST.ms||[]).filter(function(m){
+    var s=m._s||{};var mk=s.mk||{};
+    if((mk.over05||0)<CF.MC)return false;
+    var st=((m.fixture&&m.fixture.status&&(m.fixture.status.short||m.fixture.status.long))||'').toUpperCase();
+    return FINISHED.indexOf(st)<0;
+  });
+  live.sort(function(a,b){return((b._s&&b._s.ng)||0)-((a._s&&a._s.ng)||0);});
+
+  var h='';
+  if(live.length){
+    h+='<div class="rv-section-lbl">🔴 LIVE — '+live.length+' meci</div>';
+    live.forEach(function(m){h+=rvCard(m,'live');});
+  }
+
+  body.innerHTML=h+'<div id="rv-prelive-wrap"></div>';
+  loadRecsPrelive();
+}
+
+async function loadRecsPrelive(){
+  var wrap=document.getElementById('rv-prelive-wrap');
+  if(!wrap)return;
+  try{
+    var d=await apiFetch('/api/today');
+    var now=new Date();
+    var FINISHED=['FT','AET','PEN','SUSP','INT','PST','CAN','WO','ABD','AWD','FINISHED','ENDED'];
+    var liveKeys=new Set((ST.ms||[]).map(function(m){
+      return ((m.teams&&m.teams.home&&m.teams.home.name)||'')+'|'+((m.teams&&m.teams.away&&m.teams.away.name)||'');
+    }));
+
+    var items=(d.response||[]).filter(function(m){
+      // Filtrare status
+      var st=((m.fixture&&m.fixture.status&&(m.fixture.status.short||m.fixture.status.long))||'').toUpperCase();
+      if(FINISHED.indexOf(st)>=0)return false;
+      // Ora de start
+      var dt=m.fixture&&m.fixture.date?new Date(m.fixture.date):null;
+      if(!dt)return false;
+      var diffMin=(now-dt)/60000;
+      // Dispare dacă a trecut mai mult de 5 min fără să fie live
+      var key=((m.teams&&m.teams.home&&m.teams.home.name)||'')+'|'+((m.teams&&m.teams.away&&m.teams.away.name)||'');
+      if(diffMin>5&&!liveKeys.has(key))return false;
+      // Nu arăta dacă e deja în live
+      if(liveKeys.has(key))return false;
+      return true;
+    });
+
+    items.sort(function(a,b){
+      return new Date(a.fixture&&a.fixture.date||0)-new Date(b.fixture&&b.fixture.date||0);
+    });
+
+    if(!items.length){wrap.innerHTML='';return;}
+    var h='<div class="rv-section-lbl">🕐 PRE-LIVE — '+items.length+' meciuri</div>';
+    items.forEach(function(m){h+=rvCard(m,'pre');});
+    wrap.innerHTML=h;
+  }catch(e){wrap.innerHTML='';}
+}
+
+function rvCard(m,type){
+  var s=m._s||{};var mk=s.mk||{};var ng=s.ng||0;
+  var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;
+  var hn=m.teams&&m.teams.home?m.teams.home.name:'Home';
+  var an=m.teams&&m.teams.away?m.teams.away.name:'Away';
+  var hl=m.teams&&m.teams.home&&m.teams.home.logo?m.teams.home.logo:'';
+  var al=m.teams&&m.teams.away&&m.teams.away.logo?m.teams.away.logo:'';
+  var hg=m.goals?m.goals.home||0:0;
+  var ag=m.goals?m.goals.away||0:0;
+  var lg=m.league||{};
+  var conf=s.c||0;var rating=s.r||'';
+
+  var badge='';
+  if(type==='live'){
+    badge='<span class="rv-badge-live">● LIVE '+mn+"'</span>";
+  } else {
+    var dt=m.fixture&&m.fixture.date?new Date(m.fixture.date):null;
+    var ts=dt?(pad(dt.getHours())+':'+pad(dt.getMinutes())):'';
+    badge='<span class="rv-badge-pre">🕐 '+ts+'</span>';
+  }
+
+  var ngc=ngClass(ng);
+  var ngColor=ng>=80?'var(--da)':ng>=60?'#ff6b35':ng>=35?'var(--wa)':'var(--ac)';
+  var ngBg=ng>=80?'linear-gradient(90deg,#ff3d5a,#ff001a)':ng>=60?'linear-gradient(90deg,#ff6b35,#ff3d5a)':ng>=35?'linear-gradient(90deg,#f0a500,#c87800)':'linear-gradient(90deg,#00d4a8,#00b090)';
+
+  var h='<div class="rv-card">';
+  h+='<div class="rv-card-top">';
+  h+='<div class="rv-card-teams">';
+  h+='<div class="rv-card-team">';
+  if(hl)h+='<img class="team-logo" src="'+hl+'" onerror="this.style.display=\'none\'">';
+  h+='<span class="rv-tname">'+hn+'</span>';
+  if(type==='live')h+='<span class="rv-tscore'+(hg>ag?' leading':'')+'">'+hg+'</span>';
+  h+='</div>';
+  h+='<div class="rv-card-team">';
+  if(al)h+='<img class="team-logo" src="'+al+'" onerror="this.style.display=\'none\'">';
+  h+='<span class="rv-tname">'+an+'</span>';
+  if(type==='live')h+='<span class="rv-tscore'+(ag>hg?' leading':'')+'">'+ag+'</span>';
+  h+='</div>';
+  h+='</div>'+badge+'</div>';
+  h+='<div class="rv-card-meta">';
+  h+='<span class="rv-league">'+(lg.f||'🌐')+' '+(lg.name||'-')+'</span>';
+  if(conf>0)h+='<span class="rv-conf">'+conf+'% conf.</span>';
+  if(rating&&rating!=='slab')h+='<span class="rv-rating '+rating+'">'+rating.toUpperCase()+'</span>';
+  h+='</div>';
+  if(type==='live'&&ng>0){
+    h+='<div class="rv-ngp">';
+    h+='<div class="rv-ngp-lbl"><span class="rv-ngp-t">Next Goal Prob.</span><span class="rv-ngp-pct" style="color:'+ngColor+'">'+ng+'%</span></div>';
+    h+='<div class="rv-track"><div class="rv-fill" style="width:'+ng+'%;background:'+ngBg+'"></div></div>';
+    h+='</div>';
+  }
+  h+='</div>';
+  return h;
+}
 
 // ===== FEATURE 1: MINUTE RANGE FILTER =====
 var MF_PRESETS=[[20,45],[45,60],[60,75]];
