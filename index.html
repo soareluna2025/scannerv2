@@ -295,6 +295,46 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
 .wr-item.l{color:var(--da);}
 .wr-item.p{color:var(--mu2);}
 .wr-item.r{color:var(--wa);}
+
+/* AGENT TAB */
+#tb-agent.active{color:#a78bfa;border-bottom-color:#a78bfa;}
+#tp-agent{display:none;flex-direction:column;height:calc(100vh - 88px);overflow:hidden;}
+.ag-header{padding:10px 16px;background:rgba(167,139,250,.06);border-bottom:1px solid rgba(167,139,250,.15);flex-shrink:0;}
+.ag-stats{display:flex;gap:16px;overflow-x:auto;}
+.ag-stats::-webkit-scrollbar{display:none;}
+.ag-stat{display:flex;flex-direction:column;gap:1px;min-width:fit-content;}
+.ag-stat-l{font-size:9px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;}
+.ag-stat-v{font-size:13px;font-weight:800;color:#a78bfa;}
+.ag-msgs{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px;}
+.ag-msgs::-webkit-scrollbar{width:4px;}
+.ag-msgs::-webkit-scrollbar-track{background:transparent;}
+.ag-msgs::-webkit-scrollbar-thumb{background:var(--bor);border-radius:4px;}
+.ag-msg{display:flex;flex-direction:column;max-width:85%;}
+.ag-msg.user{align-self:flex-end;align-items:flex-end;}
+.ag-msg.agent{align-self:flex-start;align-items:flex-start;}
+.ag-bubble{padding:10px 13px;border-radius:12px;font-size:13px;line-height:1.55;word-break:break-word;}
+.ag-msg.user .ag-bubble{background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;border-bottom-right-radius:3px;}
+.ag-msg.agent .ag-bubble{background:var(--sur2);color:var(--tx);border-bottom-left-radius:3px;border:1px solid var(--bor);}
+.ag-ts{font-size:9px;color:var(--mu);margin-top:3px;}
+.ag-typing{align-self:flex-start;display:flex;align-items:center;gap:5px;background:var(--sur2);border:1px solid var(--bor);border-radius:12px;border-bottom-left-radius:3px;padding:10px 14px;}
+.ag-dot{width:7px;height:7px;border-radius:50%;background:var(--mu);animation:ag-bounce .9s infinite;}
+.ag-dot:nth-child(2){animation-delay:.2s;}
+.ag-dot:nth-child(3){animation-delay:.4s;}
+@keyframes ag-bounce{0%,60%,100%{transform:translateY(0);}30%{transform:translateY(-6px);}}
+.ag-quick{padding:8px 16px;display:flex;gap:6px;overflow-x:auto;border-top:1px solid var(--bor);flex-shrink:0;}
+.ag-quick::-webkit-scrollbar{display:none;}
+.ag-qb{flex-shrink:0;padding:6px 12px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.22);border-radius:16px;color:#a78bfa;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s;}
+.ag-qb:hover{background:rgba(167,139,250,.18);}
+.ag-input-wrap{padding:10px 16px;border-top:1px solid var(--bor);display:flex;align-items:flex-end;gap:8px;flex-shrink:0;}
+.ag-textarea{flex:1;background:var(--sur2);border:1px solid var(--bor);border-radius:10px;padding:10px 12px;color:var(--tx);font-size:13px;font-family:'Inter',sans-serif;resize:none;outline:none;max-height:120px;min-height:40px;line-height:1.4;transition:border-color .15s;}
+.ag-textarea:focus{border-color:rgba(167,139,250,.5);}
+.ag-send{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#a78bfa,#7c3aed);border:none;color:#fff;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;}
+.ag-send:hover{filter:brightness(1.1);}
+.ag-send:disabled{opacity:.4;cursor:default;filter:none;}
+.ag-welcome{text-align:center;padding:30px 20px;color:var(--mu);}
+.ag-welcome-icon{font-size:40px;margin-bottom:10px;}
+.ag-welcome-t{font-size:15px;font-weight:700;color:var(--tx);margin-bottom:6px;}
+.ag-welcome-s{font-size:12px;line-height:1.6;}
 </style>
 
 </head>
@@ -337,6 +377,7 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
   <div class="tab active" id="tb-live" onclick="setTab('live')">LIVE</div>
   <div class="tab" id="tb-pred" onclick="setTab('pred')">PREDICȚII</div>
   <div class="tab" id="tb-cls" onclick="setTab('cls')">CLASAMENTE</div>
+  <div class="tab" id="tb-agent" onclick="setTab('agent')">🤖 AGENT</div>
 </div>
 
 <div id="tp-live">
@@ -440,6 +481,36 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
   </div>
 </div>
 
+<div id="tp-agent" style="display:none">
+  <div class="ag-header">
+    <div class="ag-stats">
+      <div class="ag-stat"><div class="ag-stat-l">Live</div><div class="ag-stat-v" id="ag-s1">—</div></div>
+      <div class="ag-stat"><div class="ag-stat-l">Recomandate</div><div class="ag-stat-v" id="ag-s2">—</div></div>
+      <div class="ag-stat"><div class="ag-stat-l">Win Rate</div><div class="ag-stat-v" id="ag-s3">—</div></div>
+      <div class="ag-stat"><div class="ag-stat-l">Top NGP</div><div class="ag-stat-v" id="ag-s4">—</div></div>
+    </div>
+  </div>
+  <div class="ag-msgs" id="ag-msgs">
+    <div class="ag-welcome">
+      <div class="ag-welcome-icon">🤖</div>
+      <div class="ag-welcome-t">AlohaScan AI Agent</div>
+      <div class="ag-welcome-s">Întreabă-mă despre meciurile live,<br>predicții, statistici sau strategie.</div>
+    </div>
+  </div>
+  <div class="ag-quick">
+    <button class="ag-qb" onclick="agQuick('Care sunt cele mai bune meciuri live acum?')">🔥 Top live</button>
+    <button class="ag-qb" onclick="agQuick('Analizează meciurile cu NGP peste 60%')">⚡ NGP &gt;60%</button>
+    <button class="ag-qb" onclick="agQuick('Ce meciuri recomanzi pentru Over 2.5?')">⚽ Over 2.5</button>
+    <button class="ag-qb" onclick="agQuick('Arată meciurile cu GG probabil')">✅ GG</button>
+    <button class="ag-qb" onclick="agQuick('Care sunt statisticile generale ale scanerului?')">📊 Statistici</button>
+    <button class="ag-qb" onclick="agQuick('_reset_')">🔄 Reset</button>
+  </div>
+  <div class="ag-input-wrap">
+    <textarea class="ag-textarea" id="ag-input" placeholder="Întreabă despre meciuri live..." rows="1"></textarea>
+    <button class="ag-send" id="ag-send" onclick="agSend()">➤</button>
+  </div>
+</div>
+
 <footer>ALOHASCAN · 88 LIGI · xG POWERED · AI POWERED</footer>
 </div>
 
@@ -492,7 +563,7 @@ async function scn(){
     var fil=all.map(function(m){return scM(m);});
     ST.ms=fil;
     var n=new Date();document.getElementById('s4').textContent=pad(n.getHours())+':'+pad(n.getMinutes());
-    buildSTabs(fil);apF();enrich();anlz();trackPredictions();
+    buildSTabs(fil);apF();enrich();anlz();trackPredictions();agUpdateStats();
   }catch(e){showE('Eroare: '+e.message);}
 }
 
@@ -928,7 +999,16 @@ function renderDVTab(t,m){
   return h;
 }
 
-function setTab(t){ST.tab=t;['live','pred','cls'].forEach(function(x){document.getElementById('tp-'+x).style.display=x===t?'':'none';document.getElementById('tb-'+x).classList.toggle('active',x===t);});}
+function setTab(t){
+  ST.tab=t;
+  ['live','pred','cls','agent'].forEach(function(x){
+    var tp=document.getElementById('tp-'+x);
+    if(tp)tp.style.display=x===t?(x==='agent'?'flex':''):'none';
+    var tb=document.getElementById('tb-'+x);
+    if(tb)tb.classList.toggle('active',x===t);
+  });
+  if(t==='agent')agUpdateStats();
+}
 
 async function loadPred(){
   var lg=document.getElementById('pred-lg').value;var el=document.getElementById('pred-list');
@@ -1240,6 +1320,146 @@ function renderWR(data){
   document.getElementById('wr-r').textContent=total>0?rate+'%':'—';
   el.style.display='flex';
 }
+
+// ===== 🤖 AGENT TAB =====
+var GROQ_MODEL='llama-3.3-70b-versatile';
+var AGENT_MEM_KEY='alohascan_agent_memory';
+var AGENT={history:[]};
+
+(function(){
+  try{var s=localStorage.getItem(AGENT_MEM_KEY);if(s){var m=JSON.parse(s);if(Array.isArray(m))AGENT.history=m.slice(-40);}}catch(e){}
+})();
+
+function agSaveMemory(){
+  try{localStorage.setItem(AGENT_MEM_KEY,JSON.stringify(AGENT.history.slice(-40)));}catch(e){}
+}
+
+function buildSystemPrompt(){
+  var now=new Date().toLocaleString('ro');
+  var ms=ST.ms||[];
+  var topMs=ms.slice(0,15).map(function(m){
+    var s=m._s||{};var mk=s.mk||{};var f=s.f||{};
+    var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;
+    var hn=m.teams&&m.teams.home?m.teams.home.name:'?';
+    var an=m.teams&&m.teams.away?m.teams.away.name:'?';
+    var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;
+    return hn+' '+hg+'-'+ag+' '+an+' ['+mn+"', NGP:"+(s.ng||0)+'%, Over0.5:'+(mk.over05||0)+'%, GG:'+(mk.gg||0)+'%, xG:'+(f.txg?f.txg.toFixed(2):'N/A')+']';
+  });
+  var wr=loadWR();var preds=wr.predictions||[];
+  var wins=preds.filter(function(p){return p.outcome==='WIN';}).length;
+  var losses=preds.filter(function(p){return p.outcome==='LOSS';}).length;
+  var total=wins+losses;
+  var rate=total>0?Math.round(wins/total*100):0;
+  var wrStr='WIN:'+wins+' LOSS:'+losses+(total>0?' RATE:'+rate+'%':'');
+  var recCount=ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk.over05>=CF.MC;}).length;
+  return 'Ești AlohaScan AI, un asistent expert în predicții fotbal live. Ora curentă: '+now+'\n\nMECIURI LIVE ('+ms.length+' total, top 15):\n'+(topMs.length?topMs.join('\n'):'Niciun meci live momentan.')+'\n\nRECOMANDATE (Over0.5 >'+CF.MC+'%): '+recCount+'/'+CF.MD+'\nWIN RATE SCANNER: '+wrStr+'\n\nRăspunde în română. Fii concis și specific. Bazează-ți răspunsurile pe datele de mai sus.';
+}
+
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function agAppendMsg(role,text){
+  var msgs=document.getElementById('ag-msgs');if(!msgs)return;
+  var ts=new Date().toLocaleTimeString('ro',{hour:'2-digit',minute:'2-digit'});
+  var div=document.createElement('div');
+  div.className='ag-msg '+role;
+  div.innerHTML='<div class="ag-bubble">'+escHtml(text).replace(/\n/g,'<br>')+'</div><div class="ag-ts">'+ts+'</div>';
+  msgs.appendChild(div);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
+function agShowTyping(){
+  var msgs=document.getElementById('ag-msgs');if(!msgs)return;
+  var div=document.createElement('div');div.id='ag-typing';div.className='ag-typing';
+  div.innerHTML='<div class="ag-dot"></div><div class="ag-dot"></div><div class="ag-dot"></div>';
+  msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;
+}
+
+function agHideTyping(){var el=document.getElementById('ag-typing');if(el)el.remove();}
+
+function agClearWelcome(){var w=document.querySelector('.ag-welcome');if(w)w.remove();}
+
+async function agSend(){
+  var inp=document.getElementById('ag-input');
+  var btn=document.getElementById('ag-send');
+  if(!inp||!btn)return;
+  var text=inp.value.trim();
+  if(!text)return;
+
+  if(text==='_reset_'){
+    AGENT.history=[];agSaveMemory();
+    var msgs=document.getElementById('ag-msgs');
+    if(msgs)msgs.innerHTML='<div class="ag-welcome"><div class="ag-welcome-icon">🤖</div><div class="ag-welcome-t">Conversație resetată</div><div class="ag-welcome-s">Poți începe o nouă conversație.</div></div>';
+    inp.value='';inp.style.height='';
+    return;
+  }
+
+  agClearWelcome();
+  inp.value='';inp.style.height='';
+  btn.disabled=true;
+  agAppendMsg('user',text);
+
+  AGENT.history.push({role:'user',content:text});
+  if(AGENT.history.length>40)AGENT.history=AGENT.history.slice(-40);
+  agShowTyping();
+
+  try{
+    var payload={
+      model:GROQ_MODEL,
+      messages:[{role:'system',content:buildSystemPrompt()}].concat(AGENT.history.slice(-10)),
+      max_tokens:800,temperature:0.7
+    };
+    var r=await fetch('/api/agent',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    var d=await r.json();
+    agHideTyping();
+    if(d.error){agAppendMsg('agent','Eroare API: '+d.error.message);return;}
+    var reply=(d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||'Niciun răspuns.';
+    AGENT.history.push({role:'assistant',content:reply});
+    agSaveMemory();
+    agAppendMsg('agent',reply);
+  }catch(e){
+    agHideTyping();
+    agAppendMsg('agent','Eroare conexiune: '+e.message);
+  }finally{
+    btn.disabled=false;
+    if(inp)inp.focus();
+  }
+}
+
+function agQuick(q){
+  var inp=document.getElementById('ag-input');if(!inp)return;
+  inp.value=q;agSend();
+}
+
+function agUpdateStats(){
+  var ms=ST.ms||[];
+  var el1=document.getElementById('ag-s1');
+  var el2=document.getElementById('ag-s2');
+  var el3=document.getElementById('ag-s3');
+  var el4=document.getElementById('ag-s4');
+  if(el1)el1.textContent=ms.length||'—';
+  var rec=ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk.over05>=CF.MC;}).length;
+  if(el2)el2.textContent=rec+'/'+CF.MD;
+  var wr=loadWR();var preds=wr.predictions||[];
+  var wins=preds.filter(function(p){return p.outcome==='WIN';}).length;
+  var losses=preds.filter(function(p){return p.outcome==='LOSS';}).length;
+  var total=wins+losses;
+  if(el3)el3.textContent=total>0?Math.round(wins/total*100)+'%':'—';
+  var topNg=ms.reduce(function(mx,m){return Math.max(mx,(m._s&&m._s.ng)||0);},0);
+  if(el4)el4.textContent=topNg>0?topNg+'%':'—';
+}
+
+(function(){
+  document.addEventListener('DOMContentLoaded',function(){
+    var inp=document.getElementById('ag-input');
+    if(!inp)return;
+    inp.addEventListener('input',function(){this.style.height='';this.style.height=Math.min(this.scrollHeight,120)+'px';});
+    inp.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();agSend();}});
+  });
+})();
 </script>
 
 </body>
