@@ -7,6 +7,7 @@
 <title>AlohaScan</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{--bg:#0b0e17;--sur:#131825;--sur2:#1a2235;--bor:#232d44;--ac:#00d4a8;--wa:#f0a500;--da:#ff3d5a;--tx:#e2ecf4;--mu:#4d6880;--mu2:#8db0c8;}
@@ -338,6 +339,11 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
 .ag-img-preview img{max-height:80px;border-radius:8px;border:1px solid rgba(167,139,250,.3);}
 .ag-img-preview-wrap{position:relative;display:inline-block;}
 .ag-img-rm{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--da);color:#fff;border:none;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;}
+.ag-file-preview{padding:6px 16px 0;display:none;}
+.ag-file-chip{display:inline-flex;align-items:center;gap:7px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);border-radius:8px;padding:6px 10px;font-size:12px;color:#a78bfa;max-width:280px;}
+.ag-file-chip-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+.ag-file-chip-rm{background:none;border:none;color:var(--da);cursor:pointer;font-size:14px;flex-shrink:0;padding:0;line-height:1;}
+.ag-file-loading{font-size:11px;color:var(--mu);margin-top:3px;}
 .ag-welcome{text-align:center;padding:30px 20px;color:var(--mu);}
 .ag-welcome-icon{font-size:40px;margin-bottom:10px;}
 .ag-welcome-t{font-size:15px;font-weight:700;color:var(--tx);margin-bottom:6px;}
@@ -518,9 +524,17 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
       <button class="ag-img-rm" onclick="agRemoveImage()">✕</button>
     </div>
   </div>
+  <div class="ag-file-preview" id="ag-file-preview">
+    <div class="ag-file-chip">
+      <span id="ag-file-icon">📄</span>
+      <span class="ag-file-chip-name" id="ag-file-name"></span>
+      <button class="ag-file-chip-rm" onclick="agRemoveFile()">✕</button>
+    </div>
+    <div class="ag-file-loading" id="ag-file-loading" style="display:none">Se procesează...</div>
+  </div>
   <div class="ag-input-wrap">
-    <input type="file" id="ag-img-input" accept="image/*" style="display:none" onchange="agSelectImage(this)">
-    <button class="ag-img-btn" onclick="document.getElementById('ag-img-input').click()">📷</button>
+    <input type="file" id="ag-file-input" accept="image/*,.pdf,.txt,.csv,.json,.md,.js,.ts,.html,.xml,.log" style="display:none" onchange="agHandleFile(this)">
+    <button class="ag-img-btn" onclick="document.getElementById('ag-file-input').click()" title="Atașează fișier">📎</button>
     <textarea class="ag-textarea" id="ag-input" placeholder="Întreabă despre meciuri live..." rows="1"></textarea>
     <button class="ag-send" id="ag-send" onclick="agSend()">➤</button>
   </div>
@@ -1444,6 +1458,7 @@ async function loadLeaguePatterns(){
 var GROQ_MODEL='llama-3.3-70b-versatile';
 var GROQ_VISION_MODEL='meta-llama/llama-4-scout-17b-16e-instruct';
 var agPendingImage=null;
+var agPendingFile=null; // {name, text} pentru fișiere non-imagine
 var AGENT_MEM_KEY='alohascan_agent_memory';
 var AGENT={history:[]};
 
@@ -1508,19 +1523,81 @@ function agHideTyping(){var el=document.getElementById('ag-typing');if(el)el.rem
 
 function agClearWelcome(){var w=document.querySelector('.ag-welcome');if(w)w.remove();}
 
-function agSelectImage(inp){
+var AG_TEXT_TYPES=['text/plain','text/csv','text/html','text/xml','application/json','application/javascript','text/javascript','text/markdown'];
+var AG_TEXT_EXTS=['txt','csv','json','md','js','ts','html','xml','log','py','sql','yaml','yml'];
+
+function agHandleFile(inp){
   if(!inp.files||!inp.files[0])return;
   var file=inp.files[0];
-  var reader=new FileReader();
-  reader.onload=function(e){
-    agPendingImage={base64:e.target.result,type:file.type};
-    var thumb=document.getElementById('ag-img-thumb');
-    var wrap=document.getElementById('ag-img-preview');
-    if(thumb)thumb.src=e.target.result;
-    if(wrap)wrap.style.display='block';
-  };
-  reader.readAsDataURL(file);
   inp.value='';
+  agRemoveImage();agRemoveFile();
+
+  if(file.type.startsWith('image/')){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      agPendingImage={base64:e.target.result,type:file.type};
+      var thumb=document.getElementById('ag-img-thumb');
+      var wrap=document.getElementById('ag-img-preview');
+      if(thumb)thumb.src=e.target.result;
+      if(wrap)wrap.style.display='block';
+    };
+    reader.readAsDataURL(file);
+    return;
+  }
+
+  var ext=file.name.split('.').pop().toLowerCase();
+  agShowFileChip(file.name,'📄',true);
+
+  if(file.type==='application/pdf'||ext==='pdf'){
+    agReadPDF(file);return;
+  }
+
+  var isText=AG_TEXT_TYPES.indexOf(file.type)>=0||AG_TEXT_EXTS.indexOf(ext)>=0;
+  if(isText){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      agPendingFile={name:file.name,text:e.target.result.slice(0,12000)};
+      agShowFileChip(file.name,'📄',false);
+    };
+    reader.readAsText(file);
+  }else{
+    agShowFileChip(file.name+'  (format nesuportat)','⚠️',false);
+    agPendingFile={name:file.name,text:'[Fișier binar — conținut indisponibil]'};
+  }
+}
+
+async function agReadPDF(file){
+  try{
+    if(!window.pdfjsLib){
+      window.pdfjsLib=window['pdfjs-dist/build/pdf'];
+      if(window.pdfjsLib)window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+    var ab=await file.arrayBuffer();
+    var pdf=await pdfjsLib.getDocument({data:ab}).promise;
+    var text='';
+    var maxPages=Math.min(pdf.numPages,15);
+    for(var i=1;i<=maxPages;i++){
+      var page=await pdf.getPage(i);
+      var content=await page.getTextContent();
+      text+=content.items.map(function(x){return x.str;}).join(' ')+'\n';
+    }
+    agPendingFile={name:file.name,text:text.trim().slice(0,12000)};
+    agShowFileChip(file.name+' ('+pdf.numPages+' pag.)','📕',false);
+  }catch(e){
+    agPendingFile={name:file.name,text:'[Eroare citire PDF: '+e.message+']'};
+    agShowFileChip(file.name,'📕',false);
+  }
+}
+
+function agShowFileChip(name,icon,loading){
+  var wrap=document.getElementById('ag-file-preview');
+  var nm=document.getElementById('ag-file-name');
+  var ic=document.getElementById('ag-file-icon');
+  var ld=document.getElementById('ag-file-loading');
+  if(wrap)wrap.style.display='block';
+  if(nm)nm.textContent=name;
+  if(ic)ic.textContent=icon;
+  if(ld)ld.style.display=loading?'block':'none';
 }
 
 function agRemoveImage(){
@@ -1529,6 +1606,12 @@ function agRemoveImage(){
   var thumb=document.getElementById('ag-img-thumb');
   if(wrap)wrap.style.display='none';
   if(thumb)thumb.src='';
+}
+
+function agRemoveFile(){
+  agPendingFile=null;
+  var wrap=document.getElementById('ag-file-preview');
+  if(wrap)wrap.style.display='none';
 }
 
 async function agSend(){
@@ -1551,13 +1634,18 @@ async function agSend(){
   btn.disabled=true;
 
   var img=agPendingImage;
-  agRemoveImage();
+  var fil=agPendingFile;
+  agRemoveImage();agRemoveFile();
 
-  var displayText=text+(img?' 📷':'');
+  var displayText=text+(img?' 📷':fil?' 📎 '+fil.name:'');
   agAppendMsg('user',displayText);
 
-  var userContent=img?[{type:'image_url',image_url:{url:img.base64}},{type:'text',text:text||'Analizează această imagine în contextul meciurilor live.'}]:text;
-  AGENT.history.push({role:'user',content:text});
+  var finalText=text;
+  if(fil)finalText='[Fișier atașat: '+fil.name+']\n\n'+fil.text+(text?'\n\n'+text:'');
+  var userContent=img
+    ?[{type:'image_url',image_url:{url:img.base64}},{type:'text',text:text||'Analizează această imagine.'}]
+    :finalText;
+  AGENT.history.push({role:'user',content:img?text:finalText});
   if(AGENT.history.length>40)AGENT.history=AGENT.history.slice(-40);
   agShowTyping();
 
