@@ -237,6 +237,32 @@ main{padding:0;}
 .clspt{color:var(--ac);font-weight:800;}
 
 footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1px solid var(--bor);margin-top:20px;text-transform:uppercase;letter-spacing:.8px;}
+
+/* MINUTE FILTER */
+.mf-wrap{padding:0 16px 10px;}
+.mf-presets{display:flex;gap:6px;margin-bottom:8px;}
+.mfp{flex:1;padding:7px 4px;border-radius:8px;border:1px solid var(--bor);background:var(--sur2);color:var(--mu);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;min-height:36px;}
+.mfp.active{border-color:var(--ac);color:var(--ac);background:rgba(0,212,168,.08);}
+.mf-lbl{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.mf-lbl-t{font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;}
+.mf-lbl-v{font-size:12px;font-weight:800;color:var(--ac);}
+.mf-slider{position:relative;height:36px;display:flex;align-items:center;}
+.mf-track{position:absolute;left:12px;right:12px;height:4px;background:var(--bor);border-radius:4px;pointer-events:none;}
+.mf-fill{position:absolute;height:100%;background:var(--ac);border-radius:4px;}
+.mf-range{position:absolute;width:100%;height:36px;background:none;-webkit-appearance:none;appearance:none;pointer-events:none;margin:0;padding:0;}
+.mf-range::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:var(--ac);border:3px solid var(--bg);cursor:pointer;pointer-events:all;box-shadow:0 2px 6px rgba(0,0,0,.5);}
+.mf-range::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:var(--ac);border:3px solid var(--bg);cursor:pointer;pointer-events:all;box-shadow:0 2px 6px rgba(0,0,0,.5);}
+.mf-range:focus{outline:none;}
+
+/* WIN RATE */
+.wr-wrap{padding:8px 16px;background:rgba(0,212,168,.04);border-bottom:1px solid var(--bor);display:flex;align-items:center;justify-content:space-between;}
+.wr-lbl{font-size:9px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;}
+.wr-items{display:flex;gap:14px;}
+.wr-item{font-size:12px;font-weight:800;}
+.wr-item.w{color:var(--ac);}
+.wr-item.l{color:var(--da);}
+.wr-item.p{color:var(--mu2);}
+.wr-item.r{color:var(--wa);}
 </style>
 
 </head>
@@ -280,6 +306,16 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
     <div class="si"><div class="sl">Update</div><div class="sv d" id="s4">-</div></div>
   </div>
 
+  <div class="wr-wrap" id="wr-wrap" style="display:none">
+    <span class="wr-lbl">Win Rate Scanner</span>
+    <div class="wr-items">
+      <span class="wr-item w" id="wr-w">W: 0</span>
+      <span class="wr-item l" id="wr-l">L: 0</span>
+      <span class="wr-item p" id="wr-p">P: 0</span>
+      <span class="wr-item r" id="wr-r">—</span>
+    </div>
+  </div>
+
   <div class="connect-wrap">
     <button class="btn-connect" id="btc" onclick="conn()">CONECTARE</button>
     <div class="connect-hint">Date live în timp real — football-data.org</div>
@@ -298,6 +334,20 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
     <button class="fb" onclick="setR('AM',event)">Americas</button>
     <button class="fb" onclick="setR('AS',event)">Asia</button>
     <button class="fb" onclick="setR('AF',event)">Africa</button>
+  </div>
+
+  <div class="mf-wrap" id="mfw" style="display:none">
+    <div class="mf-presets">
+      <button class="mfp" onclick="setMFPreset(20,45,this)">20-45'</button>
+      <button class="mfp" onclick="setMFPreset(45,60,this)">45-60'</button>
+      <button class="mfp" onclick="setMFPreset(60,75,this)">60-75'</button>
+    </div>
+    <div class="mf-lbl"><span class="mf-lbl-t">Minute</span><span class="mf-lbl-v" id="mf-lbl-v">20 – 75</span></div>
+    <div class="mf-slider">
+      <div class="mf-track"><div class="mf-fill" id="mf-fill"></div></div>
+      <input type="range" class="mf-range" id="mf-min" min="0" max="90" value="20">
+      <input type="range" class="mf-range" id="mf-max" min="0" max="90" value="75">
+    </div>
   </div>
 
   <div class="ctrl" id="ctr" style="display:none">
@@ -384,6 +434,8 @@ async function conn(){
     document.getElementById('ctr').style.display='flex';
     document.getElementById('dab').style.display='flex';
     document.getElementById('msel').style.display='flex';
+    document.getElementById('mfw').style.display='';
+    initMF();renderWR(loadWR());
     await scn();startAR();
   }catch(e){b.disabled=false;b.textContent='CONECTARE';b.className='btn-connect';showE('Eroare: '+e.message);showEm();}
 }
@@ -398,7 +450,7 @@ async function scn(){
     var fil=all.map(function(m){return scM(m);});
     ST.ms=fil;
     var n=new Date();document.getElementById('s4').textContent=pad(n.getHours())+':'+pad(n.getMinutes());
-    buildSTabs(fil);apF();enrich();anlz();
+    buildSTabs(fil);apF();enrich();anlz();trackPredictions();
   }catch(e){showE('Eroare: '+e.message);}
 }
 
@@ -593,6 +645,7 @@ function apF(){
   var ms=ST.ms.slice();
   if(ST.rg!=='ALL'){var ids=LG[ST.rg]?LG[ST.rg].map(function(l){return l.id;}):[];ms=ms.filter(function(m){return ids.indexOf(m.league?m.league.id:0)>=0;});}
   if(SF!=='all'){var sp=SF.split('-').map(Number);ms=ms.filter(function(m){var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;return hg===sp[0]&&ag===sp[1];});}
+  ms=ms.filter(function(m){var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;return mn>=MF.min&&mn<=MF.max;});
   ms.sort(function(a,b){var pa=a._s?a._s.ng||0:0;var pb=b._s?b._s.ng||0:0;return pb-pa;});
   var rec=Math.min(ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk.over05>=CF.MC;}).length,CF.MD);
   document.getElementById('s3').textContent=rec+'/5';document.getElementById('dac').textContent=rec+'/5';
@@ -883,6 +936,137 @@ function showL(m){document.getElementById('mcc').innerHTML='<div class="loading"
 function showEm(){document.getElementById('mcc').innerHTML='<div class="empty"><div class="empty-t">AlohaScan Ready</div><div class="empty-s">Apasă CONECTARE pentru meciuri live.</div></div>';}
 function showE(m){var b=document.getElementById('erb');b.textContent=m;b.style.display='block';}
 function hideE(){document.getElementById('erb').style.display='none';}
+
+// ===== FEATURE 1: MINUTE RANGE FILTER =====
+var MF_PRESETS=[[20,45],[45,60],[60,75]];
+var MF=(function(){try{var s=localStorage.getItem('alohascan_mf');return s?JSON.parse(s):{min:20,max:75};}catch(e){return{min:20,max:75};}})();
+
+function initMF(){
+  var rMin=document.getElementById('mf-min');
+  var rMax=document.getElementById('mf-max');
+  if(!rMin||!rMax)return;
+  rMin.value=MF.min;rMax.value=MF.max;
+  updateMFUI();
+  rMin.addEventListener('input',function(){
+    if(+rMin.value>+rMax.value-5)rMin.value=+rMax.value-5;
+    MF.min=+rMin.value;saveMF();updateMFUI();apF();
+  });
+  rMax.addEventListener('input',function(){
+    if(+rMax.value<+rMin.value+5)rMax.value=+rMin.value+5;
+    MF.max=+rMax.value;saveMF();updateMFUI();apF();
+  });
+}
+
+function updateMFUI(){
+  var v=document.getElementById('mf-lbl-v');
+  var fill=document.getElementById('mf-fill');
+  if(v)v.textContent=MF.min+' \u2013 '+MF.max;
+  if(fill){fill.style.left=(MF.min/90*100)+'%';fill.style.right=((90-MF.max)/90*100)+'%';}
+  document.querySelectorAll('.mfp').forEach(function(b,i){
+    var p=MF_PRESETS[i];
+    b.classList.toggle('active',p&&MF.min===p[0]&&MF.max===p[1]);
+  });
+}
+
+function setMFPreset(mn,mx){
+  MF.min=mn;MF.max=mx;
+  var rMin=document.getElementById('mf-min');
+  var rMax=document.getElementById('mf-max');
+  if(rMin)rMin.value=mn;if(rMax)rMax.value=mx;
+  saveMF();updateMFUI();apF();
+}
+
+function saveMF(){
+  try{localStorage.setItem('alohascan_mf',JSON.stringify(MF));}catch(e){}
+}
+
+// ===== FEATURE 2: WIN RATE TRACKER =====
+var WR_KEY='alohascan_stats';
+
+function loadWR(){
+  try{var s=localStorage.getItem(WR_KEY);return s?JSON.parse(s):{predictions:[]};}catch(e){return{predictions:[]};}
+}
+function saveWR(d){try{localStorage.setItem(WR_KEY,JSON.stringify(d));}catch(e){}}
+
+function trackPredictions(){
+  var data=loadWR();
+  var now=new Date().toISOString();
+  var liveKeys=new Set();
+
+  // Build map of current live matches by key
+  var liveMap={};
+  ST.ms.forEach(function(m){
+    var hn=m.teams&&m.teams.home?m.teams.home.name:'';
+    var an=m.teams&&m.teams.away?m.teams.away.name:'';
+    if(!hn||!an)return;
+    var key=hn+'|'+an;
+    liveKeys.add(key);
+    liveMap[key]=m;
+  });
+
+  // Record new high-confidence alerts
+  ST.ms.forEach(function(m){
+    var s=m._s||{};var mk=s.mk||{};
+    if((mk.over05||0)<CF.MC)return;
+    var hn=m.teams&&m.teams.home?m.teams.home.name:'';
+    var an=m.teams&&m.teams.away?m.teams.away.name:'';
+    if(!hn||!an)return;
+    var key=hn+'|'+an;
+    var hg=m.goals?m.goals.home||0:0;
+    var ag=m.goals?m.goals.away||0:0;
+    var scoreNow=hg+'-'+ag;
+    var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;
+    var already=data.predictions.some(function(p){return p.matchId===key&&p.outcome==='PENDING';});
+    if(!already){
+      data.predictions.push({
+        id:key+'_'+Date.now(),
+        matchId:key,homeTeam:hn,awayTeam:an,
+        league:m.league?m.league.name:'',
+        minute:mn,confidence:s.c||0,
+        scoreAtAlert:scoreNow,
+        alertTime:now,resolvedAt:null,outcome:'PENDING',finalScore:null
+      });
+    }
+  });
+
+  // Resolve pending predictions
+  data.predictions.forEach(function(p){
+    if(p.outcome!=='PENDING')return;
+    var live=liveMap[p.matchId];
+    if(live){
+      // Match still live — check if score changed (= WIN)
+      var hg=live.goals?live.goals.home||0:0;
+      var ag=live.goals?live.goals.away||0:0;
+      var scoreNow=hg+'-'+ag;
+      if(scoreNow!==p.scoreAtAlert){
+        p.outcome='WIN';p.resolvedAt=now;p.finalScore=scoreNow;
+      }
+    } else {
+      // Match left live feed — LOSS if score unchanged (we never saw a goal)
+      p.outcome='LOSS';p.resolvedAt=now;
+    }
+  });
+
+  // Keep last 200 records
+  if(data.predictions.length>200)data.predictions=data.predictions.slice(-200);
+  saveWR(data);
+  renderWR(data);
+}
+
+function renderWR(data){
+  var el=document.getElementById('wr-wrap');if(!el)return;
+  var preds=data.predictions;
+  var wins=preds.filter(function(p){return p.outcome==='WIN';}).length;
+  var losses=preds.filter(function(p){return p.outcome==='LOSS';}).length;
+  var pending=preds.filter(function(p){return p.outcome==='PENDING';}).length;
+  var total=wins+losses;
+  var rate=total>0?Math.round(wins/total*100):0;
+  document.getElementById('wr-w').textContent='W: '+wins;
+  document.getElementById('wr-l').textContent='L: '+losses;
+  document.getElementById('wr-p').textContent='P: '+pending;
+  document.getElementById('wr-r').textContent=total>0?rate+'%':'—';
+  el.style.display='flex';
+}
 </script>
 
 </body>
