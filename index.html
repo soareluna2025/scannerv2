@@ -332,6 +332,12 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
 .ag-send{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#a78bfa,#7c3aed);border:none;color:#fff;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;}
 .ag-send:hover{filter:brightness(1.1);}
 .ag-send:disabled{opacity:.4;cursor:default;filter:none;}
+.ag-img-btn{width:40px;height:40px;border-radius:10px;background:var(--sur2);border:1px solid var(--bor);color:var(--mu2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;}
+.ag-img-btn:hover{border-color:rgba(167,139,250,.5);color:#a78bfa;}
+.ag-img-preview{padding:6px 16px 0;display:none;}
+.ag-img-preview img{max-height:80px;border-radius:8px;border:1px solid rgba(167,139,250,.3);}
+.ag-img-preview-wrap{position:relative;display:inline-block;}
+.ag-img-rm{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--da);color:#fff;border:none;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;}
 .ag-welcome{text-align:center;padding:30px 20px;color:var(--mu);}
 .ag-welcome-icon{font-size:40px;margin-bottom:10px;}
 .ag-welcome-t{font-size:15px;font-weight:700;color:var(--tx);margin-bottom:6px;}
@@ -506,7 +512,15 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
     <button class="ag-qb" onclick="agQuick('Care sunt statisticile generale ale scanerului?')">📊 Statistici</button>
     <button class="ag-qb" onclick="agQuick('_reset_')">🔄 Reset</button>
   </div>
+  <div class="ag-img-preview" id="ag-img-preview">
+    <div class="ag-img-preview-wrap">
+      <img id="ag-img-thumb" src="" alt="">
+      <button class="ag-img-rm" onclick="agRemoveImage()">✕</button>
+    </div>
+  </div>
   <div class="ag-input-wrap">
+    <input type="file" id="ag-img-input" accept="image/*" style="display:none" onchange="agSelectImage(this)">
+    <button class="ag-img-btn" onclick="document.getElementById('ag-img-input').click()">📷</button>
     <textarea class="ag-textarea" id="ag-input" placeholder="Întreabă despre meciuri live..." rows="1"></textarea>
     <button class="ag-send" id="ag-send" onclick="agSend()">➤</button>
   </div>
@@ -1428,6 +1442,8 @@ async function loadLeaguePatterns(){
 
 // ===== 🤖 AGENT TAB =====
 var GROQ_MODEL='llama-3.3-70b-versatile';
+var GROQ_VISION_MODEL='meta-llama/llama-4-scout-17b-16e-instruct';
+var agPendingImage=null;
 var AGENT_MEM_KEY='alohascan_agent_memory';
 var AGENT={history:[]};
 
@@ -1492,6 +1508,29 @@ function agHideTyping(){var el=document.getElementById('ag-typing');if(el)el.rem
 
 function agClearWelcome(){var w=document.querySelector('.ag-welcome');if(w)w.remove();}
 
+function agSelectImage(inp){
+  if(!inp.files||!inp.files[0])return;
+  var file=inp.files[0];
+  var reader=new FileReader();
+  reader.onload=function(e){
+    agPendingImage={base64:e.target.result,type:file.type};
+    var thumb=document.getElementById('ag-img-thumb');
+    var wrap=document.getElementById('ag-img-preview');
+    if(thumb)thumb.src=e.target.result;
+    if(wrap)wrap.style.display='block';
+  };
+  reader.readAsDataURL(file);
+  inp.value='';
+}
+
+function agRemoveImage(){
+  agPendingImage=null;
+  var wrap=document.getElementById('ag-img-preview');
+  var thumb=document.getElementById('ag-img-thumb');
+  if(wrap)wrap.style.display='none';
+  if(thumb)thumb.src='';
+}
+
 async function agSend(){
   var inp=document.getElementById('ag-input');
   var btn=document.getElementById('ag-send');
@@ -1510,17 +1549,26 @@ async function agSend(){
   agClearWelcome();
   inp.value='';inp.style.height='';
   btn.disabled=true;
-  agAppendMsg('user',text);
 
+  var img=agPendingImage;
+  agRemoveImage();
+
+  var displayText=text+(img?' 📷':'');
+  agAppendMsg('user',displayText);
+
+  var userContent=img?[{type:'image_url',image_url:{url:img.base64}},{type:'text',text:text||'Analizează această imagine în contextul meciurilor live.'}]:text;
   AGENT.history.push({role:'user',content:text});
   if(AGENT.history.length>40)AGENT.history=AGENT.history.slice(-40);
   agShowTyping();
 
   try{
     var sysPrompt=await buildSystemPrompt();
+    var model=img?GROQ_VISION_MODEL:GROQ_MODEL;
+    var messages=[{role:'system',content:sysPrompt}].concat(AGENT.history.slice(-10));
+    if(img)messages[messages.length-1]={role:'user',content:userContent};
     var payload={
-      model:GROQ_MODEL,
-      messages:[{role:'system',content:sysPrompt}].concat(AGENT.history.slice(-10)),
+      model:model,
+      messages:messages,
       max_tokens:800,temperature:0.7
     };
     var r=await fetch('/api/agent',{
