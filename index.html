@@ -524,7 +524,7 @@ AS:[{id:169,n:'J1 League',f:'🇯🇵'},{id:170,n:'J2 League',f:'🇯🇵'},{id:
 AF:[{id:233,n:'Egyptian Prem',f:'🇪🇬'},{id:200,n:'PSL RSA',f:'🇿🇦'},{id:379,n:'Botola Pro',f:'🇲🇦'},{id:380,n:'Ligue Pro DZ',f:'🇩🇿'},{id:381,n:'Ligue 1 TN',f:'🇹🇳'},{id:382,n:'Nigerian Liga',f:'🇳🇬'},{id:383,n:'Senegal Ligue',f:'🇸🇳'},{id:384,n:'CAF Champions',f:'🌍'},{id:324,n:'A-League NZ',f:'🇳🇿'}]
 };
 var LM={};['EU','AM','AS','AF'].forEach(function(r){LG[r].forEach(function(l){LM[l.id]=l;});});
-var ST={cn:false,ms:[],rg:'ALL',rt:null,ct:null,cd:300,tab:'live',cE:{},cS:{}};
+var ST={cn:false,ms:[],fms:[],rg:'ALL',rt:null,ct:null,cd:300,tab:'live',cE:{},cS:{}};
 var TS={};var SF='all';var CMATCH=null;
 
 setInterval(function(){var d=new Date();document.getElementById('clk').textContent=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());},1000);
@@ -769,6 +769,7 @@ function apF(){
   ms=ms.filter(function(m){var st=(m.fixture&&m.fixture.status&&(m.fixture.status.short||m.fixture.status.long||'')||'').toUpperCase();return FINISHED_ST.indexOf(st)<0;});
   ms=ms.filter(function(m){var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;return mn>=MF.min&&mn<=MF.max;});
   ms.sort(function(a,b){var pa=a._s?a._s.ng||0:0;var pb=b._s?b._s.ng||0:0;return pb-pa;});
+  ST.fms=ms;
   var rec=Math.min(ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk.over05>=CF.MC;}).length,CF.MD);
   document.getElementById('s3').textContent=rec+'/'+CF.MD;document.getElementById('dac').textContent=rec+'/'+CF.MD;
   rnd(ms);
@@ -849,7 +850,7 @@ function toggleLeague(id,hdr){
 
 // ===== DETAIL VIEW =====
 function openDetail(idx){
-  var m=ST.ms[idx];if(!m)return;
+  var m=ST.fms[idx]||ST.ms[idx];if(!m)return;
   CMATCH=m;
   var hn=m.teams&&m.teams.home?m.teams.home.name:'Home';
   var an=m.teams&&m.teams.away?m.teams.away.name:'Away';
