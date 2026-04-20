@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AlohaScan</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{--bg:#0b0e17;--sur:#131825;--sur2:#1a2235;--bor:#232d44;--ac:#00d4a8;--wa:#f0a500;--da:#ff3d5a;--tx:#e2ecf4;--mu:#4d6880;--mu2:#8db0c8;}
@@ -548,7 +549,7 @@ async function conn(){
     document.getElementById('dab').style.display='flex';
     document.getElementById('msel').style.display='flex';
     document.getElementById('mfw').style.display='';
-    initMF();renderWR(loadWR());
+    initMF();renderWR(loadWR());initSupabase();
     await scn();startAR();
   }catch(e){b.disabled=false;b.textContent='CONECTARE';b.className='btn-connect';showE('Eroare: '+e.message);showEm();}
 }
@@ -564,6 +565,12 @@ async function scn(){
     ST.ms=fil;
     var n=new Date();document.getElementById('s4').textContent=pad(n.getHours())+':'+pad(n.getMinutes());
     buildSTabs(fil);apF();enrich();anlz();trackPredictions();agUpdateStats();
+    if(supa){
+      ST.ms.forEach(function(m){var s=m._s||{};var mk=s.mk||{};if((mk.over05||0)>=75)saveMatchSnapshot(m);});
+      resolveOutcomes();
+      if(!window._snapCount)window._snapCount=0;
+      if(++window._snapCount%10===0)calculateLeaguePatterns();
+    }
   }catch(e){showE('Eroare: '+e.message);}
 }
 
@@ -1321,6 +1328,103 @@ function renderWR(data){
   el.style.display='flex';
 }
 
+// ===== SUPABASE =====
+var SUPA_URL='https://kdyafjlwbximefwdhbnc.supabase.co';
+var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkeWFmamx3YnhpbWVmd2RoYm5jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MTE4MTgsImV4cCI6MjA5MjI4NzgxOH0.f-6dFSq8pAUq9bkz_A0N-qjdYigULIeRmJTkOXsCJuI';
+var supa=null;
+
+function initSupabase(){
+  try{supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);console.log('✅ Supabase conectat');}
+  catch(e){console.warn('Supabase init failed:',e.message);}
+}
+
+async function saveMatchSnapshot(m){
+  if(!supa)return;
+  var s=m._s||{};var mk=s.mk||{};var f=s.f||{};
+  var fix=m.fixture||{};var teams=m.teams||{};var goals=m.goals||{};var league=m.league||{};
+  var snap={
+    fixture_id:fix.id||0,
+    home_team:teams.home?teams.home.name:'',
+    away_team:teams.away?teams.away.name:'',
+    league_id:league.id||null,league_name:league.name||'',league_country:league.country||'',
+    minute:(fix.status&&fix.status.elapsed)||0,
+    score_home:goals.home||0,score_away:goals.away||0,
+    status:(fix.status&&fix.status.short)||'',
+    xg_home:f.hxg||0,xg_away:f.axg||0,xg_total:f.txg||0,
+    shots_home:f.hSh||0,shots_away:f.aSh||0,
+    shots_on_target_home:f.hSOT||0,shots_on_target_away:f.aSOT||0,
+    dangerous_attacks_home:f.hDA||0,dangerous_attacks_away:f.aDA||0,
+    corners_home:f.hC||0,corners_away:f.aC||0,
+    possession_home:f.hp||50,
+    next_goal_prob:s.ng||0,over05_prob:mk.over05||0,over15_prob:mk.over15||0,gg_prob:mk.gg||0,
+    confidence:s.c||0,rating:s.r||'slab',
+    score_at_snapshot:(goals.home||0)+'-'+(goals.away||0),
+    outcome:'PENDING'
+  };
+  try{await supa.from('match_snapshots').insert(snap);}catch(e){console.warn('Snapshot error:',e.message);}
+}
+
+async function resolveOutcomes(){
+  if(!supa)return;
+  try{
+    var ago=new Date(Date.now()-3*60*60*1000).toISOString();
+    var {data:pending}=await supa.from('match_snapshots').select('id,fixture_id,score_at_snapshot').eq('outcome','PENDING').gte('created_at',ago);
+    if(!pending||!pending.length)return;
+    var liveMap={};ST.ms.forEach(function(m){var id=m.fixture&&m.fixture.id;if(id)liveMap[id]=m;});
+    for(var i=0;i<pending.length;i++){
+      var p=pending[i];var live=liveMap[p.fixture_id];
+      if(live){
+        var hg=live.goals?live.goals.home||0:0;var ag=live.goals?live.goals.away||0:0;
+        if(hg+'-'+ag!==p.score_at_snapshot)
+          await supa.from('match_snapshots').update({outcome:'WIN',final_score_home:hg,final_score_away:ag,goal_scored_after:true}).eq('id',p.id);
+      }else{
+        await supa.from('match_snapshots').update({outcome:'LOSS',goal_scored_after:false}).eq('id',p.id);
+      }
+    }
+  }catch(e){console.warn('Resolve error:',e.message);}
+}
+
+async function calculateLeaguePatterns(){
+  if(!supa)return;
+  try{
+    var {data:resolved}=await supa.from('match_snapshots').select('league_id,league_name,league_country,minute,score_home,score_away,outcome,xg_total,next_goal_prob').in('outcome',['WIN','LOSS']).limit(5000);
+    if(!resolved||resolved.length<10)return;
+    var leagues={};
+    resolved.forEach(function(r){
+      var lid=r.league_id||0;
+      if(!leagues[lid])leagues[lid]={id:lid,name:r.league_name,country:r.league_country,all:[],s00_20_45:[],s00_45_60:[],s00_60_75:[]};
+      leagues[lid].all.push(r);
+      var z=r.score_home===0&&r.score_away===0;
+      if(z&&r.minute>=20&&r.minute<=45)leagues[lid].s00_20_45.push(r);
+      if(z&&r.minute>45&&r.minute<=60)leagues[lid].s00_45_60.push(r);
+      if(z&&r.minute>60&&r.minute<=75)leagues[lid].s00_60_75.push(r);
+    });
+    function wr(arr){if(!arr.length)return null;return Math.round(arr.filter(function(x){return x.outcome==='WIN';}).length/arr.length*100);}
+    for(var lid in leagues){
+      var lg=leagues[lid];var rate=wr(lg.all);var rel=rate!==null?rate:50;
+      var rec=rel>=70?'PRIORITATE':rel>=50?'NORMAL':'EVITA';
+      var avgXg=lg.all.reduce(function(s,x){return s+(x.xg_total||0);},0)/lg.all.length;
+      var avgMin=lg.all.reduce(function(s,x){return s+(x.minute||0);},0)/lg.all.length;
+      var avgNGP=lg.all.reduce(function(s,x){return s+(x.next_goal_prob||0);},0)/lg.all.length;
+      await supa.from('league_patterns').upsert({
+        league_id:parseInt(lid),league_name:lg.name,league_country:lg.country,
+        total_matches:lg.all.length,goal_rate_overall:rate,
+        goal_rate_00_min20_45:wr(lg.s00_20_45),goal_rate_00_min45_60:wr(lg.s00_45_60),goal_rate_00_min60_75:wr(lg.s00_60_75),
+        avg_xg_at_alert:Math.round(avgXg*100)/100,avg_minute_at_alert:Math.round(avgMin*10)/10,
+        avg_next_goal_prob:Math.round(avgNGP*10)/10,reliability_score:rel,recommendation:rec,
+        last_calculated:new Date().toISOString()
+      },{onConflict:'league_id'});
+    }
+    console.log('✅ Patternuri calculate:',Object.keys(leagues).length,'ligi');
+  }catch(e){console.warn('Patterns error:',e.message);}
+}
+
+async function loadLeaguePatterns(){
+  if(!supa)return null;
+  try{var {data}=await supa.from('league_patterns').select('*').order('reliability_score',{ascending:false}).limit(88);return data||[];}
+  catch(e){return null;}
+}
+
 // ===== 🤖 AGENT TAB =====
 var GROQ_MODEL='llama-3.3-70b-versatile';
 var AGENT_MEM_KEY='alohascan_agent_memory';
@@ -1334,7 +1438,7 @@ function agSaveMemory(){
   try{localStorage.setItem(AGENT_MEM_KEY,JSON.stringify(AGENT.history.slice(-40)));}catch(e){}
 }
 
-function buildSystemPrompt(){
+async function buildSystemPrompt(){
   var now=new Date().toLocaleString('ro');
   var ms=ST.ms||[];
   var topMs=ms.slice(0,15).map(function(m){
@@ -1348,11 +1452,20 @@ function buildSystemPrompt(){
   var wr=loadWR();var preds=wr.predictions||[];
   var wins=preds.filter(function(p){return p.outcome==='WIN';}).length;
   var losses=preds.filter(function(p){return p.outcome==='LOSS';}).length;
-  var total=wins+losses;
-  var rate=total>0?Math.round(wins/total*100):0;
+  var total=wins+losses;var rate=total>0?Math.round(wins/total*100):0;
   var wrStr='WIN:'+wins+' LOSS:'+losses+(total>0?' RATE:'+rate+'%':'');
   var recCount=ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk.over05>=CF.MC;}).length;
-  return 'Ești AlohaScan AI, un asistent expert în predicții fotbal live. Ora curentă: '+now+'\n\nMECIURI LIVE ('+ms.length+' total, top 15):\n'+(topMs.length?topMs.join('\n'):'Niciun meci live momentan.')+'\n\nRECOMANDATE (Over0.5 >'+CF.MC+'%): '+recCount+'/'+CF.MD+'\nWIN RATE SCANNER: '+wrStr+'\n\nRăspunde în română. Fii concis și specific. Bazează-ți răspunsurile pe datele de mai sus.';
+
+  var patternText='Date insuficiente încă (minim 10 meciuri necesare).';
+  var patterns=await loadLeaguePatterns();
+  if(patterns&&patterns.length>0){
+    var prio=patterns.filter(function(p){return p.recommendation==='PRIORITATE';});
+    var evit=patterns.filter(function(p){return p.recommendation==='EVITA';});
+    patternText='LIGI PRIORITATE ('+prio.length+'): '+prio.slice(0,10).map(function(p){return p.league_name+' '+p.reliability_score+'% ('+p.total_matches+' meciuri)';}).join(', ');
+    if(evit.length)patternText+='\nLIGI DE EVITAT ('+evit.length+'): '+evit.slice(0,5).map(function(p){return p.league_name+' '+p.reliability_score+'%';}).join(', ');
+  }
+
+  return 'Ești AlohaScan AI, expert în predicții fotbal live. Ora: '+now+'\n\nMECIURI LIVE ('+ms.length+' total, top 15):\n'+(topMs.length?topMs.join('\n'):'Niciun meci live momentan.')+'\n\nRECOMANDATE (Over0.5 >'+CF.MC+'%): '+recCount+'/'+CF.MD+'\nWIN RATE: '+wrStr+'\n\nPATTERNURI ISTORICE (Supabase):\n'+patternText+'\n\nRăspunde în română. Fii concis. Bazează-te pe datele de mai sus.';
 }
 
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -1403,9 +1516,10 @@ async function agSend(){
   agShowTyping();
 
   try{
+    var sysPrompt=await buildSystemPrompt();
     var payload={
       model:GROQ_MODEL,
-      messages:[{role:'system',content:buildSystemPrompt()}].concat(AGENT.history.slice(-10)),
+      messages:[{role:'system',content:sysPrompt}].concat(AGENT.history.slice(-10)),
       max_tokens:800,temperature:0.7
     };
     var r=await fetch('/api/agent',{
