@@ -9,6 +9,7 @@
 |---------|-------|-----------|----------|
 | `FOOTBALL_DATA_KEY` | football-data.org | 12 ligi top (PL, BL1, SA, etc.) | Timp real |
 | `API_FOOTBALL_KEY` | api-sports.io | 88 ligi globale | ~15min delay (free tier) |
+| `BSD_KEY` | sports.bzzoiro.com | Ligi globale + ML predictions | Timp real |
 
 ### Regula de combinare
 - Fiecare API nou adăugat trebuie integrat în `api/football.js`

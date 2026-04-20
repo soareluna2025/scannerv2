@@ -49,5 +49,45 @@ export default async function handler(req, res) {
     } catch (e) {}
   }
 
+  // sports.bzzoiro.com (BSD) - real-time live scores
+  const bsdKey = process.env.BSD_KEY;
+  if (bsdKey) {
+    try {
+      const r = await fetch('https://sports.bzzoiro.com/api/live/', {
+        headers: { 'Authorization': 'Token ' + bsdKey }
+      });
+      const data = await r.json();
+      const list = Array.isArray(data) ? data : (data.results || data.matches || data.response || []);
+      const existingNames = new Set(combined.map(m => m.teams.home.name + '|' + m.teams.away.name));
+      list.forEach(m => {
+        const hn = m.home_team?.name || m.homeTeam?.name || m.home?.name || '';
+        const an = m.away_team?.name || m.awayTeam?.name || m.away?.name || '';
+        if (!hn || !an) return;
+        const key = hn + '|' + an;
+        if (existingNames.has(key)) return;
+        existingNames.add(key);
+        combined.push({
+          _src: 'bsd',
+          fixture: { status: { elapsed: m.minute || m.elapsed || m.time || 0 } },
+          league: {
+            id: m.league?.id || m.competition?.id || 0,
+            name: m.league?.name || m.competition?.name || '-',
+            f: m.league?.code || m.competition?.code || '🌐',
+            logo: m.league?.logo || m.competition?.emblem || ''
+          },
+          teams: {
+            home: { name: hn, logo: m.home_team?.logo || m.homeTeam?.crest || '' },
+            away: { name: an, logo: m.away_team?.logo || m.awayTeam?.crest || '' }
+          },
+          goals: {
+            home: m.home_score ?? m.score?.home ?? m.goals?.home ?? 0,
+            away: m.away_score ?? m.score?.away ?? m.goals?.away ?? 0
+          },
+          statistics: []
+        });
+      });
+    } catch (e) {}
+  }
+
   res.status(200).json({ response: combined });
 }
