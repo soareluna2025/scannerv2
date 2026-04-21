@@ -1521,8 +1521,6 @@ async function loadLeaguePatterns(){
 }
 
 // ===== 🤖 AGENT TAB =====
-var GROQ_MODEL='llama-3.3-70b-versatile';
-var GROQ_VISION_MODEL='meta-llama/llama-4-scout-17b-16e-instruct';
 var agPendingImage=null;
 var agPendingFile=null; // {name, text} pentru fișiere non-imagine
 var AGENT_MEM_KEY='alohascan_agent_memory';
@@ -1733,14 +1731,9 @@ async function agSend(){
 
   try{
     var sysPrompt=await buildSystemPrompt();
-    var model=img?GROQ_VISION_MODEL:GROQ_MODEL;
     var messages=[{role:'system',content:sysPrompt}].concat(AGENT.history.slice(-10));
     if(img)messages[messages.length-1]={role:'user',content:userContent};
-    var payload={
-      model:model,
-      messages:messages,
-      max_tokens:800,temperature:0.7
-    };
+    var payload={messages:messages,max_tokens:800};
     var r=await fetch('/api/agent',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -1748,8 +1741,8 @@ async function agSend(){
     });
     var d=await r.json();
     agHideTyping();
-    if(d.error){agAppendMsg('agent','Eroare API: '+d.error.message);return;}
-    var reply=(d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||'Niciun răspuns.';
+    if(d.error){agAppendMsg('agent','Eroare API: '+(typeof d.error==='string'?d.error:d.error.message||JSON.stringify(d.error)));return;}
+    var reply=(d.content&&d.content[0]&&d.content[0].text)||'Niciun răspuns.';
     AGENT.history.push({role:'assistant',content:reply});
     agSaveMemory();
     agAppendMsg('agent',reply);
