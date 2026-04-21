@@ -33,25 +33,31 @@ export default async function handler(req, res) {
     const hxg = getS(0, 'expected_goals');
     const axg = getS(1, 'expected_goals');
     const shots = getS(0, 'Shots on Goal') + getS(0, 'Shots off Goal') + getS(1, 'Shots on Goal') + getS(1, 'Shots off Goal');
+    const corners = getS(0, 'Corner Kicks') + getS(1, 'Corner Kicks');
     const poss = getS(0, 'Ball Possession') || 50;
-    return `${i}. ${league}: ${home} ${hg}-${ag} ${away} | Min:${mn} | xG:${hxg.toFixed(1)}+${axg.toFixed(1)} | Sut:${shots} | Poss:${poss}%`;
+    return `${i}. ${league}: ${home} ${hg}-${ag} ${away} | Min:${mn} | xG:${hxg.toFixed(1)}+${axg.toFixed(1)} | Sut:${shots} | Cornere:${corners} | Poss:${poss}%`;
   });
 
   try {
     const msg = await client.messages.create({
-      model: 'claude-haiku-4-5',
-      max_tokens: 1500,
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
       system: [
         {
           type: 'text',
-          text: 'Esti un analist de fotbal expert. Primesti date de la meciuri live si oferi un insight concis in romana (maxim 12 cuvinte per meci). Raspunde DOAR cu un JSON array, fara text suplimentar, in formatul: [{"id":0,"insight":"text scurt in romana"},...]. Fii direct si specific despre ce se intampla in meci.',
+          text: `Ești un analist de fotbal expert specializat în predicții live. Pentru fiecare meci primit calculează:
+1. "score" (0-100): scor compozit bazat pe probabilitatea unui gol iminent (xG, șuturi, presiune, minute jucate)
+2. "recommendation": maxim 2 propoziții în română cu recomandarea ta specifică și concisă
+
+Răspunde DOAR cu JSON array, fără text suplimentar:
+[{"id":0,"score":75,"recommendation":"Ambele echipe atacă intens cu xG ridicat. Recomandat Over 0.5 repriza a doua."},...]`,
           cache_control: { type: 'ephemeral' }
         }
       ],
       messages: [
         {
           role: 'user',
-          content: 'Analizeaza meciurile live:\n' + summaries.join('\n')
+          content: 'Analizează meciurile live:\n' + summaries.join('\n')
         }
       ]
     });
