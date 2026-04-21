@@ -1742,7 +1742,7 @@ async function agSend(){
     var d=await r.json();
     agHideTyping();
     if(d.error){agAppendMsg('agent','Eroare API: '+(typeof d.error==='string'?d.error:d.error.message||JSON.stringify(d.error)));return;}
-    var reply=(d.content&&d.content[0]&&d.content[0].text)||'Niciun răspuns.';
+    var reply=(d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||'Niciun răspuns.';
     AGENT.history.push({role:'assistant',content:reply});
     agSaveMemory();
     agAppendMsg('agent',reply);
