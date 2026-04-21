@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
+html{overscroll-behavior-y:contain;}
 :root{--bg:#0b0e17;--sur:#131825;--sur2:#1a2235;--bor:#232d44;--ac:#00d4a8;--wa:#f0a500;--da:#ff3d5a;--tx:#e2ecf4;--mu:#4d6880;--mu2:#8db0c8;}
 body{background:var(--bg);color:var(--tx);font-family:'Inter',sans-serif;min-height:100vh;max-width:480px;margin:0 auto;overscroll-behavior-y:contain;}
 
@@ -238,7 +239,9 @@ main{padding:0;}
 .clsn{color:var(--tx);font-weight:500;}
 .clspt{color:var(--ac);font-weight:800;}
 
-footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1px solid var(--bor);margin-top:20px;text-transform:uppercase;letter-spacing:.8px;}
+footer{text-align:center;padding:16px 20px;font-size:9px;color:var(--mu);border-top:1px solid var(--bor);margin-top:20px;text-transform:uppercase;letter-spacing:.8px;}
+.btn-disc{display:none;margin:0 auto 12px;padding:10px 28px;background:rgba(255,61,90,.08);border:1px solid rgba(255,61,90,.25);border-radius:10px;color:var(--da);font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.5px;transition:all .15s;}
+.btn-disc:hover{background:rgba(255,61,90,.15);}
 
 /* RECS VIEW */
 #recs-view{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:500;overflow-y:auto;display:none;max-width:480px;margin:0 auto;}
@@ -540,6 +543,7 @@ footer{text-align:center;padding:20px;font-size:9px;color:var(--mu);border-top:1
   </div>
 </div>
 
+<button class="btn-disc" id="btn-disc" onclick="disc()">❌ DECONECTARE</button>
 <footer>ALOHASCAN · 88 LIGI · xG POWERED · AI POWERED</footer>
 </div>
 
@@ -565,6 +569,22 @@ async function apiFetch(url){
   if(!r.ok)throw new Error('HTTP '+r.status);throw new Error('Raspuns invalid');
 }
 
+function disc(){
+  if(ST.rt)clearInterval(ST.rt);if(ST.ct)clearInterval(ST.ct);
+  ST.cn=false;ST.ms=[];ST.fms=[];
+  try{localStorage.removeItem('alohascan_connected');}catch(e){}
+  var b=document.getElementById('btc');b.disabled=false;b.textContent='CONECTARE';b.className='btn-connect';
+  document.getElementById('sbar').style.display='none';
+  document.getElementById('ref').style.display='none';
+  document.getElementById('ctr').style.display='none';
+  document.getElementById('dab').style.display='none';
+  document.getElementById('msel').style.display='none';
+  document.getElementById('mfw').style.display='none';
+  document.getElementById('wr-wrap').style.display='none';
+  document.getElementById('btn-disc').style.display='none';
+  showEm();hideE();
+}
+
 async function conn(){
   var b=document.getElementById('btc');b.disabled=true;b.textContent='SE CONECTEAZĂ...';hideE();showL('Verificare...');
   try{
@@ -578,6 +598,8 @@ async function conn(){
     document.getElementById('msel').style.display='flex';
     document.getElementById('mfw').style.display='';
     initMF();renderWR(loadWR());initSupabase();
+    document.getElementById('btn-disc').style.display='block';
+    try{localStorage.setItem('alohascan_connected','1');}catch(e){}
     await scn();startAR();
   }catch(e){b.disabled=false;b.textContent='CONECTARE';b.className='btn-connect';showE('Eroare: '+e.message);showEm();}
 }
@@ -1706,9 +1728,12 @@ function agUpdateStats(){
 (function(){
   document.addEventListener('DOMContentLoaded',function(){
     var inp=document.getElementById('ag-input');
-    if(!inp)return;
-    inp.addEventListener('input',function(){this.style.height='';this.style.height=Math.min(this.scrollHeight,120)+'px';});
-    inp.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();agSend();}});
+    if(inp){
+      inp.addEventListener('input',function(){this.style.height='';this.style.height=Math.min(this.scrollHeight,120)+'px';});
+      inp.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();agSend();}});
+    }
+    // Auto-reconectare dacă era conectat înainte de reload
+    try{if(localStorage.getItem('alohascan_connected')==='1')conn();}catch(e){}
   });
 })();
 </script>
