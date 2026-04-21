@@ -4,7 +4,7 @@
     {
       "code": "uefa.cl",
       "name": "UEFA Champions League 2019/20",
-      "country": "",
+      "country": "Europe",
       "avg_over05_from_00ht": 0.8621,
       "ht00_over05_matches": 25,
       "ht00_draw_matches": 4,
@@ -16,7 +16,7 @@
     {
       "code": "hu.1",
       "name": "Hungarian Nemzeti Bajnokság I 2018/19",
-      "country": "",
+      "country": "Hungary",
       "avg_over05_from_00ht": 0.8615,
       "ht00_over05_matches": 56,
       "ht00_draw_matches": 9,
@@ -28,7 +28,7 @@
     {
       "code": "uefa.cl",
       "name": "UEFA Champions League 2012/13",
-      "country": "",
+      "country": "Europe",
       "avg_over05_from_00ht": 0.8529,
       "ht00_over05_matches": 29,
       "ht00_draw_matches": 5,
@@ -40,7 +40,7 @@
     {
       "code": "ch.1",
       "name": "Swiss Super League 2018/19",
-      "country": "",
+      "country": "Switzerland",
       "avg_over05_from_00ht": 0.8431,
       "ht00_over05_matches": 43,
       "ht00_draw_matches": 8,
@@ -52,7 +52,7 @@
     {
       "code": "ch.2",
       "name": "Swiss Challenge League 2020/21",
-      "country": "",
+      "country": "Switzerland",
       "avg_over05_from_00ht": 0.8413,
       "ht00_over05_matches": 53,
       "ht00_draw_matches": 10,
@@ -64,7 +64,7 @@
     {
       "code": "uefa.cl",
       "name": "UEFA Champions League 2013/14",
-      "country": "",
+      "country": "Europe",
       "avg_over05_from_00ht": 0.8378,
       "ht00_over05_matches": 31,
       "ht00_draw_matches": 6,
@@ -88,7 +88,7 @@
     {
       "code": "sco.1",
       "name": "Scottish Premiership 2024/25",
-      "country": "",
+      "country": "Scotland",
       "avg_over05_from_00ht": 0.8148,
       "ht00_over05_matches": 44,
       "ht00_draw_matches": 10,
@@ -100,7 +100,7 @@
     {
       "code": "uefa.cl",
       "name": "UEFA Champions League 2018/19",
-      "country": "",
+      "country": "Europe",
       "avg_over05_from_00ht": 0.8108,
       "ht00_over05_matches": 30,
       "ht00_draw_matches": 7,
@@ -112,7 +112,7 @@
     {
       "code": "uefa.cl",
       "name": "UEFA Champions League 2014/15",
-      "country": "",
+      "country": "Europe",
       "avg_over05_from_00ht": 0.8095,
       "ht00_over05_matches": 34,
       "ht00_draw_matches": 8,
@@ -136,7 +136,7 @@
     {
       "code": "uefa.cl",
       "name": "UEFA Champions League 2024/25",
-      "country": "",
+      "country": "Europe",
       "avg_over05_from_00ht": 0.8,
       "ht00_over05_matches": 36,
       "ht00_draw_matches": 9,
@@ -172,7 +172,7 @@
     {
       "code": "de.3",
       "name": "Deutsche 3. Liga 2014/15",
-      "country": "",
+      "country": "Germany",
       "avg_over05_from_00ht": 0.7895,
       "ht00_over05_matches": 90,
       "ht00_draw_matches": 24,
@@ -184,7 +184,7 @@
     {
       "code": "cz.1",
       "name": "Czech Republic First League 2018/19",
-      "country": "",
+      "country": "Czech Republic",
       "avg_over05_from_00ht": 0.7857,
       "ht00_over05_matches": 66,
       "ht00_draw_matches": 18,
@@ -196,7 +196,7 @@
     {
       "code": "ch.1",
       "name": "Swiss Super League 2020/21",
-      "country": "",
+      "country": "Switzerland",
       "avg_over05_from_00ht": 0.7818,
       "ht00_over05_matches": 43,
       "ht00_draw_matches": 12,
@@ -208,7 +208,7 @@
     {
       "code": "ch.2",
       "name": "Swiss Challenge League 2019/20",
-      "country": "",
+      "country": "Switzerland",
       "avg_over05_from_00ht": 0.7805,
       "ht00_over05_matches": 32,
       "ht00_draw_matches": 9,
@@ -220,7 +220,7 @@
     {
       "code": "de.3",
       "name": "Deutsche 3. Liga 2020/21",
-      "country": "",
+      "country": "Germany",
       "avg_over05_from_00ht": 0.7788,
       "ht00_over05_matches": 88,
       "ht00_draw_matches": 25,
@@ -292,7 +292,7 @@
     {
       "code": "uefa.cl",
       "name": "UEFA Champions League 2017/18",
-      "country": "",
+      "country": "Europe",
       "avg_over05_from_00ht": 0.7667,
       "ht00_over05_matches": 23,
       "ht00_draw_matches": 7,
@@ -388,7 +388,7 @@
     {
       "code": "uefa.cl",
       "name": "UEFA Champions League 2011/12",
-      "country": "",
+      "country": "Europe",
       "avg_over05_from_00ht": 0.7568,
       "ht00_over05_matches": 28,
       "ht00_draw_matches": 9,
@@ -412,7 +412,7 @@
     {
       "code": "de.3",
       "name": "Deutsche 3. Liga 2019/20",
-      "country": "",
+      "country": "Germany",
       "avg_over05_from_00ht": 0.7544,
       "ht00_over05_matches": 86,
       "ht00_draw_matches": 28,
@@ -424,7 +424,7 @@
     {
       "code": "sco.1",
       "name": "Scottish Premiership 2018/19",
-      "country": "",
+      "country": "Scotland",
       "avg_over05_from_00ht": 0.75,
       "ht00_over05_matches": 45,
       "ht00_draw_matches": 15,
@@ -460,7 +460,7 @@
     {
       "code": "ch.1",
       "name": "Swiss Super League 2019/20",
-      "country": "",
+      "country": "Switzerland",
       "avg_over05_from_00ht": 0.7442,
       "ht00_over05_matches": 32,
       "ht00_draw_matches": 11,
@@ -484,7 +484,7 @@
     {
       "code": "tr.2",
       "name": "Turkish 1. Lig 2019/20",
-      "country": "",
+      "country": "Turkey",
       "avg_over05_from_00ht": 0.7395,
       "ht00_over05_matches": 88,
       "ht00_draw_matches": 31,
@@ -496,7 +496,7 @@
     {
       "code": "sco.1",
       "name": "Scottish Premiership 2020/21",
-      "country": "",
+      "country": "Scotland",
       "avg_over05_from_00ht": 0.7385,
       "ht00_over05_matches": 48,
       "ht00_draw_matches": 17,
@@ -508,7 +508,7 @@
     {
       "code": "cz.1",
       "name": "Czech Republic First League 2020/21",
-      "country": "",
+      "country": "Czech Republic",
       "avg_over05_from_00ht": 0.7327,
       "ht00_over05_matches": 74,
       "ht00_draw_matches": 27,
@@ -520,7 +520,7 @@
     {
       "code": "ch.1",
       "name": "Swiss Super League 2014/15",
-      "country": "",
+      "country": "Switzerland",
       "avg_over05_from_00ht": 0.7308,
       "ht00_over05_matches": 38,
       "ht00_draw_matches": 14,
@@ -532,7 +532,7 @@
     {
       "code": "hu.1",
       "name": "Hungarian Nemzeti Bajnokság I 2020/21",
-      "country": "",
+      "country": "Hungary",
       "avg_over05_from_00ht": 0.7308,
       "ht00_over05_matches": 38,
       "ht00_draw_matches": 14,
@@ -544,7 +544,7 @@
     {
       "code": "uefa.cl",
       "name": "UEFA Champions League 2015/16",
-      "country": "",
+      "country": "Europe",
       "avg_over05_from_00ht": 0.7297,
       "ht00_over05_matches": 27,
       "ht00_draw_matches": 10,
@@ -556,7 +556,7 @@
     {
       "code": "de.3",
       "name": "Deutsche 3. Liga 2017/18",
-      "country": "",
+      "country": "Germany",
       "avg_over05_from_00ht": 0.7248,
       "ht00_over05_matches": 79,
       "ht00_draw_matches": 30,
@@ -568,7 +568,7 @@
     {
       "code": "ma.1",
       "name": "Morocco | Botola Pro 1 2024/25",
-      "country": "",
+      "country": "Morocco",
       "avg_over05_from_00ht": 0.7237,
       "ht00_over05_matches": 55,
       "ht00_draw_matches": 21,
@@ -592,7 +592,7 @@
     {
       "code": "copa.l",
       "name": "Copa Libertadores 2025",
-      "country": "",
+      "country": "South America",
       "avg_over05_from_00ht": 0.72,
       "ht00_over05_matches": 36,
       "ht00_draw_matches": 14,
@@ -628,7 +628,7 @@
     {
       "code": "sco.1",
       "name": "Scottish Premiership 2019/20",
-      "country": "",
+      "country": "Scotland",
       "avg_over05_from_00ht": 0.7091,
       "ht00_over05_matches": 39,
       "ht00_draw_matches": 16,
@@ -652,7 +652,7 @@
     {
       "code": "de.3",
       "name": "Deutsche 3. Liga 2018/19",
-      "country": "",
+      "country": "Germany",
       "avg_over05_from_00ht": 0.7054,
       "ht00_over05_matches": 91,
       "ht00_draw_matches": 38,
@@ -676,7 +676,7 @@
     {
       "code": "de.3",
       "name": "Deutsche 3. Liga 2016/17",
-      "country": "",
+      "country": "Germany",
       "avg_over05_from_00ht": 0.6967,
       "ht00_over05_matches": 85,
       "ht00_draw_matches": 37,
@@ -700,7 +700,7 @@
     {
       "code": "eg.1",
       "name": "Egypt | Premiership 2024/25",
-      "country": "",
+      "country": "Egypt",
       "avg_over05_from_00ht": 0.6667,
       "ht00_over05_matches": 58,
       "ht00_draw_matches": 29,
@@ -712,7 +712,7 @@
     {
       "code": "mls",
       "name": "Major League Soccer 2025",
-      "country": "",
+      "country": "USA",
       "avg_over05_from_00ht": 0.6471,
       "ht00_over05_matches": 33,
       "ht00_draw_matches": 18,
@@ -724,7 +724,7 @@
     {
       "code": "uefa.cl",
       "name": "UEFA Champions League 2016/17",
-      "country": "",
+      "country": "Europe",
       "avg_over05_from_00ht": 0.6429,
       "ht00_over05_matches": 18,
       "ht00_draw_matches": 10,
@@ -736,7 +736,7 @@
     {
       "code": "de.3",
       "name": "Deutsche 3. Liga 2015/16",
-      "country": "",
+      "country": "Germany",
       "avg_over05_from_00ht": 0.6296,
       "ht00_over05_matches": 85,
       "ht00_draw_matches": 50,
@@ -748,7 +748,7 @@
     {
       "code": "dz.1",
       "name": "Algeria | Ligue 1 2024/25",
-      "country": "",
+      "country": "Algeria",
       "avg_over05_from_00ht": 0.5915,
       "ht00_over05_matches": 42,
       "ht00_draw_matches": 29,
@@ -760,7 +760,7 @@
     {
       "code": "ru.2",
       "name": "Russia 1. Division 2019/20",
-      "country": "",
+      "country": "Russia",
       "avg_over05_from_00ht": 0.5821,
       "ht00_over05_matches": 39,
       "ht00_draw_matches": 28,
@@ -772,7 +772,7 @@
     {
       "code": "co.1",
       "name": "Colombia Primera A 2025",
-      "country": "",
+      "country": "Colombia",
       "avg_over05_from_00ht": 0.55,
       "ht00_over05_matches": 33,
       "ht00_draw_matches": 27,
