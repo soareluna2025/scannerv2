@@ -597,7 +597,7 @@ async function conn(){
     document.getElementById('dab').style.display='flex';
     document.getElementById('msel').style.display='flex';
     document.getElementById('mfw').style.display='';
-    initMF();renderWR(loadWR());initSupabase();
+    initMF();renderWR(loadWR());initSupabase();loadHistoricalData();
     document.getElementById('btn-disc').style.display='block';
     try{localStorage.setItem('alohascan_connected','1');}catch(e){}
     await scn();startAR();
@@ -1379,6 +1379,34 @@ function renderWR(data){
   el.style.display='flex';
 }
 
+// ===== DATE ISTORICE (87,966 meciuri, 2010-2025) =====
+var HIST={leagues:null,teams:null};
+async function loadHistoricalData(){
+  if(HIST.leagues)return;
+  try{
+    var [lr,tr]=await Promise.all([
+      fetch('/data/leagues_config.json').then(function(r){return r.json();}),
+      fetch('/data/team_profiles.json').then(function(r){return r.json();})
+    ]);
+    HIST.leagues=lr.leagues||[];
+    HIST.teams=tr.teams||[];
+    console.log('📊 Date istorice: '+HIST.leagues.length+' ligi, '+HIST.teams.length+' echipe');
+  }catch(e){console.warn('Historical data load failed:',e.message);}
+}
+function getLeagueHistory(name){
+  if(!HIST.leagues||!name)return null;
+  var n=name.toLowerCase();
+  return HIST.leagues.find(function(l){return l.name.toLowerCase().includes(n)||n.includes(l.name.toLowerCase());});
+}
+function getTeamHistory(name){
+  if(!HIST.teams||!name)return null;
+  var n=name.toLowerCase().replace(/\s+fc$|\s+cf$|\s+sc$|\s+ac$/,'').trim();
+  return HIST.teams.find(function(t){
+    var tn=t.name.toLowerCase().replace(/\s+fc$|\s+cf$|\s+sc$|\s+ac$/,'').trim();
+    return tn===n||tn.includes(n)||n.includes(tn);
+  });
+}
+
 // ===== SUPABASE =====
 var SUPA_URL='https://kdyafjlwbximefwdhbnc.supabase.co';
 var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkeWFmamx3YnhpbWVmd2RoYm5jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MTE4MTgsImV4cCI6MjA5MjI4NzgxOH0.f-6dFSq8pAUq9bkz_A0N-qjdYigULIeRmJTkOXsCJuI';
@@ -1510,16 +1538,32 @@ async function buildSystemPrompt(){
   var wrStr='WIN:'+wins+' LOSS:'+losses+(total>0?' RATE:'+rate+'%':'');
   var recCount=ms.filter(function(m){return m._s&&m._s.mk&&m._s.mk.over05>=CF.MC;}).length;
 
-  var patternText='Date insuficiente încă (minim 10 meciuri necesare).';
+  // Patternuri istorice din 87,966 meciuri (2010-2025)
+  var histText='Date istorice indisponibile.';
+  if(HIST.leagues&&HIST.leagues.length>0){
+    var top5h=HIST.leagues.slice(0,5).map(function(l){return l.name+' '+Math.round(l.avg_over05_from_00ht*100)+'% ('+l.ht00_matches+' meciuri 0-0 HT)';});
+    var bot3h=HIST.leagues.slice(-3).map(function(l){return l.name+' '+Math.round(l.avg_over05_from_00ht*100)+'%';});
+    histText='BAZA DATE: 87,966 meciuri analizate (2010-2025)\nTOP LIGI Over0.5 din 0-0 HT: '+top5h.join(' | ')+'\nLIGI RISC: '+bot3h.join(' | ');
+    // Adaugă info despre ligile meciurilor live curente
+    var liveLeagueInfo=ms.slice(0,5).map(function(m){
+      var lg=m.league&&m.league.name?getLeagueHistory(m.league.name):null;
+      if(!lg)return null;
+      return (m.league.name||'?')+' → istorik Over0.5 din 0-0HT: '+Math.round(lg.avg_over05_from_00ht*100)+'%';
+    }).filter(Boolean);
+    if(liveLeagueInfo.length)histText+='\nLIGI LIVE CU DATE ISTORICE:\n'+liveLeagueInfo.join('\n');
+  }
+
+  // Patternuri live din Supabase (colectate de scanner)
+  var patternText='Date live insuficiente (continuă scanarea).';
   var patterns=await loadLeaguePatterns();
   if(patterns&&patterns.length>0){
     var prio=patterns.filter(function(p){return p.recommendation==='PRIORITATE';});
     var evit=patterns.filter(function(p){return p.recommendation==='EVITA';});
-    patternText='LIGI PRIORITATE ('+prio.length+'): '+prio.slice(0,10).map(function(p){return p.league_name+' '+p.reliability_score+'% ('+p.total_matches+' meciuri)';}).join(', ');
-    if(evit.length)patternText+='\nLIGI DE EVITAT ('+evit.length+'): '+evit.slice(0,5).map(function(p){return p.league_name+' '+p.reliability_score+'%';}).join(', ');
+    patternText='LIGI PRIORITATE ('+prio.length+'): '+prio.slice(0,8).map(function(p){return p.league_name+' '+p.reliability_score+'%';}).join(', ');
+    if(evit.length)patternText+='\nLIGI DE EVITAT: '+evit.slice(0,4).map(function(p){return p.league_name+' '+p.reliability_score+'%';}).join(', ');
   }
 
-  return 'Ești AlohaScan AI, expert în predicții fotbal live. Ora: '+now+'\n\nMECIURI LIVE ('+ms.length+' total, top 15):\n'+(topMs.length?topMs.join('\n'):'Niciun meci live momentan.')+'\n\nRECOMANDATE (Over0.5 >'+CF.MC+'%): '+recCount+'/'+CF.MD+'\nWIN RATE: '+wrStr+'\n\nPATTERNURI ISTORICE (Supabase):\n'+patternText+'\n\nRăspunde în română. Fii concis. Bazează-te pe datele de mai sus.';
+  return 'Ești AlohaScan AI, expert în predicții fotbal live. Ora: '+now+'\n\nMECIURI LIVE ('+ms.length+' total, top 15):\n'+(topMs.length?topMs.join('\n'):'Niciun meci live momentan.')+'\n\nRECOMANDATE (Over0.5 >'+CF.MC+'%): '+recCount+'/'+CF.MD+'\nWIN RATE SCANNER: '+wrStr+'\n\nDATE ISTORICE (87,966 meciuri 2010-2025):\n'+histText+'\n\nPATTERNURI LIVE (Supabase):\n'+patternText+'\n\nRăspunde în română. Fii concis și bazat pe date.';
 }
 
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}

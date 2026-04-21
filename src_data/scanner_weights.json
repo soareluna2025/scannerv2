@@ -1,0 +1,13 @@
+{
+  "note": "Greut\u0103\u021bi bazate pe analiza 2010-prezent",
+  "generated": "2026-04-21",
+  "league_weight": 0.25,
+  "team_attack_weight": 0.3,
+  "historical_00ht_rate": 0.25,
+  "season_form_weight": 0.2,
+  "thresholds": {
+    "min_matches": 50,
+    "high_rate": 0.8,
+    "medium_rate": 0.65
+  }
+}
