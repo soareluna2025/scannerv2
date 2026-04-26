@@ -21,10 +21,10 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'public, s-maxage=55, stale-while-revalidate=10');
 
-  const key = process.env.APIFOOTBALL_KEY;
+  const key = process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
   if (!key) {
-    log('ERROR: APIFOOTBALL_KEY not set');
-    return res.status(200).json({ response: [], error: 'APIFOOTBALL_KEY not configured' });
+    log('ERROR: no API-Football key configured');
+    return res.status(200).json({ response: [], error: 'API key not configured (set APIFOOTBALL_KEY or API_FOOTBALL_KEY in Vercel)' });
   }
 
   // Return cached response if still fresh
