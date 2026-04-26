@@ -640,10 +640,10 @@ async function scn(){
   try{
     var d=await apiFetch('/api/football');
     var all=d.response||[];
-    document.getElementById('s1').textContent=all.length;
-    document.getElementById('s2').textContent=all.length;
     var fil=all.map(function(m){return scM(m);});
     ST.ms=fil;
+    document.getElementById('s1').textContent=fil.length;
+    document.getElementById('s2').textContent=fil.length;
     var n=new Date();document.getElementById('s4').textContent=pad(n.getHours())+':'+pad(n.getMinutes());
     buildSTabs(fil);apF();enrich();anlz();trackPredictions();agUpdateStats();
     if(supa){
@@ -844,10 +844,25 @@ function setR(r,e){ST.rg=r;document.querySelectorAll('.fb').forEach(function(b){
 
 function apF(){
   var ms=ST.ms.slice();
+  // Positive LIVE filter: must have a valid live status short code OR elapsed > 0
+  var LIVE_ST=['1H','2H','HT','ET','BT','P','LIVE','INT','IN_PLAY','PAUSED','EXTRA_TIME','PENALTY_SHOOTOUT'];
+  ms=ms.filter(function(m){
+    var sh=(m.fixture&&m.fixture.status&&m.fixture.status.short||'').toUpperCase();
+    var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;
+    return LIVE_ST.indexOf(sh)>=0||mn>0;
+  });
+  // Suspicious data filter: elapsed > 5 and zero statistics means ghost match
+  ms=ms.filter(function(m){
+    var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;
+    if(mn<=5)return true;
+    var st=m.statistics||[];
+    if(!st.length)return false; // no stats at all after min 5 — suspicious
+    var f=m._s&&m._s.f||{};
+    var hasData=(f.hxg||0)+(f.axg||0)+(f.hSOT||0)+(f.aSOT||0)+(f.hDA||0)+(f.aDA||0)+(f.hSh||0)+(f.aSh||0)>0;
+    return hasData;
+  });
   if(ST.rg!=='ALL'){var ids=LG[ST.rg]?LG[ST.rg].map(function(l){return l.id;}):[];ms=ms.filter(function(m){return ids.indexOf(m.league?m.league.id:0)>=0;});}
   if(SF!=='all'){var sp=SF.split('-').map(Number);ms=ms.filter(function(m){var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;return hg===sp[0]&&ag===sp[1];});}
-  var FINISHED_ST=['FT','AET','PEN','SUSP','INT','PST','CAN','WO','ABD','AWD','WO'];
-  ms=ms.filter(function(m){var st=(m.fixture&&m.fixture.status&&(m.fixture.status.short||m.fixture.status.long||'')||'').toUpperCase();return FINISHED_ST.indexOf(st)<0;});
   ms=ms.filter(function(m){var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;return mn>=MF.min&&mn<=MF.max;});
   ms.sort(function(a,b){var pa=a._s?a._s.ng||0:0;var pb=b._s?b._s.ng||0:0;return pb-pa;});
   ST.fms=ms;
