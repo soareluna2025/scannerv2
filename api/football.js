@@ -60,14 +60,11 @@ export default async function handler(req, res) {
       .filter(m => {
         const sh      = m.fixture?.status?.short || '';
         const elapsed = m.fixture?.status?.elapsed || 0;
-        const stats   = m.statistics || [];
 
         // Must be a live status
         if (!LIVE_STATUS.has(sh)) return false;
-        // Must have started
+        // Must have started (elapsed >= 1 proves the match is in progress)
         if (elapsed < 1) return false;
-        // Must have statistics (proves match is genuinely in progress)
-        if (stats.length === 0) return false;
 
         return true;
       })

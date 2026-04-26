@@ -854,12 +854,15 @@ function apF(){
     if(src==='fd')return true; // fd already filtered server-side to live only
     return LIVE_ST.indexOf(sh)>=0&&mn>=1;
   });
-  // Suspicious data filter: af-only matches must have statistics (server enforces this but double-check)
+  // Stale data filter: if match has statistics AND all activity is 0 after min 15 → ghost
   ms=ms.filter(function(m){
-    var src=m._src||'af';
-    if(src==='fd')return true; // fd matches always shown even without stats
+    var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;
+    if(mn<=15)return true; // too early to judge
     var st=m.statistics||[];
-    return st.length>0;
+    if(!st.length)return true; // no stats available — keep match, show without stats
+    var f=m._s&&m._s.f||{};
+    var activity=(f.hSOT||0)+(f.aSOT||0)+(f.hSh||0)+(f.aSh||0)+(f.hDA||0)+(f.aDA||0)+(f.hC||0)+(f.aC||0);
+    return activity>0; // has stats but all zero after min 15 → stale
   });
   if(ST.rg!=='ALL'){var ids=LG[ST.rg]?LG[ST.rg].map(function(l){return l.id;}):[];ms=ms.filter(function(m){return ids.indexOf(m.league?m.league.id:0)>=0;});}
   if(SF!=='all'){var sp=SF.split('-').map(Number);ms=ms.filter(function(m){var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;return hg===sp[0]&&ag===sp[1];});}
