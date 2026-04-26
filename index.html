@@ -216,6 +216,31 @@ main{padding:0;}
 .ai-score-lbl{font-size:10px;color:var(--mu2);font-weight:700;min-width:28px;}
 .ai-score-track{flex:1;height:4px;background:var(--bor);border-radius:4px;overflow:hidden;}
 .ai-score-fill{height:100%;border-radius:4px;transition:width .5s;}
+/* FlashScore stats */
+.fs-teams-hdr{display:flex;justify-content:space-between;align-items:center;padding:4px 0 10px;margin-bottom:4px;}
+.fs-th{font-size:12px;font-weight:700;}
+.fs-grp{margin:10px 0 4px;font-size:9px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.8px;padding-bottom:4px;border-bottom:1px solid var(--bor);}
+.fs-row{margin-bottom:7px;}
+.fs-vals{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;}
+.fs-vh{font-size:13px;font-weight:800;color:#00d4a8;}
+.fs-va{font-size:13px;font-weight:800;color:#a78bfa;}
+.fs-nm{font-size:10px;color:var(--mu2);text-align:center;flex:1;}
+.fs-bar{height:5px;border-radius:3px;background:var(--bor);display:flex;overflow:hidden;}
+.fs-bh{background:#00d4a8;border-radius:3px 0 0 3px;transition:width .4s;}
+.fs-ba{background:#a78bfa;border-radius:0 3px 3px 0;transition:width .4s;}
+/* AI Prediction card */
+.ai-pred-wrap{background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.2);border-radius:10px;padding:14px;margin-top:14px;}
+.ai-pred-hdr{font-size:11px;font-weight:700;color:#a78bfa;margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.ai-pred-load{text-align:center;color:var(--mu);font-size:12px;padding:16px 0;}
+.ai-pred-prob{display:flex;align-items:center;gap:14px;margin-bottom:10px;}
+.ai-pred-pct{font-size:40px;font-weight:800;line-height:1;}
+.ai-pred-info{flex:1;}
+.ai-pred-sublbl{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;}
+.ai-pred-team{font-size:13px;font-weight:700;color:var(--tx);margin-top:2px;}
+.ai-pred-min{font-size:11px;color:var(--mu2);margin-bottom:6px;}
+.ai-pred-badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;margin-bottom:8px;}
+.ai-pred-txt{font-size:11px;color:var(--mu2);line-height:1.6;margin-bottom:6px;}
+.ai-pred-rec{font-size:11px;font-weight:600;color:var(--ac);}
 .ai-score-val{font-size:12px;font-weight:700;min-width:24px;text-align:right;}
 .ai-rec{font-size:10px;color:var(--mu2);padding:2px 12px 8px;line-height:1.5;font-style:italic;}
 
@@ -925,6 +950,7 @@ function openDetail(idx){
   document.getElementById('detail-view').style.display='block';
   document.getElementById('main-app').style.display='none';
   window.scrollTo(0,0);
+  setTimeout(function(){autoPredict(m);},50);
 }
 function closeDetail(){
   document.getElementById('detail-view').style.display='none';
@@ -934,6 +960,74 @@ function dvTab(t){
   document.querySelectorAll('.dv-tab').forEach(function(b){b.classList.remove('active');});
   document.querySelector('[data-tab="'+t+'"]').classList.add('active');
   document.getElementById('dv-content').innerHTML=renderDVTab(t,CMATCH);
+  if(t==='stats')autoPredict(CMATCH);
+}
+
+async function autoPredict(m){
+  if(!m)return;
+  var fid=m.fixture&&m.fixture.id?m.fixture.id:((m.teams&&m.teams.home?m.teams.home.name:'')+(m.teams&&m.teams.away?m.teams.away.name:'')).replace(/\s/g,'');
+  var el=document.getElementById('ai-pred-'+fid);
+  if(!el)return;
+  var s=m._s||{};var f=s.f||{};
+  var hn=m.teams&&m.teams.home?m.teams.home.name:'Home';
+  var an=m.teams&&m.teams.away?m.teams.away.name:'Away';
+  var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;
+  var mn=(m.fixture&&m.fixture.status)?m.fixture.status.elapsed||0:0;
+  var lg=m.league&&m.league.name?m.league.name:'?';
+  var hxg=(f.hxg||0).toFixed(2);var axg=(f.axg||0).toFixed(2);
+  var hSOT=f.hSOT||0;var aSOT=f.aSOT||0;
+  var hSh=f.hSh||0;var aSh=f.aSh||0;
+  var hp=f.hp||50;var hC=f.hC||0;var aC=f.aC||0;
+  var hDA=f.hDA||0;var aDA=f.aDA||0;
+  var hYC=f.hYC||0;var aYC=f.aYC||0;
+  var hSv=f.hSv||0;var aSv=f.aSv||0;
+  var hOff=f.hOff||0;var aOff=f.aOff||0;
+  var histCtx='';
+  if(window.HIST){
+    var lid=m.league&&m.league.id;
+    var lgHist=lid&&HIST.leagues&&HIST.leagues[lid];
+    if(lgHist)histCtx+='Liga '+lg+': avg '+lgHist.avg_goals_per_match+' goluri/meci, GG%='+lgHist.gg_pct+'%, Over2.5%='+lgHist.over25_pct+'%. ';
+    var hid=m.teams&&m.teams.home&&m.teams.home.id;var aid=m.teams&&m.teams.away&&m.teams.away.id;
+    if(hid&&HIST.teams&&HIST.teams[hid])histCtx+=hn+': avg '+HIST.teams[hid].avg_goals_scored+' marcate, '+HIST.teams[hid].avg_goals_conceded+' primite/meci. ';
+    if(aid&&HIST.teams&&HIST.teams[aid])histCtx+=an+': avg '+HIST.teams[aid].avg_goals_scored+' marcate, '+HIST.teams[aid].avg_goals_conceded+' primite/meci. ';
+  }
+  var userMsg='Meci live: '+lg+' | '+hn+' '+hg+'-'+ag+' '+an+' | Minutul: '+mn+'\n'+
+    'xG: '+hn+'='+hxg+', '+an+'='+axg+'\n'+
+    'Șuturi pe poartă: '+hn+'='+hSOT+', '+an+'='+aSOT+'\n'+
+    'Șuturi total: '+hn+'='+hSh+', '+an+'='+aSh+'\n'+
+    'Posesie: '+hn+'='+hp+'%, '+an+'='+(100-hp)+'%\n'+
+    'Cornere: '+hn+'='+hC+', '+an+'='+aC+'\n'+
+    'Atacuri periculoase: '+hn+'='+hDA+', '+an+'='+aDA+'\n'+
+    'Cartonașe galbene: '+hn+'='+hYC+', '+an+'='+aYC+'\n'+
+    'Salvări: '+hn+'='+hSv+', '+an+'='+aSv+'\n'+
+    (histCtx?'Date istorice (87.966 meciuri): '+histCtx:'');
+  var sysMsg='Ești un analist de fotbal expert. Bazat pe statisticile live și datele istorice furnizate, calculează:\n1. prob_gol: probabilitate 0-100 să mai fie un gol în acest meci\n2. echipa: care echipă e mai predispusă să marcheze (numele exact)\n3. minute: în ce interval de minute estimezi golul (ex: "68-75")\n4. incredere: nivelul tău de încredere 0-100\n5. analiza: 2-3 propoziții scurte în română cu justificare bazată pe statistici\n6. recomandare: sfat de pariu concis în română (max 1 propoziție)\nRăspunde STRICT JSON fără text extra:\n{"prob_gol":75,"echipa":"Arsenal","minute":"62-70","incredere":68,"analiza":"...","recomandare":"..."}';
+  el.innerHTML='<div class="ai-pred-load">🤖 Se analizează meciul...</div>';
+  try{
+    var r=await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'system',content:sysMsg},{role:'user',content:userMsg}],max_tokens:400})});
+    var d=await r.json();
+    var txt=d.choices&&d.choices[0]&&d.choices[0].message?d.choices[0].message.content:'';
+    var jm=txt.match(/\{[\s\S]*\}/);
+    var pred=jm?JSON.parse(jm[0]):null;
+    if(!pred)throw new Error('parse');
+    var pg=pred.prob_gol||0;
+    var pc=pg>=70?'#ff3d5a':pg>=45?'#f0a500':'#00d4a8';
+    var ic=pred.incredere||0;
+    var html='<div class="ai-pred-wrap">';
+    html+='<div class="ai-pred-hdr">🤖 Predicție AI — Next Goal</div>';
+    html+='<div class="ai-pred-prob">';
+    html+='<div class="ai-pred-pct" style="color:'+pc+'">'+pg+'%</div>';
+    html+='<div class="ai-pred-info">';
+    html+='<div class="ai-pred-sublbl">PROBABILITATE GOL</div>';
+    html+='<div class="ai-pred-team">'+pred.echipa+'</div>';
+    html+='<div class="ai-pred-min">⏱ '+pred.minute+' min</div>';
+    html+='<div class="ai-pred-badge" style="background:rgba(0,212,168,.12);color:#00d4a8">Încredere '+ic+'%</div>';
+    html+='</div></div>';
+    if(pred.analiza)html+='<div class="ai-pred-txt">'+pred.analiza+'</div>';
+    if(pred.recomandare)html+='<div class="ai-pred-rec">💡 '+pred.recomandare+'</div>';
+    html+='</div>';
+    el.innerHTML=html;
+  }catch(e){el.innerHTML='<div class="ai-pred-load" style="color:var(--mu)">Analiză indisponibilă</div>';}
 }
 
 function renderDetail(m){
@@ -988,22 +1082,33 @@ function renderDVTab(t,m){
   var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;
   var h='';
   if(t==='stats'){
-    h+='<div class="ds"><div class="ds-title">Statistici Live</div>';
-    function s2(l,hv,av){h+='<div class="s2"><span class="s2-h">'+hv+'</span><span class="s2-l">'+l+'</span><span class="s2-a">'+av+'</span></div>';}
-    s2('xG',(f.hxg||0).toFixed(2),(f.axg||0).toFixed(2));
-    s2('Șuturi pe poartă',f.hSOT||0,f.aSOT||0);
-    s2('Șuturi total',f.hSh||0,f.aSh||0);
-    s2('Posesie %',(f.hp||50)+'%',(100-(f.hp||50))+'%');
-    s2('Cornere',f.hC||0,f.aC||0);
-    s2('Atacuri periculoase',f.hDA||0,f.aDA||0);
-    s2('Cartonașe galbene',f.hYC||0,f.aYC||0);
-    s2('Salvări',f.hSv||0,f.aSv||0);
-    s2('Offside-uri',f.hOff||0,f.aOff||0);
-    h+='<div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--bor)">';
-    h+='<span style="font-size:11px;font-weight:700;color:var(--ac)">'+hn+'</span>';
-    h+='<span style="font-size:9px;color:var(--mu)">ECHIPĂ</span>';
-    h+='<span style="font-size:11px;font-weight:700;color:#22d3ee">'+an+'</span>';
-    h+='</div></div>';
+    var fid=m.fixture&&m.fixture.id?m.fixture.id:(hn+an).replace(/\s/g,'');
+    function fsB(lbl,hv,av,fmt){
+      hv=parseFloat(hv)||0;av=parseFloat(av)||0;
+      var tot=hv+av;var hp=tot>0?Math.round(hv/tot*100):50;var ap=100-hp;
+      var hd=fmt?fmt(hv):hv;var ad=fmt?fmt(av):av;
+      h+='<div class="fs-row">';
+      h+='<div class="fs-vals"><span class="fs-vh">'+hd+'</span><span class="fs-nm">'+lbl+'</span><span class="fs-va">'+ad+'</span></div>';
+      h+='<div class="fs-bar"><div class="fs-bh" style="width:'+hp+'%"></div><div class="fs-ba" style="width:'+ap+'%"></div></div>';
+      h+='</div>';
+    }
+    h+='<div class="ds">';
+    h+='<div class="fs-teams-hdr"><span class="fs-th" style="color:#00d4a8">'+hn+'</span><span class="fs-th" style="color:#a78bfa">'+an+'</span></div>';
+    h+='<div class="fs-grp">ATAC</div>';
+    fsB('xG',f.hxg||0,f.axg||0,function(v){return v.toFixed(2);});
+    fsB('Șuturi pe poartă',f.hSOT||0,f.aSOT||0);
+    fsB('Șuturi total',f.hSh||0,f.aSh||0);
+    fsB('Atacuri periculoase',f.hDA||0,f.aDA||0);
+    h+='<div class="fs-grp">POSESIE & SET-PIECE</div>';
+    var hp50=f.hp||50;var ap50=100-hp50;
+    h+='<div class="fs-row"><div class="fs-vals"><span class="fs-vh">'+hp50+'%</span><span class="fs-nm">Posesie</span><span class="fs-va">'+ap50+'%</span></div><div class="fs-bar"><div class="fs-bh" style="width:'+hp50+'%"></div><div class="fs-ba" style="width:'+ap50+'%"></div></div></div>';
+    fsB('Cornere',f.hC||0,f.aC||0);
+    fsB('Offside-uri',f.hOff||0,f.aOff||0);
+    h+='<div class="fs-grp">APĂRARE</div>';
+    fsB('Salvări',f.hSv||0,f.aSv||0);
+    fsB('Cartonașe galbene',f.hYC||0,f.aYC||0);
+    h+='</div>';
+    h+='<div id="ai-pred-'+fid+'"><div class="ai-pred-load">🤖 Se analizează meciul...</div></div>';
   }
   else if(t==='form'){
     function fbdgs(raw){if(!raw||!raw.length)return '<span style="font-size:11px;color:var(--mu)">N/A</span>';var o='';raw.slice(0,5).forEach(function(g){var w=g.teams&&g.teams.home?g.teams.home.winner:null;var r=w===true?'W':w===false?'L':'D';o+='<span class="fbdg '+r+'">'+r+'</span>';});return o;}
