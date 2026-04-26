@@ -17,14 +17,18 @@ function getStat(statistics, teamIdx, type) {
   return parseFloat(v) || 0;
 }
 
+function norm(n) { return (n || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'public, s-maxage=55, stale-while-revalidate=10');
 
-  const key = process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
-  if (!key) {
-    log('ERROR: no API-Football key configured');
-    return res.status(200).json({ response: [], error: 'API key not configured (set APIFOOTBALL_KEY or API_FOOTBALL_KEY in Vercel)' });
+  const afKey = process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
+  const fdKey = process.env.FOOTBALL_DATA_KEY;
+
+  if (!afKey && !fdKey) {
+    log('ERROR: no API keys configured');
+    return res.status(200).json({ response: [], error: 'No API keys configured' });
   }
 
   // Return cached response if still fresh
@@ -34,47 +38,40 @@ export default async function handler(req, res) {
     return res.status(200).json(_cache.data);
   }
 
+  // Fetch both APIs simultaneously
+  const [afRes, fdRes] = await Promise.allSettled([
+    afKey
+      ? fetch('https://v3.football.api-sports.io/fixtures?live=all', {
+          headers: { 'x-apisports-key': afKey }
+        }).then(r => r.json()).catch(e => ({ _err: e.message }))
+      : Promise.resolve(null),
+    fdKey
+      ? fetch('https://api.football-data.org/v4/matches?status=LIVE', {
+          headers: { 'X-Auth-Token': fdKey }
+        }).then(r => r.json()).catch(e => ({ _err: e.message }))
+      : Promise.resolve(null)
+  ]);
+
+  const combined = [];
+  const seen = new Set();
+
+  // --- API-Football (primary: wider league coverage) ---
   try {
-    log('fetching live fixtures from API-Football');
-    const r = await fetch('https://v3.football.api-sports.io/fixtures?live=all', {
-      headers: { 'x-apisports-key': key }
-    });
+    const data = afRes.status === 'fulfilled' ? afRes.value : null;
+    if (data && !data._err && !data.errors?.token) {
+      const raw = Array.isArray(data.response) ? data.response : [];
+      log(`af raw: ${raw.length}`);
 
-    if (!r.ok) {
-      log(`API error HTTP ${r.status}`);
-      return res.status(200).json({ response: [], error: `Upstream HTTP ${r.status}` });
-    }
-
-    const data = await r.json();
-
-    if (data.errors && Object.keys(data.errors).length > 0) {
-      const errMsg = JSON.stringify(data.errors);
-      log(`API errors: ${errMsg}`);
-      return res.status(200).json({ response: [], error: errMsg });
-    }
-
-    const raw = Array.isArray(data.response) ? data.response : [];
-    log(`raw fixtures from API: ${raw.length}`);
-
-    const validated = raw
-      .filter(m => {
+      for (const m of raw) {
         const sh      = m.fixture?.status?.short || '';
-        const elapsed = m.fixture?.status?.elapsed || 0;
+        const elapsed = m.fixture?.status?.elapsed ?? 0;
 
-        // Must be a live status
-        if (!LIVE_STATUS.has(sh)) return false;
-        // Must have started (elapsed >= 1 proves the match is in progress)
-        if (elapsed < 1) return false;
+        // Must be a recognised live status — trust the API on elapsed
+        if (!LIVE_STATUS.has(sh)) continue;
 
-        return true;
-      })
-      .map(m => {
-        const stats   = m.statistics || [];
-        const elapsed = m.fixture.status.elapsed;
-
-        // Extract all relevant statistics
-        const hSOT = getStat(stats, 0, 'Shots on Goal');
-        const aSOT = getStat(stats, 1, 'Shots on Goal');
+        const stats = m.statistics || [];
+        const hSOT  = getStat(stats, 0, 'Shots on Goal');
+        const aSOT  = getStat(stats, 1, 'Shots on Goal');
         const hSoff = getStat(stats, 0, 'Shots off Goal');
         const aSoff = getStat(stats, 1, 'Shots off Goal');
         const hDA   = getStat(stats, 0, 'Dangerous Attacks');
@@ -82,28 +79,30 @@ export default async function handler(req, res) {
         const hC    = getStat(stats, 0, 'Corner Kicks');
         const aC    = getStat(stats, 1, 'Corner Kicks');
 
-        // Server-side stale data filter:
-        // After 10 minutes, if shots + dangerous attacks + corners are all 0 → stale/ghost
-        if (elapsed > 10) {
+        // Stale-data guard: only applied when stats ARE present;
+        // if a match has stats but ALL activity = 0 after min 10 → ghost/stale
+        if (stats.length > 0 && elapsed > 10) {
           const activity = hSOT + aSOT + hSoff + aSoff + hDA + aDA + hC + aC;
-          if (activity === 0) return null;
+          if (activity === 0) {
+            log(`stale filtered: ${m.teams?.home?.name} vs ${m.teams?.away?.name} min=${elapsed}`);
+            continue;
+          }
         }
 
-        // Extract xG — MEGA plan includes this; return 0 if null/missing
         const hxg = getStat(stats, 0, 'expected_goals');
         const axg = getStat(stats, 1, 'expected_goals');
+        const key  = norm(m.teams?.home?.name) + '|' + norm(m.teams?.away?.name);
 
-        return {
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        combined.push({
           _src: 'af',
           _validated: true,
           fixture: {
             id:     m.fixture.id,
             date:   m.fixture.date,
-            status: {
-              short:   m.fixture.status.short,
-              long:    m.fixture.status.long,
-              elapsed: elapsed
-            }
+            status: { short: sh, long: m.fixture.status.long, elapsed }
           },
           league: {
             id:      m.league.id,
@@ -114,39 +113,71 @@ export default async function handler(req, res) {
             f:       m.league.country || '🌐'
           },
           teams: {
-            home: {
-              id:   m.teams.home.id,
-              name: m.teams.home.name,
-              logo: m.teams.home.logo
-            },
-            away: {
-              id:   m.teams.away.id,
-              name: m.teams.away.name,
-              logo: m.teams.away.logo
-            }
+            home: { id: m.teams.home.id, name: m.teams.home.name, logo: m.teams.home.logo },
+            away: { id: m.teams.away.id, name: m.teams.away.name, logo: m.teams.away.logo }
+          },
+          goals:      { home: m.goals.home ?? 0, away: m.goals.away ?? 0 },
+          xg:         { home: hxg, away: axg },
+          statistics: stats,
+          events:     m.events  || [],
+          lineups:    m.lineups || []
+        });
+      }
+    }
+  } catch (e) {
+    log(`af parse error: ${e.message}`);
+  }
+
+  // --- football-data.org (supplementary: real-time top European leagues) ---
+  const FD_LIVE  = new Set(['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT']);
+  const FD_SHORT = { IN_PLAY: '1H', PAUSED: 'HT', EXTRA_TIME: 'ET', PENALTY_SHOOTOUT: 'P' };
+
+  try {
+    const data = fdRes.status === 'fulfilled' ? fdRes.value : null;
+    if (data && !data._err && !data.errorCode && Array.isArray(data.matches)) {
+      log(`fd raw: ${data.matches.length}`);
+      for (const m of data.matches) {
+        if (!FD_LIVE.has(m.status)) continue;
+        const key = norm(m.homeTeam?.shortName || m.homeTeam?.name) + '|' +
+                    norm(m.awayTeam?.shortName || m.awayTeam?.name);
+        if (seen.has(key)) continue; // already covered by af
+        seen.add(key);
+
+        combined.push({
+          _src: 'fd',
+          _validated: true,
+          fixture: {
+            id:     m.id,
+            date:   m.utcDate,
+            status: { short: FD_SHORT[m.status] || m.status, long: m.status, elapsed: m.minute || 0 }
+          },
+          league: {
+            id:      m.competition.id,
+            name:    m.competition.name,
+            country: m.area?.name || '',
+            logo:    m.competition.emblem || '',
+            flag:    '',
+            f:       m.competition.code || '🌐'
+          },
+          teams: {
+            home: { id: m.homeTeam.id, name: m.homeTeam.shortName || m.homeTeam.name, logo: m.homeTeam.crest || '' },
+            away: { id: m.awayTeam.id, name: m.awayTeam.shortName || m.awayTeam.name, logo: m.awayTeam.crest || '' }
           },
           goals: {
-            home: m.goals.home ?? 0,
-            away: m.goals.away ?? 0
+            home: m.score.fullTime.home ?? m.score.halfTime.home ?? 0,
+            away: m.score.fullTime.away ?? m.score.halfTime.away ?? 0
           },
-          // Pre-extracted xG (0 if not available — never fabricated)
-          xg: { home: hxg, away: axg },
-          statistics: stats,
-          events:     m.events   || [],
-          lineups:    m.lineups  || []
-        };
-      })
-      .filter(Boolean); // remove nulls from stale data filter
-
-    log(`validated fixtures: ${validated.length} (filtered ${raw.length - validated.length})`);
-
-    const result = { response: validated };
-    _cache = { data: result, ts: now };
-    return res.status(200).json(result);
-
+          xg: { home: 0, away: 0 },
+          statistics: [], events: [], lineups: []
+        });
+      }
+    }
   } catch (e) {
-    log(`ERROR: ${e.message}`);
-    // Return empty rather than 500 so frontend handles gracefully
-    return res.status(200).json({ response: [], error: e.message });
+    log(`fd parse error: ${e.message}`);
   }
+
+  log(`final combined: ${combined.length}`);
+  const result = { response: combined };
+  _cache = { data: result, ts: now };
+  return res.status(200).json(result);
 }
