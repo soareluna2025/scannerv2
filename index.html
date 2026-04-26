@@ -781,7 +781,7 @@ function rnd(ms){
   order.forEach(function(lid){
     var g=groups[lid];var lg=g.lg||{};
     var lname=lg.name||'-';
-    var lm=LM[lg.id]||{};var lf=lm.f||'🌐';
+    var lm=LM[lg.id]||{};var lf=lm.f||lg.f||'🌐';
     var country=lg.country||'';
     h+='<div class="league-group">';
     h+='<div class="league-hdr" onclick="toggleLeague(\'lg'+lid+'\',this)">';
