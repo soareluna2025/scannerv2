@@ -19,6 +19,24 @@ function getStat(statistics, teamIdx, type) {
 
 function norm(n) { return (n || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
 
+// Estimate elapsed minutes when API returns null (free-tier limitation)
+function estimateElapsed(fixtureDate, statusShort) {
+  if (!fixtureDate) return 0;
+  const kickoffMs = new Date(fixtureDate).getTime();
+  const nowMs     = Date.now();
+  const totalMins = Math.max(0, Math.floor((nowMs - kickoffMs) / 60000));
+
+  switch (statusShort) {
+    case '1H':  return Math.min(45, totalMins);
+    case 'HT':  return 45;
+    case '2H':  return Math.min(90, Math.max(46, totalMins - 15)); // ~15min halftime break
+    case 'ET':  return Math.min(120, Math.max(91, totalMins - 30));
+    case 'BT':  return 105; // break between ET halves
+    case 'P':   return 120;
+    default:    return Math.min(90, totalMins);
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'public, s-maxage=55, stale-while-revalidate=10');
@@ -63,11 +81,18 @@ export default async function handler(req, res) {
       log(`af raw: ${raw.length}`);
 
       for (const m of raw) {
-        const sh      = m.fixture?.status?.short || '';
-        const elapsed = m.fixture?.status?.elapsed ?? 0;
+        const sh = m.fixture?.status?.short || '';
 
-        // Must be a recognised live status — trust the API on elapsed
+        // Must be a recognised live status — trust the API on status
         if (!LIVE_STATUS.has(sh)) continue;
+
+        // Elapsed: free tier often returns null — estimate from kickoff time as fallback
+        let elapsed = m.fixture?.status?.elapsed;
+        if (!elapsed && elapsed !== 0) {
+          // elapsed is null/undefined — estimate from fixture date
+          elapsed = estimateElapsed(m.fixture?.date, sh);
+        }
+        elapsed = elapsed || 0;
 
         const stats = m.statistics || [];
         const hSOT  = getStat(stats, 0, 'Shots on Goal');
