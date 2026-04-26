@@ -1,27 +1,61 @@
+function log(msg) {
+  console.log(`[today] ${new Date().toISOString()} ${msg}`);
+}
+
+const LIVE_STATUS = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'INT', 'NS']);
+const NOT_STARTED = 'NS';
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=30');
 
-  const key = process.env.API_FOOTBALL_KEY;
-  if (!key) return res.status(500).json({ error: 'API_FOOTBALL_KEY neconfigurat' });
+  const key = process.env.APIFOOTBALL_KEY;
+  if (!key) {
+    log('ERROR: APIFOOTBALL_KEY not set');
+    return res.status(200).json({ response: [], error: 'APIFOOTBALL_KEY not configured' });
+  }
 
-  // Today's date in YYYY-MM-DD (UTC)
+  // Today's date in YYYY-MM-DD format (UTC)
   const today = new Date().toISOString().split('T')[0];
+  const nowMs = Date.now();
+  const threeHoursMs = 3 * 60 * 60 * 1000;
 
   try {
-    // Fetch upcoming (NS = Not Started) fixtures for today
+    log(`fetching today's fixtures for ${today}`);
     const r = await fetch(
       `https://v3.football.api-sports.io/fixtures?date=${today}&status=NS`,
       { headers: { 'x-apisports-key': key } }
     );
+
+    if (!r.ok) {
+      log(`API error HTTP ${r.status}`);
+      return res.status(200).json({ response: [], error: `Upstream HTTP ${r.status}` });
+    }
+
     const data = await r.json();
 
     if (data.errors && Object.keys(data.errors).length > 0) {
-      return res.status(403).json({ error: JSON.stringify(data.errors) });
+      const errMsg = JSON.stringify(data.errors);
+      log(`API errors: ${errMsg}`);
+      return res.status(200).json({ response: [], error: errMsg });
     }
 
-    res.status(200).json({ response: data.response || [] });
+    const raw = Array.isArray(data.response) ? data.response : [];
+    log(`raw fixtures: ${raw.length}`);
+
+    // Keep only matches starting within the next 3 hours
+    const upcoming = raw.filter(m => {
+      const fixtureDate = m.fixture?.date;
+      if (!fixtureDate) return false;
+      const fixtureMs = new Date(fixtureDate).getTime();
+      return fixtureMs >= nowMs && fixtureMs <= nowMs + threeHoursMs;
+    });
+
+    log(`upcoming (next 3h): ${upcoming.length}`);
+    return res.status(200).json({ response: upcoming });
+
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    log(`ERROR: ${e.message}`);
+    return res.status(200).json({ response: [], error: e.message });
   }
 }
