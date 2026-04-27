@@ -111,9 +111,15 @@ export default async function handler(req, res) {
   // --- API-Football (primary: wider league coverage) ---
   try {
     const data = afRes.status === 'fulfilled' ? afRes.value : null;
+    if (data?.errors && Object.keys(data.errors).length > 0) {
+      log(`af API errors: ${JSON.stringify(data.errors)}`);
+    }
+    if (data?.paging) {
+      log(`af paging: current=${data.paging.current} total=${data.paging.total}`);
+    }
     if (data && !data._err && !data.errors?.token) {
       const raw = Array.isArray(data.response) ? data.response : [];
-      log(`af raw: ${raw.length}`);
+      log(`af raw: ${raw.length} (plan remaining: ${data.results ?? '?'})`);
 
       for (const m of raw) {
         const sh = m.fixture?.status?.short || '';
