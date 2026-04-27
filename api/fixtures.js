@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  const API_KEY = process.env.API_FOOTBALL_KEY;
+  const API_KEY = process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
   try {
     const r = await fetch(
