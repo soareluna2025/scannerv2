@@ -163,12 +163,10 @@ async function sbFetch(path, method = 'GET', body = null) {
   return null;
 }
 
-// upsert: insert or update by fixture_id + minute
 async function upsertSnapshot(row) {
   await sbFetch('/match_snapshots', 'POST', row);
 }
 
-// patch outcome for a finished match
 async function resolveOutcome(fixtureId, outcome, finalHome, finalAway) {
   await sbFetch(
     `/match_snapshots?fixture_id=eq.${fixtureId}&outcome=eq.LIVE`,
@@ -177,7 +175,6 @@ async function resolveOutcome(fixtureId, outcome, finalHome, finalAway) {
   );
 }
 
-// read last N snapshots for a league to compute patterns
 async function leagueSnapshots(leagueId, limit = 200) {
   return sbFetch(
     `/match_snapshots?league_id=eq.${leagueId}&outcome=neq.LIVE&order=created_at.desc&limit=${limit}`
@@ -188,7 +185,6 @@ async function upsertLeaguePattern(row) {
   await sbFetch('/league_patterns?on_conflict=league_id', 'POST', row);
 }
 
-// track how many times the cron has run (simple module-level counter, resets on cold start)
 let _runCount = 0;
 
 function log(msg) {
@@ -196,7 +192,6 @@ function log(msg) {
 }
 
 export default async function handler(req, res) {
-  // Security: verify cron secret (skip check when CRON_SECRET not set — dev mode)
   if (CRON_SECRET) {
     const auth = req.headers['authorization'] || '';
     if (auth !== `Bearer ${CRON_SECRET}`) {
@@ -216,7 +211,6 @@ export default async function handler(req, res) {
   _runCount++;
   log(`run #${_runCount}`);
 
-  // 1. Fetch live matches from API-Football (all statuses including FT for outcome resolution)
   let liveMatches = [], finishedMatches = [];
   try {
     const liveR = await fetch('https://v3.football.api-sports.io/fixtures?live=all', {
@@ -234,7 +228,6 @@ export default async function handler(req, res) {
     log(`fetch live error: ${e.message}`);
   }
 
-  // 2. Fetch recently finished matches (last 2h) for outcome resolution
   try {
     const now = new Date();
     const from = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString().slice(0, 16);
@@ -250,7 +243,6 @@ export default async function handler(req, res) {
     log(`fetch finished error: ${e.message}`);
   }
 
-  // 3. Process live matches → save snapshots
   const snapshotResults = [];
   for (const m of liveMatches) {
     try {
@@ -298,13 +290,11 @@ export default async function handler(req, res) {
     }
   }
 
-  // 4. Resolve outcomes for finished matches
   const resolved = [];
   for (const m of finishedMatches) {
     try {
       const fh = m.goals?.home ?? 0;
       const fa = m.goals?.away ?? 0;
-      // Determine outcome from pre-match perspective: if we tracked this match, mark WIN (goals scored) or LOSS
       const outcome = (fh + fa) > 0 ? 'WIN' : 'LOSS';
       await resolveOutcome(m.fixture.id, outcome, fh, fa);
       resolved.push({ id: m.fixture.id, outcome, score: `${fh}-${fa}` });
@@ -313,16 +303,13 @@ export default async function handler(req, res) {
     }
   }
 
-  // 5. Every 10 runs: recalculate league patterns from resolved snapshots
   if (_runCount % 10 === 0) {
     log('recalculating league patterns...');
     try {
-      // Get distinct leagues from recent snapshots
       const recent = await sbFetch(
         '/match_snapshots?outcome=neq.LIVE&order=created_at.desc&limit=1000&select=league_id,league_name,over05,over15,over25,gg,ng,minute,outcome'
       );
 
-      // Group by league
       const byLeague = {};
       for (const row of recent) {
         if (!row.league_id) continue;
