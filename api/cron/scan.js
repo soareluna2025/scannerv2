@@ -342,12 +342,117 @@ export default async function handler(req, res) {
     }
   }
 
-  log(`done: ${snapshotResults.length} snapshots, ${resolved.length} resolved`);
+  // 6. Scan pre-match fixtures (starting in next 30 min)
+  const pmResults = [];
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const nowMs = Date.now();
+    const in30min = nowMs + 30 * 60 * 1000;
+
+    const todayR = await fetch(
+      `https://v3.football.api-sports.io/fixtures?date=${today}&status=NS`,
+      { headers: { 'x-apisports-key': FOOTBALL_KEY } }
+    );
+    const todayData = await todayR.json();
+    const allFixtures = Array.isArray(todayData.response) ? todayData.response : [];
+
+    const upcoming = allFixtures.filter(m => {
+      const fd = m.fixture?.date ? new Date(m.fixture.date).getTime() : 0;
+      return fd >= nowMs && fd <= in30min;
+    });
+
+    log(`pre-match upcoming: ${upcoming.length}`);
+
+    for (const m of upcoming) {
+      try {
+        const hid = m.teams?.home?.id;
+        const aid = m.teams?.away?.id;
+        if (!hid || !aid) continue;
+
+        const [h2hR, hfR, afR] = await Promise.all([
+          fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${hid}-${aid}&last=10`, { headers: { 'x-apisports-key': FOOTBALL_KEY } }),
+          fetch(`https://v3.football.api-sports.io/fixtures?team=${hid}&last=5&status=FT`, { headers: { 'x-apisports-key': FOOTBALL_KEY } }),
+          fetch(`https://v3.football.api-sports.io/fixtures?team=${aid}&last=5&status=FT`, { headers: { 'x-apisports-key': FOOTBALL_KEY } })
+        ]);
+        const [h2hData, hfData, afData] = await Promise.all([h2hR.json(), hfR.json(), afR.json()]);
+
+        const h2h = h2hData.response || [];
+        const hForm = hfData.response || [];
+        const aForm = afData.response || [];
+
+        if (h2h.length < 3 || hForm.length < 3 || aForm.length < 3) continue;
+
+        const h2hN = h2h.length;
+        const ggH2HN = h2h.filter(g => g.goals?.home > 0 && g.goals?.away > 0).length;
+        const o15H2HN = h2h.filter(g => (g.goals?.home || 0) + (g.goals?.away || 0) >= 2).length;
+        const ggH2H = ggH2HN / h2hN;
+        const over15H2H = o15H2HN / h2hN;
+
+        const hf5 = hForm.slice(0, 5);
+        const af5 = aForm.slice(0, 5);
+        const ggHF = hf5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / hf5.length;
+        const ggAF = af5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / af5.length;
+        const o15HF = hf5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / hf5.length;
+        const o15AF = af5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / af5.length;
+
+        const ggScore   = ggH2H * 0.30 + ggHF * 0.25 + ggAF * 0.25 + over15H2H * 0.20;
+        const o15Score  = over15H2H * 0.30 + (o15HF / 3) * 0.25 + (o15AF / 3) * 0.25 + ggH2H * 0.20;
+        const composite = (ggScore + o15Score) / 2 * 100;
+
+        const row = {
+          fixture_id:      m.fixture.id,
+          home_team:       m.teams?.home?.name,
+          away_team:       m.teams?.away?.name,
+          league_id:       m.league?.id,
+          league_name:     m.league?.name,
+          kickoff_time:    m.fixture.date,
+          gg_score:        Math.round(ggScore * 100),
+          over15_score:    Math.round(o15Score * 100),
+          composite_score: Math.round(composite),
+          h2h_gg_rate:     Math.round(ggH2H * 100),
+          h2h_over15_rate: Math.round(over15H2H * 100),
+          home_form_gg:    Math.round(ggHF * 100),
+          away_form_gg:    Math.round(ggAF * 100),
+          outcome:         'PENDING',
+          created_at:      new Date().toISOString(),
+        };
+
+        await sbFetch('/pre_match_snapshots', 'POST', row);
+        pmResults.push({ id: m.fixture.id, composite: Math.round(composite) });
+      } catch (e) {
+        log(`pm error fixture ${m.fixture?.id}: ${e.message}`);
+      }
+    }
+
+    // Resolve outcomes for pre-match snapshots that have finished
+    const pmResolved = [];
+    for (const m of finishedMatches) {
+      try {
+        const fh = m.goals?.home ?? 0;
+        const fa = m.goals?.away ?? 0;
+        const gg = fh > 0 && fa > 0;
+        const o15 = fh + fa >= 2;
+        await sbFetch(
+          `/pre_match_snapshots?fixture_id=eq.${m.fixture.id}&outcome=eq.PENDING`,
+          'PATCH',
+          { outcome: 'DONE', actual_gg: gg, actual_over15: o15, actual_home: fh, actual_away: fa, resolved_at: new Date().toISOString() }
+        );
+        pmResolved.push(m.fixture.id);
+      } catch (e) { /* ignore */ }
+    }
+    if (pmResolved.length) log(`pm resolved: ${pmResolved.length}`);
+  } catch (e) {
+    log(`pre-match scan error: ${e.message}`);
+  }
+
+  log(`done: ${snapshotResults.length} snapshots, ${resolved.length} resolved, ${pmResults.length} pre-match`);
   return res.status(200).json({
     run: _runCount,
     snapshots: snapshotResults.length,
     resolved: resolved.length,
+    prematch: pmResults.length,
     live: snapshotResults,
     outcomes: resolved,
+    prematch_list: pmResults,
   });
 }

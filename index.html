@@ -51,6 +51,35 @@ main{padding:0;}
 .btn-connect.connected{background:rgba(0,212,168,.08);color:var(--ac);border:1px solid rgba(0,212,168,.22);transform:none;filter:none;}
 .connect-hint{font-size:11px;color:var(--mu);text-align:center;margin-top:6px;}
 
+/* MODE SWITCHER */
+.mode-btns{display:flex;gap:8px;margin-bottom:10px;}
+.btn-mode{flex:1;padding:10px;background:var(--sur2);border:1px solid var(--bor);border-radius:8px;color:var(--mu2);font-size:12px;font-weight:700;letter-spacing:.5px;cursor:pointer;transition:all .2s;}
+.btn-mode.active{background:rgba(0,212,168,.12);color:var(--ac);border-color:rgba(0,212,168,.4);}
+
+/* PRE-MATCH CARDS */
+.pm-summary{margin:0 16px 10px;font-size:11px;color:var(--mu2);text-align:center;padding:7px 10px;background:var(--sur);border-radius:7px;border:1px solid var(--bor);}
+.pm-card{margin:0 16px 10px;background:var(--sur);border:1px solid var(--bor);border-radius:12px;padding:12px 14px;}
+.pm-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.pm-league{font-size:10px;color:var(--mu2);font-weight:600;letter-spacing:.3px;}
+.pm-badge{font-size:13px;font-weight:800;padding:3px 9px;border-radius:6px;}
+.pm-badge-green{background:rgba(0,212,168,.15);color:var(--ac);}
+.pm-badge-orange{background:rgba(240,165,0,.15);color:var(--wa);}
+.pm-teams{font-size:14px;font-weight:700;color:var(--tx);margin-bottom:2px;}
+.pm-vs{color:var(--mu);font-weight:400;margin:0 5px;}
+.pm-kickoff{font-size:11px;color:var(--mu2);margin-bottom:9px;}
+.pm-bar-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+.pm-bar-lbl{font-size:10px;color:var(--mu2);width:74px;flex-shrink:0;}
+.pm-bar-track{flex:1;height:6px;background:var(--sur2);border-radius:3px;overflow:hidden;}
+.pm-bar-fill{height:100%;border-radius:3px;transition:width .5s;}
+.pm-bar-green{background:var(--ac);}
+.pm-bar-orange{background:var(--wa);}
+.pm-bar-val{font-size:11px;font-weight:700;width:34px;text-align:right;}
+.pm-h2h{font-size:10px;color:var(--mu);margin-top:7px;padding-top:7px;border-top:1px solid var(--bor);}
+.pm-loading{text-align:center;color:var(--mu);padding:40px;font-size:13px;}
+.pm-empty{text-align:center;padding:40px 20px;}
+.pm-empty .empty-t{font-size:15px;font-weight:700;color:var(--mu2);margin-bottom:6px;}
+.pm-empty .empty-s{font-size:12px;color:var(--mu);}
+
 /* RECS */
 .recs{margin:0 16px 12px;background:rgba(0,212,168,.05);border:1px solid rgba(0,212,168,.16);border-radius:10px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;}
 .recs-l{font-size:12px;font-weight:700;color:var(--ac);}
@@ -447,9 +476,17 @@ footer{text-align:center;padding:16px 20px;font-size:9px;color:var(--mu);border-
   </div>
 
   <div class="connect-wrap">
-    <button class="btn-connect" id="btc" onclick="conn()">CONECTARE</button>
-    <div class="connect-hint">Date live în timp real — football-data.org</div>
+    <div class="mode-btns">
+      <button class="btn-mode active" id="btn-mode-live" onclick="switchMode('live')">🔴 LIVE</button>
+      <button class="btn-mode" id="btn-mode-pre" onclick="switchMode('pre')">📅 PRE-MECI</button>
+    </div>
+    <div id="live-connect">
+      <button class="btn-connect" id="btc" onclick="conn()">CONECTARE</button>
+      <div class="connect-hint">Date live în timp real — football-data.org</div>
+    </div>
   </div>
+
+  <div id="pm-container" style="display:none;padding-top:8px"></div>
 
   <div class="err-box" id="erb"></div>
 
@@ -1642,6 +1679,159 @@ function tgCheckAlerts(matches){
       '🏆 '+lg+' | ⏱ Min <b>'+mn+"'</b>\n"+
       '📊 Next Goal: <b>'+ng+'%</b> | Over0.5: <b>'+over05+'%</b>\n'+
       (f.txg?'📈 xG: '+(f.txg.toFixed?f.txg.toFixed(2):f.txg)+'\n':'')+
+      '🔗 scannerv2-five.vercel.app';
+    tgNotify(msg);
+  });
+}
+
+// ===== PRE-MATCH SCANNER =====
+var MODE='live';
+var PM_SENT=new Set();
+var PM_IT=null;
+
+function switchMode(m){
+  MODE=m;
+  document.getElementById('btn-mode-live').classList.toggle('active',m==='live');
+  document.getElementById('btn-mode-pre').classList.toggle('active',m==='pre');
+  var isLive=m==='live';
+  var lcEl=document.getElementById('live-connect');
+  var pmEl=document.getElementById('pm-container');
+  if(lcEl)lcEl.style.display=isLive?'':'none';
+  if(pmEl)pmEl.style.display=isLive?'none':'';
+  if(isLive){
+    if(PM_IT){clearInterval(PM_IT);PM_IT=null;}
+    if(ST.cn){
+      document.getElementById('sbar').style.display='';
+      var r=document.getElementById('ref');if(r)r.style.display='flex';
+      var mfw=document.getElementById('mfw');if(mfw)mfw.style.display='block';
+      var msel=document.getElementById('msel');if(msel)msel.style.display='flex';
+      var mcc=document.getElementById('mcc');if(mcc)mcc.style.display='';
+    }else{
+      showEm();
+    }
+  }else{
+    ['sbar','ref','mfw','msel','dab','wr-wrap','erb','ctr','mcc'].forEach(function(id){
+      var el=document.getElementById(id);if(el)el.style.display='none';
+    });
+    loadPreMatch();
+    if(!PM_IT)PM_IT=setInterval(loadPreMatch,60000);
+  }
+}
+
+function scorePreMatch(m,enr){
+  var h2h=enr&&enr.h2h?enr.h2h:[];
+  var hForm=enr&&enr.homeForm?enr.homeForm:[];
+  var aForm=enr&&enr.awayForm?enr.awayForm:[];
+  if(h2h.length<3||hForm.length<3||aForm.length<3)return null;
+  var h2hN=h2h.length;
+  var ggH2HN=h2h.filter(function(g){return g.goals&&g.goals.home>0&&g.goals.away>0;}).length;
+  var o15H2HN=h2h.filter(function(g){return g.goals&&(g.goals.home||0)+(g.goals.away||0)>=2;}).length;
+  var ggH2H=ggH2HN/h2hN;
+  var over15H2H=o15H2HN/h2hN;
+  var hf5=hForm.slice(0,5);var af5=aForm.slice(0,5);
+  var ggHomeForm=hf5.filter(function(g){return g.goals&&(g.goals.home>0||g.goals.away>0);}).length/hf5.length;
+  var ggAwayForm=af5.filter(function(g){return g.goals&&(g.goals.home>0||g.goals.away>0);}).length/af5.length;
+  var over15HomeForm=hf5.reduce(function(s,g){return s+(g.goals?(g.goals.home||0)+(g.goals.away||0):0);},0)/hf5.length;
+  var over15AwayForm=af5.reduce(function(s,g){return s+(g.goals?(g.goals.home||0)+(g.goals.away||0):0);},0)/af5.length;
+  var ggScore=ggH2H*0.30+ggHomeForm*0.25+ggAwayForm*0.25+over15H2H*0.20;
+  var over15Score=over15H2H*0.30+(over15HomeForm/3)*0.25+(over15AwayForm/3)*0.25+ggH2H*0.20;
+  var compositeScore=(ggScore+over15Score)/2*100;
+  var now=Date.now();
+  var kickoff=Math.round((new Date(m.fixture.date).getTime()-now)/60000);
+  return{
+    ggScore:Math.round(ggScore*100),
+    over15Score:Math.round(over15Score*100),
+    compositeScore:Math.round(compositeScore),
+    kickoff:kickoff,
+    h2hGG:Math.round(ggH2H*100),
+    h2hOver15:Math.round(over15H2H*100),
+    h2hCount:h2hN,
+    ggH2Hn:ggH2HN,
+    over15H2Hn:o15H2HN
+  };
+}
+
+async function loadPreMatch(){
+  var pmDiv=document.getElementById('pm-container');
+  if(!pmDiv||MODE!=='pre')return;
+  pmDiv.innerHTML='<div class="pm-loading">⏳ Se scanează meciurile din 30 min...</div>';
+  try{
+    var now=Date.now();
+    var in30min=now+30*60*1000;
+    var allIds=new Set();
+    ['EU','AM','AS','AF'].forEach(function(r){LG[r].forEach(function(l){allIds.add(l.id);});});
+    var data=await apiFetch('/api/today');
+    var fixtures=Array.isArray(data.response)?data.response:[];
+    var upcoming=fixtures.filter(function(m){
+      var fd=m.fixture&&m.fixture.date?new Date(m.fixture.date).getTime():0;
+      return fd>=now&&fd<=in30min&&allIds.has(m.league&&m.league.id);
+    });
+    if(!upcoming.length){
+      pmDiv.innerHTML='<div class="pm-summary">0 meciuri în următoarele 30 min | Prag: 75%+</div><div class="pm-empty"><div class="empty-t">Niciun meci în 30 min</div><div class="empty-s">Nu sunt meciuri din ligile monitorizate care să înceapă în 30 de minute.</div></div>';
+      return;
+    }
+    var enriched=await Promise.all(upcoming.map(async function(m){
+      var hid=m.teams&&m.teams.home?m.teams.home.id:null;
+      var aid=m.teams&&m.teams.away?m.teams.away.id:null;
+      if(!hid||!aid)return m;
+      try{var enr=await apiFetch('/api/enrich?h='+hid+'&a='+aid);m._pm=scorePreMatch(m,enr);}catch(e){}
+      return m;
+    }));
+    var scored=enriched.filter(function(m){return m._pm&&m._pm.compositeScore>=75;});
+    scored.sort(function(a,b){return b._pm.compositeScore-a._pm.compositeScore;});
+    tgCheckPreMatch(scored);
+    renderPreMatch(scored,upcoming.length);
+  }catch(e){
+    pmDiv.innerHTML='<div class="pm-empty"><div class="empty-t">Eroare</div><div class="empty-s">'+e.message+'</div></div>';
+  }
+}
+
+function renderPreMatch(matches,totalScanned){
+  var pmDiv=document.getElementById('pm-container');
+  if(!pmDiv)return;
+  var h='<div class="pm-summary">'+matches.length+' meciuri recomandate din '+totalScanned+' scanate | Prag: 75%+</div>';
+  if(!matches.length){
+    h+='<div class="pm-empty"><div class="empty-t">Niciun meci peste prag</div><div class="empty-s">Nu s-au găsit meciuri cu scor compozit ≥75% în ligile monitorizate.</div></div>';
+    pmDiv.innerHTML=h;return;
+  }
+  matches.forEach(function(m){
+    var pm=m._pm;
+    var hn=m.teams&&m.teams.home?m.teams.home.name:'Home';
+    var an=m.teams&&m.teams.away?m.teams.away.name:'Away';
+    var lg=m.league||{};var lm=LM[lg.id]||{};
+    var lf=lm.f||lg.f||'🌐';var lname=lg.name||'';
+    var cs=pm.compositeScore;
+    var csClass=cs>=85?'pm-badge-green':'pm-badge-orange';
+    var ko=pm.kickoff<=0?'⏰ Începe acum':'⏰ în '+pm.kickoff+' min';
+    var h2hShow=Math.min(pm.h2hCount,5);
+    h+='<div class="pm-card">';
+    h+='<div class="pm-card-top"><div class="pm-league">'+lf+' '+lname+'</div><span class="pm-badge '+csClass+'">'+cs+'</span></div>';
+    h+='<div class="pm-teams">'+hn+'<span class="pm-vs">vs</span>'+an+'</div>';
+    h+='<div class="pm-kickoff">'+ko+'</div>';
+    h+='<div class="pm-bar-row"><span class="pm-bar-lbl">🥅 GG</span><div class="pm-bar-track"><div class="pm-bar-fill pm-bar-green" style="width:'+Math.min(100,pm.ggScore)+'%"></div></div><span class="pm-bar-val">'+pm.ggScore+'%</span></div>';
+    h+='<div class="pm-bar-row"><span class="pm-bar-lbl">⚽ Over 1.5</span><div class="pm-bar-track"><div class="pm-bar-fill pm-bar-orange" style="width:'+Math.min(100,pm.over15Score)+'%"></div></div><span class="pm-bar-val">'+pm.over15Score+'%</span></div>';
+    h+='<div class="pm-h2h">GG în '+pm.ggH2Hn+'/'+h2hShow+' meciuri | Over1.5 în '+pm.over15H2Hn+'/'+h2hShow+' meciuri</div>';
+    h+='</div>';
+  });
+  pmDiv.innerHTML=h;
+}
+
+function tgCheckPreMatch(matches){
+  if(!matches||!matches.length)return;
+  matches.forEach(function(m){
+    var fid=m.fixture&&m.fixture.id;
+    if(!fid||PM_SENT.has('pm_'+fid))return;
+    PM_SENT.add('pm_'+fid);
+    var pm=m._pm;
+    var hn=m.teams&&m.teams.home?m.teams.home.name:'Home';
+    var an=m.teams&&m.teams.away?m.teams.away.name:'Away';
+    var lg=m.league&&m.league.name?m.league.name:'';
+    var lf=(m.league&&LM[m.league.id]&&LM[m.league.id].f)||'🌐';
+    var msg='📅 <b>PRE-MECI ALERT AlohaScan</b>\n'+
+      '⚽ '+hn+' vs '+an+'\n'+
+      '🏆 '+lf+' '+lg+' | ⏰ Începe în '+pm.kickoff+'min\n'+
+      '🥅 GG: <b>'+pm.ggScore+'%</b> | Over1.5: <b>'+pm.over15Score+'%</b>\n'+
+      '📊 H2H: GG în '+pm.ggH2Hn+'/5 | Over1.5 în '+pm.over15H2Hn+'/5\n'+
       '🔗 scannerv2-five.vercel.app';
     tgNotify(msg);
   });
