@@ -853,7 +853,7 @@ function apF(){
     // fd source trusted by server-side IN_PLAY filter; require live status for others
     var src=m._src||'af';
     if(src==='fd')return true; // fd already filtered server-side to live only
-    return LIVE_ST.indexOf(sh)>=0&&mn>=1;
+    return LIVE_ST.indexOf(sh)>=0&&mn>=0;
   });
   // Stale data filter: if match has statistics AND all activity is 0 after min 15 → ghost
   ms=ms.filter(function(m){
