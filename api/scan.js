@@ -5,7 +5,7 @@ res.setHeader(‘Access-Control-Allow-Headers’, ‘Content-Type’);
 if (req.method === ‘OPTIONS’) return res.status(200).end();
 
 var endpoint = req.query.endpoint || ‘’;
-var key = process.env.API_FOOTBALL_KEY || ‘’;
+var key = process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY || ‘’;
 
 if (!endpoint) return res.status(400).json({ error: ‘Missing endpoint’ });
 if (!key) return res.status(500).json({ error: ‘API key not configured on server’ });
