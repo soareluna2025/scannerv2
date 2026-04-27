@@ -76,7 +76,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'public, s-maxage=55, stale-while-revalidate=10');
 
-  const afKey = process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
+  const afKey = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
   const fdKey = process.env.FOOTBALL_DATA_KEY;
 
   if (!afKey && !fdKey) {
