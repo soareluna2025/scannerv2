@@ -18,10 +18,11 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const key = process.env.XAI_API_KEY;
-  if (!key) {
-    log('ERROR: XAI_API_KEY not set');
-    return res.status(500).json({ error: 'XAI_API_KEY not configured' });
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const grokKey      = process.env.XAI_API_KEY;
+  if (!anthropicKey && !grokKey) {
+    log('ERROR: no AI key configured');
+    return res.status(500).json({ error: 'Niciun API key AI configurat' });
   }
 
   const { matches } = req.body || {};
@@ -61,33 +62,50 @@ export default async function handler(req, res) {
 Răspunde STRICT cu JSON array, fără niciun text suplimentar:
 [{"id":0,"score":75,"recommendation":"Arsenal atacă intens cu xG 1.8. Recomandat Over 0.5 repriza a doua."},...]`;
 
-  try {
-    log(`analyzing ${summaries.length} matches`);
+  const userContent = 'Analizează meciurile live:\n' + summaries.join('\n');
+
+  async function tryAnthropic() {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2000, system: systemPrompt, messages: [{ role: 'user', content: userContent }] })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error?.message || `Anthropic HTTP ${r.status}`);
+    return data.content?.[0]?.text || '[]';
+  }
+
+  async function tryGrok() {
     const r = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type':  'application/json'
-      },
-      body: JSON.stringify({
-        model:      'grok-3-mini',
-        max_tokens: 2000,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user',   content: 'Analizează meciurile live:\n' + summaries.join('\n') }
-        ]
-      })
+      headers: { 'Authorization': `Bearer ${grokKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'grok-3-mini', max_tokens: 2000, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }] })
     });
-
     const data = await r.json();
-    if (!r.ok) {
-      log(`Grok error ${r.status}: ${JSON.stringify(data)}`);
-      return res.status(r.status).json({ error: data.error?.message || 'Grok API error' });
+    if (!r.ok) throw new Error(data.error?.message || `Grok HTTP ${r.status}`);
+    return data.choices?.[0]?.message?.content || '[]';
+  }
+
+  try {
+    log(`analyzing ${summaries.length} matches`);
+    let text = '[]';
+
+    if (anthropicKey) {
+      try {
+        text = await tryAnthropic();
+        log('Anthropic ok');
+      } catch (e) {
+        log(`Anthropic failed: ${e.message} — trying Grok`);
+        if (!grokKey) throw e;
+        text = await tryGrok();
+        log('Grok fallback ok');
+      }
+    } else {
+      text = await tryGrok();
+      log('Grok ok');
     }
 
-    const text = data.choices?.[0]?.message?.content || '[]';
     log(`raw response: ${text.substring(0, 120)}...`);
-
     const match = text.match(/\[[\s\S]*\]/);
     const analysis = match ? JSON.parse(match[0]) : [];
     log(`parsed ${analysis.length} analysis results`);
