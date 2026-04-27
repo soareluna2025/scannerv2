@@ -1627,7 +1627,7 @@ function tgCheckAlerts(matches){
     if(!fid||TG_SENT.has(fid))return;
     var s=m._s||{};var mk=s.mk||{};var ng=s.ng||0;
     var over05=mk.over05||0;
-    if(ng<75&&over05<CF.MC)return; // sub prag — skip
+    if(ng<60&&over05<60)return; // sub prag — skip
     TG_SENT.add(fid);
     var hn=m.teams&&m.teams.home?m.teams.home.name:'Home';
     var an=m.teams&&m.teams.away?m.teams.away.name:'Away';
