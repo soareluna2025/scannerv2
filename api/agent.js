@@ -30,8 +30,23 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'No user/assistant messages provided' });
   }
 
+  // Convert OpenAI-style image_url content blocks → Anthropic format
+  const convertedMessages = messages.map(m => {
+    if (!Array.isArray(m.content)) return m;
+    return {
+      ...m,
+      content: m.content.map(block => {
+        if (block.type !== 'image_url') return block;
+        const dataUrl = block.image_url?.url || '';
+        const match   = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (!match) return { type: 'text', text: '[image]' };
+        return { type: 'image', source: { type: 'base64', media_type: match[1], data: match[2] } };
+      })
+    };
+  });
+
   try {
-    log(`calling Anthropic (${messages.length} messages)`);
+    log(`calling Anthropic (${convertedMessages.length} messages)`);
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -40,10 +55,10 @@ export default async function handler(req, res) {
         'content-type':      'application/json'
       },
       body: JSON.stringify({
-        model:      'claude-sonnet-4-20250514',
+        model:      'claude-sonnet-4-6',
         max_tokens: body.max_tokens || 1000,
         system:     systemMsg,
-        messages:   messages
+        messages:   convertedMessages
       })
     });
 

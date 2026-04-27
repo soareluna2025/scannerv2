@@ -646,6 +646,7 @@ async function scn(){
     document.getElementById('s2').textContent=fil.length;
     var n=new Date();document.getElementById('s4').textContent=pad(n.getHours())+':'+pad(n.getMinutes());
     buildSTabs(fil);apF();enrich();anlz();trackPredictions();agUpdateStats();
+    tgCheckAlerts(ST.ms);
     if(supa){
       ST.ms.forEach(function(m){saveMatchSnapshot(m);});
       resolveOutcomes();
@@ -1586,9 +1587,10 @@ async function resolveOutcomes(){
   if(!supa)return;
   try{
     var ago=new Date(Date.now()-3*60*60*1000).toISOString();
-    var {data:pending}=await supa.from('match_snapshots').select('id,fixture_id,score_at_snapshot').eq('outcome','PENDING').gte('created_at',ago);
+    var {data:pending}=await supa.from('match_snapshots').select('id,fixture_id,score_at_snapshot,created_at').eq('outcome','PENDING').gte('created_at',ago);
     if(!pending||!pending.length)return;
     var liveMap={};ST.ms.forEach(function(m){var id=m.fixture&&m.fixture.id;if(id)liveMap[id]=m;});
+    var now=Date.now();
     for(var i=0;i<pending.length;i++){
       var p=pending[i];var live=liveMap[p.fixture_id];
       if(live){
@@ -1596,10 +1598,51 @@ async function resolveOutcomes(){
         if(hg+'-'+ag!==p.score_at_snapshot)
           await supa.from('match_snapshots').update({outcome:'WIN',final_score_home:hg,final_score_away:ag,goal_scored_after:true}).eq('id',p.id);
       }else{
-        await supa.from('match_snapshots').update({outcome:'LOSS',goal_scored_after:false}).eq('id',p.id);
+        // Mark LOSS only if snapshot is 90+ min old — avoids false LOSS from temporary API gaps
+        var ageMin=(now-new Date(p.created_at).getTime())/60000;
+        if(ageMin>=90)
+          await supa.from('match_snapshots').update({outcome:'LOSS',goal_scored_after:false}).eq('id',p.id);
       }
     }
   }catch(e){console.warn('Resolve error:',e.message);}
+}
+
+// ===== TELEGRAM NOTIFICATIONS =====
+var TG_SENT=new Set(); // fixture IDs already notified this session
+
+async function tgNotify(text){
+  try{
+    await fetch('/api/telegram',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message:text})
+    });
+  }catch(e){console.warn('tgNotify error:',e.message);}
+}
+
+function tgCheckAlerts(matches){
+  if(!matches||!matches.length)return;
+  matches.forEach(function(m){
+    var fid=m.fixture&&m.fixture.id;
+    if(!fid||TG_SENT.has(fid))return;
+    var s=m._s||{};var mk=s.mk||{};var ng=s.ng||0;
+    var over05=mk.over05||0;
+    if(ng<75&&over05<CF.MC)return; // sub prag — skip
+    TG_SENT.add(fid);
+    var hn=m.teams&&m.teams.home?m.teams.home.name:'Home';
+    var an=m.teams&&m.teams.away?m.teams.away.name:'Away';
+    var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;
+    var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;
+    var lg=m.league&&m.league.name?m.league.name:'';
+    var f=s.f||{};
+    var msg='🚨 <b>ALERTĂ AlohaScan</b>\n'+
+      '⚽ '+hn+' '+hg+'-'+ag+' '+an+'\n'+
+      '🏆 '+lg+' | ⏱ Min <b>'+mn+"'</b>\n"+
+      '📊 Next Goal: <b>'+ng+'%</b> | Over0.5: <b>'+over05+'%</b>\n'+
+      (f.txg?'📈 xG: '+(f.txg.toFixed?f.txg.toFixed(2):f.txg)+'\n':'')+
+      '🔗 scannerv2-five.vercel.app';
+    tgNotify(msg);
+  });
 }
 
 async function calculateLeaguePatterns(){
