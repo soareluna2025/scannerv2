@@ -9,9 +9,39 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Vercel Deploy Hook
+      - uses: actions/checkout@v4
+
+      - name: Deploy via Vercel API (explicit SHA)
+        id: api_deploy
+        continue-on-error: true
         run: |
-          curl -s -X POST \
+          SHA=$(git rev-parse HEAD)
+          echo "Deploying SHA: $SHA"
+          HTTP_STATUS=$(curl -s -o /tmp/vercel_resp.json -w "%{http_code}" \
+            -X POST "https://api.vercel.com/v13/deployments" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"name\": \"scannerv2\",
+              \"target\": \"production\",
+              \"gitSource\": {
+                \"type\": \"github\",
+                \"org\": \"soareluna2025\",
+                \"repo\": \"scannerv2\",
+                \"ref\": \"main\",
+                \"sha\": \"$SHA\"
+              },
+              \"projectId\": \"prj_6KIlo6YA9b8LMJ31455I1abJUEld\"
+            }")
+          echo "API status: $HTTP_STATUS"
+          cat /tmp/vercel_resp.json
+          [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]
+
+      - name: Fallback — Deploy Hook
+        if: steps.api_deploy.outcome == 'failure'
+        run: |
+          echo "API deploy failed, trying deploy hook..."
+          sleep 3
+          curl -sf -X POST \
             "https://api.vercel.com/v1/integrations/deploy/prj_6KIlo6YA9b8LMJ31455I1abJUEld/EvrYobtS20" \
-            --fail-with-body
-          echo "Deploy hook triggered successfully"
+            -o /dev/null && echo "Deploy hook triggered"
