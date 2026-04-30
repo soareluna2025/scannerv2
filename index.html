@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>AlohaScan</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#080d18;--sur:#0f1729;--sur2:#162035;--sur3:#1c2a45;
+  --ac:#00d4a8;--ac2:rgba(0,212,168,.12);--ac3:rgba(0,212,168,.25);
+  --tx:#f0f4ff;--mu:#5a6a8a;--mu2:#8a9bb8;--bor:rgba(255,255,255,.06);
+  --red:#ff4d6d;--yellow:#ffd166;--green:#06d6a0;
+}
+html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden}
+
+/* HEADER */
+.hdr{position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;height:56px;
+  background:rgba(8,13,24,.92);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--bor);}
+.logo{font-size:18px;font-weight:800;letter-spacing:-.5px}
+.logo span{color:var(--ac)}
+.hdr-right{display:flex;align-items:center;gap:12px}
+.live-badge{display:flex;align-items:center;gap:5px;
+  background:var(--ac2);border:1px solid var(--ac3);
+  border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:var(--ac)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--ac);
+  animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+.clock{font-size:12px;color:var(--mu2);font-variant-numeric:tabular-nums;font-weight:600}
+
+/* STATS BAR */
+.stats{display:flex;gap:0;overflow-x:auto;
+  padding:8px 16px;gap:16px;
+  border-bottom:1px solid var(--bor);
+  background:rgba(15,23,41,.6);}
+.stats::-webkit-scrollbar{display:none}
+.stat{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:fit-content}
+.stat-v{font-size:18px;font-weight:800;color:var(--ac)}
+.stat-l{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.stat-sep{width:1px;background:var(--bor);flex-shrink:0}
+
+/* CONTENT */
+.page{position:fixed;top:56px;left:0;right:0;bottom:64px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.page::-webkit-scrollbar{display:none}
+.tab-content{display:none;padding:12px 12px 8px}
+.tab-content.active{display:block}
+
+/* CONNECT */
+.connect-area{padding:20px 12px}
+.btn-connect{width:100%;padding:14px;border-radius:14px;
+  background:linear-gradient(135deg,var(--ac),#00b894);
+  border:none;color:#080d18;font-size:14px;font-weight:800;
+  letter-spacing:.5px;cursor:pointer;transition:all .2s;
+  box-shadow:0 4px 20px rgba(0,212,168,.3)}
+.btn-connect:active{transform:scale(.98)}
+.btn-connect.connected{background:var(--sur2);color:var(--ac);
+  border:1px solid var(--ac3);box-shadow:none}
+.connect-hint{text-align:center;font-size:11px;color:var(--mu);margin-top:8px}
+
+/* FILTER CHIPS */
+.chips{display:flex;gap:6px;overflow-x:auto;padding:0 12px 12px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;
+  background:var(--sur);border:1px solid var(--bor);color:var(--mu2);cursor:pointer;transition:all .15s}
+.chip.active{background:var(--ac2);border-color:var(--ac3);color:var(--ac)}
+
+/* MATCH CARD */
+.card{background:var(--sur);border:1px solid var(--bor);border-radius:16px;
+  margin-bottom:8px;overflow:hidden;transition:border-color .2s}
+.card:active{border-color:var(--bor)}
+.card-league{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px 8px;border-bottom:1px solid var(--bor)}
+.league-name{font-size:10px;font-weight:700;color:var(--mu2);text-transform:uppercase;letter-spacing:.5px}
+.card-minute{display:flex;align-items:center;gap:5px}
+.min-dot{width:5px;height:5px;border-radius:50%;background:var(--ac);animation:pulse 1.5s ease-in-out infinite}
+.min-val{font-size:11px;font-weight:700;color:var(--ac)}
+.card-teams{padding:12px 14px}
+.team-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.team-row:last-child{margin-bottom:0}
+.team-name{font-size:15px;font-weight:700;color:var(--tx);flex:1;padding-right:8px}
+.team-score{font-size:22px;font-weight:800;color:var(--tx);min-width:24px;text-align:right}
+.team-score.winning{color:var(--ac)}
+.card-footer{padding:8px 14px 12px}
+.ngp-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.ngp-label{font-size:10px;font-weight:600;color:var(--mu);text-transform:uppercase;letter-spacing:.5px}
+.ngp-pct{font-size:13px;font-weight:800}
+.ngp-bar{height:3px;background:var(--sur3);border-radius:2px;overflow:hidden}
+.ngp-fill{height:100%;border-radius:2px;transition:width .3s ease}
+.badge-forte{display:inline-flex;align-items:center;gap:4px;
+  background:var(--ac2);border:1px solid var(--ac3);
+  border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;color:var(--ac)}
+.markets{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.mkt{padding:4px 10px;border-radius:8px;background:var(--sur2);
+  font-size:10px;font-weight:600;color:var(--mu2);white-space:nowrap}
+.mkt span{color:var(--tx);font-weight:700}
+
+/* HT separator */
+.ht-divider{display:flex;align-items:center;gap:8px;padding:6px 0}
+.ht-line{flex:1;height:1px;background:var(--bor)}
+.ht-label{font-size:10px;color:var(--mu);font-weight:600;letter-spacing:.5px}
+
+/* EMPTY */
+.empty{text-align:center;padding:60px 20px;color:var(--mu)}
+.empty-icon{font-size:40px;margin-bottom:12px;opacity:.4}
+.empty-t{font-size:15px;font-weight:700;color:var(--mu2);margin-bottom:6px}
+.empty-s{font-size:12px;line-height:1.6}
+
+/* WIN RATE */
+.wr{display:flex;align-items:center;justify-content:space-between;
+  padding:8px 12px;background:rgba(0,212,168,.04);border-bottom:1px solid var(--bor)}
+.wr-lbl{font-size:9px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.5px}
+.wr-items{display:flex;align-items:center;gap:10px}
+.wr-w{color:var(--green);font-size:12px;font-weight:700}
+.wr-l{color:var(--red);font-size:12px;font-weight:700}
+.wr-p{color:var(--yellow);font-size:12px;font-weight:700}
+.wr-r{color:var(--tx);font-size:12px;font-weight:800}
+.wr-reset{font-size:14px;color:var(--mu);cursor:pointer;opacity:.6;line-height:1;padding:2px 4px}
+
+/* PRE-MECI */
+.pm-card{background:var(--sur);border:1px solid var(--bor);border-radius:16px;margin-bottom:8px;overflow:hidden}
+.pm-header{padding:12px 14px;border-bottom:1px solid var(--bor)}
+.pm-kickoff{font-size:10px;color:var(--mu2);font-weight:600;margin-bottom:4px}
+.pm-teams{font-size:15px;font-weight:800;color:var(--tx)}
+.pm-league{font-size:10px;color:var(--mu);margin-top:2px}
+.pm-body{padding:12px 14px}
+.pm-meter-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.pm-meter-label{font-size:10px;color:var(--mu2);font-weight:600;width:60px;flex-shrink:0}
+.pm-meter-bar{flex:1;height:4px;background:var(--sur3);border-radius:2px;overflow:hidden}
+.pm-meter-fill{height:100%;border-radius:2px}
+.pm-meter-fill.green{background:var(--green)}
+.pm-meter-fill.teal{background:var(--ac)}
+.pm-meter-pct{font-size:11px;font-weight:800;color:var(--tx);min-width:32px;text-align:right}
+.pm-stats{display:flex;gap:12px;margin-top:6px}
+.pm-stat{font-size:10px;color:var(--mu)}
+.pm-stat span{color:var(--mu2);font-weight:600}
+.pm-score-badge{display:inline-flex;align-items:center;
+  background:linear-gradient(135deg,var(--ac2),rgba(6,214,160,.08));
+  border:1px solid var(--ac3);border-radius:8px;padding:4px 10px;
+  font-size:12px;font-weight:800;color:var(--ac);margin-top:8px}
+.pm-summary{background:var(--sur2);border-radius:10px;padding:10px 14px;
+  margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.pm-summary-t{font-size:11px;color:var(--mu2)}
+.pm-summary-v{font-size:13px;font-weight:800;color:var(--ac)}
+
+/* AGENT */
+.agent-wrap{display:flex;flex-direction:column;height:100%}
+.agent-msgs{flex:1;overflow-y:auto;padding:12px;-webkit-overflow-scrolling:touch}
+.agent-msgs::-webkit-scrollbar{display:none}
+.msg{display:flex;margin-bottom:12px}
+.msg.user{justify-content:flex-end}
+.msg.bot{justify-content:flex-start}
+.bubble{max-width:82%;padding:10px 14px;border-radius:16px;font-size:13px;line-height:1.5}
+.msg.user .bubble{background:linear-gradient(135deg,var(--ac),#00b894);color:#080d18;font-weight:600;border-bottom-right-radius:4px}
+.msg.bot .bubble{background:var(--sur2);color:var(--tx);border:1px solid var(--bor);border-bottom-left-radius:4px}
+.msg-time{font-size:9px;color:var(--mu);margin-top:3px;text-align:right}
+.agent-input-wrap{padding:12px;display:flex;gap:8px;border-top:1px solid var(--bor);background:var(--bg)}
+.agent-input{flex:1;background:var(--sur);border:1px solid var(--bor);border-radius:12px;
+  padding:10px 14px;color:var(--tx);font-size:14px;outline:none;
+  transition:border-color .2s}
+.agent-input:focus{border-color:var(--ac3)}
+.agent-input::placeholder{color:var(--mu)}
+.agent-send{width:42px;height:42px;border-radius:12px;
+  background:linear-gradient(135deg,var(--ac),#00b894);
+  border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:18px;color:#080d18;flex-shrink:0;transition:opacity .2s}
+.agent-send:active{opacity:.8}
+.agent-stats{display:flex;gap:12px;padding:8px 12px;border-bottom:1px solid var(--bor);
+  background:rgba(0,212,168,.03)}
+.ag-stat{display:flex;flex-direction:column;align-items:center;gap:1px}
+.ag-stat-l{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px}
+.ag-stat-v{font-size:14px;font-weight:800;color:var(--ac)}
+.typing{display:flex;gap:4px;align-items:center;padding:10px 14px}
+.typing span{width:6px;height:6px;border-radius:50%;background:var(--mu2);animation:typing .9s ease-in-out infinite}
+.typing span:nth-child(2){animation-delay:.15s}
+.typing span:nth-child(3){animation-delay:.3s}
+@keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+
+/* BOTTOM NAV */
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:100;
+  display:flex;height:64px;
+  background:rgba(8,13,24,.95);backdrop-filter:blur(20px);
+  border-top:1px solid var(--bor);}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;cursor:pointer;border:none;background:none;transition:all .15s;padding:8px}
+.nav-icon{font-size:20px;line-height:1}
+.nav-label{font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--mu)}
+.nav-btn.active .nav-label{color:var(--ac)}
+.nav-btn.active .nav-icon{filter:drop-shadow(0 0 6px var(--ac))}
+
+/* SCORE FILTERS */
+.score-chips{display:flex;gap:6px;overflow-x:auto;padding:0 12px 12px;scrollbar-width:none}
+.score-chips::-webkit-scrollbar{display:none}
+.score-chip{flex-shrink:0;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;
+  background:var(--sur);border:1px solid var(--bor);color:var(--mu2);cursor:pointer;transition:all .15s}
+.score-chip.active{background:var(--ac2);border-color:var(--ac3);color:var(--ac)}
+
+/* LOADING SPINNER */
+.spinner{display:flex;justify-content:center;padding:40px}
+.spin{width:28px;height:28px;border:2px solid var(--sur3);border-top-color:var(--ac);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* SCROLLBAR */
+*{scrollbar-width:thin;scrollbar-color:var(--sur3) transparent}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="logo">ALOHA<span>SCAN</span></div>
+  <div class="hdr-right">
+    <div class="live-badge" id="live-badge" style="display:none">
+      <div class="live-dot"></div>LIVE
+    </div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<!-- STATS BAR -->
+<div class="stats" id="stats-bar" style="display:none">
+  <div class="stat"><div class="stat-v" id="s-live">0</div><div class="stat-l">Live</div></div>
+  <div class="stat-sep"></div>
+  <div class="stat"><div class="stat-v" id="s-rec">0/20</div><div class="stat-l">Recomandate</div></div>
+  <div class="stat-sep"></div>
+  <div class="stat"><div class="stat-v" id="s-ngp">0%</div><div class="stat-l">Top NGP</div></div>
+  <div class="stat-sep"></div>
+  <div class="stat"><div class="stat-v" id="s-upd">--:--</div><div class="stat-l">Update</div></div>
+</div>
+
+<!-- WIN RATE -->
+<div class="wr" id="wr-bar" style="display:none">
+  <span class="wr-lbl">Win Rate</span>
+  <div class="wr-items">
+    <span class="wr-w" id="wr-w">W: 0</span>
+    <span class="wr-l" id="wr-l">L: 0</span>
+    <span class="wr-p" id="wr-p">P: 0</span>
+    <span class="wr-r" id="wr-r">—</span>
+    <span class="wr-reset" onclick="resetWR()" title="Reset">↺</span>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<main class="page" id="page">
+
+  <!-- TAB: LIVE -->
+  <div class="tab-content active" id="tab-live">
+    <div class="connect-area" id="connect-area">
+      <button class="btn-connect" id="btn-conn" onclick="toggleConn()">CONECTARE</button>
+      <div class="connect-hint">Date live în timp real</div>
+    </div>
+    <div id="live-body" style="display:none">
+      <div class="chips" id="region-chips">
+        <div class="chip active" onclick="filterRegion(this,'all')">Toate</div>
+        <div class="chip" onclick="filterRegion(this,'europe')">Europa</div>
+        <div class="chip" onclick="filterRegion(this,'americas')">Americas</div>
+        <div class="chip" onclick="filterRegion(this,'asia')">Asia</div>
+        <div class="chip" onclick="filterRegion(this,'africa')">Africa</div>
+      </div>
+      <div class="score-chips" id="score-chips"></div>
+      <div id="match-list"></div>
+    </div>
+  </div>
+
+  <!-- TAB: PRE-MECI -->
+  <div class="tab-content" id="tab-pre">
+    <div id="pm-body">
+      <div class="empty">
+        <div class="empty-icon">📅</div>
+        <div class="empty-t">Pre-meci</div>
+        <div class="empty-s">Apasă butonul pentru a încărca meciurile de azi</div>
+      </div>
+    </div>
+    <div style="padding:0 12px 12px">
+      <button class="btn-connect" onclick="loadPM()" id="btn-pm">Încarcă Pre-meci</button>
+    </div>
+  </div>
+
+  <!-- TAB: AGENT -->
+  <div class="tab-content" id="tab-agent">
+    <div class="agent-stats" id="ag-stats">
+      <div class="ag-stat"><div class="ag-stat-v" id="ag-live">—</div><div class="ag-stat-l">Live</div></div>
+      <div class="ag-stat"><div class="ag-stat-v" id="ag-rec">—</div><div class="ag-stat-l">Recom.</div></div>
+      <div class="ag-stat"><div class="ag-stat-v" id="ag-wr">—</div><div class="ag-stat-l">Win Rate</div></div>
+      <div class="ag-stat"><div class="ag-stat-v" id="ag-ngp">—</div><div class="ag-stat-l">Top NGP</div></div>
+    </div>
+    <div class="agent-msgs" id="ag-msgs">
+      <div class="msg bot">
+        <div>
+          <div class="bubble">Bună! Sunt AlohaScan AI. Întreabă-mă despre meciurile live, predicții sau statistici.</div>
+          <div class="msg-time" id="ag-start-time">--:--</div>
+        </div>
+      </div>
+    </div>
+    <div class="agent-input-wrap">
+      <input class="agent-input" id="ag-input" placeholder="Întreabă ceva..." onkeydown="agKey(event)">
+      <button class="agent-send" onclick="agSend()">➤</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- BOTTOM NAV -->
+<nav class="nav">
+  <button class="nav-btn active" id="nav-live" onclick="setTab('live')">
+    <span class="nav-icon">⚽</span>
+    <span class="nav-label">Live</span>
+  </button>
+  <button class="nav-btn" id="nav-pre" onclick="setTab('pre')">
+    <span class="nav-icon">📅</span>
+    <span class="nav-label">Pre-meci</span>
+  </button>
+  <button class="nav-btn" id="nav-agent" onclick="setTab('agent')">
+    <span class="nav-icon">🤖</span>
+    <span class="nav-label">Agent</span>
+  </button>
+</nav>
+<script>
+// ── CONFIG ──────────────────────────────────────────────────
+var CFG={MC:80,MD:20,RI:50000};
+var WR_KEY='alohascan_wr_v2';
+var ST={ms:[],connected:false,ws:null,region:'all',score:'all'};
+var TG_SENT=new Set();
+
+// ── CLOCK ────────────────────────────────────────────────────
+function tickClock(){
+  var d=new Date();
+  document.getElementById('clock').textContent=
+    d.toTimeString().slice(0,8);
+}
+setInterval(tickClock,1000);tickClock();
+document.getElementById('ag-start-time').textContent=new Date().toTimeString().slice(0,5);
+
+// ── TABS ─────────────────────────────────────────────────────
+function setTab(t){
+  ['live','pre','agent'].forEach(function(x){
+    document.getElementById('tab-'+x).classList.toggle('active',x===t);
+    document.getElementById('nav-'+x).classList.toggle('active',x===t);
+  });
+  var pg=document.getElementById('page');
+  if(t==='agent'){
+    pg.style.display='flex';pg.style.flexDirection='column';
+    document.getElementById('tab-agent').style.display='flex';
+    document.getElementById('tab-agent').style.flexDirection='column';
+    document.getElementById('tab-agent').style.height='100%';
+    setTimeout(function(){var m=document.getElementById('ag-msgs');m.scrollTop=m.scrollHeight;},50);
+    agUpdateStats();
+  } else {
+    pg.style.display='';
+  }
+}
+
+// ── POISSON / NGP ─────────────────────────────────────────────
+function poissonCDF(lambda,k){
+  if(lambda<=0)return k===0?1:0;
+  var p=Math.exp(-lambda);var cum=p;
+  for(var i=1;i<=k;i++){p=p*lambda/i;cum+=p;}
+  return cum;
+}
+function mkt(need,lr){
+  if(need<=0)return 100;
+  var pF=poissonCDF(lr,need-1);
+  return Math.round(Math.max(5,Math.min(98,(1-pF)*100)));
+}
+function getStat(st,idx,type){
+  var t=st&&st[idx]&&st[idx].statistics;
+  if(!Array.isArray(t))return 0;
+  var e=t.find(function(s){return s.type===type;});
+  var v=e&&e.value;
+  if(v===null||v===undefined||v==='N/A'||v==='')return 0;
+  return parseFloat(v)||0;
+}
+function calcScore(m){
+  var st=m.statistics||[];
+  var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;
+  var hg=m.goals?m.goals.home||0:0;
+  var ag=m.goals?m.goals.away||0:0;
+  var hxg=getStat(st,0,'expected_goals');
+  var axg=getStat(st,1,'expected_goals');
+  var hSOT=getStat(st,0,'Shots on Goal');
+  var aSOT=getStat(st,1,'Shots on Goal');
+  var hSh=getStat(st,0,'Shots off Goal')+hSOT;
+  var aSh=getStat(st,1,'Shots off Goal')+aSOT;
+  var hDA=getStat(st,0,'Dangerous Attacks');
+  var aDA=getStat(st,1,'Dangerous Attacks');
+  var txg=hxg+axg;
+  var remFrac=Math.max(0,Math.min(1,(95-mn)/90));
+  var remXg=mn>0?(txg/mn)*(90-mn):0.025*(90-mn);
+  if(txg===0)remXg=0.7*remFrac;
+  if(mn>=70)remXg*=1.2;if(mn>=80)remXg*=1.15;
+  var ng=Math.round(Math.max(3,Math.min(97,(1-Math.exp(-Math.max(remXg,0.05)))*100)));
+  var totalG=hg+ag;
+  var lxg=txg>0?txg*3:0;
+  var lb=lxg>0?lxg*.55+1.4*.45:1.6;
+  var lr=lb*remFrac;
+  return{
+    ng:ng,
+    mk:{
+      over05:mkt(1,lr),
+      over15:mkt(Math.max(1,2-totalG),lr),
+      over25:mkt(Math.max(1,3-totalG),lr),
+    },
+    forte:ng>=70,
+    mn:mn,hg:hg,ag:ag,hxg:hxg,axg:axg,
+    tSh:hSh+aSh,tSOT:hSOT+aSOT,
+    hDA:hDA,aDA:aDA
+  };
+}
+
+// ── REGION FILTER ─────────────────────────────────────────────
+var EUROPE_KWORDS=['england','spain','germany','france','italy','portugal','netherlands','belgium','scotland','turkey','russia','ukraine','greece','sweden','norway','denmark','poland','czech','austria','switzerland','croatia','serbia','romania','bulgaria','hungary','slovakia','finland'];
+var AMERICAS_KWORDS=['brazil','argentina','mexico','colombia','chile','peru','ecuador','uruguay','usa','canada','venezuela','bolivia','paraguay'];
+var ASIA_KWORDS=['japan','korea','china','saudi','uae','qatar','iran','india','australia','indonesia','thailand'];
+var AFRICA_KWORDS=['nigeria','egypt','morocco','south africa','ghana','senegal','cameroon','ivory'];
+
+function matchRegion(m,reg){
+  if(reg==='all')return true;
+  var c=(m.league&&(m.league.country||m.league.name)||'').toLowerCase();
+  var kw=reg==='europe'?EUROPE_KWORDS:reg==='americas'?AMERICAS_KWORDS:reg==='asia'?ASIA_KWORDS:AFRICA_KWORDS;
+  return kw.some(function(k){return c.indexOf(k)>=0;});
+}
+function filterRegion(el,reg){
+  ST.region=reg;
+  document.querySelectorAll('#region-chips .chip').forEach(function(c){c.classList.remove('active');});
+  el.classList.add('active');
+  renderMatches();
+}
+function filterScore(el,score){
+  ST.score=score;
+  document.querySelectorAll('#score-chips .score-chip').forEach(function(c){c.classList.remove('active');});
+  el.classList.add('active');
+  renderMatches();
+}
+
+// ── WEBSOCKET / CONNECT ───────────────────────────────────────
+var _autoIt=null;
+function toggleConn(){
+  if(ST.connected){disconnect();return;}
+  connect();
+}
+function connect(){
+  var btn=document.getElementById('btn-conn');
+  btn.textContent='Conectare...';btn.disabled=true;
+  loadLive(function(ok){
+    btn.disabled=false;
+    if(ok){
+      ST.connected=true;
+      btn.textContent='DECONECTARE';btn.classList.add('connected');
+      document.getElementById('connect-area').style.marginBottom='0';
+      document.getElementById('live-body').style.display='block';
+      document.getElementById('live-badge').style.display='flex';
+      document.getElementById('stats-bar').style.display='flex';
+      document.getElementById('wr-bar').style.display='flex';
+      _autoIt=setInterval(function(){loadLive();},CFG.RI);
+    } else {
+      btn.textContent='CONECTARE';
+    }
+  });
+}
+function disconnect(){
+  ST.connected=false;clearInterval(_autoIt);
+  document.getElementById('btn-conn').textContent='CONECTARE';
+  document.getElementById('btn-conn').classList.remove('connected');
+  document.getElementById('live-body').style.display='none';
+  document.getElementById('live-badge').style.display='none';
+  document.getElementById('stats-bar').style.display='none';
+  document.getElementById('wr-bar').style.display='none';
+}
+
+async function loadLive(cb){
+  try{
+    var r=await fetch('/api/football');
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    var d=await r.json();
+    var raw=Array.isArray(d.response)?d.response:(Array.isArray(d)?d:[]);
+    ST.ms=raw.map(function(m){m._s=calcScore(m);return m;});
+    renderMatches();
+    updateStats();
+    trackWR();
+    tgCheck();
+    if(cb)cb(true);
+  }catch(e){
+    console.error('loadLive',e);
+    if(cb)cb(false);
+  }
+}
+
+// ── STATS UPDATE ──────────────────────────────────────────────
+function updateStats(){
+  var rec=ST.ms.filter(function(m){return m._s&&m._s.ng>=CFG.MC;}).length;
+  rec=Math.min(rec,CFG.MD);
+  var topNg=ST.ms.reduce(function(mx,m){return Math.max(mx,(m._s&&m._s.ng)||0);},0);
+  var now=new Date();
+  document.getElementById('s-live').textContent=ST.ms.length;
+  document.getElementById('s-rec').textContent=rec+'/'+CFG.MD;
+  document.getElementById('s-ngp').textContent=topNg+'%';
+  document.getElementById('s-upd').textContent=now.toTimeString().slice(0,5);
+}
+
+// ── RENDER MATCHES ────────────────────────────────────────────
+function ngpColor(p){return p>=80?'#00d4a8':p>=60?'#ffd166':'#ff6b6b';}
+
+function renderMatches(){
+  var ms=ST.ms.filter(function(m){
+    if(!matchRegion(m,ST.region))return false;
+    if(ST.score!=='all'){
+      var hg=m.goals?m.goals.home||0:0;
+      var ag=m.goals?m.goals.away||0:0;
+      var key=hg+'-'+ag;if(key!==ST.score)return false;
+    }
+    return true;
+  });
+  // build score chips
+  var counts={};
+  ST.ms.forEach(function(m){
+    var k=(m.goals?m.goals.home||0:0)+'-'+(m.goals?m.goals.away||0:0);
+    counts[k]=(counts[k]||0)+1;
+  });
+  var sc=document.getElementById('score-chips');
+  var allActive=ST.score==='all';
+  var html='<div class="score-chip'+(allActive?' active':'')+'" onclick="filterScore(this,\'all\')">Toate ('+ST.ms.length+')</div>';
+  Object.keys(counts).sort().forEach(function(k){
+    var active=ST.score===k;
+    html+='<div class="score-chip'+(active?' active':'')+'" onclick="filterScore(this,\''+k+'\')">'+k+' ('+counts[k]+')</div>';
+  });
+  sc.innerHTML=html;
+
+  // group by league
+  var leagues={};var leagueOrder=[];
+  ms.forEach(function(m){
+    var lid=m.league&&m.league.id||'0';
+    var ln=m.league&&m.league.name||'Unknown';
+    if(!leagues[lid]){leagues[lid]={name:ln,ms:[]};leagueOrder.push(lid);}
+    leagues[lid].ms.push(m);
+  });
+
+  if(!ms.length){
+    document.getElementById('match-list').innerHTML=
+      '<div class="empty"><div class="empty-icon">⚽</div><div class="empty-t">Niciun meci</div><div class="empty-s">Nu există meciuri pentru filtrele selectate</div></div>';
+    return;
+  }
+
+  var out='';
+  leagueOrder.forEach(function(lid){
+    var lg=leagues[lid];
+    lg.ms.sort(function(a,b){return((b._s&&b._s.ng)||0)-((a._s&&a._s.ng)||0);});
+    lg.ms.forEach(function(m){
+      var s=m._s||{};var mk=s.mk||{};
+      var hg=s.hg||0;var ag=s.ag||0;
+      var mn=s.mn||0;
+      var ng=s.ng||0;
+      var hWin=hg>ag;var aWin=ag>hg;
+      var c=ngpColor(ng);
+      var flag=m.league&&m.league.flag?'<img src="'+m.league.flag+'" style="width:12px;height:9px;object-fit:cover;border-radius:2px;margin-right:4px;">':'';
+      out+='<div class="card">';
+      out+='<div class="card-league">';
+      out+='<div class="league-name">'+flag+(lg.name||'')+'</div>';
+      out+='<div class="card-minute"><div class="min-dot"></div><div class="min-val">'+mn+"'</div></div>";
+      out+='</div>';
+      out+='<div class="card-teams">';
+      out+='<div class="team-row"><div class="team-name">'+(m.teams&&m.teams.home&&m.teams.home.name||'—')+'</div><div class="team-score'+(hWin?' winning':'')+'">'+hg+'</div></div>';
+      out+='<div class="team-row"><div class="team-name">'+(m.teams&&m.teams.away&&m.teams.away.name||'—')+'</div><div class="team-score'+(aWin?' winning':'')+'">'+ag+'</div></div>';
+      out+='</div>';
+      out+='<div class="card-footer">';
+      out+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
+      if(s.forte)out+='<div class="badge-forte">⚡ FORTE</div>';
+      out+='<div class="ngp-pct" style="color:'+c+'">'+ng+'%</div></div>';
+      out+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+ng+'%;background:'+c+'"></div></div>';
+      out+='<div class="markets">';
+      out+='<div class="mkt">Over 0.5 <span>'+mk.over05+'%</span></div>';
+      out+='<div class="mkt">Over 1.5 <span>'+mk.over15+'%</span></div>';
+      out+='<div class="mkt">Over 2.5 <span>'+mk.over25+'%</span></div>';
+      out+='</div>';
+      out+='</div></div>';
+    });
+  });
+  document.getElementById('match-list').innerHTML=out;
+}
+
+// ── WIN RATE ──────────────────────────────────────────────────
+function loadWR(){try{var s=localStorage.getItem(WR_KEY);return s?JSON.parse(s):{predictions:[]};}catch(e){return{predictions:[]};}}
+function saveWR(d){try{localStorage.setItem(WR_KEY,JSON.stringify(d));}catch(e){}}
+function resetWR(){try{localStorage.removeItem(WR_KEY);}catch(e){}renderWR({predictions:[]});}
+
+function trackWR(){
+  var data=loadWR();var now=new Date().toISOString();
+  var liveMap={};
+  ST.ms.forEach(function(m){
+    var k=(m.teams&&m.teams.home&&m.teams.home.name||'')+'|'+(m.teams&&m.teams.away&&m.teams.away.name||'');
+    liveMap[k]=m;
+  });
+  ST.ms.forEach(function(m){
+    var s=m._s||{};
+    if((s.ng||0)<CFG.MC)return;
+    var k=(m.teams&&m.teams.home&&m.teams.home.name||'')+'|'+(m.teams&&m.teams.away&&m.teams.away.name||'');
+    var hg=m.goals?m.goals.home||0:0;var ag=m.goals?m.goals.away||0:0;
+    var score=hg+'-'+ag;
+    if(!data.predictions.some(function(p){return p.matchId===k&&p.outcome==='PENDING';})){
+      data.predictions.push({id:k+'_'+Date.now(),matchId:k,scoreAtAlert:score,outcome:'PENDING',alertTime:now});
+    }
+  });
+  data.predictions.forEach(function(p){
+    if(p.outcome!=='PENDING')return;
+    var live=liveMap[p.matchId];
+    if(live){
+      var hg=live.goals?live.goals.home||0:0;var ag=live.goals?live.goals.away||0:0;
+      if((hg+'-'+ag)!==p.scoreAtAlert){p.outcome='WIN';p.resolvedAt=now;}
+    } else {
+      p.outcome='LOSS';p.resolvedAt=now;
+    }
+  });
+  if(data.predictions.length>200)data.predictions=data.predictions.slice(-200);
+  saveWR(data);renderWR(data);
+}
+function renderWR(data){
+  var p=data.predictions;
+  var w=p.filter(function(x){return x.outcome==='WIN';}).length;
+  var l=p.filter(function(x){return x.outcome==='LOSS';}).length;
+  var pend=p.filter(function(x){return x.outcome==='PENDING';}).length;
+  var t=w+l;var rate=t>0?Math.round(w/t*100):0;
+  document.getElementById('wr-w').textContent='W: '+w;
+  document.getElementById('wr-l').textContent='L: '+l;
+  document.getElementById('wr-p').textContent='P: '+pend;
+  document.getElementById('wr-r').textContent=t>0?rate+'%':'—';
+}
+
+// ── TELEGRAM ──────────────────────────────────────────────────
+function tgCheck(){
+  ST.ms.forEach(function(m){
+    var s=m._s||{};
+    if((s.ng||0)<CFG.MC)return;
+    var fid=m.fixture&&m.fixture.id;
+    if(!fid||TG_SENT.has(fid))return;
+    TG_SENT.add(fid);
+    var hn=m.teams&&m.teams.home&&m.teams.home.name||'';
+    var an=m.teams&&m.teams.away&&m.teams.away.name||'';
+    var lg=m.league&&m.league.name||'';
+    var msg='⚡ ALERT AlohaScan\n⚽ '+hn+' vs '+an+'\n🏆 '+lg+' | '+s.mn+"'\n📊 NGP: "+s.ng+'%\n🔗 scannerv2-five.vercel.app';
+    fetch('/api/telegram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})}).catch(function(){});
+  });
+}
+
+// ── PRE-MECI ──────────────────────────────────────────────────
+var PM_SENT=new Set();var PM_LOADED=false;
+async function loadPM(){
+  var btn=document.getElementById('btn-pm');
+  btn.textContent='Se încarcă...';btn.disabled=true;
+  var body=document.getElementById('pm-body');
+  body.innerHTML='<div class="spinner"><div class="spin"></div></div>';
+  try{
+    var r=await fetch('/api/today');
+    var d=await r.json();
+    var raw=Array.isArray(d.response)?d.response:[];
+    var now=Date.now();var in30=now+30*60*1000;
+    var upcoming=raw.filter(function(m){
+      var fd=m.fixture&&m.fixture.date?new Date(m.fixture.date).getTime():0;
+      return fd>=now&&fd<=in30;
+    });
+    if(!upcoming.length){
+      body.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-t">Niciun meci</div><div class="empty-s">Nu există meciuri care încep în următoarele 30 de minute</div></div>';
+      btn.textContent='Reîncarcă';btn.disabled=false;return;
+    }
+    var enriched=[];
+    for(var i=0;i<upcoming.length;i++){
+      var m=upcoming[i];
+      var hid=m.teams&&m.teams.home&&m.teams.home.id;
+      var aid=m.teams&&m.teams.away&&m.teams.away.id;
+      if(!hid||!aid)continue;
+      try{
+        var er=await fetch('/api/enrich?h='+hid+'&a='+aid);
+        var ed=await er.json();
+        var sc=scorePM(m,ed);
+        if(sc)enriched.push({m:m,sc:sc});
+      }catch(e){}
+    }
+    enriched.sort(function(a,b){return b.sc.composite-a.sc.composite;});
+    renderPM(enriched,upcoming.length);
+    btn.textContent='Reîncarcă';btn.disabled=false;
+  }catch(e){
+    body.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+e.message+'</div></div>';
+    btn.textContent='Reîncarcă';btn.disabled=false;
+  }
+}
+function scorePM(m,enr){
+  var h2h=enr.h2h||[];var hf=enr.homeForm||[];var af=enr.awayForm||[];
+  if(h2h.length<3||hf.length<3||af.length<3)return null;
+  var h2hN=h2h.length;
+  var ggH2H=h2h.filter(function(g){return g.goals&&g.goals.home>0&&g.goals&&g.goals.away>0;}).length/h2hN;
+  var o15H2H=h2h.filter(function(g){return(g.goals&&g.goals.home||0)+(g.goals&&g.goals.away||0)>=2;}).length/h2hN;
+  var hf5=hf.slice(0,5);var af5=af.slice(0,5);
+  var ggHF=hf5.filter(function(g){return(g.goals&&g.goals.home||0)+(g.goals&&g.goals.away||0)>0;}).length/hf5.length;
+  var ggAF=af5.filter(function(g){return(g.goals&&g.goals.home||0)+(g.goals&&g.goals.away||0)>0;}).length/af5.length;
+  var ggScore=ggH2H*.30+ggHF*.25+ggAF*.25+o15H2H*.20;
+  var o15Score=o15H2H*.30+(hf5.reduce(function(s,g){return s+(g.goals&&g.goals.home||0)+(g.goals&&g.goals.away||0);},0)/hf5.length/3)*.25+(af5.reduce(function(s,g){return s+(g.goals&&g.goals.home||0)+(g.goals&&g.goals.away||0);},0)/af5.length/3)*.25+ggH2H*.20;
+  var composite=(ggScore+o15Score)/2*100;
+  var kickMs=m.fixture&&m.fixture.date?new Date(m.fixture.date).getTime():0;
+  var inMin=Math.round((kickMs-Date.now())/60000);
+  return{gg:Math.round(ggScore*100),o15:Math.round(o15Score*100),composite:Math.round(composite),inMin:inMin,h2hGG:Math.round(ggH2H*100),h2hO15:Math.round(o15H2H*100),h2hN:h2hN};
+}
+function renderPM(items,total){
+  var body=document.getElementById('pm-body');
+  if(!items.length){
+    body.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-t">Niciun meci qualificat</div><div class="empty-s">'+total+' meciuri scanate — niciun meci nu îndeplinește criteriile</div></div>';
+    return;
+  }
+  var html='<div class="pm-summary"><span class="pm-summary-t">'+total+' scanate · '+items.length+' recomandate</span><span class="pm-summary-v">≥75%</span></div>';
+  items.forEach(function(it){
+    var m=it.m;var sc=it.sc;
+    var hn=m.teams&&m.teams.home&&m.teams.home.name||'';
+    var an=m.teams&&m.teams.away&&m.teams.away.name||'';
+    var lg=m.league&&m.league.name||'';
+    var gc=sc.gg>=75?'teal':'green';
+    var oc=sc.o15>=75?'teal':'green';
+    html+='<div class="pm-card">';
+    html+='<div class="pm-header"><div class="pm-kickoff">⏰ Începe în '+sc.inMin+' min</div>';
+    html+='<div class="pm-teams">'+hn+' vs '+an+'</div>';
+    html+='<div class="pm-league">'+lg+'</div></div>';
+    html+='<div class="pm-body">';
+    html+='<div class="pm-meter-row"><div class="pm-meter-label">GG</div><div class="pm-meter-bar"><div class="pm-meter-fill '+gc+'" style="width:'+sc.gg+'%"></div></div><div class="pm-meter-pct">'+sc.gg+'%</div></div>';
+    html+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill '+oc+'" style="width:'+sc.o15+'%"></div></div><div class="pm-meter-pct">'+sc.o15+'%</div></div>';
+    html+='<div class="pm-stats"><span class="pm-stat">H2H GG: <span>'+sc.h2hGG+'%</span></span><span class="pm-stat">H2H O1.5: <span>'+sc.h2hO15+'%</span></span><span class="pm-stat">'+sc.h2hN+' meciuri</span></div>';
+    html+='<div class="pm-score-badge">Scor compozit: '+sc.composite+'%</div>';
+    html+='</div></div>';
+  });
+  body.innerHTML=html;
+}
+
+// ── AGENT ─────────────────────────────────────────────────────
+var AG_MEM=[];
+function agUpdateStats(){
+  var ms=ST.ms;
+  var rec=ms.filter(function(m){return m._s&&m._s.ng>=CFG.MC;}).length;
+  var wr=loadWR();var p=wr.predictions;
+  var w=p.filter(function(x){return x.outcome==='WIN';}).length;
+  var l=p.filter(function(x){return x.outcome==='LOSS';}).length;
+  var t=w+l;var rate=t>0?Math.round(w/t*100)+'%':'—';
+  var topNg=ms.reduce(function(mx,m){return Math.max(mx,(m._s&&m._s.ng)||0);},0);
+  document.getElementById('ag-live').textContent=ms.length||'—';
+  document.getElementById('ag-rec').textContent=Math.min(rec,CFG.MD)+'/'+CFG.MD;
+  document.getElementById('ag-wr').textContent=rate;
+  document.getElementById('ag-ngp').textContent=topNg?topNg+'%':'—';
+}
+function agKey(e){if(e.key==='Enter')agSend();}
+function agAppend(role,text){
+  var msgs=document.getElementById('ag-msgs');
+  var t=new Date().toTimeString().slice(0,5);
+  var cls=role==='user'?'user':'bot';
+  var div=document.createElement('div');div.className='msg '+cls;
+  div.innerHTML='<div><div class="bubble">'+text.replace(/\n/g,'<br>')+'</div><div class="msg-time">'+t+'</div></div>';
+  msgs.appendChild(div);
+  setTimeout(function(){msgs.scrollTop=msgs.scrollHeight;},50);
+}
+function agTyping(){
+  var msgs=document.getElementById('ag-msgs');
+  var div=document.createElement('div');div.className='msg bot';div.id='ag-typing';
+  div.innerHTML='<div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>';
+  msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;
+}
+function agRemoveTyping(){var t=document.getElementById('ag-typing');if(t)t.remove();}
+function buildSysPrompt(){
+  var ms=ST.ms;
+  var top=ms.slice().sort(function(a,b){return((b._s&&b._s.ng)||0)-((a._s&&a._s.ng)||0);}).slice(0,10);
+  var mLines=top.map(function(m){
+    var s=m._s||{};
+    return (m.teams&&m.teams.home&&m.teams.home.name||'?')+' '+(m.goals&&m.goals.home||0)+'-'+(m.goals&&m.goals.away||0)+' '+(m.teams&&m.teams.away&&m.teams.away.name||'?')+' ['+s.mn+"' NGP:"+s.ng+'%]';
+  }).join('\n');
+  var wr=loadWR();var p=wr.predictions;
+  var w=p.filter(function(x){return x.outcome==='WIN';}).length;
+  var l=p.filter(function(x){return x.outcome==='LOSS';}).length;
+  return 'Ești AlohaScan AI, expert predicții fotbal live. Ora: '+new Date().toTimeString().slice(0,5)+'\n\nMECIURI LIVE TOP 10:\n'+mLines+'\n\nWIN RATE: W:'+w+' L:'+l+'\n\nRăspunde în română, concis și util.';
+}
+async function agSend(){
+  var inp=document.getElementById('ag-input');
+  var text=inp.value.trim();if(!text)return;
+  inp.value='';
+  agAppend('user',text);
+  AG_MEM.push({role:'user',content:text});
+  if(AG_MEM.length>10)AG_MEM=AG_MEM.slice(-10);
+  agTyping();
+  try{
+    var msgs=[{role:'system',content:buildSysPrompt()}].concat(AG_MEM);
+    var r=await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:msgs,max_tokens:500})});
+    var d=await r.json();
+    agRemoveTyping();
+    if(d.error){agAppend('bot','Eroare: '+d.error);return;}
+    var reply=d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content||'—';
+    agAppend('bot',reply);
+    AG_MEM.push({role:'assistant',content:reply});
+  }catch(e){agRemoveTyping();agAppend('bot','Eroare conexiune: '+e.message);}
+}
+
+// INIT
+renderWR(loadWR());
+</script>
+</body>
+</html>
