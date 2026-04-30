@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const grokKey      = process.env.XAI_API_KEY;
+  const grokKey      = process.env.XAI_API_KEY || process.env.GROQ_KEY;
   if (!anthropicKey && !grokKey) {
     log('ERROR: no AI key configured');
     return res.status(500).json({ error: 'Niciun API key AI configurat' });
