@@ -11,37 +11,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy via Vercel API (explicit SHA)
-        id: api_deploy
-        continue-on-error: true
-        run: |
-          SHA=$(git rev-parse HEAD)
-          echo "Deploying SHA: $SHA"
-          HTTP_STATUS=$(curl -s -o /tmp/vercel_resp.json -w "%{http_code}" \
-            -X POST "https://api.vercel.com/v13/deployments" \
-            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"name\": \"scannerv2\",
-              \"target\": \"production\",
-              \"gitSource\": {
-                \"type\": \"github\",
-                \"org\": \"soareluna2025\",
-                \"repo\": \"scannerv2\",
-                \"ref\": \"main\",
-                \"sha\": \"$SHA\"
-              },
-              \"projectId\": \"prj_6KIlo6YA9b8LMJ31455I1abJUEld\"
-            }")
-          echo "API status: $HTTP_STATUS"
-          cat /tmp/vercel_resp.json
-          [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
 
-      - name: Fallback — Deploy Hook
-        if: steps.api_deploy.outcome == 'failure'
+      - name: Get orgId from Vercel API
+        id: org
         run: |
-          echo "API deploy failed, trying deploy hook..."
-          sleep 3
-          curl -sf -X POST \
-            "https://api.vercel.com/v1/integrations/deploy/prj_6KIlo6YA9b8LMJ31455I1abJUEld/EvrYobtS20" \
-            -o /dev/null && echo "Deploy hook triggered"
+          INFO=$(curl -s "https://api.vercel.com/v9/projects/prj_6KIlo6YA9b8LMJ31455I1abJUEld" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}")
+          echo "Response: $INFO"
+          ORG=$(echo "$INFO" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('accountId',''))" 2>/dev/null || echo "")
+          echo "orgId=$ORG" >> $GITHUB_OUTPUT
+          echo "Found orgId: $ORG"
+
+      - name: Write .vercel/project.json
+        run: |
+          mkdir -p .vercel
+          echo '{"projectId":"prj_6KIlo6YA9b8LMJ31455I1abJUEld","orgId":"${{ steps.org.outputs.orgId }}"}' > .vercel/project.json
+          cat .vercel/project.json
+
+      - name: Deploy to Vercel Production
+        run: vercel deploy --prod --token ${{ secrets.VERCEL_TOKEN }} --yes
