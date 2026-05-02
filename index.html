@@ -96,6 +96,8 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .mkt{padding:4px 10px;border-radius:8px;background:var(--sur2);
   font-size:10px;font-weight:600;color:var(--mu2);white-space:nowrap}
 .mkt span{color:var(--tx);font-weight:700}
+.enrich-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px solid var(--bor)}
+.enr{padding:3px 8px;border-radius:6px;background:rgba(255,255,255,0.05);font-size:10px;font-weight:700}
 
 /* HT separator */
 .ht-divider{display:flex;align-items:center;gap:8px;padding:6px 0}
@@ -573,6 +575,15 @@ function renderMatches(){
       out+='<div class="mkt">Over 1.5 <span>'+mk.over15+'%</span></div>';
       out+='<div class="mkt">Over 2.5 <span>'+mk.over25+'%</span></div>';
       out+='</div>';
+      var ed=m.enrichData;
+      if(ed){
+        var ec=function(v){return v===null||v===undefined?'#666':v>=70?'#22c55e':v>=45?'#f59e0b':'#ef4444';};
+        out+='<div class="enrich-row">';
+        if(ed.homeScoreRate!==null)out+='<span class="enr" style="color:'+ec(ed.homeScoreRate)+'">Gazde '+ed.homeScoreRate+'%</span>';
+        if(ed.awayScoreRate!==null)out+='<span class="enr" style="color:'+ec(ed.awayScoreRate)+'">Oaspeti '+ed.awayScoreRate+'%</span>';
+        if(ed.h2hOver15!==null)out+='<span class="enr" style="color:'+ec(ed.h2hOver15)+'">O1.5 H2H '+ed.h2hOver15+'%</span>';
+        out+='</div>';
+      }
       out+='</div></div>';
     });
   });

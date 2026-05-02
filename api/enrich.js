@@ -9,16 +9,29 @@ export default async function handler(req, res) {
   if (!h || !a) return res.status(400).json({ error: 'Parametri h si a sunt necesari' });
 
   try {
-    const [h2hRes, homeRes, awayRes] = await Promise.all([
-      fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${h}-${a}&last=10`, { headers: { 'x-apisports-key': key } }),
-      fetch(`https://v3.football.api-sports.io/fixtures?team=${h}&last=5&status=FT`, { headers: { 'x-apisports-key': key } }),
-      fetch(`https://v3.football.api-sports.io/fixtures?team=${a}&last=5&status=FT`, { headers: { 'x-apisports-key': key } })
+    const hdr = { 'x-apisports-key': key };
+    const hId = Number(h);
+    const aId = Number(a);
+
+    const [r1, r2, r3] = await Promise.all([
+      fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${h}-${a}&last=10`, { headers: hdr }),
+      fetch(`https://v3.football.api-sports.io/fixtures?team=${h}&last=20&status=FT`, { headers: hdr }),
+      fetch(`https://v3.football.api-sports.io/fixtures?team=${a}&last=20&status=FT`, { headers: hdr })
     ]);
-    const [h2hData, homeData, awayData] = await Promise.all([h2hRes.json(), homeRes.json(), awayRes.json()]);
+    const [d1, d2, d3] = await Promise.all([r1.json(), r2.json(), r3.json()]);
+
+    const h2h      = (d1.response || []).slice(0, 10);
+    const hGames   = (d2.response || []).filter(m => m.teams?.home?.id === hId).slice(0, 10);
+    const aGames   = (d3.response || []).filter(m => m.teams?.away?.id === aId).slice(0, 10);
+
+    const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
+
     res.status(200).json({
-      h2h: h2hData.response || [],
-      homeForm: homeData.response || [],
-      awayForm: awayData.response || []
+      homeScoreRate: pct(hGames, m => (m.goals?.home ?? 0) > 0),
+      awayScoreRate: pct(aGames, m => (m.goals?.away ?? 0) > 0),
+      h2hOver15:     pct(h2h,    m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1),
+      h2hGG:         pct(h2h,    m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0),
+      h2hSample:     h2h.length
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

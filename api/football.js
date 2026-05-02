@@ -2,6 +2,35 @@
 let _cache = { data: null, ts: 0 };
 const CACHE_TTL = 55_000;
 
+// Per-fixture enrich cache (persists across requests on same instance)
+const enrichCache = new Map();
+
+async function enrichMatch(fixtureId, homeId, awayId, apiKey) {
+  if (enrichCache.has(fixtureId)) return;
+  try {
+    const hdr = { 'x-apisports-key': apiKey };
+    const [r1, r2, r3] = await Promise.all([
+      fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${homeId}-${awayId}&last=10`, { headers: hdr }),
+      fetch(`https://v3.football.api-sports.io/fixtures?team=${homeId}&last=20&status=FT`, { headers: hdr }),
+      fetch(`https://v3.football.api-sports.io/fixtures?team=${awayId}&last=20&status=FT`, { headers: hdr })
+    ]);
+    const [d1, d2, d3] = await Promise.all([r1.json(), r2.json(), r3.json()]);
+    const h2h    = (d1.response || []).slice(0, 10);
+    const hGames = (d2.response || []).filter(m => m.teams?.home?.id === homeId).slice(0, 10);
+    const aGames = (d3.response || []).filter(m => m.teams?.away?.id === awayId).slice(0, 10);
+    const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
+    enrichCache.set(fixtureId, {
+      homeScoreRate: pct(hGames, m => (m.goals?.home ?? 0) > 0),
+      awayScoreRate: pct(aGames, m => (m.goals?.away ?? 0) > 0),
+      h2hOver15:     pct(h2h,   m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1),
+      h2hGG:         pct(h2h,   m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0),
+      h2hSample:     h2h.length
+    });
+  } catch (e) {
+    log(`enrich ${fixtureId}: ${e.message}`);
+  }
+}
+
 const COUNTRY_FLAG = {
   'Afghanistan': '🇦🇫', 'Albania': '🇦🇱', 'Algeria': '🇩🇿', 'Angola': '🇦🇴',
   'Argentina': '🇦🇷', 'Armenia': '🇦🇲', 'Australia': '🇦🇺', 'Austria': '🇦🇹',
@@ -240,6 +269,22 @@ export default async function handler(req, res) {
     }
   } catch (e) {
     log(`fd parse error: ${e.message}`);
+  }
+
+  // Enrich uncached matches (max 5 per call to preserve API quota)
+  if (afKey) {
+    const toEnrich = combined
+      .filter(m => m.teams?.home?.id && m.teams?.away?.id && !enrichCache.has(m.fixture.id))
+      .slice(0, 5);
+    if (toEnrich.length > 0) {
+      log(`enriching ${toEnrich.length} new matches`);
+      await Promise.all(toEnrich.map(m =>
+        enrichMatch(m.fixture.id, m.teams.home.id, m.teams.away.id, afKey)
+      ));
+    }
+  }
+  for (const m of combined) {
+    m.enrichData = enrichCache.get(m.fixture.id) || null;
   }
 
   log(`final combined: ${combined.length}`);
