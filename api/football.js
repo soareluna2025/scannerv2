@@ -271,11 +271,11 @@ export default async function handler(req, res) {
     log(`fd parse error: ${e.message}`);
   }
 
-  // Enrich uncached matches (max 5 per call to preserve API quota)
+  // Enrich uncached matches (max 50 per call)
   if (afKey) {
     const toEnrich = combined
       .filter(m => m.teams?.home?.id && m.teams?.away?.id && !enrichCache.has(m.fixture.id))
-      .slice(0, 5);
+      .slice(0, 50);
     if (toEnrich.length > 0) {
       log(`enriching ${toEnrich.length} new matches`);
       await Promise.all(toEnrich.map(m =>
@@ -287,8 +287,14 @@ export default async function handler(req, res) {
     m.enrichData = enrichCache.get(m.fixture.id) || null;
   }
 
-  log(`final combined: ${combined.length}`);
-  const result = { response: combined };
+  // Filter out women's leagues
+  const WOMEN_RE = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
+  const filtered = combined.filter(m => !WOMEN_RE.test(m.league?.name || ''));
+  if (combined.length !== filtered.length)
+    log(`women filter removed ${combined.length - filtered.length} matches`);
+
+  log(`final combined: ${filtered.length}`);
+  const result = { response: filtered };
   _cache = { data: result, ts: now };
   return res.status(200).json(result);
 }
