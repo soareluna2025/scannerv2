@@ -44,7 +44,7 @@ export default async function handler(req, res) {
 
   const today = new Date().toISOString().split('T')[0];
   const nowMs = Date.now();
-  const threeHoursMs = 3 * 60 * 60 * 1000;
+  const in24h = nowMs + 24 * 60 * 60 * 1000;
 
   try {
     log(`fetching today's fixtures for ${today}`);
@@ -72,7 +72,7 @@ export default async function handler(req, res) {
     const upcoming = raw.filter(m => {
       if (WOMEN_RE.test(m.league?.name || '')) return false;
       const fixtureMs = new Date(m.fixture?.date).getTime();
-      return fixtureMs >= nowMs && fixtureMs <= nowMs + threeHoursMs;
+      return fixtureMs >= nowMs && fixtureMs <= in24h;
     });
 
     log(`upcoming after filter: ${upcoming.length}`);
