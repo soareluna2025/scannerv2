@@ -403,6 +403,7 @@ function calcScore(m){
       over05:mkt(1,lr),
       over15:mkt(Math.max(1,2-totalG),lr),
       over25:mkt(Math.max(1,3-totalG),lr),
+      over35:mkt(Math.max(1,4-totalG),lr),
     },
     forte:ng>=70,
     mn:mn,hg:hg,ag:ag,hxg:hxg,axg:axg,
@@ -572,10 +573,12 @@ function renderMatches(){
       if(s.forte)out+='<div class="badge-forte">⚡ FORTE</div>';
       out+='<div class="ngp-pct" style="color:'+c+'">'+ng+'%</div></div>';
       out+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+ng+'%;background:'+c+'"></div></div>';
+      var tg=hg+ag;
       out+='<div class="markets">';
-      out+='<div class="mkt">Over 0.5 <span>'+mk.over05+'%</span></div>';
-      out+='<div class="mkt">Over 1.5 <span>'+mk.over15+'%</span></div>';
-      out+='<div class="mkt">Over 2.5 <span>'+mk.over25+'%</span></div>';
+      if(tg===0)out+='<div class="mkt">Over 0.5 <span>'+mk.over05+'%</span></div>';
+      if(tg<2)out+='<div class="mkt">Over 1.5 <span>'+mk.over15+'%</span></div>';
+      if(tg<3)out+='<div class="mkt">Over 2.5 <span>'+mk.over25+'%</span></div>';
+      if(tg>=3&&tg<4)out+='<div class="mkt">Over 3.5 <span>'+mk.over35+'%</span></div>';
       out+='</div>';
       var ed=m.enrichData;
       if(ed){
