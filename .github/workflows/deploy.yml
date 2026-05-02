@@ -10,27 +10,31 @@ jobs:
     steps:
       - name: Trigger Vercel deployment
         run: |
+          REPO_ID="${{ github.event.repository.id }}"
+          echo "Repo ID: $REPO_ID"
+
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "https://api.vercel.com/v13/deployments" \
             -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d '{
-              "name": "scannerv2",
-              "project": "prj_6KIlo6YA9b8LMJ31455I1abJUEld",
-              "target": "production",
-              "gitSource": {
-                "type": "github",
-                "ref": "main",
-                "org": "soareluna2025",
-                "repo": "scannerv2"
+            -d "{
+              \"name\": \"scannerv2\",
+              \"project\": \"prj_6KIlo6YA9b8LMJ31455I1abJUEld\",
+              \"target\": \"production\",
+              \"gitSource\": {
+                \"type\": \"github\",
+                \"repoId\": $REPO_ID,
+                \"ref\": \"main\"
               }
-            }')
+            }")
+
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
           echo "HTTP: $HTTP_CODE"
-          echo "Body: $BODY"
+          echo "Response: $BODY"
+
           if [ "$HTTP_CODE" -ge 400 ]; then
-            echo "Deploy API call failed"
+            echo "ERROR: Deploy API call failed with HTTP $HTTP_CODE"
             exit 1
           fi
           echo "Deploy triggered successfully"
