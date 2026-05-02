@@ -1,0 +1,45 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get Vercel org ID
+        id: org
+        run: |
+          ORG_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            "https://api.vercel.com/v2/user" | jq -r '.user.id')
+          echo "id=$ORG_ID" >> $GITHUB_OUTPUT
+
+      - name: Pull Vercel project settings
+        run: |
+          npx vercel pull \
+            --yes \
+            --environment=production \
+            --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ steps.org.outputs.id }}
+          VERCEL_PROJECT_ID: prj_6KIlo6YA9b8LMJ31455I1abJUEld
+
+      - name: Build
+        run: |
+          npx vercel build --prod \
+            --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ steps.org.outputs.id }}
+          VERCEL_PROJECT_ID: prj_6KIlo6YA9b8LMJ31455I1abJUEld
+
+      - name: Deploy to production
+        run: |
+          npx vercel deploy --prebuilt --prod \
+            --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ steps.org.outputs.id }}
+          VERCEL_PROJECT_ID: prj_6KIlo6YA9b8LMJ31455I1abJUEld
