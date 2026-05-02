@@ -449,6 +449,7 @@ function connect(){
     btn.disabled=false;
     if(ok){
       ST.connected=true;
+      sessionStorage.setItem('wasConnected','1');
       btn.textContent='DECONECTARE';btn.classList.add('connected');
       document.getElementById('connect-area').style.marginBottom='0';
       document.getElementById('live-body').style.display='block';
@@ -463,6 +464,7 @@ function connect(){
 }
 function disconnect(){
   ST.connected=false;clearInterval(_autoIt);
+  sessionStorage.removeItem('wasConnected');
   document.getElementById('btn-conn').textContent='CONECTARE';
   document.getElementById('btn-conn').classList.remove('connected');
   document.getElementById('live-body').style.display='none';
@@ -804,6 +806,7 @@ async function agSend(){
 
 // INIT
 renderWR(loadWR());
+if(sessionStorage.getItem('wasConnected')==='1') connect();
 </script>
 </body>
 </html>
