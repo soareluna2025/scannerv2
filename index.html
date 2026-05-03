@@ -138,6 +138,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .pm-stats{display:flex;gap:12px;margin-top:6px}
 .pm-stat{font-size:10px;color:var(--mu)}
 .pm-stat span{color:var(--mu2);font-weight:600}
+.pm-league-hdr{padding:10px 14px 4px;font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center}
 .pm-score-badge{display:inline-flex;align-items:center;
   background:linear-gradient(135deg,var(--ac2),rgba(6,214,160,.08));
   border:1px solid var(--ac3);border-radius:8px;padding:4px 10px;
@@ -673,9 +674,12 @@ async function loadPM(){
   try{
     var r=await fetch('/api/today');
     var d=await r.json();
-    var raw=Array.isArray(d.response)?d.response:[];
+    console.log('[loadPM] raw response:', d);
+    // Accept both d.response (array) and d directly
+    var raw=Array.isArray(d.response)?d.response:Array.isArray(d)?d:[];
+    console.log('[loadPM] matches found:', raw.length);
     if(!raw.length){
-      body.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-t">Niciun meci</div><div class="empty-s">Nu există meciuri în următoarele 24 de ore</div></div>';
+      body.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-t">Niciun meci</div><div class="empty-s">API a returnat 0 meciuri'+(d.error?' — '+d.error:'')+'</div></div>';
       btn.textContent='Reîncarcă';btn.disabled=false;return;
     }
     _pmMatches=raw.sort(function(a,b){return new Date(a.fixture.date)-new Date(b.fixture.date);});
@@ -697,6 +701,7 @@ async function loadPM(){
       renderPM();
     }
   }catch(e){
+    console.error('[loadPM] error:', e);
     body.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+e.message+'</div></div>';
     btn.textContent='Reîncarcă';btn.disabled=false;
   }
@@ -719,27 +724,49 @@ function scorePM(m,enr){
 function renderPM(){
   var body=document.getElementById('pm-body');
   var total=_pmMatches.length;
-  var pending=_pmMatches.filter(function(m){return!_pmEnrich[m.fixture.id];}).length;
-  var items=[];
+  if(!total){body.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-t">Niciun meci</div></div>';return;}
+  // Group by league
+  var leagues={};var leagueOrder=[];
   _pmMatches.forEach(function(m){
-    var enr=_pmEnrich[m.fixture.id];
-    var sc=enr?scorePM(m,enr):null;
-    if(sc&&sc.composite>=75)items.push({m:m,sc:sc});
+    var lid=(m.league&&m.league.id)||'0';
+    if(!leagues[lid]){leagues[lid]={name:m.league&&m.league.name||'',flag:m.league&&m.league.flag||'',ms:[]};leagueOrder.push(lid);}
+    leagues[lid].ms.push(m);
   });
-  items.sort(function(a,b){return b.sc.composite-a.sc.composite;});
+  var enrichedCount=Object.keys(_pmEnrich).length;
+  var pending=total-enrichedCount;
   var pendingTxt=pending>0?' · <span style="opacity:.6">⏳ '+pending+' se analizează</span>':'';
-  var html='<div class="pm-summary"><span class="pm-summary-t">'+total+' meciuri · '+items.length+' recomandate'+pendingTxt+'</span><span class="pm-summary-v">≥75%</span></div>';
-  if(!items.length&&pending===0){
-    html+='<div class="empty" style="padding:30px 20px"><div class="empty-icon">📊</div><div class="empty-t">Niciun meci calificat</div></div>';
-  }
-  items.forEach(function(it){
-    var m=it.m;var sc=it.sc;
-    var hn=m.teams&&m.teams.home&&m.teams.home.name||'';
-    var an=m.teams&&m.teams.away&&m.teams.away.name||'';
-    var lg=m.league&&m.league.name||'';
-    var gc=sc.gg>=75?'teal':'green';
-    var oc=sc.o15>=75?'teal':'green';
-    var timeStr=sc.inMin<=0?'Acum':sc.inMin<60?'în '+sc.inMin+' min':'în '+Math.floor(sc.inMin/60)+'h '+sc.inMin%60+'m';
+  var html='<div class="pm-summary"><span class="pm-summary-t">'+total+' meciuri'+pendingTxt+'</span></div>';
+  leagueOrder.forEach(function(lid){
+    var lg=leagues[lid];
+    var flagImg=lg.flag?'<img src="'+lg.flag+'" style="width:12px;height:9px;object-fit:cover;border-radius:2px;margin-right:5px;">':'';
+    html+='<div class="pm-league-hdr">'+flagImg+lg.name+'</div>';
+    lg.ms.forEach(function(m){
+      var hn=m.teams&&m.teams.home&&m.teams.home.name||'—';
+      var an=m.teams&&m.teams.away&&m.teams.away.name||'—';
+      var kickoff=m.fixture&&m.fixture.date?new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
+      var enr=_pmEnrich[m.fixture&&m.fixture.id];
+      var sc=enr?scorePM(m,enr):null;
+      html+='<div class="pm-card">';
+      html+='<div class="pm-header">';
+      html+='<div class="pm-kickoff">🕐 '+kickoff+'</div>';
+      html+='<div class="pm-teams">'+hn+' vs '+an+'</div>';
+      html+='</div>';
+      if(sc){
+        var gc=sc.gg>=75?'teal':'green';
+        var oc=sc.o15>=75?'teal':'green';
+        html+='<div class="pm-body">';
+        html+='<div class="pm-meter-row"><div class="pm-meter-label">GG</div><div class="pm-meter-bar"><div class="pm-meter-fill '+gc+'" style="width:'+sc.gg+'%"></div></div><div class="pm-meter-pct">'+sc.gg+'%</div></div>';
+        html+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill '+oc+'" style="width:'+sc.o15+'%"></div></div><div class="pm-meter-pct">'+sc.o15+'%</div></div>';
+        html+='<div class="pm-stats"><span class="pm-stat">H2H GG: <span>'+sc.h2hGG+'%</span></span><span class="pm-stat">H2H O1.5: <span>'+sc.h2hO15+'%</span></span><span class="pm-stat">'+sc.h2hN+' H2H</span></div>';
+        html+='</div>';
+      }else if(enr){
+        html+='<div class="pm-body"><div style="font-size:11px;color:var(--mu)">Date H2H insuficiente</div></div>';
+      }
+      html+='</div>';
+    });
+  });
+  body.innerHTML=html;
+}
     html+='<div class="pm-card">';
     html+='<div class="pm-header"><div class="pm-kickoff">⏰ '+timeStr+'</div>';
     html+='<div class="pm-teams">'+hn+' vs '+an+'</div>';
