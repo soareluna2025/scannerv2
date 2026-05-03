@@ -1023,7 +1023,16 @@ function renderPM(){
       html+='<span class="pm-stat">Gazde <span style="color:'+ec(enr.homeScoreRate)+'">'+enr.homeScoreRate+'%</span></span>';
       html+='<span class="pm-stat">Oaspeti <span style="color:'+ec(enr.awayScoreRate)+'">'+enr.awayScoreRate+'%</span></span>';
       if(enr.confidence)html+='<span class="badge-conf '+enr.confidence+'">'+enr.confidence+'</span>';
-      html+='</div></div>';
+      html+='</div>';
+      if(enr.homeWin!=null)html+='<div class="enrich-row hda-row"><span style="color:'+ec(enr.homeWin)+'">H:'+enr.homeWin+'%</span><span style="color:'+ec(enr.draw)+'">D:'+enr.draw+'%</span><span style="color:'+ec(enr.awayWin)+'">A:'+enr.awayWin+'%</span></div>';
+      if(enr.hasOdds){
+        if(enr.bestEV>0){
+          html+='<div class="ev-row"><span class="ev-val ev-pos">EV: +'+Math.round(enr.bestEV*100)+'%</span><span class="ev-bet">'+(enr.bestBet||'')+' @ '+(enr.bestCota?enr.bestCota.toFixed(2):'—')+'</span>'+(enr.bestKelly?'<span class="ev-kelly">Kelly: '+enr.bestKelly.toFixed(2)+' LTC</span>':'')+'</div>';
+        }else{
+          html+='<div class="ev-row"><span class="ev-val ev-neg" style="font-size:10px">EV: NO VALUE</span></div>';
+        }
+      }
+      html+='</div>';
     }else{
       html+='<div class="pm-body" style="display:flex;align-items:center;justify-content:space-between">';
       html+='<span style="font-size:11px;color:var(--mu)">Neanalzat</span>';

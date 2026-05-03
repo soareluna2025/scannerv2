@@ -7,10 +7,35 @@ const CACHE_TTL = 55_000;
 // Per-fixture enrich cache (persists across requests on same instance)
 const enrichCache = new Map();
 
-function poissonP(lambda, k) {
-  let p = Math.exp(-lambda);
-  for (let i = 1; i <= k; i++) p *= lambda / i;
-  return p;
+function poissonProb(lambda, k) {
+  let result = Math.exp(-lambda);
+  for (let i = 1; i <= k; i++) result *= lambda / i;
+  return result;
+}
+
+function calcPoisson6x6(lambdaHome, lambdaAway) {
+  let probHomeWin = 0, probDraw = 0, probAwayWin = 0;
+  let probOver15 = 0, probOver25 = 0, probGG = 0;
+  for (let i = 0; i <= 5; i++) {
+    for (let j = 0; j <= 5; j++) {
+      const p = poissonProb(lambdaHome, i) * poissonProb(lambdaAway, j);
+      if (i > j) probHomeWin += p;
+      else if (i === j) probDraw += p;
+      else probAwayWin += p;
+      if (i + j >= 2) probOver15 += p;
+      if (i + j >= 3) probOver25 += p;
+      if (i > 0 && j > 0) probGG += p;
+    }
+  }
+  const total = probHomeWin + probDraw + probAwayWin;
+  return {
+    homeWin:    Math.round(probHomeWin / total * 100),
+    draw:       Math.round(probDraw    / total * 100),
+    awayWin:    Math.round(probAwayWin / total * 100),
+    over15Prob: Math.round(probOver15 * 100),
+    over25Prob: Math.round(probOver25 * 100),
+    ggProb:     Math.round(probGG     * 100),
+  };
 }
 
 async function enrichMatch(fixtureId, homeId, awayId, apiKey) {
@@ -27,10 +52,9 @@ async function enrichMatch(fixtureId, homeId, awayId, apiKey) {
     const aGames = (d2.response || []).filter(m => m.teams?.away?.id === awayId).slice(0, 10);
     const h2h    = (d3.response || []).slice(0, 10);
 
-    const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
-    const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
+    const avg    = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
+    const pct    = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
     const round2 = v => Math.round(v * 100) / 100;
-    const round1 = v => Math.round(v * 10) / 10;
 
     const homeAvgScored   = avg(hGames, m => m.goals?.home ?? 0);
     const homeAvgConceded = avg(hGames, m => m.goals?.away ?? 0);
@@ -41,9 +65,7 @@ async function enrichMatch(fixtureId, homeId, awayId, apiKey) {
     const lambdaAway  = (awayAvgScored + homeAvgConceded) / 2;
     const lambdaTotal = lambdaHome + lambdaAway;
 
-    const over15Prob = (1 - poissonP(lambdaTotal, 0) - poissonP(lambdaTotal, 1)) * 100;
-    const over25Prob = (1 - poissonP(lambdaTotal, 0) - poissonP(lambdaTotal, 1) - poissonP(lambdaTotal, 2)) * 100;
-    const ggProb     = (1 - Math.exp(-lambdaHome)) * (1 - Math.exp(-lambdaAway)) * 100;
+    const matrix = calcPoisson6x6(lambdaHome, lambdaAway);
 
     const confidence = (h2h.length >= 8 && hGames.length >= 8 && aGames.length >= 8) ? 'HIGH'
                      : (h2h.length >= 5 && hGames.length >= 5 && aGames.length >= 5) ? 'MED'
@@ -55,7 +77,8 @@ async function enrichMatch(fixtureId, homeId, awayId, apiKey) {
       awayAvgScored: round2(awayAvgScored), awayAvgConceded: round2(awayAvgConceded),
       awayScoreRate: pct(aGames, m => (m.goals?.away ?? 0) > 0),
       lambdaHome: round2(lambdaHome), lambdaAway: round2(lambdaAway), lambdaTotal: round2(lambdaTotal),
-      over15Prob: round1(over15Prob), over25Prob: round1(over25Prob), ggProb: round1(ggProb),
+      over15Prob: matrix.over15Prob, over25Prob: matrix.over25Prob, ggProb: matrix.ggProb,
+      homeWin: matrix.homeWin, draw: matrix.draw, awayWin: matrix.awayWin,
       h2hOver15: pct(h2h, m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1),
       h2hGG:     pct(h2h, m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0),
       h2hSample: h2h.length, confidence
