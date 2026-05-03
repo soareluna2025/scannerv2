@@ -767,19 +767,6 @@ function renderPM(){
   });
   body.innerHTML=html;
 }
-    html+='<div class="pm-card">';
-    html+='<div class="pm-header"><div class="pm-kickoff">⏰ '+timeStr+'</div>';
-    html+='<div class="pm-teams">'+hn+' vs '+an+'</div>';
-    html+='<div class="pm-league">'+lg+'</div></div>';
-    html+='<div class="pm-body">';
-    html+='<div class="pm-meter-row"><div class="pm-meter-label">GG</div><div class="pm-meter-bar"><div class="pm-meter-fill '+gc+'" style="width:'+sc.gg+'%"></div></div><div class="pm-meter-pct">'+sc.gg+'%</div></div>';
-    html+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill '+oc+'" style="width:'+sc.o15+'%"></div></div><div class="pm-meter-pct">'+sc.o15+'%</div></div>';
-    html+='<div class="pm-stats"><span class="pm-stat">H2H GG: <span>'+sc.h2hGG+'%</span></span><span class="pm-stat">H2H O1.5: <span>'+sc.h2hO15+'%</span></span><span class="pm-stat">'+sc.h2hN+' meciuri</span></div>';
-    html+='<div class="pm-score-badge">Scor compozit: '+sc.composite+'%</div>';
-    html+='</div></div>';
-  });
-  body.innerHTML=html;
-}
 
 // ── AGENT ─────────────────────────────────────────────────────
 var AG_MEM=[];
