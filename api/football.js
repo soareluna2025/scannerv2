@@ -1,4 +1,6 @@
 // In-memory cache to limit API-Football calls (55s TTL)
+import { ALLOWED_LEAGUE_IDS } from './leagues.js';
+
 let _cache = { data: null, ts: 0 };
 const CACHE_TTL = 55_000;
 
@@ -321,11 +323,13 @@ export default async function handler(req, res) {
   const firstWithEnrich = combined.find(m => m.enrichData);
   if (firstWithEnrich) log(`enrichData sample: ${JSON.stringify(firstWithEnrich.enrichData)}`);
 
-  // Filter out women's leagues
+  // Strict whitelist: only allowed league IDs pass
   const WOMEN_RE = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
-  const filtered = combined.filter(m => !WOMEN_RE.test(m.league?.name || ''));
+  const filtered = combined.filter(m =>
+    ALLOWED_LEAGUE_IDS.has(m.league?.id) && !WOMEN_RE.test(m.league?.name || '')
+  );
   if (combined.length !== filtered.length)
-    log(`women filter removed ${combined.length - filtered.length} matches`);
+    log(`league filter removed ${combined.length - filtered.length} matches (${filtered.length} allowed)`);
 
   log(`final combined: ${filtered.length}`);
   const result = { response: filtered };

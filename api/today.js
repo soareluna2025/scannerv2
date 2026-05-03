@@ -1,3 +1,5 @@
+import { ALLOWED_LEAGUE_IDS } from './leagues.js';
+
 function log(msg) {
   console.log(`[today] ${new Date().toISOString()} ${msg}`);
 }
@@ -46,13 +48,15 @@ export default async function handler(req, res) {
     });
     log(`Status breakdown: ${JSON.stringify(byStatus)}`);
 
-    // Filter 1: women's leagues
-    const afterWomen = raw.filter(m => !WOMEN_RE.test(m.league?.name || ''));
-    log(`After women filter: ${afterWomen.length} (removed ${raw.length - afterWomen.length})`);
+    // Filter 1: strict league whitelist + women exclusion
+    const afterLeague = raw.filter(m =>
+      ALLOWED_LEAGUE_IDS.has(m.league?.id) && !WOMEN_RE.test(m.league?.name || '')
+    );
+    log(`After league filter: ${afterLeague.length} (removed ${raw.length - afterLeague.length})`);
 
     // Filter 2: only NS (Not Started) — keep pre-match only
-    const afterStatus = afterWomen.filter(m => m.fixture?.status?.short === 'NS');
-    log(`After NS filter: ${afterStatus.length} (removed ${afterWomen.length - afterStatus.length})`);
+    const afterStatus = afterLeague.filter(m => m.fixture?.status?.short === 'NS');
+    log(`After NS filter: ${afterStatus.length} (removed ${afterLeague.length - afterStatus.length})`);
 
     const result = afterStatus.map(m => ({
       fixture: { id: m.fixture.id, date: m.fixture.date, status: m.fixture.status },
@@ -63,7 +67,7 @@ export default async function handler(req, res) {
     }));
 
     log(`Final response: ${result.length} matches`);
-    return res.status(200).json({ response: result, _debug: { raw: raw.length, afterWomen: afterWomen.length, afterStatus: afterStatus.length, byStatus } });
+    return res.status(200).json({ response: result, _debug: { raw: raw.length, afterLeague: afterLeague.length, afterStatus: afterStatus.length, byStatus } });
 
   } catch (e) {
     log(`ERROR: ${e.message}`);
