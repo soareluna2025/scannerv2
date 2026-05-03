@@ -216,6 +216,100 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 
 /* SCROLLBAR */
 *{scrollbar-width:thin;scrollbar-color:var(--sur3) transparent}
+
+/* MATCH DETAIL OVERLAY */
+.md-overlay{position:fixed;inset:0;z-index:500;background:var(--bg);
+  transform:translateY(100%);transition:transform .35s cubic-bezier(.32,.72,0,1);
+  display:flex;flex-direction:column;overflow:hidden}
+.md-overlay.open{transform:translateY(0)}
+.md-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;height:56px;flex-shrink:0;
+  background:rgba(8,13,24,.95);border-bottom:1px solid var(--bor);
+  backdrop-filter:blur(20px)}
+.md-close{width:36px;height:36px;border-radius:50%;border:none;
+  background:var(--sur2);color:var(--tx);font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.md-title{font-size:13px;font-weight:700;color:var(--mu2);text-align:center;flex:1;padding:0 8px}
+.md-tabs{display:flex;border-bottom:1px solid var(--bor);flex-shrink:0;
+  background:rgba(8,13,24,.8)}
+.md-tab{flex:1;padding:12px 4px;font-size:11px;font-weight:700;text-align:center;
+  color:var(--mu);border:none;background:none;cursor:pointer;letter-spacing:.4px;
+  border-bottom:2px solid transparent;transition:all .2s}
+.md-tab.active{color:var(--ac);border-bottom-color:var(--ac)}
+.md-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px}
+.md-body::-webkit-scrollbar{display:none}
+
+/* SUMAR */
+.md-score-block{text-align:center;padding:20px 0 16px}
+.md-teams-row{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:8px}
+.md-team-name{font-size:15px;font-weight:800;color:var(--tx);flex:1;text-align:center}
+.md-score{font-size:52px;font-weight:900;color:var(--tx);letter-spacing:-2px;min-width:80px;text-align:center}
+.md-minute{text-align:center;margin-bottom:16px}
+.md-min-badge{display:inline-flex;align-items:center;gap:5px;
+  background:var(--ac2);border:1px solid var(--ac3);border-radius:20px;
+  padding:4px 12px;font-size:12px;font-weight:700;color:var(--ac)}
+.md-section{margin-bottom:20px}
+.md-section-title{font-size:10px;font-weight:800;color:var(--mu);text-transform:uppercase;
+  letter-spacing:.8px;margin-bottom:10px}
+.md-stat-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.md-stat-val{font-size:12px;font-weight:700;color:var(--tx);min-width:30px;text-align:center}
+.md-stat-label{font-size:11px;color:var(--mu2);flex:1;text-align:center}
+.md-stat-bar-wrap{flex:2;display:flex;gap:4px;align-items:center}
+.md-stat-bar{flex:1;height:4px;background:var(--sur3);border-radius:2px;overflow:hidden}
+.md-stat-bar-fill{height:100%;border-radius:2px;background:var(--ac)}
+.md-stat-bar-fill.away{background:var(--mu)}
+.md-prob-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.md-prob{flex:1;min-width:80px;background:var(--sur2);border-radius:10px;padding:10px;text-align:center}
+.md-prob-val{font-size:20px;font-weight:900}
+.md-prob-lbl{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.md-h2h-row{display:flex;align-items:center;justify-content:space-between;
+  background:var(--sur2);border-radius:8px;padding:8px 12px;margin-bottom:6px}
+.md-h2h-score{font-size:14px;font-weight:800;color:var(--ac);min-width:40px;text-align:center}
+.md-h2h-teams{font-size:11px;color:var(--mu2);flex:1;text-align:center}
+.md-h2h-date{font-size:10px;color:var(--mu);min-width:50px;text-align:right}
+
+/* FORM */
+.md-form-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;
+  background:var(--sur2);border-radius:8px;padding:8px 12px}
+.md-form-badge{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;
+  justify-content:center;font-size:11px;font-weight:800;flex-shrink:0}
+.md-form-badge.W{background:rgba(6,214,160,.2);color:var(--green)}
+.md-form-badge.D{background:rgba(255,209,102,.15);color:var(--yellow)}
+.md-form-badge.L{background:rgba(255,77,109,.15);color:var(--red)}
+.md-form-score{font-size:13px;font-weight:700;color:var(--tx);min-width:36px;text-align:center}
+.md-form-opp{font-size:11px;color:var(--mu2);flex:1}
+.md-form-date{font-size:10px;color:var(--mu)}
+
+/* FORMATII */
+.md-lineup-wrap{display:flex;gap:0;flex-direction:column}
+.md-formation-label{text-align:center;font-size:11px;font-weight:700;color:var(--ac);
+  padding:6px;background:var(--sur2);border-radius:8px;margin-bottom:10px}
+.md-player-row{display:flex;align-items:center;gap:10px;padding:7px 10px;
+  background:var(--sur2);border-radius:8px;margin-bottom:4px}
+.md-player-num{font-size:11px;font-weight:800;color:var(--mu);min-width:20px;text-align:center}
+.md-player-name{font-size:13px;font-weight:600;color:var(--tx);flex:1}
+.md-player-rating{font-size:12px;font-weight:800;padding:2px 7px;border-radius:6px}
+.md-player-rating.high{background:rgba(6,214,160,.2);color:var(--green)}
+.md-player-rating.mid{background:rgba(255,209,102,.15);color:var(--yellow)}
+.md-player-rating.low{background:rgba(255,77,109,.15);color:var(--red)}
+.md-sub-divider{font-size:10px;color:var(--mu);padding:8px 0 4px;font-weight:700;letter-spacing:.5px}
+
+/* JUCATORI */
+.md-player-card{background:var(--sur2);border-radius:10px;padding:10px 12px;margin-bottom:6px}
+.md-pc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.md-pc-name{font-size:13px;font-weight:700;color:var(--tx)}
+.md-pc-team{font-size:10px;color:var(--mu);margin-top:1px}
+.md-pc-stats{display:flex;gap:12px;flex-wrap:wrap}
+.md-pc-stat{font-size:10px;color:var(--mu)}
+.md-pc-stat span{color:var(--tx);font-weight:700}
+
+/* EVENTS */
+.md-event{display:flex;align-items:center;gap:10px;padding:6px 10px;
+  background:var(--sur2);border-radius:8px;margin-bottom:4px}
+.md-event-min{font-size:11px;font-weight:800;color:var(--ac);min-width:32px}
+.md-event-icon{font-size:14px;min-width:18px;text-align:center}
+.md-event-detail{flex:1;font-size:12px;color:var(--tx)}
+.md-event-team{font-size:10px;color:var(--mu)}
 </style>
 </head>
 <body>
@@ -313,6 +407,24 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   </div>
 
 </main>
+
+<!-- MATCH DETAIL OVERLAY -->
+<div class="md-overlay" id="md-overlay">
+  <div class="md-hdr">
+    <button class="md-close" onclick="mdClose()">✕</button>
+    <div class="md-title" id="md-title">Detalii meci</div>
+    <div style="width:36px"></div>
+  </div>
+  <div class="md-tabs">
+    <button class="md-tab active" onclick="mdTab(0)">SUMAR</button>
+    <button class="md-tab" onclick="mdTab(1)">FORMAȚII</button>
+    <button class="md-tab" onclick="mdTab(2)">JUCĂTORI</button>
+    <button class="md-tab" onclick="mdTab(3)">FORMĂ</button>
+  </div>
+  <div class="md-body" id="md-body">
+    <div class="spinner"><div class="spin"></div></div>
+  </div>
+</div>
 
 <!-- BOTTOM NAV -->
 <nav class="nav">
@@ -569,7 +681,10 @@ function renderMatches(){
       var hWin=hg>ag;var aWin=ag>hg;
       var c=ngpColor(ng);
       var flag=m.league&&m.league.flag?'<img src="'+m.league.flag+'" style="width:12px;height:9px;object-fit:cover;border-radius:2px;margin-right:4px;">':'';
-      out+='<div class="card">';
+      var fid2=m.fixture&&m.fixture.id||0;
+      var hid2=m.teams&&m.teams.home&&m.teams.home.id||0;
+      var aid2=m.teams&&m.teams.away&&m.teams.away.id||0;
+      out+='<div class="card" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer">';
       out+='<div class="card-league">';
       out+='<div class="league-name">'+flag+(lg.name||'')+'</div>';
       out+='<div class="card-minute"><div class="min-dot"></div><div class="min-val">'+mn+"'</div></div>";
@@ -758,7 +873,7 @@ function renderPM(){
     var kickoff=m.fixture&&m.fixture.date?new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
     var enr=_pmEnrich[fid];
     var isTop=enr&&probs.length&&(enr.over15Prob||0)>=topThresh&&topThresh<999;
-    html+='<div class="pm-card">';
+    html+='<div class="pm-card" onclick="mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer">';
     html+='<div class="pm-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">';
     html+='<div><div class="pm-kickoff">'+flag+lg+' · 🕐 '+kickoff+'</div>';
     html+='<div class="pm-teams">'+hn+' vs '+an+'</div></div>';
@@ -849,7 +964,312 @@ async function agSend(){
   }catch(e){agRemoveTyping();agAppend('bot','Eroare conexiune: '+e.message);}
 }
 
-// INIT
+// ── MATCH DETAIL ──────────────────────────────────────────────
+var _md={data:null,tabIdx:0,fixtureId:0,homeId:0,awayId:0};
+
+function mdOpen(fid,hid,aid,srcEl){
+  if(!fid||!hid||!aid)return;
+  // stop click from bubbling into any inner button (e.g. analyze)
+  if(window.event&&window.event.target&&window.event.target.tagName==='BUTTON'&&window.event.target!==srcEl)return;
+  _md.fixtureId=fid;_md.homeId=hid;_md.awayId=aid;_md.tabIdx=0;_md.data=null;
+  var ov=document.getElementById('md-overlay');
+  ov.classList.add('open');
+  document.getElementById('md-body').innerHTML='<div class="spinner"><div class="spin"></div></div>';
+  document.getElementById('md-title').textContent='Detalii meci';
+  document.querySelectorAll('.md-tab').forEach(function(t,i){t.classList.toggle('active',i===0);});
+  mdFetch();
+}
+function mdClose(){
+  document.getElementById('md-overlay').classList.remove('open');
+}
+
+// Swipe-down to close
+(function(){
+  var startY=0;
+  var ov=document.getElementById('md-overlay');
+  ov.addEventListener('touchstart',function(e){startY=e.touches[0].clientY;},{passive:true});
+  ov.addEventListener('touchend',function(e){
+    var dy=e.changedTouches[0].clientY-startY;
+    if(dy>80&&document.getElementById('md-body').scrollTop<=0)mdClose();
+  },{passive:true});
+})();
+
+async function mdFetch(){
+  try{
+    var url='/api/match?id='+_md.fixtureId+'&h='+_md.homeId+'&a='+_md.awayId;
+    var r=await fetch(url);
+    var d=await r.json();
+    if(d.error)throw new Error(d.error);
+    _md.data=d;
+    // Pre-fill title from fixture or from existing ST.ms data
+    var fix=d.fixture;
+    if(fix){
+      var hn=fix.teams&&fix.teams.home&&fix.teams.home.name||'?';
+      var an=fix.teams&&fix.teams.away&&fix.teams.away.name||'?';
+      document.getElementById('md-title').textContent=hn+' vs '+an;
+    }
+    mdRender();
+  }catch(e){
+    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+e.message+'</div></div>';
+  }
+}
+
+function mdTab(idx){
+  _md.tabIdx=idx;
+  document.querySelectorAll('.md-tab').forEach(function(t,i){t.classList.toggle('active',i===idx);});
+  mdRender();
+}
+
+function mdRender(){
+  if(!_md.data){return;}
+  var d=_md.data;
+  if(_md.tabIdx===0)mdRenderSumar(d);
+  else if(_md.tabIdx===1)mdRenderFormatii(d);
+  else if(_md.tabIdx===2)mdRenderJucatori(d);
+  else mdRenderForma(d);
+}
+
+function mdRenderSumar(d){
+  var fix=d.fixture;
+  var en=d.enrich||{};
+  var stats=(fix&&fix.statistics)||[];
+  var hg=fix&&fix.goals?fix.goals.home??0:0;
+  var ag=fix&&fix.goals?fix.goals.away??0:0;
+  var mn=fix&&fix.fixture&&fix.fixture.status?fix.fixture.status.elapsed||0:0;
+  var sh=fix&&fix.fixture&&fix.fixture.status?fix.fixture.status.short||'NS':'NS';
+  var hn=fix&&fix.teams&&fix.teams.home?fix.teams.home.name:'?';
+  var an=fix&&fix.teams&&fix.teams.away?fix.teams.away.name:'?';
+  var isLive=(['1H','2H','HT','ET','BT','P','LIVE','INT']).indexOf(sh)>=0;
+  var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
+
+  var out='<div class="md-score-block">';
+  out+='<div class="md-teams-row">';
+  out+='<div class="md-team-name">'+hn+'</div>';
+  out+='<div class="md-score">'+hg+' - '+ag+'</div>';
+  out+='<div class="md-team-name">'+an+'</div>';
+  out+='</div></div>';
+  if(isLive){
+    out+='<div class="md-minute"><div class="md-min-badge"><div class="min-dot"></div>'+mn+"'</div></div>";
+  }
+
+  // Events (goals/cards) summary
+  var evts=d.events||[];
+  var goalEvts=evts.filter(function(e){return e.type==='Goal';});
+  var cardEvts=evts.filter(function(e){return e.type==='Card';});
+  var subEvts=evts.filter(function(e){return e.type==='subst';});
+  if(evts.length){
+    out+='<div class="md-section"><div class="md-section-title">Evenimente</div>';
+    evts.slice(0,20).forEach(function(e){
+      var icon=e.type==='Goal'?(e.detail==='Own Goal'?'⚽🔴':e.detail==='Penalty'?'⚽⚪':'⚽')
+              :e.type==='Card'?(e.detail==='Yellow Card'?'🟨':'🟥')
+              :e.type==='subst'?'🔄':'•';
+      out+='<div class="md-event">';
+      out+='<div class="md-event-min">'+(e.time&&e.time.elapsed||'?')+"'</div>";
+      out+='<div class="md-event-icon">'+icon+'</div>';
+      out+='<div style="flex:1">';
+      out+='<div class="md-event-detail">'+(e.player&&e.player.name||'')+(e.assist&&e.assist.name?' <span style="color:var(--mu);font-size:10px">('+e.assist.name+')</span>':'')+'</div>';
+      out+='<div class="md-event-team">'+(e.team&&e.team.name||'')+'</div>';
+      out+='</div></div>';
+    });
+    out+='</div>';
+  }
+
+  // Match statistics bars
+  function getSt(idx,type){
+    var t=stats&&stats[idx]&&stats[idx].statistics;
+    if(!Array.isArray(t))return null;
+    var e=t.find(function(s){return s.type===type;});
+    var v=e&&e.value;
+    if(v===null||v===undefined||v==='N/A'||v==='')return null;
+    return v;
+  }
+  function statRow(label,hv,av){
+    if(hv===null&&av===null)return '';
+    var hNum=parseFloat(hv)||0;var aNum=parseFloat(av)||0;
+    var tot=hNum+aNum;
+    var hPct=tot>0?Math.round(hNum/tot*100):50;
+    var aPct=100-hPct;
+    return '<div class="md-stat-row">'+
+      '<div class="md-stat-val">'+hv+'</div>'+
+      '<div class="md-stat-bar-wrap">'+
+        '<div class="md-stat-bar"><div class="md-stat-bar-fill" style="width:'+hPct+'%;float:right"></div></div>'+
+        '<div class="md-stat-label">'+label+'</div>'+
+        '<div class="md-stat-bar"><div class="md-stat-bar-fill away" style="width:'+aPct+'%"></div></div>'+
+      '</div>'+
+      '<div class="md-stat-val">'+av+'</div></div>';
+  }
+  var statsHTML='';
+  var statDefs=[
+    ['Ball Possession','Posesie'],['Shots on Goal','Suturi pe poartă'],
+    ['Shots off Goal','Suturi pe lângă'],['Total Shots','Total suturi'],
+    ['Corner Kicks','Cornere'],['Fouls','Fault-uri'],['Yellow Cards','Galbene'],
+    ['expected_goals','xG']
+  ];
+  statDefs.forEach(function(sd){
+    statsHTML+=statRow(sd[1],getSt(0,sd[0]),getSt(1,sd[0]));
+  });
+  if(statsHTML){
+    out+='<div class="md-section"><div class="md-section-title">Statistici meci</div>'+statsHTML+'</div>';
+  }
+
+  // Poisson probs
+  if(en.over15Prob!=null){
+    out+='<div class="md-section"><div class="md-section-title">Predicții Poisson</div>';
+    out+='<div class="md-prob-row">';
+    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over15Prob)+'">'+Math.round(en.over15Prob)+'%</div><div class="md-prob-lbl">Over 1.5</div></div>';
+    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over25Prob)+'">'+Math.round(en.over25Prob)+'%</div><div class="md-prob-lbl">Over 2.5</div></div>';
+    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.ggProb)+'">'+Math.round(en.ggProb)+'%</div><div class="md-prob-lbl">GG</div></div>';
+    out+='</div>';
+    out+='<div class="md-prob-row">';
+    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeScoreRate)+'">'+en.homeScoreRate+'%</div><div class="md-prob-lbl">Gazde marcheaza</div></div>';
+    out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2)">'+Number(en.lambdaTotal||0).toFixed(2)+'</div><div class="md-prob-lbl">λ Total</div></div>';
+    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.awayScoreRate)+'">'+en.awayScoreRate+'%</div><div class="md-prob-lbl">Oaspeti marcheaza</div></div>';
+    out+='</div>';
+    if(en.confidence)out+='<div style="text-align:center;margin-top:6px"><span class="badge-conf '+en.confidence+'">Incredere: '+en.confidence+'</span></div>';
+    out+='</div>';
+  }
+
+  // H2H
+  if(en.h2hForm&&en.h2hForm.length){
+    out+='<div class="md-section"><div class="md-section-title">H2H Direct (ultimele 5)</div>';
+    en.h2hForm.forEach(function(h){
+      out+='<div class="md-h2h-row">';
+      out+='<div class="md-h2h-teams">'+h.home+' vs '+h.away+'</div>';
+      out+='<div class="md-h2h-score">'+h.score+'</div>';
+      out+='<div class="md-h2h-date">'+h.date+'</div>';
+      out+='</div>';
+    });
+    out+='</div>';
+  }
+
+  document.getElementById('md-body').innerHTML=out;
+}
+
+function mdRenderFormatii(d){
+  var lineups=d.lineups||[];
+  if(!lineups.length){
+    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-t">Fără formații</div><div class="empty-s">Datele nu sunt disponibile</div></div>';
+    return;
+  }
+  var out='';
+  lineups.forEach(function(team){
+    var tn=team.team&&team.team.name||'?';
+    var fm=team.formation||'?';
+    out+='<div class="md-section">';
+    out+='<div class="md-section-title">'+tn+'</div>';
+    out+='<div class="md-formation-label">'+fm+'</div>';
+    var starters=team.startXI||[];
+    starters.forEach(function(p){
+      var pl=p.player||{};
+      out+=mdPlayerRow(pl,d.players);
+    });
+    var subs=team.substitutes||[];
+    if(subs.length){
+      out+='<div class="md-sub-divider">REZERVE</div>';
+      subs.forEach(function(p){
+        var pl=p.player||{};
+        out+=mdPlayerRow(pl,d.players);
+      });
+    }
+    out+='</div>';
+  });
+  document.getElementById('md-body').innerHTML=out;
+}
+
+function mdPlayerRow(pl,allPlayers){
+  var name=pl.name||'?';
+  var num=pl.number||'';
+  var matched=allPlayers&&allPlayers.find(function(p){return p.id===pl.id;});
+  var rating=matched&&matched.rating;
+  var rClass=rating?rating>=7.5?'high':rating>=6.5?'mid':'low':'';
+  var rText=rating?Number(rating).toFixed(1):'';
+  return '<div class="md-player-row">'+
+    '<div class="md-player-num">'+num+'</div>'+
+    '<div class="md-player-name">'+name+'</div>'+
+    (rText?'<div class="md-player-rating '+rClass+'">'+rText+'</div>':'')+
+    '</div>';
+}
+
+function mdRenderJucatori(d){
+  var players=d.players||[];
+  if(!players.length){
+    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">👤</div><div class="empty-t">Fără date</div><div class="empty-s">Statisticile nu sunt disponibile</div></div>';
+    return;
+  }
+  var out='<div class="md-section"><div class="md-section-title">Top jucători după rating</div>';
+  players.slice(0,20).forEach(function(p){
+    if(!p.rating&&!p.goals&&!p.assists)return;
+    var rClass=p.rating?p.rating>=7.5?'high':p.rating>=6.5?'mid':'low':'';
+    out+='<div class="md-player-card">';
+    out+='<div class="md-pc-top">';
+    out+='<div><div class="md-pc-name">'+p.name+'</div><div class="md-pc-team">'+p.teamName+' · '+p.position+'</div></div>';
+    if(p.rating)out+='<div class="md-player-rating '+rClass+'">'+Number(p.rating).toFixed(1)+'</div>';
+    out+='</div>';
+    out+='<div class="md-pc-stats">';
+    if(p.goals)out+='<span class="md-pc-stat">Goluri <span>'+p.goals+'</span></span>';
+    if(p.assists)out+='<span class="md-pc-stat">Assist <span>'+p.assists+'</span></span>';
+    if(p.passAcc)out+='<span class="md-pc-stat">Pase% <span>'+p.passAcc+'</span></span>';
+    if(p.dribbles)out+='<span class="md-pc-stat">Drib <span>'+p.dribbles+'</span></span>';
+    if(p.yellowCards)out+='<span class="md-pc-stat">🟨 <span>'+p.yellowCards+'</span></span>';
+    if(p.redCards)out+='<span class="md-pc-stat">🟥 <span>'+p.redCards+'</span></span>';
+    out+='<span class="md-pc-stat">Min <span>'+p.minutes+'</span></span>';
+    out+='</div></div>';
+  });
+  out+='</div>';
+  document.getElementById('md-body').innerHTML=out;
+}
+
+function mdRenderForma(d){
+  var en=d.enrich||{};
+  var fix=d.fixture;
+  var hn=fix&&fix.teams&&fix.teams.home?fix.teams.home.name:'Gazde';
+  var an=fix&&fix.teams&&fix.teams.away?fix.teams.away.name:'Oaspeti';
+  var out='';
+
+  function formSection(title,form){
+    if(!form||!form.length)return '<div class="md-section"><div class="md-section-title">'+title+'</div><div style="color:var(--mu);font-size:12px">Fără date</div></div>';
+    var s='<div class="md-section"><div class="md-section-title">'+title+'</div>';
+    form.forEach(function(f){
+      s+='<div class="md-form-row">';
+      s+='<div class="md-form-badge '+(f.result||'D')+'">'+(f.result||'D')+'</div>';
+      s+='<div class="md-form-score">'+(f.score||'')+'</div>';
+      s+='<div class="md-form-opp">vs '+(f.opponent||'?')+'</div>';
+      s+='<div class="md-form-date">'+(f.date||'')+'</div>';
+      s+='</div>';
+    });
+    s+='</div>';
+    return s;
+  }
+
+  out+=formSection('Forma '+hn+' (ultimele 5 acasă)',en.homeForm);
+  out+=formSection('Forma '+an+' (ultimele 5 deplasare)',en.awayForm);
+
+  if(en.h2hForm&&en.h2hForm.length){
+    out+='<div class="md-section"><div class="md-section-title">H2H Direct (ultimele 5)</div>';
+    en.h2hForm.forEach(function(h){
+      out+='<div class="md-h2h-row">';
+      out+='<div class="md-h2h-teams">'+h.home+' vs '+h.away+'</div>';
+      out+='<div class="md-h2h-score">'+h.score+'</div>';
+      out+='<div class="md-h2h-date">'+h.date+'</div>';
+      out+='</div>';
+    });
+    out+='</div>';
+  }
+
+  if(en.h2hOver15!=null){
+    out+='<div class="md-section"><div class="md-section-title">Statistici H2H</div>';
+    out+='<div class="md-prob-row">';
+    var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
+    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.h2hOver15)+'">'+en.h2hOver15+'%</div><div class="md-prob-lbl">H2H Over 1.5</div></div>';
+    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.h2hGG)+'">'+en.h2hGG+'%</div><div class="md-prob-lbl">H2H GG</div></div>';
+    out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2)">'+en.h2hSample+'</div><div class="md-prob-lbl">Meciuri H2H</div></div>';
+    out+='</div></div>';
+  }
+
+  document.getElementById('md-body').innerHTML=out;
+}
+
+// ── INIT ──────────────────────────────────────────────────────
 renderWR(loadWR());
 if(sessionStorage.getItem('wasConnected')==='1') connect();
 </script>
