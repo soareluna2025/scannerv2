@@ -582,11 +582,12 @@ function renderMatches(){
       out+='</div>';
       var ed=m.enrichData;
       if(ed){
-        var ec=function(v){return v===null||v===undefined?'#666':v>=70?'#22c55e':v>=45?'#f59e0b':'#ef4444';};
+        var ec=function(v){return v==null?'#666':v>=70?'#22c55e':v>=45?'#f59e0b':'#ef4444';};
+        var ev=function(v){return v==null?'—':v+'%';};
         out+='<div class="enrich-row">';
-        if(ed.homeScoreRate!==null)out+='<span class="enr" style="color:'+ec(ed.homeScoreRate)+'">Gazde '+ed.homeScoreRate+'%</span>';
-        if(ed.awayScoreRate!==null)out+='<span class="enr" style="color:'+ec(ed.awayScoreRate)+'">Oaspeti '+ed.awayScoreRate+'%</span>';
-        if(ed.h2hOver15!==null)out+='<span class="enr" style="color:'+ec(ed.h2hOver15)+'">O1.5 H2H '+ed.h2hOver15+'%</span>';
+        if(ed.homeScoreRate!=null)out+='<span class="enr" style="color:'+ec(ed.homeScoreRate)+'">Gazde '+ev(ed.homeScoreRate)+'</span>';
+        if(ed.awayScoreRate!=null)out+='<span class="enr" style="color:'+ec(ed.awayScoreRate)+'">Oaspeti '+ev(ed.awayScoreRate)+'</span>';
+        if(ed.h2hOver15!=null)out+='<span class="enr" style="color:'+ec(ed.h2hOver15)+'">O1.5 H2H '+ev(ed.h2hOver15)+'</span>';
         out+='</div>';
       }
       out+='</div></div>';
@@ -660,68 +661,77 @@ function tgCheck(){
 
 // ── PRE-MECI ──────────────────────────────────────────────────
 var PM_SENT=new Set();var PM_LOADED=false;
+var _pmMatches=[];
+var _pmEnrich={};
+
 async function loadPM(){
   var btn=document.getElementById('btn-pm');
   btn.textContent='Se încarcă...';btn.disabled=true;
   var body=document.getElementById('pm-body');
   body.innerHTML='<div class="spinner"><div class="spin"></div></div>';
+  _pmMatches=[];_pmEnrich={};
   try{
     var r=await fetch('/api/today');
     var d=await r.json();
     var raw=Array.isArray(d.response)?d.response:[];
-    var now=Date.now();var in30=now+30*60*1000;
-    var upcoming=raw.filter(function(m){
-      var fd=m.fixture&&m.fixture.date?new Date(m.fixture.date).getTime():0;
-      return fd>=now&&fd<=in30;
-    });
-    if(!upcoming.length){
-      body.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-t">Niciun meci</div><div class="empty-s">Nu există meciuri care încep în următoarele 30 de minute</div></div>';
+    if(!raw.length){
+      body.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-t">Niciun meci</div><div class="empty-s">Nu există meciuri în următoarele 24 de ore</div></div>';
       btn.textContent='Reîncarcă';btn.disabled=false;return;
     }
-    var enriched=[];
-    for(var i=0;i<upcoming.length;i++){
-      var m=upcoming[i];
-      var hid=m.teams&&m.teams.home&&m.teams.home.id;
-      var aid=m.teams&&m.teams.away&&m.teams.away.id;
-      if(!hid||!aid)continue;
-      try{
-        var er=await fetch('/api/enrich?h='+hid+'&a='+aid);
-        var ed=await er.json();
-        var sc=scorePM(m,ed);
-        if(sc)enriched.push({m:m,sc:sc});
-      }catch(e){}
-    }
-    enriched.sort(function(a,b){return b.sc.composite-a.sc.composite;});
-    renderPM(enriched,upcoming.length);
+    _pmMatches=raw.sort(function(a,b){return new Date(a.fixture.date)-new Date(b.fixture.date);});
+    renderPM();
     btn.textContent='Reîncarcă';btn.disabled=false;
+    // Lazy enrich: batches of 5, max 100 matches
+    var toEnrich=_pmMatches.filter(function(m){
+      return m.teams&&m.teams.home&&m.teams.home.id&&m.teams.away&&m.teams.away.id;
+    }).slice(0,100);
+    for(var i=0;i<toEnrich.length;i+=5){
+      var batch=toEnrich.slice(i,i+5);
+      await Promise.all(batch.map(async function(m){
+        try{
+          var er=await fetch('/api/enrich?h='+m.teams.home.id+'&a='+m.teams.away.id);
+          var ed=await er.json();
+          if(!ed.error)_pmEnrich[m.fixture.id]=ed;
+        }catch(e){}
+      }));
+      renderPM();
+    }
   }catch(e){
     body.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+e.message+'</div></div>';
     btn.textContent='Reîncarcă';btn.disabled=false;
   }
 }
 function scorePM(m,enr){
-  var h2h=enr.h2h||[];var hf=enr.homeForm||[];var af=enr.awayForm||[];
-  if(h2h.length<3||hf.length<3||af.length<3)return null;
-  var h2hN=h2h.length;
-  var ggH2H=h2h.filter(function(g){return g.goals&&g.goals.home>0&&g.goals&&g.goals.away>0;}).length/h2hN;
-  var o15H2H=h2h.filter(function(g){return(g.goals&&g.goals.home||0)+(g.goals&&g.goals.away||0)>=2;}).length/h2hN;
-  var hf5=hf.slice(0,5);var af5=af.slice(0,5);
-  var ggHF=hf5.filter(function(g){return(g.goals&&g.goals.home||0)+(g.goals&&g.goals.away||0)>0;}).length/hf5.length;
-  var ggAF=af5.filter(function(g){return(g.goals&&g.goals.home||0)+(g.goals&&g.goals.away||0)>0;}).length/af5.length;
-  var ggScore=ggH2H*.30+ggHF*.25+ggAF*.25+o15H2H*.20;
-  var o15Score=o15H2H*.30+(hf5.reduce(function(s,g){return s+(g.goals&&g.goals.home||0)+(g.goals&&g.goals.away||0);},0)/hf5.length/3)*.25+(af5.reduce(function(s,g){return s+(g.goals&&g.goals.home||0)+(g.goals&&g.goals.away||0);},0)/af5.length/3)*.25+ggH2H*.20;
+  if(!enr||enr.h2hSample==null||enr.h2hSample<3)return null;
+  var gg=(enr.h2hGG||0)/100;
+  var o15=(enr.h2hOver15||0)/100;
+  var hr=(enr.homeScoreRate||0)/100;
+  var ar=(enr.awayScoreRate||0)/100;
+  var ggScore=gg*.35+hr*.35+ar*.30;
+  var o15Score=o15*.50+hr*.25+ar*.25;
   var composite=(ggScore+o15Score)/2*100;
   var kickMs=m.fixture&&m.fixture.date?new Date(m.fixture.date).getTime():0;
   var inMin=Math.round((kickMs-Date.now())/60000);
-  return{gg:Math.round(ggScore*100),o15:Math.round(o15Score*100),composite:Math.round(composite),inMin:inMin,h2hGG:Math.round(ggH2H*100),h2hO15:Math.round(o15H2H*100),h2hN:h2hN};
+  return{gg:Math.round(ggScore*100),o15:Math.round(o15Score*100),
+    composite:Math.round(composite),inMin:inMin,
+    h2hGG:enr.h2hGG||0,h2hO15:enr.h2hOver15||0,h2hN:enr.h2hSample};
 }
-function renderPM(items,total){
+function renderPM(){
   var body=document.getElementById('pm-body');
-  if(!items.length){
-    body.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-t">Niciun meci qualificat</div><div class="empty-s">'+total+' meciuri scanate — niciun meci nu îndeplinește criteriile</div></div>';
-    return;
+  var total=_pmMatches.length;
+  var pending=_pmMatches.filter(function(m){return!_pmEnrich[m.fixture.id];}).length;
+  var items=[];
+  _pmMatches.forEach(function(m){
+    var enr=_pmEnrich[m.fixture.id];
+    var sc=enr?scorePM(m,enr):null;
+    if(sc&&sc.composite>=75)items.push({m:m,sc:sc});
+  });
+  items.sort(function(a,b){return b.sc.composite-a.sc.composite;});
+  var pendingTxt=pending>0?' · <span style="opacity:.6">⏳ '+pending+' se analizează</span>':'';
+  var html='<div class="pm-summary"><span class="pm-summary-t">'+total+' meciuri · '+items.length+' recomandate'+pendingTxt+'</span><span class="pm-summary-v">≥75%</span></div>';
+  if(!items.length&&pending===0){
+    html+='<div class="empty" style="padding:30px 20px"><div class="empty-icon">📊</div><div class="empty-t">Niciun meci calificat</div></div>';
   }
-  var html='<div class="pm-summary"><span class="pm-summary-t">'+total+' scanate · '+items.length+' recomandate</span><span class="pm-summary-v">≥75%</span></div>';
   items.forEach(function(it){
     var m=it.m;var sc=it.sc;
     var hn=m.teams&&m.teams.home&&m.teams.home.name||'';
@@ -729,8 +739,9 @@ function renderPM(items,total){
     var lg=m.league&&m.league.name||'';
     var gc=sc.gg>=75?'teal':'green';
     var oc=sc.o15>=75?'teal':'green';
+    var timeStr=sc.inMin<=0?'Acum':sc.inMin<60?'în '+sc.inMin+' min':'în '+Math.floor(sc.inMin/60)+'h '+sc.inMin%60+'m';
     html+='<div class="pm-card">';
-    html+='<div class="pm-header"><div class="pm-kickoff">⏰ Începe în '+sc.inMin+' min</div>';
+    html+='<div class="pm-header"><div class="pm-kickoff">⏰ '+timeStr+'</div>';
     html+='<div class="pm-teams">'+hn+' vs '+an+'</div>';
     html+='<div class="pm-league">'+lg+'</div></div>';
     html+='<div class="pm-body">';

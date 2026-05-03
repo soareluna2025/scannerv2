@@ -286,6 +286,8 @@ export default async function handler(req, res) {
   for (const m of combined) {
     m.enrichData = enrichCache.get(m.fixture.id) || null;
   }
+  const firstWithEnrich = combined.find(m => m.enrichData);
+  if (firstWithEnrich) log(`enrichData sample: ${JSON.stringify(firstWithEnrich.enrichData)}`);
 
   // Filter out women's leagues
   const WOMEN_RE = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
