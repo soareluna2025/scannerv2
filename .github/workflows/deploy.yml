@@ -7,7 +7,66 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: prj_6KIlo6YA9b8LMJ31455I1abJUEld
+
     steps:
+      - name: Upsert SUPABASE_URL
+        run: |
+          TOKEN="${{ secrets.VERCEL_TOKEN }}"
+
+          ENVS=$(curl -s \
+            "https://api.vercel.com/v10/projects/$PROJECT_ID/env" \
+            -H "Authorization: Bearer $TOKEN")
+
+          ENV_ID=$(echo "$ENVS" | jq -r '.envs[]? | select(.key == "SUPABASE_URL") | .id' | head -1)
+
+          if [ -n "$ENV_ID" ]; then
+            echo "PATCH SUPABASE_URL (id=$ENV_ID)"
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH \
+              "https://api.vercel.com/v10/projects/$PROJECT_ID/env/$ENV_ID" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"value":"https://kdyafjlwbximefwdhbnc.supabase.co","target":["production","preview","development"]}')
+            echo "HTTP: $HTTP"
+          else
+            echo "POST SUPABASE_URL"
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+              "https://api.vercel.com/v10/projects/$PROJECT_ID/env" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"key":"SUPABASE_URL","value":"https://kdyafjlwbximefwdhbnc.supabase.co","type":"plain","target":["production","preview","development"]}')
+            echo "HTTP: $HTTP"
+          fi
+
+      - name: Upsert SUPABASE_KEY
+        run: |
+          TOKEN="${{ secrets.VERCEL_TOKEN }}"
+
+          ENVS=$(curl -s \
+            "https://api.vercel.com/v10/projects/$PROJECT_ID/env" \
+            -H "Authorization: Bearer $TOKEN")
+
+          ENV_ID=$(echo "$ENVS" | jq -r '.envs[]? | select(.key == "SUPABASE_KEY") | .id' | head -1)
+
+          if [ -n "$ENV_ID" ]; then
+            echo "PATCH SUPABASE_KEY (id=$ENV_ID)"
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH \
+              "https://api.vercel.com/v10/projects/$PROJECT_ID/env/$ENV_ID" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"value":"sb_publishable_CdtsCYs5j4_SMnq2AA9pxA_ybnpoqCz","target":["production","preview","development"]}')
+            echo "HTTP: $HTTP"
+          else
+            echo "POST SUPABASE_KEY"
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+              "https://api.vercel.com/v10/projects/$PROJECT_ID/env" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"key":"SUPABASE_KEY","value":"sb_publishable_CdtsCYs5j4_SMnq2AA9pxA_ybnpoqCz","type":"encrypted","target":["production","preview","development"]}')
+            echo "HTTP: $HTTP"
+          fi
+
       - name: Trigger Vercel deployment
         run: |
           REPO_ID="${{ github.event.repository.id }}"
