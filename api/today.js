@@ -15,16 +15,13 @@ export default async function handler(req, res) {
   }
 
   const today = new Date().toISOString().split('T')[0];
-  const nowMs = Date.now();
-  const in24h = nowMs + 24 * 60 * 60 * 1000;
+  log(`date=${today}, key present=${!!key}`);
 
   try {
-    log(`fetching today's fixtures for ${today}`);
-    const r = await fetch(
-      `https://v3.football.api-sports.io/fixtures?date=${today}&status=NS`,
-      { headers: { 'x-apisports-key': key } }
-    );
+    const url = `https://v3.football.api-sports.io/fixtures?date=${today}`;
+    log(`fetching: ${url}`);
 
+    const r = await fetch(url, { headers: { 'x-apisports-key': key } });
     if (!r.ok) {
       log(`API error HTTP ${r.status}`);
       return res.status(200).json({ response: [], error: `Upstream HTTP ${r.status}` });
@@ -39,24 +36,34 @@ export default async function handler(req, res) {
     }
 
     const raw = Array.isArray(data.response) ? data.response : [];
-    log(`raw fixtures: ${raw.length}`);
+    log(`Total raw: ${raw.length}`);
 
-    const upcoming = raw
-      .filter(m => {
-        if (WOMEN_RE.test(m.league?.name || '')) return false;
-        const fixtureMs = new Date(m.fixture?.date).getTime();
-        return fixtureMs >= nowMs && fixtureMs <= in24h;
-      })
-      .map(m => ({
-        fixture: { id: m.fixture.id, date: m.fixture.date, status: m.fixture.status },
-        league:  { id: m.league.id, name: m.league.name, country: m.league.country, flag: m.league.flag },
-        teams:   { home: { id: m.teams.home.id, name: m.teams.home.name },
-                   away: { id: m.teams.away.id, name: m.teams.away.name } },
-        goals:   { home: m.goals.home, away: m.goals.away }
-      }));
+    // Count by status before filtering
+    const byStatus = {};
+    raw.forEach(m => {
+      const s = m.fixture?.status?.short || 'unknown';
+      byStatus[s] = (byStatus[s] || 0) + 1;
+    });
+    log(`Status breakdown: ${JSON.stringify(byStatus)}`);
 
-    log(`upcoming after filter: ${upcoming.length}`);
-    return res.status(200).json({ response: upcoming });
+    // Filter 1: women's leagues
+    const afterWomen = raw.filter(m => !WOMEN_RE.test(m.league?.name || ''));
+    log(`After women filter: ${afterWomen.length} (removed ${raw.length - afterWomen.length})`);
+
+    // Filter 2: only NS (Not Started) — keep pre-match only
+    const afterStatus = afterWomen.filter(m => m.fixture?.status?.short === 'NS');
+    log(`After NS filter: ${afterStatus.length} (removed ${afterWomen.length - afterStatus.length})`);
+
+    const result = afterStatus.map(m => ({
+      fixture: { id: m.fixture.id, date: m.fixture.date, status: m.fixture.status },
+      league:  { id: m.league.id, name: m.league.name, country: m.league.country, flag: m.league.flag },
+      teams:   { home: { id: m.teams.home.id, name: m.teams.home.name },
+                 away: { id: m.teams.away.id, name: m.teams.away.name } },
+      goals:   { home: m.goals.home, away: m.goals.away }
+    }));
+
+    log(`Final response: ${result.length} matches`);
+    return res.status(200).json({ response: result, _debug: { raw: raw.length, afterWomen: afterWomen.length, afterStatus: afterStatus.length, byStatus } });
 
   } catch (e) {
     log(`ERROR: ${e.message}`);
