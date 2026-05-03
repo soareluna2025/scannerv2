@@ -858,6 +858,19 @@ var PM_SENT=new Set();var PM_LOADED=false;
 var _pmMatches=[];
 var _pmEnrich={};
 
+function enrichUrl(hid,aid,m){
+  var u='/api/enrich?h='+hid+'&a='+aid;
+  if(m&&m.fixture&&m.fixture.id){
+    u+='&fid='+m.fixture.id;
+    u+='&hn='+encodeURIComponent((m.teams&&m.teams.home&&m.teams.home.name)||'');
+    u+='&an='+encodeURIComponent((m.teams&&m.teams.away&&m.teams.away.name)||'');
+    u+='&lg='+encodeURIComponent((m.league&&m.league.name)||'');
+    u+='&lgid='+((m.league&&m.league.id)||0);
+    u+='&dt='+encodeURIComponent((m.fixture&&m.fixture.date)||'');
+  }
+  return u;
+}
+
 async function loadPM(){
   var btn=document.getElementById('btn-pm');
   btn.textContent='Se încarcă...';btn.disabled=true;
@@ -886,7 +899,7 @@ async function loadPM(){
       var batch=toEnrich.slice(i,i+5);
       await Promise.all(batch.map(async function(m){
         try{
-          var er=await fetch('/api/enrich?h='+m.teams.home.id+'&a='+m.teams.away.id);
+          var er=await fetch(enrichUrl(m.teams.home.id,m.teams.away.id,m));
           var ed=await er.json();
           if(!ed.error)_pmEnrich[m.fixture.id]=ed;
         }catch(e){}
@@ -904,7 +917,8 @@ async function analyzeMatch(fid,hid,aid){
   var btn=document.getElementById('abtn-'+fid);
   if(btn){btn.textContent='⏳';btn.disabled=true;}
   try{
-    var r=await fetch('/api/enrich?h='+hid+'&a='+aid);
+    var pm=_pmMatches.find(function(x){return x.fixture&&x.fixture.id===fid;});
+    var r=await fetch(enrichUrl(hid,aid,pm||null));
     var ed=await r.json();
     if(!ed.error){_pmEnrich[fid]=ed;renderPM();}
     else{if(btn){btn.textContent='ANALIZEAZA';btn.disabled=false;}}
@@ -1490,7 +1504,7 @@ async function genEnrichUpcoming(){
     var batch=toEnrich.slice(i,i+5);
     await Promise.all(batch.map(async function(m){
       try{
-        var er=await fetch('/api/enrich?h='+m.teams.home.id+'&a='+m.teams.away.id);
+        var er=await fetch(enrichUrl(m.teams.home.id,m.teams.away.id,m));
         var ed=await er.json();
         if(!ed.error)_pmEnrich[m.fixture.id]=ed;
       }catch(e){}

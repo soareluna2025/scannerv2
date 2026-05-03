@@ -104,6 +104,39 @@ export default async function handler(req, res) {
 
     const enrich = calcPoisson(hGames, aGames, h2h);
 
+    // Fire-and-forget prediction record to Supabase
+    const sbUrl = process.env.SUPABASE_URL;
+    const sbKey = process.env.SUPABASE_KEY;
+    if (sbUrl && sbKey && fixture) {
+      fetch(`${sbUrl}/rest/v1/predictions`, {
+        method: 'POST',
+        headers: {
+          'apikey':        sbKey,
+          'Authorization': `Bearer ${sbKey}`,
+          'Content-Type':  'application/json',
+          'Prefer':        'resolution=ignore-duplicates,return=minimal'
+        },
+        body: JSON.stringify({
+          fixture_id:      fixture.fixture?.id,
+          home_team:       fixture.teams?.home?.name  || '',
+          away_team:       fixture.teams?.away?.name  || '',
+          league_name:     fixture.league?.name       || '',
+          league_id:       fixture.league?.id         || null,
+          match_date:      fixture.fixture?.date      || null,
+          lambda_home:     enrich.lambdaHome,
+          lambda_away:     enrich.lambdaAway,
+          lambda_total:    enrich.lambdaTotal,
+          over15_prob:     enrich.over15Prob,
+          over25_prob:     enrich.over25Prob,
+          gg_prob:         enrich.ggProb,
+          home_score_rate: enrich.homeScoreRate,
+          away_score_rate: enrich.awayScoreRate,
+          h2h_over15:      enrich.h2hOver15,
+          confidence:      enrich.confidence,
+        })
+      }).catch(() => {});
+    }
+
     // Normalise player stats
     const flatPlayers = players.flatMap(team =>
       (team.players || []).map(p => ({

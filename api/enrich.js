@@ -55,7 +55,7 @@ export default async function handler(req, res) {
   const key = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
   if (!key) return res.status(500).json({ error: 'API_FOOTBALL_KEY neconfigurat' });
 
-  const { h, a } = req.query;
+  const { h, a, fid, hn, an, lg, lgid, dt } = req.query;
   if (!h || !a) return res.status(400).json({ error: 'Parametri h si a sunt necesari' });
 
   const hId = Number(h);
@@ -74,7 +74,42 @@ export default async function handler(req, res) {
     const aGames = (d2.response || []).filter(m => m.teams?.away?.id === aId).slice(0, 10);
     const h2h    = (d3.response || []).slice(0, 10);
 
-    res.status(200).json(calcPoisson(hGames, aGames, h2h, hId, aId));
+    const result = calcPoisson(hGames, aGames, h2h, hId, aId);
+
+    // Fire-and-forget to Supabase when fixture context is provided
+    const sbUrl = process.env.SUPABASE_URL;
+    const sbKey = process.env.SUPABASE_KEY;
+    if (sbUrl && sbKey && fid) {
+      fetch(`${sbUrl}/rest/v1/predictions`, {
+        method: 'POST',
+        headers: {
+          'apikey':        sbKey,
+          'Authorization': `Bearer ${sbKey}`,
+          'Content-Type':  'application/json',
+          'Prefer':        'resolution=ignore-duplicates,return=minimal'
+        },
+        body: JSON.stringify({
+          fixture_id:      Number(fid),
+          home_team:       hn  || '',
+          away_team:       an  || '',
+          league_name:     lg  || '',
+          league_id:       lgid ? Number(lgid) : null,
+          match_date:      dt  || null,
+          lambda_home:     result.lambdaHome,
+          lambda_away:     result.lambdaAway,
+          lambda_total:    result.lambdaTotal,
+          over15_prob:     result.over15Prob,
+          over25_prob:     result.over25Prob,
+          gg_prob:         result.ggProb,
+          home_score_rate: result.homeScoreRate,
+          away_score_rate: result.awayScoreRate,
+          h2h_over15:      result.h2hOver15,
+          confidence:      result.confidence,
+        })
+      }).catch(() => {});
+    }
+
+    res.status(200).json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
