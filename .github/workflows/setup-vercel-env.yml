@@ -1,0 +1,67 @@
+name: Setup Vercel Environment Variables
+
+on:
+  workflow_dispatch:
+    inputs:
+      supabase_key:
+        description: 'Supabase API Key (sb_publishable_...)'
+        required: true
+
+jobs:
+  setup-env:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_PROJECT_ID: prj_6KIlo6YA9b8LMJ31455I1abJUEld
+      SUPABASE_URL: https://kdyafjlwbximefwdhbnc.supabase.co
+
+    steps:
+      - name: Add SUPABASE_URL
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"key\": \"SUPABASE_URL\",
+              \"value\": \"$SUPABASE_URL\",
+              \"type\": \"plain\",
+              \"target\": [\"production\", \"preview\", \"development\"]
+            }")
+          HTTP=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP: $HTTP"
+          echo "Body: $BODY"
+          if [ "$HTTP" -ge 400 ] && [ "$HTTP" != "409" ]; then
+            echo "ERROR adding SUPABASE_URL"
+            exit 1
+          fi
+          echo "SUPABASE_URL added (HTTP $HTTP)"
+
+      - name: Add SUPABASE_KEY
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"key\": \"SUPABASE_KEY\",
+              \"value\": \"${{ github.event.inputs.supabase_key }}\",
+              \"type\": \"encrypted\",
+              \"target\": [\"production\", \"preview\", \"development\"]
+            }")
+          HTTP=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP: $HTTP"
+          echo "Body: $BODY"
+          if [ "$HTTP" -ge 400 ] && [ "$HTTP" != "409" ]; then
+            echo "ERROR adding SUPABASE_KEY"
+            exit 1
+          fi
+          echo "SUPABASE_KEY added (HTTP $HTTP)"
+
+      - name: Verify env vars
+        run: |
+          curl -s \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+          | grep -o '"key":"[^"]*"' | sort
