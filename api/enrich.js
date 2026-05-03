@@ -1,3 +1,53 @@
+function poissonP(lambda, k) {
+  let p = Math.exp(-lambda);
+  for (let i = 1; i <= k; i++) p *= lambda / i;
+  return p;
+}
+
+function calcPoisson(hGames, aGames, h2h, hId, aId) {
+  const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
+  const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
+
+  const homeAvgScored    = avg(hGames, m => m.goals?.home ?? 0);
+  const homeAvgConceded  = avg(hGames, m => m.goals?.away ?? 0);
+  const awayAvgScored    = avg(aGames, m => m.goals?.away ?? 0);
+  const awayAvgConceded  = avg(aGames, m => m.goals?.home ?? 0);
+
+  const lambdaHome  = (homeAvgScored + awayAvgConceded) / 2;
+  const lambdaAway  = (awayAvgScored + homeAvgConceded) / 2;
+  const lambdaTotal = lambdaHome + lambdaAway;
+
+  const over15Prob = (1 - poissonP(lambdaTotal, 0) - poissonP(lambdaTotal, 1)) * 100;
+  const over25Prob = (1 - poissonP(lambdaTotal, 0) - poissonP(lambdaTotal, 1) - poissonP(lambdaTotal, 2)) * 100;
+  const ggProb     = (1 - Math.exp(-lambdaHome)) * (1 - Math.exp(-lambdaAway)) * 100;
+
+  const confidence = (h2h.length >= 8 && hGames.length >= 8 && aGames.length >= 8) ? 'HIGH'
+                   : (h2h.length >= 5 && hGames.length >= 5 && aGames.length >= 5) ? 'MED'
+                   : 'LOW';
+
+  const r2 = v => Math.round(v * 100) / 100;
+  const r1 = v => Math.round(v * 10) / 10;
+
+  return {
+    homeAvgScored:    r2(homeAvgScored),
+    homeAvgConceded:  r2(homeAvgConceded),
+    homeScoreRate:    pct(hGames, m => (m.goals?.home ?? 0) > 0),
+    awayAvgScored:    r2(awayAvgScored),
+    awayAvgConceded:  r2(awayAvgConceded),
+    awayScoreRate:    pct(aGames, m => (m.goals?.away ?? 0) > 0),
+    lambdaHome:       r2(lambdaHome),
+    lambdaAway:       r2(lambdaAway),
+    lambdaTotal:      r2(lambdaTotal),
+    over15Prob:       r1(over15Prob),
+    over25Prob:       r1(over25Prob),
+    ggProb:           r1(ggProb),
+    h2hOver15:        pct(h2h, m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1),
+    h2hGG:            pct(h2h, m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0),
+    h2hSample:        h2h.length,
+    confidence
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -8,31 +58,23 @@ export default async function handler(req, res) {
   const { h, a } = req.query;
   if (!h || !a) return res.status(400).json({ error: 'Parametri h si a sunt necesari' });
 
+  const hId = Number(h);
+  const aId = Number(a);
+
   try {
     const hdr = { 'x-apisports-key': key };
-    const hId = Number(h);
-    const aId = Number(a);
-
     const [r1, r2, r3] = await Promise.all([
-      fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${h}-${a}&last=10`, { headers: hdr }),
       fetch(`https://v3.football.api-sports.io/fixtures?team=${h}&last=20&status=FT`, { headers: hdr }),
-      fetch(`https://v3.football.api-sports.io/fixtures?team=${a}&last=20&status=FT`, { headers: hdr })
+      fetch(`https://v3.football.api-sports.io/fixtures?team=${a}&last=20&status=FT`, { headers: hdr }),
+      fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${h}-${a}&last=10`, { headers: hdr })
     ]);
     const [d1, d2, d3] = await Promise.all([r1.json(), r2.json(), r3.json()]);
 
-    const h2h      = (d1.response || []).slice(0, 10);
-    const hGames   = (d2.response || []).filter(m => m.teams?.home?.id === hId).slice(0, 10);
-    const aGames   = (d3.response || []).filter(m => m.teams?.away?.id === aId).slice(0, 10);
+    const hGames = (d1.response || []).filter(m => m.teams?.home?.id === hId).slice(0, 10);
+    const aGames = (d2.response || []).filter(m => m.teams?.away?.id === aId).slice(0, 10);
+    const h2h    = (d3.response || []).slice(0, 10);
 
-    const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
-
-    res.status(200).json({
-      homeScoreRate: pct(hGames, m => (m.goals?.home ?? 0) > 0),
-      awayScoreRate: pct(aGames, m => (m.goals?.away ?? 0) > 0),
-      h2hOver15:     pct(h2h,    m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1),
-      h2hGG:         pct(h2h,    m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0),
-      h2hSample:     h2h.length
-    });
+    res.status(200).json(calcPoisson(hGames, aGames, h2h, hId, aId));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

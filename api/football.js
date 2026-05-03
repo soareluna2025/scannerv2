@@ -5,26 +5,58 @@ const CACHE_TTL = 55_000;
 // Per-fixture enrich cache (persists across requests on same instance)
 const enrichCache = new Map();
 
+function poissonP(lambda, k) {
+  let p = Math.exp(-lambda);
+  for (let i = 1; i <= k; i++) p *= lambda / i;
+  return p;
+}
+
 async function enrichMatch(fixtureId, homeId, awayId, apiKey) {
   if (enrichCache.has(fixtureId)) return;
   try {
     const hdr = { 'x-apisports-key': apiKey };
     const [r1, r2, r3] = await Promise.all([
-      fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${homeId}-${awayId}&last=10`, { headers: hdr }),
       fetch(`https://v3.football.api-sports.io/fixtures?team=${homeId}&last=20&status=FT`, { headers: hdr }),
-      fetch(`https://v3.football.api-sports.io/fixtures?team=${awayId}&last=20&status=FT`, { headers: hdr })
+      fetch(`https://v3.football.api-sports.io/fixtures?team=${awayId}&last=20&status=FT`, { headers: hdr }),
+      fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${homeId}-${awayId}&last=10`, { headers: hdr })
     ]);
     const [d1, d2, d3] = await Promise.all([r1.json(), r2.json(), r3.json()]);
-    const h2h    = (d1.response || []).slice(0, 10);
-    const hGames = (d2.response || []).filter(m => m.teams?.home?.id === homeId).slice(0, 10);
-    const aGames = (d3.response || []).filter(m => m.teams?.away?.id === awayId).slice(0, 10);
+    const hGames = (d1.response || []).filter(m => m.teams?.home?.id === homeId).slice(0, 10);
+    const aGames = (d2.response || []).filter(m => m.teams?.away?.id === awayId).slice(0, 10);
+    const h2h    = (d3.response || []).slice(0, 10);
+
+    const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
     const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
+    const r2 = v => Math.round(v * 100) / 100;
+    const r1f = v => Math.round(v * 10) / 10;
+
+    const homeAvgScored   = avg(hGames, m => m.goals?.home ?? 0);
+    const homeAvgConceded = avg(hGames, m => m.goals?.away ?? 0);
+    const awayAvgScored   = avg(aGames, m => m.goals?.away ?? 0);
+    const awayAvgConceded = avg(aGames, m => m.goals?.home ?? 0);
+
+    const lambdaHome  = (homeAvgScored + awayAvgConceded) / 2;
+    const lambdaAway  = (awayAvgScored + homeAvgConceded) / 2;
+    const lambdaTotal = lambdaHome + lambdaAway;
+
+    const over15Prob = (1 - poissonP(lambdaTotal, 0) - poissonP(lambdaTotal, 1)) * 100;
+    const over25Prob = (1 - poissonP(lambdaTotal, 0) - poissonP(lambdaTotal, 1) - poissonP(lambdaTotal, 2)) * 100;
+    const ggProb     = (1 - Math.exp(-lambdaHome)) * (1 - Math.exp(-lambdaAway)) * 100;
+
+    const confidence = (h2h.length >= 8 && hGames.length >= 8 && aGames.length >= 8) ? 'HIGH'
+                     : (h2h.length >= 5 && hGames.length >= 5 && aGames.length >= 5) ? 'MED'
+                     : 'LOW';
+
     enrichCache.set(fixtureId, {
+      homeAvgScored: r2(homeAvgScored), homeAvgConceded: r2(homeAvgConceded),
       homeScoreRate: pct(hGames, m => (m.goals?.home ?? 0) > 0),
+      awayAvgScored: r2(awayAvgScored), awayAvgConceded: r2(awayAvgConceded),
       awayScoreRate: pct(aGames, m => (m.goals?.away ?? 0) > 0),
-      h2hOver15:     pct(h2h,   m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1),
-      h2hGG:         pct(h2h,   m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0),
-      h2hSample:     h2h.length
+      lambdaHome: r2(lambdaHome), lambdaAway: r2(lambdaAway), lambdaTotal: r2(lambdaTotal),
+      over15Prob: r1f(over15Prob), over25Prob: r1f(over25Prob), ggProb: r1f(ggProb),
+      h2hOver15: pct(h2h, m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1),
+      h2hGG:     pct(h2h, m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0),
+      h2hSample: h2h.length, confidence
     });
   } catch (e) {
     log(`enrich ${fixtureId}: ${e.message}`);

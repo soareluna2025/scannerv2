@@ -98,6 +98,15 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .mkt span{color:var(--tx);font-weight:700}
 .enrich-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px solid var(--bor)}
 .enr{padding:3px 8px;border-radius:6px;background:rgba(255,255,255,0.05);font-size:10px;font-weight:700}
+.badge-conf{padding:2px 7px;border-radius:5px;font-size:9px;font-weight:800;letter-spacing:.5px}
+.badge-conf.HIGH{background:rgba(34,197,94,.15);color:#22c55e}
+.badge-conf.MED{background:rgba(245,158,11,.15);color:#f59e0b}
+.badge-conf.LOW{background:rgba(239,68,68,.15);color:#ef4444}
+.badge-top{background:rgba(34,197,94,.2);border:1px solid #22c55e;color:#22c55e;
+  padding:2px 8px;border-radius:6px;font-size:9px;font-weight:800;letter-spacing:.5px}
+.analyze-btn{padding:5px 12px;border-radius:8px;border:1px solid var(--ac3);
+  background:var(--ac2);color:var(--ac);font-size:11px;font-weight:700;cursor:pointer}
+.analyze-btn:disabled{opacity:.5;cursor:default}
 
 /* HT separator */
 .ht-divider{display:flex;align-items:center;gap:8px;padding:6px 0}
@@ -583,12 +592,16 @@ function renderMatches(){
       out+='</div>';
       var ed=m.enrichData;
       if(ed){
-        var ec=function(v){return v==null?'#666':v>=70?'#22c55e':v>=45?'#f59e0b':'#ef4444';};
-        var ev=function(v){return v==null?'—':v+'%';};
+        var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
         out+='<div class="enrich-row">';
-        if(ed.homeScoreRate!=null)out+='<span class="enr" style="color:'+ec(ed.homeScoreRate)+'">Gazde '+ev(ed.homeScoreRate)+'</span>';
-        if(ed.awayScoreRate!=null)out+='<span class="enr" style="color:'+ec(ed.awayScoreRate)+'">Oaspeti '+ev(ed.awayScoreRate)+'</span>';
-        if(ed.h2hOver15!=null)out+='<span class="enr" style="color:'+ec(ed.h2hOver15)+'">O1.5 H2H '+ev(ed.h2hOver15)+'</span>';
+        if(ed.over15Prob!=null)out+='<span class="enr" style="color:'+ec(ed.over15Prob)+'">O1.5 '+Math.round(ed.over15Prob)+'%</span>';
+        if(ed.ggProb!=null)out+='<span class="enr" style="color:'+ec(ed.ggProb)+'">GG '+Math.round(ed.ggProb)+'%</span>';
+        if(ed.lambdaTotal!=null)out+='<span class="enr" style="color:var(--mu2)">λ '+Number(ed.lambdaTotal).toFixed(2)+'</span>';
+        if(ed.confidence)out+='<span class="badge-conf '+ed.confidence+'">'+ed.confidence+'</span>';
+        out+='</div>';
+        out+='<div class="enrich-row">';
+        if(ed.homeScoreRate!=null)out+='<span class="enr" style="color:'+ec(ed.homeScoreRate)+'">Gazde '+ed.homeScoreRate+'%</span>';
+        if(ed.awayScoreRate!=null)out+='<span class="enr" style="color:'+ec(ed.awayScoreRate)+'">Oaspeti '+ed.awayScoreRate+'%</span>';
         out+='</div>';
       }
       out+='</div></div>';
@@ -706,64 +719,68 @@ async function loadPM(){
     btn.textContent='Reîncarcă';btn.disabled=false;
   }
 }
-function scorePM(m,enr){
-  if(!enr||enr.h2hSample==null||enr.h2hSample<3)return null;
-  var gg=(enr.h2hGG||0)/100;
-  var o15=(enr.h2hOver15||0)/100;
-  var hr=(enr.homeScoreRate||0)/100;
-  var ar=(enr.awayScoreRate||0)/100;
-  var ggScore=gg*.35+hr*.35+ar*.30;
-  var o15Score=o15*.50+hr*.25+ar*.25;
-  var composite=(ggScore+o15Score)/2*100;
-  var kickMs=m.fixture&&m.fixture.date?new Date(m.fixture.date).getTime():0;
-  var inMin=Math.round((kickMs-Date.now())/60000);
-  return{gg:Math.round(ggScore*100),o15:Math.round(o15Score*100),
-    composite:Math.round(composite),inMin:inMin,
-    h2hGG:enr.h2hGG||0,h2hO15:enr.h2hOver15||0,h2hN:enr.h2hSample};
+async function analyzeMatch(fid,hid,aid){
+  var btn=document.getElementById('abtn-'+fid);
+  if(btn){btn.textContent='⏳';btn.disabled=true;}
+  try{
+    var r=await fetch('/api/enrich?h='+hid+'&a='+aid);
+    var ed=await r.json();
+    if(!ed.error){_pmEnrich[fid]=ed;renderPM();}
+    else{if(btn){btn.textContent='ANALIZEAZA';btn.disabled=false;}}
+  }catch(e){if(btn){btn.textContent='ANALIZEAZA';btn.disabled=false;}}
 }
 function renderPM(){
   var body=document.getElementById('pm-body');
   var total=_pmMatches.length;
   if(!total){body.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-t">Niciun meci</div></div>';return;}
-  // Group by league
-  var leagues={};var leagueOrder=[];
-  _pmMatches.forEach(function(m){
-    var lid=(m.league&&m.league.id)||'0';
-    if(!leagues[lid]){leagues[lid]={name:m.league&&m.league.name||'',flag:m.league&&m.league.flag||'',ms:[]};leagueOrder.push(lid);}
-    leagues[lid].ms.push(m);
+  var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
+  // Calculate TOP PICK threshold (top 25% by over15Prob)
+  var probs=Object.values(_pmEnrich).map(function(e){return e.over15Prob||0;}).sort(function(a,b){return b-a;});
+  var topThresh=probs.length?probs[Math.floor(probs.length*0.25)]||0:999;
+  // Sort by over15Prob desc, then by kickoff
+  var sorted=_pmMatches.slice().sort(function(a,b){
+    var ea=_pmEnrich[a.fixture&&a.fixture.id];var eb=_pmEnrich[b.fixture&&b.fixture.id];
+    var pa=ea?ea.over15Prob||0:-1;var pb=eb?eb.over15Prob||0:-1;
+    if(pb!==pa)return pb-pa;
+    return new Date(a.fixture.date)-new Date(b.fixture.date);
   });
-  var enrichedCount=Object.keys(_pmEnrich).length;
-  var pending=total-enrichedCount;
-  var pendingTxt=pending>0?' · <span style="opacity:.6">⏳ '+pending+' se analizează</span>':'';
-  var html='<div class="pm-summary"><span class="pm-summary-t">'+total+' meciuri'+pendingTxt+'</span></div>';
-  leagueOrder.forEach(function(lid){
-    var lg=leagues[lid];
-    var flagImg=lg.flag?'<img src="'+lg.flag+'" style="width:12px;height:9px;object-fit:cover;border-radius:2px;margin-right:5px;">':'';
-    html+='<div class="pm-league-hdr">'+flagImg+lg.name+'</div>';
-    lg.ms.forEach(function(m){
-      var hn=m.teams&&m.teams.home&&m.teams.home.name||'—';
-      var an=m.teams&&m.teams.away&&m.teams.away.name||'—';
-      var kickoff=m.fixture&&m.fixture.date?new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
-      var enr=_pmEnrich[m.fixture&&m.fixture.id];
-      var sc=enr?scorePM(m,enr):null;
-      html+='<div class="pm-card">';
-      html+='<div class="pm-header">';
-      html+='<div class="pm-kickoff">🕐 '+kickoff+'</div>';
-      html+='<div class="pm-teams">'+hn+' vs '+an+'</div>';
+  var analyzedCount=Object.keys(_pmEnrich).length;
+  var pendingTxt=analyzedCount<total?' · <span style="opacity:.6">⏳ '+(total-analyzedCount)+' neanalzate</span>':'';
+  var html='<div class="pm-summary"><span class="pm-summary-t">'+total+' meciuri · '+analyzedCount+' analizate'+pendingTxt+'</span></div>';
+  sorted.forEach(function(m){
+    var fid=m.fixture&&m.fixture.id;
+    var hid=m.teams&&m.teams.home&&m.teams.home.id;
+    var aid=m.teams&&m.teams.away&&m.teams.away.id;
+    var hn=m.teams&&m.teams.home&&m.teams.home.name||'—';
+    var an=m.teams&&m.teams.away&&m.teams.away.name||'—';
+    var lg=m.league&&m.league.name||'';
+    var flag=m.league&&m.league.flag?'<img src="'+m.league.flag+'" style="width:12px;height:9px;object-fit:cover;border-radius:2px;margin-right:4px;">':'';
+    var kickoff=m.fixture&&m.fixture.date?new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
+    var enr=_pmEnrich[fid];
+    var isTop=enr&&probs.length&&(enr.over15Prob||0)>=topThresh&&topThresh<999;
+    html+='<div class="pm-card">';
+    html+='<div class="pm-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">';
+    html+='<div><div class="pm-kickoff">'+flag+lg+' · 🕐 '+kickoff+'</div>';
+    html+='<div class="pm-teams">'+hn+' vs '+an+'</div></div>';
+    if(isTop)html+='<span class="badge-top">TOP PICK</span>';
+    html+='</div>';
+    if(enr){
+      html+='<div class="pm-body">';
+      html+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(enr.over15Prob||0,100)+'%;background:'+ec(enr.over15Prob)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(enr.over15Prob)+'">'+Math.round(enr.over15Prob||0)+'%</div></div>';
+      html+='<div class="pm-meter-row"><div class="pm-meter-label">GG</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(enr.ggProb||0,100)+'%;background:'+ec(enr.ggProb)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(enr.ggProb)+'">'+Math.round(enr.ggProb||0)+'%</div></div>';
+      html+='<div class="pm-stats">';
+      html+='<span class="pm-stat">λ <span>'+Number(enr.lambdaTotal||0).toFixed(2)+'</span></span>';
+      html+='<span class="pm-stat">Gazde <span style="color:'+ec(enr.homeScoreRate)+'">'+enr.homeScoreRate+'%</span></span>';
+      html+='<span class="pm-stat">Oaspeti <span style="color:'+ec(enr.awayScoreRate)+'">'+enr.awayScoreRate+'%</span></span>';
+      if(enr.confidence)html+='<span class="badge-conf '+enr.confidence+'">'+enr.confidence+'</span>';
+      html+='</div></div>';
+    }else{
+      html+='<div class="pm-body" style="display:flex;align-items:center;justify-content:space-between">';
+      html+='<span style="font-size:11px;color:var(--mu)">Neanalzat</span>';
+      if(hid&&aid)html+='<button class="analyze-btn" id="abtn-'+fid+'" onclick="analyzeMatch('+fid+','+hid+','+aid+')">ANALIZEAZA</button>';
       html+='</div>';
-      if(sc){
-        var gc=sc.gg>=75?'teal':'green';
-        var oc=sc.o15>=75?'teal':'green';
-        html+='<div class="pm-body">';
-        html+='<div class="pm-meter-row"><div class="pm-meter-label">GG</div><div class="pm-meter-bar"><div class="pm-meter-fill '+gc+'" style="width:'+sc.gg+'%"></div></div><div class="pm-meter-pct">'+sc.gg+'%</div></div>';
-        html+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill '+oc+'" style="width:'+sc.o15+'%"></div></div><div class="pm-meter-pct">'+sc.o15+'%</div></div>';
-        html+='<div class="pm-stats"><span class="pm-stat">H2H GG: <span>'+sc.h2hGG+'%</span></span><span class="pm-stat">H2H O1.5: <span>'+sc.h2hO15+'%</span></span><span class="pm-stat">'+sc.h2hN+' H2H</span></div>';
-        html+='</div>';
-      }else if(enr){
-        html+='<div class="pm-body"><div style="font-size:11px;color:var(--mu)">Date H2H insuficiente</div></div>';
-      }
-      html+='</div>';
-    });
+    }
+    html+='</div>';
   });
   body.innerHTML=html;
 }
