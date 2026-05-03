@@ -27,8 +27,8 @@ async function enrichMatch(fixtureId, homeId, awayId, apiKey) {
 
     const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
     const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
-    const r2 = v => Math.round(v * 100) / 100;
-    const r1f = v => Math.round(v * 10) / 10;
+    const round2 = v => Math.round(v * 100) / 100;
+    const round1 = v => Math.round(v * 10) / 10;
 
     const homeAvgScored   = avg(hGames, m => m.goals?.home ?? 0);
     const homeAvgConceded = avg(hGames, m => m.goals?.away ?? 0);
@@ -48,12 +48,12 @@ async function enrichMatch(fixtureId, homeId, awayId, apiKey) {
                      : 'LOW';
 
     enrichCache.set(fixtureId, {
-      homeAvgScored: r2(homeAvgScored), homeAvgConceded: r2(homeAvgConceded),
+      homeAvgScored: round2(homeAvgScored), homeAvgConceded: round2(homeAvgConceded),
       homeScoreRate: pct(hGames, m => (m.goals?.home ?? 0) > 0),
-      awayAvgScored: r2(awayAvgScored), awayAvgConceded: r2(awayAvgConceded),
+      awayAvgScored: round2(awayAvgScored), awayAvgConceded: round2(awayAvgConceded),
       awayScoreRate: pct(aGames, m => (m.goals?.away ?? 0) > 0),
-      lambdaHome: r2(lambdaHome), lambdaAway: r2(lambdaAway), lambdaTotal: r2(lambdaTotal),
-      over15Prob: r1f(over15Prob), over25Prob: r1f(over25Prob), ggProb: r1f(ggProb),
+      lambdaHome: round2(lambdaHome), lambdaAway: round2(lambdaAway), lambdaTotal: round2(lambdaTotal),
+      over15Prob: round1(over15Prob), over25Prob: round1(over25Prob), ggProb: round1(ggProb),
       h2hOver15: pct(h2h, m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1),
       h2hGG:     pct(h2h, m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0),
       h2hSample: h2h.length, confidence
