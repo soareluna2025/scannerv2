@@ -197,7 +197,9 @@ export default async function handler(req, res) {
   // --- API-Football (primary: wider league coverage) ---
   try {
     const data = afRes.status === 'fulfilled' ? afRes.value : null;
-    if (data?.errors && Object.keys(data.errors).length > 0) {
+    if (data?._err) {
+      log(`af fetch error: ${data._err}`);
+    } else if (data?.errors && Object.keys(data.errors).length > 0) {
       log(`af API errors: ${JSON.stringify(data.errors)}`);
     }
     if (data?.paging) {
@@ -207,11 +209,13 @@ export default async function handler(req, res) {
       const raw = Array.isArray(data.response) ? data.response : [];
       log(`af raw: ${raw.length} (plan remaining: ${data.results ?? '?'})`);
 
+      let passedStatus = 0, passedStale = 0;
       for (const m of raw) {
         const sh = m.fixture?.status?.short || '';
 
         // Must be a recognised live status — trust the API on status
         if (!LIVE_STATUS.has(sh)) continue;
+        passedStatus++;
 
         // Elapsed: free tier often returns null — estimate from kickoff time as fallback
         let elapsed = m.fixture?.status?.elapsed;
@@ -248,6 +252,7 @@ export default async function handler(req, res) {
         if (seen.has(key)) continue;
         seen.add(key);
 
+        passedStale++;
         combined.push({
           _src: 'af',
           _validated: true,
@@ -275,6 +280,7 @@ export default async function handler(req, res) {
           lineups:    m.lineups || []
         });
       }
+      log(`af status-filter: ${passedStatus}/${raw.length} live; stale-guard kept: ${passedStale}/${passedStatus}`);
     }
   } catch (e) {
     log(`af parse error: ${e.message}`);
@@ -347,13 +353,24 @@ export default async function handler(req, res) {
   const firstWithEnrich = combined.find(m => m.enrichData);
   if (firstWithEnrich) log(`enrichData sample: ${JSON.stringify(firstWithEnrich.enrichData)}`);
 
-  // Strict whitelist: only allowed league IDs pass
+  // Strict whitelist: af-source uses API-Football IDs; fd-source uses football-data.org
+  // competition IDs (different numbering) — for fd we only apply the women's filter.
   const WOMEN_RE = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
-  const filtered = combined.filter(m =>
-    ALLOWED_LEAGUE_IDS.has(m.league?.id) && !WOMEN_RE.test(m.league?.name || '')
+  const filtered = combined.filter(m => {
+    if (WOMEN_RE.test(m.league?.name || '')) return false;
+    if (m._src === 'fd') return true; // fd IDs differ — league already curated by fd.org
+    return ALLOWED_LEAGUE_IDS.has(m.league?.id);
+  });
+
+  // Log which af-source leagues were blocked so we can fix the whitelist
+  const blocked = combined.filter(m =>
+    m._src === 'af' && !ALLOWED_LEAGUE_IDS.has(m.league?.id) && !WOMEN_RE.test(m.league?.name || '')
   );
-  if (combined.length !== filtered.length)
-    log(`league filter removed ${combined.length - filtered.length} matches (${filtered.length} allowed)`);
+  if (blocked.length) {
+    const ids = [...new Map(blocked.map(m => [m.league.id, `${m.league.id}:"${m.league.name}" (${m.league.country})`])).values()];
+    log(`af leagues BLOCKED by whitelist (${blocked.length} matches): ${ids.join(' | ')}`);
+  }
+  log(`league filter: ${combined.length} → ${filtered.length} (removed ${combined.length - filtered.length})`);
 
   log(`final combined: ${filtered.length}`);
   const result = { response: filtered };

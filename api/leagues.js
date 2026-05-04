@@ -90,12 +90,12 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   258,   // Costa Rica - Liga FPD
   261,   // Honduras - Liga Nacional
   235,   // Guatemala - Liga Nacional
-  307,   // Panama - LPF
   244,   // El Salvador - Primera Division
   256,   // Nicaragua - Liga Primera
 
   // ASIA
-  308,   // Saudi Arabia - First Division
+  307,   // Saudi Arabia - Saudi Professional League (Saudi Pro League)
+  308,   // Saudi Arabia - First Division League (second tier)
   98,    // Japan - J1 League
   99,    // Japan - J2 League
   100,   // Japan - Emperor's Cup
