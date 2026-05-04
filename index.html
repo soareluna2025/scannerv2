@@ -1140,7 +1140,7 @@ function mdClose(){
 
 async function mdFetch(){
   try{
-    var url='/api/match?id='+_md.fixtureId+'&h='+_md.homeId+'&a='+_md.awayId;
+    var url='/api/match?id='+_md.fixtureId+'&h='+_md.homeId+'&a='+_md.awayId+'&br='+getBankroll();
     var r=await fetch(url);
     var d=await r.json();
     if(d.error)throw new Error(d.error);
@@ -1566,7 +1566,7 @@ function genRenderLive(){
       var aid=x.m.teams&&x.m.teams.away&&x.m.teams.away.id;
       if(fid&&hid&&aid&&!_genLiveEnrich['p'+fid]){
         _genLiveEnrich['p'+fid]=true;
-        fetch('/api/enrich?h='+hid+'&a='+aid).then(function(r){return r.json();}).then(function(ed){
+        fetch(enrichUrl(hid,aid,x.m)).then(function(r){return r.json();}).then(function(ed){
           if(!ed.error){_genLiveEnrich[fid]=ed;if(GEN.open&&GEN.tabIdx===0)genRenderLive();}
         }).catch(function(){});
       }
@@ -1624,9 +1624,9 @@ async function genEnrichUpcoming(){
 function genUpdateBadge(){
   var liveCount=ST.ms.filter(function(m){
     var ed=m.enrichData||_genLiveEnrich[m.fixture&&m.fixture.id];
-    return ed&&(ed.over15Prob||0)>=60;
+    return ed&&((ed.over15Prob||0)>=60||(ed.hasOdds&&(ed.bestEV||0)>0.04));
   }).length;
-  var pmCount=Object.values(_pmEnrich).filter(function(ed){return(ed.over15Prob||0)>=60;}).length;
+  var pmCount=Object.values(_pmEnrich).filter(function(ed){return(ed.over15Prob||0)>=60||(ed.hasOdds&&(ed.bestEV||0)>0.04);}).length;
   var total=liveCount+pmCount;
   var badge=document.getElementById('gen-badge');
   if(badge){badge.textContent=total>99?'99+':String(total);badge.style.display=total>0?'':'none';}
