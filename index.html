@@ -377,6 +377,22 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .gen-card-big-val{font-size:22px;font-weight:900;line-height:1}
 .gen-card-big-lbl{font-size:9px;font-weight:700;letter-spacing:.5px;
   text-transform:uppercase;color:var(--mu);margin-top:2px}
+.search-wrap{position:relative;margin:8px 12px 6px;display:flex;align-items:center}
+.search-inp{width:100%;padding:8px 32px 8px 10px;background:rgba(255,255,255,0.06);border:1px solid var(--bor);border-radius:10px;color:var(--tx);font-size:13px;outline:none}
+.search-inp::placeholder{color:var(--mu)}
+.search-inp:focus{border-color:var(--ac)}
+.search-clear{position:absolute;right:8px;background:none;border:none;color:var(--mu);font-size:14px;cursor:pointer;display:none;line-height:1;padding:2px 4px}
+.refresh-btn{background:none;border:1px solid var(--bor);color:var(--mu);font-size:12px;font-weight:700;padding:5px 10px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:4px;transition:color .2s}
+.refresh-btn:hover{color:var(--tx)}
+.refresh-btn.spinning .rf-icon{display:inline-block;animation:spin 0.6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.star-btn{position:absolute;top:8px;right:8px;background:none;border:none;font-size:16px;cursor:pointer;opacity:0.5;transition:opacity .2s;z-index:2;line-height:1;padding:2px}
+.star-btn.active{opacity:1}
+.star-btn:hover{opacity:1}
+.fav-header{display:flex;align-items:center;justify-content:space-between;padding:10px 12px 4px}
+.fav-header-t{font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.5px;text-transform:uppercase}
+.fav-clear-btn{font-size:11px;color:#ef4444;background:none;border:none;cursor:pointer;padding:2px 6px}
+.nav-fav-badge{position:absolute;top:-2px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;min-width:14px;height:14px;border-radius:7px;display:none;align-items:center;justify-content:center;line-height:1;padding:0 2px}
 </style>
 </head>
 <body>
@@ -441,6 +457,13 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
       <div class="connect-hint">Date live în timp real</div>
     </div>
     <div id="live-body" style="display:none">
+      <div class="search-wrap" id="live-search-wrap">
+        <input class="search-inp" id="live-search" placeholder="Cauta echipa..." oninput="liveSearchChange(this.value)" autocomplete="off">
+        <button class="search-clear" id="live-search-clear" onclick="liveSearchClear()">✕</button>
+      </div>
+      <div style="display:flex;justify-content:flex-end;padding:4px 12px 0">
+        <button class="refresh-btn" id="live-rf-btn" onclick="manualRefreshLive()"><span class="rf-icon">↻</span> Refresh</button>
+      </div>
       <div class="chips" id="region-chips">
         <div class="chip active" onclick="filterRegion(this,'all')">Toate</div>
         <div class="chip" onclick="filterRegion(this,'europe')">Europa</div>
@@ -455,6 +478,13 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 
   <!-- TAB: PRE-MECI -->
   <div class="tab-content" id="tab-pre">
+    <div class="search-wrap">
+      <input class="search-inp" id="pm-search" placeholder="Cauta echipa..." oninput="pmSearchChange(this.value)" autocomplete="off">
+      <button class="search-clear" id="pm-search-clear" onclick="pmSearchClear()">✕</button>
+    </div>
+    <div style="display:flex;justify-content:flex-end;padding:4px 12px 0">
+      <button class="refresh-btn" id="pre-rf-btn" onclick="manualRefreshPM()"><span class="rf-icon">↻</span> Refresh</button>
+    </div>
     <div id="pm-body">
       <div class="empty">
         <div class="empty-icon">📅</div>
@@ -464,6 +494,16 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     </div>
     <div style="padding:0 12px 12px">
       <button class="btn-connect" onclick="loadPM()" id="btn-pm">Încarcă Pre-meci</button>
+    </div>
+  </div>
+
+  <!-- TAB: PREFERATE -->
+  <div class="tab-content" id="tab-fav">
+    <div style="display:flex;justify-content:flex-end;padding:4px 12px 0">
+      <button class="refresh-btn" id="fav-rf-btn" onclick="manualRefreshFavs()"><span class="rf-icon">↻</span> Refresh</button>
+    </div>
+    <div id="fav-body">
+      <div class="empty"><div class="empty-icon">⭐</div><div class="empty-t">Preferate</div><div class="empty-s">Apasă ⭐ pe orice meci pentru a-l salva</div></div>
     </div>
   </div>
 
@@ -539,6 +579,10 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     <span class="nav-icon">🤖</span>
     <span class="nav-label">Agent</span>
   </button>
+  <button class="nav-btn" id="nav-fav" onclick="setTab('fav')">
+    <span class="nav-icon" style="position:relative">⭐<span class="nav-fav-badge" id="fav-badge"></span></span>
+    <span class="nav-label">Preferate</span>
+  </button>
   <button class="nav-btn" id="nav-gen" onclick="genOpen()">
     <span class="nav-icon" style="position:relative">⚡<span class="nav-badge" id="gen-badge" style="display:none">0</span></span>
     <span class="nav-label">Generează</span>
@@ -546,13 +590,13 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 </nav>
 <script>
 // ── CONFIG ──────────────────────────────────────────────────
-var CFG={MC:80,MD:20,RI:50000};
+var CFG={MC:80,MD:20,RI:30000};
 var WR_KEY='alohascan_wr_v2';
 var BANKROLL_KEY='alohascan_bankroll';
 function getBankroll(){return parseFloat(localStorage.getItem(BANKROLL_KEY))||10;}
 function settingsOpen(){document.getElementById('bankroll-input').value=getBankroll();document.getElementById('settings-overlay').classList.add('open');}
 function settingsClose(){var v=parseFloat(document.getElementById('bankroll-input').value);if(v>0)localStorage.setItem(BANKROLL_KEY,v);document.getElementById('settings-overlay').classList.remove('open');}
-var ST={ms:[],connected:false,ws:null,region:'all',score:'all'};
+var ST={ms:[],connected:false,ws:null,region:'all',score:'all',searchQ:''};
 var TG_SENT=new Set();
 
 // ── CLOCK ────────────────────────────────────────────────────
@@ -566,7 +610,7 @@ document.getElementById('ag-start-time').textContent=new Date().toTimeString().s
 
 // ── TABS ─────────────────────────────────────────────────────
 function setTab(t){
-  ['live','pre','agent'].forEach(function(x){
+  ['live','pre','agent','fav'].forEach(function(x){
     document.getElementById('tab-'+x).classList.toggle('active',x===t);
     document.getElementById('nav-'+x).classList.toggle('active',x===t);
   });
@@ -580,6 +624,9 @@ function setTab(t){
     agUpdateStats();
   } else {
     pg.style.display='';
+  }
+  if(t==='fav'){
+    renderFavs();
   }
 }
 
@@ -739,6 +786,12 @@ function ngpColor(p){return p>=80?'#00d4a8':p>=60?'#ffd166':'#ff6b6b';}
 
 function renderMatches(){
   var ms=ST.ms.filter(function(m){
+    if(ST.searchQ){
+      var hn=(m.teams&&m.teams.home&&m.teams.home.name||'').toLowerCase();
+      var an=(m.teams&&m.teams.away&&m.teams.away.name||'').toLowerCase();
+      var q=ST.searchQ.toLowerCase();
+      if(hn.indexOf(q)<0&&an.indexOf(q)<0)return false;
+    }
     if(!matchRegion(m,ST.region))return false;
     if(ST.score!=='all'){
       var hg=m.goals?m.goals.home||0:0;
@@ -792,14 +845,17 @@ function renderMatches(){
       var fid2=m.fixture&&m.fixture.id||0;
       var hid2=m.teams&&m.teams.home&&m.teams.home.id||0;
       var aid2=m.teams&&m.teams.away&&m.teams.away.id||0;
-      out+='<div class="card" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer">';
+      var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===m.teams.home.id;});
+      var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===m.teams.away.id;});
+      out+='<div class="card" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer;position:relative">';
+      out+='<button class="star-btn'+(isFav(fid2)?' active':'')+'" onclick="event.stopPropagation();toggleFav('+fid2+',this)">'+(isFav(fid2)?'⭐':'☆')+'</button>';
       out+='<div class="card-league">';
       out+='<div class="league-name">'+flag+(lg.name||'')+'</div>';
       out+='<div class="card-minute"><div class="min-dot"></div><div class="min-val">'+mn+"'</div></div>";
       out+='</div>';
       out+='<div class="card-teams">';
-      out+='<div class="team-row"><div class="team-name">'+(m.teams&&m.teams.home&&m.teams.home.name||'—')+'</div><div class="team-score'+(hWin?' winning':'')+'">'+hg+'</div></div>';
-      out+='<div class="team-row"><div class="team-name">'+(m.teams&&m.teams.away&&m.teams.away.name||'—')+'</div><div class="team-score'+(aWin?' winning':'')+'">'+ag+'</div></div>';
+      out+='<div class="team-row"><div class="team-name">'+(m.teams&&m.teams.home&&m.teams.home.name||'—')+(hRed?' 🟥':'')+'</div><div class="team-score'+(hWin?' winning':'')+'">'+hg+'</div></div>';
+      out+='<div class="team-row"><div class="team-name">'+(m.teams&&m.teams.away&&m.teams.away.name||'—')+(aRed?' 🟥':'')+'</div><div class="team-score'+(aWin?' winning':'')+'">'+ag+'</div></div>';
       out+='</div>';
       out+='<div class="card-footer">';
       out+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
@@ -842,7 +898,9 @@ function renderMatches(){
       out+='</div></div>';
     });
   });
+  var sy=document.getElementById('page').scrollTop;
   document.getElementById('match-list').innerHTML=out;
+  document.getElementById('page').scrollTop=sy;
 }
 
 // ── WIN RATE ──────────────────────────────────────────────────
@@ -909,7 +967,7 @@ function tgCheck(){
 }
 
 // ── PRE-MECI ──────────────────────────────────────────────────
-var PM_SENT=new Set();var PM_LOADED=false;
+var PM_SENT=new Set();var PM_LOADED=false;var PM_SEARCH='';
 var _pmMatches=[];
 var _pmEnrich={};
 
@@ -997,6 +1055,14 @@ function renderPM(){
   var analyzedCount=Object.keys(_pmEnrich).length;
   var pendingTxt=analyzedCount<total?' · <span style="opacity:.6">⏳ '+(total-analyzedCount)+' neanalzate</span>':'';
   var html='<div class="pm-summary"><span class="pm-summary-t">'+total+' meciuri · '+analyzedCount+' analizate'+pendingTxt+'</span></div>';
+  if(PM_SEARCH){
+    var q=PM_SEARCH.toLowerCase();
+    sorted=sorted.filter(function(m){
+      var hn=(m.teams&&m.teams.home&&m.teams.home.name||'').toLowerCase();
+      var an=(m.teams&&m.teams.away&&m.teams.away.name||'').toLowerCase();
+      return hn.indexOf(q)>=0||an.indexOf(q)>=0;
+    });
+  }
   sorted.forEach(function(m){
     var fid=m.fixture&&m.fixture.id;
     var hid=m.teams&&m.teams.home&&m.teams.home.id;
@@ -1008,7 +1074,8 @@ function renderPM(){
     var kickoff=m.fixture&&m.fixture.date?new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
     var enr=_pmEnrich[fid];
     var isTop=enr&&probs.length&&(enr.over15Prob||0)>=topThresh&&topThresh<999;
-    html+='<div class="pm-card" onclick="mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer">';
+    html+='<div class="pm-card" onclick="mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer;position:relative">';
+    html+='<button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>';
     html+='<div class="pm-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">';
     html+='<div><div class="pm-kickoff">'+flag+lg+' · 🕐 '+kickoff+'</div>';
     html+='<div class="pm-teams">'+hn+' vs '+an+'</div></div>';
@@ -1041,7 +1108,9 @@ function renderPM(){
     }
     html+='</div>';
   });
+  var sy=body.scrollTop;
   body.innerHTML=html;
+  body.scrollTop=sy;
 }
 
 // ── AGENT ─────────────────────────────────────────────────────
@@ -1632,9 +1701,186 @@ function genUpdateBadge(){
   if(badge){badge.textContent=total>99?'99+':String(total);badge.style.display=total>0?'':'none';}
 }
 
+// ── SEARCH ────────────────────────────────────────────────────
+function liveSearchChange(v){
+  ST.searchQ=v.trim();
+  document.getElementById('live-search-clear').style.display=v?'block':'none';
+  renderMatches();
+}
+function liveSearchClear(){
+  document.getElementById('live-search').value='';
+  liveSearchChange('');
+}
+function pmSearchChange(v){
+  PM_SEARCH=v.trim();
+  document.getElementById('pm-search-clear').style.display=v?'block':'none';
+  renderPM();
+}
+function pmSearchClear(){
+  document.getElementById('pm-search').value='';
+  pmSearchChange('');
+}
+
+// ── REFRESH MANUAL ────────────────────────────────────────────
+function manualRefreshLive(){
+  var btn=document.getElementById('live-rf-btn');
+  if(btn)btn.classList.add('spinning');
+  loadLive(function(){if(btn)btn.classList.remove('spinning');});
+}
+function manualRefreshPM(){
+  var btn=document.getElementById('pre-rf-btn');
+  if(btn)btn.classList.add('spinning');
+  _pmMatches=[];_pmEnrich={};
+  loadPM().then(function(){if(btn)btn.classList.remove('spinning');}).catch(function(){if(btn)btn.classList.remove('spinning');});
+}
+function manualRefreshFavs(){
+  var btn=document.getElementById('fav-rf-btn');
+  if(btn)btn.classList.add('spinning');
+  renderFavs();
+  if(btn)setTimeout(function(){btn.classList.remove('spinning');},400);
+}
+
+// ── FAVORITES ─────────────────────────────────────────────────
+var FAVS_KEY='alohascan_favs';
+function loadFavs(){try{var s=localStorage.getItem(FAVS_KEY);return s?JSON.parse(s):{items:[]};}catch(e){return{items:[]};}}
+function saveFavs(d){try{localStorage.setItem(FAVS_KEY,JSON.stringify(d));}catch(e){}}
+function isFav(fid){
+  var d=loadFavs();
+  for(var i=0;i<d.items.length;i++){if(d.items[i].fid===fid)return true;}
+  return false;
+}
+function toggleFav(fid,btn){
+  var m=ST.ms.find(function(x){return x.fixture&&x.fixture.id===fid;});
+  var ed=m&&(m.enrichData||_genLiveEnrich[fid])||null;
+  _toggleFavCommon(fid,'live',m,ed,btn);
+}
+function toggleFavPM(fid,btn){
+  var m=_pmMatches.find(function(x){return x.fixture&&x.fixture.id===fid;});
+  var ed=_pmEnrich[fid]||null;
+  _toggleFavCommon(fid,'pre',m,ed,btn);
+}
+function _toggleFavCommon(fid,type,m,ed,btn){
+  var d=loadFavs();
+  var idx=-1;
+  for(var i=0;i<d.items.length;i++){if(d.items[i].fid===fid){idx=i;break;}}
+  if(idx>=0){
+    d.items.splice(idx,1);
+    if(btn){btn.classList.remove('active');btn.textContent='☆';}
+  }else{
+    d.items.push({fid:fid,type:type,m:m,ed:ed,savedAt:new Date().toISOString()});
+    if(btn){btn.classList.add('active');btn.textContent='⭐';}
+  }
+  saveFavs(d);
+  updateFavBadge();
+  if(document.getElementById('tab-fav').classList.contains('active'))renderFavs();
+}
+function updateFavBadge(){
+  var n=loadFavs().items.length;
+  var b=document.getElementById('fav-badge');
+  if(b){b.textContent=n>99?'99+':String(n);b.style.display=n>0?'flex':'none';}
+}
+function removeFav(fid){
+  var d=loadFavs();
+  d.items=d.items.filter(function(x){return x.fid!==fid;});
+  saveFavs(d);
+  updateFavBadge();
+  renderFavs();
+}
+function clearAllFavs(){
+  if(!confirm('Ștergi toate preferatele?'))return;
+  saveFavs({items:[]});
+  updateFavBadge();
+  renderFavs();
+}
+function renderFavs(){
+  var d=loadFavs();
+  var body=document.getElementById('fav-body');
+  if(!body)return;
+  if(!d.items.length){
+    body.innerHTML='<div class="empty"><div class="empty-icon">⭐</div><div class="empty-t">Niciun favorit</div><div class="empty-s">Apasă ⭐ pe orice meci pentru a-l salva</div></div>';
+    return;
+  }
+  var sp=body.scrollTop;
+  var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
+  function favCard(item){
+    var m=item.m;if(!m)return '';
+    if(item.type==='live'){
+      var lm=ST.ms.find(function(x){return x.fixture&&x.fixture.id===item.fid;});
+      if(lm)m=lm;
+    }
+    var fid=item.fid;
+    var hid=m.teams&&m.teams.home&&m.teams.home.id||0;
+    var aid=m.teams&&m.teams.away&&m.teams.away.id||0;
+    var hn=m.teams&&m.teams.home&&m.teams.home.name||'—';
+    var an=m.teams&&m.teams.away&&m.teams.away.name||'—';
+    var lg=m.league&&m.league.name||'';
+    var flag=m.league&&m.league.flag?'<img src="'+m.league.flag+'" style="width:12px;height:9px;object-fit:cover;border-radius:2px;margin-right:4px;">':'';
+    var ed=item.type==='live'?(m.enrichData||_genLiveEnrich[fid]||item.ed):(_pmEnrich[fid]||item.ed);
+    var hg=m.goals?m.goals.home||0:0;
+    var ag=m.goals?m.goals.away||0:0;
+    var timeStr='';
+    if(item.type==='live'){
+      var mn=m.fixture&&m.fixture.status&&m.fixture.status.elapsed||0;
+      var sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
+      var isLv=['1H','2H','HT','ET','P'].indexOf(sh)>=0;
+      timeStr=isLv?'<span style="color:var(--ac);font-size:10px">● '+mn+"'</span>":'<span style="color:var(--mu);font-size:10px">FT</span>';
+    }else{
+      timeStr=m.fixture&&m.fixture.date?'<span style="font-size:10px;color:var(--mu)">🕐 '+new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>':'';
+    }
+    var s='<div class="pm-card" style="position:relative;cursor:pointer" onclick="mdOpen('+fid+','+hid+','+aid+',this)">';
+    s+='<button class="star-btn active" onclick="event.stopPropagation();removeFav('+fid+')">⭐</button>';
+    s+='<div class="pm-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">';
+    s+='<div><div class="pm-kickoff">'+flag+lg+' · '+timeStr+'</div>';
+    s+='<div class="pm-teams">'+hn+' <span style="color:var(--mu)">'+hg+' - '+ag+'</span> '+an+'</div></div>';
+    s+='</div>';
+    if(ed&&ed.homeWin!=null){
+      s+='<div class="pm-body">';
+      s+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(ed.over15Prob||0,100)+'%;background:'+ec(ed.over15Prob)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(ed.over15Prob)+'">'+Math.round(ed.over15Prob||0)+'%</div></div>';
+      s+='<div class="enrich-row hda-row"><span style="color:'+ec(ed.homeWin)+'">H:'+ed.homeWin+'%</span><span style="color:'+ec(ed.draw)+'">D:'+ed.draw+'%</span><span style="color:'+ec(ed.awayWin)+'">A:'+ed.awayWin+'%</span></div>';
+      if(ed.hasOdds&&ed.bestEV>0){
+        s+='<div class="ev-row"><span class="ev-val ev-pos">EV: +'+Math.round(ed.bestEV*100)+'%</span><span class="ev-bet">'+(ed.bestBet||'')+' @ '+(ed.bestCota?ed.bestCota.toFixed(2):'—')+'</span></div>';
+      }
+      s+='</div>';
+    }
+    s+='</div>';
+    return s;
+  }
+  var html='<div class="fav-header"><span class="fav-header-t">'+d.items.length+' meciuri salvate</span><button class="fav-clear-btn" onclick="clearAllFavs()">Sterge toate</button></div>';
+  var live=d.items.filter(function(x){return x.type==='live';});
+  var pre=d.items.filter(function(x){return x.type==='pre';});
+  if(live.length){
+    html+='<div class="pm-summary"><span class="pm-summary-t">⚽ LIVE ('+live.length+')</span></div>';
+    html+=live.map(favCard).join('');
+  }
+  if(pre.length){
+    html+='<div class="pm-summary"><span class="pm-summary-t">📅 UPCOMING ('+pre.length+')</span></div>';
+    html+=pre.map(favCard).join('');
+  }
+  body.innerHTML=html;
+  body.scrollTop=sp;
+}
+
 // ── INIT ──────────────────────────────────────────────────────
 renderWR(loadWR());
+updateFavBadge();
 if(sessionStorage.getItem('wasConnected')==='1') connect();
+// 30s auto-refresh for PM and Favs tabs
+setInterval(function(){
+  var tabPre=document.getElementById('tab-pre');
+  var tabFav=document.getElementById('tab-fav');
+  if(tabPre&&tabPre.classList.contains('active')&&_pmMatches.length){
+    fetch('/api/today').then(function(r){return r.json();}).then(function(d){
+      var raw=Array.isArray(d.response)?d.response:Array.isArray(d)?d:[];
+      if(!raw.length)return;
+      var body=document.getElementById('pm-body');
+      var sp=body?body.scrollTop:0;
+      _pmMatches=raw.sort(function(a,b){return new Date(a.fixture.date)-new Date(b.fixture.date);});
+      renderPM();
+      if(body)body.scrollTop=sp;
+    }).catch(function(){});
+  }
+  if(tabFav&&tabFav.classList.contains('active')){renderFavs();}
+},30000);
 </script>
 </body>
 </html>
