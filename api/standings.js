@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   const key = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
   if (!key) return res.status(500).json({ error: 'API_FOOTBALL_KEY neconfigurat' });
 
-  const { league, season = '2024' } = req.query;
+  const { league, season = new Date().getFullYear().toString() } = req.query;
   if (!league) return res.status(400).json({ error: 'Parametru liga lipsa' });
 
   try {

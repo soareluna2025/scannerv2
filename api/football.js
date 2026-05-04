@@ -329,9 +329,10 @@ export default async function handler(req, res) {
   }
 
   // Enrich uncached matches (max 50 per call)
+  // Skip fd-source: their team IDs are football-data.org IDs, incompatible with api-sports endpoints
   if (afKey) {
     const toEnrich = combined
-      .filter(m => m.teams?.home?.id && m.teams?.away?.id && !enrichCache.has(m.fixture.id))
+      .filter(m => m._src !== 'fd' && m.teams?.home?.id && m.teams?.away?.id && !enrichCache.has(m.fixture.id))
       .slice(0, 50);
     if (toEnrich.length > 0) {
       log(`enriching ${toEnrich.length} new matches`);
