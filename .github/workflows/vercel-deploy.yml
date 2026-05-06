@@ -9,18 +9,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Vercel Production Deploy
+      - uses: actions/checkout@v4
+
+      - name: Deploy via Vercel CLI
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: prj_6KIlo6YA9b8LMJ31455I1abJUEld
         run: |
-          curl -s -X POST "https://api.vercel.com/v13/deployments" \
-            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "name": "scannerv2",
-              "target": "production",
-              "gitSource": {
-                "type": "github",
-                "org": "soareluna2025",
-                "repo": "scannerv2",
-                "ref": "main"
-              }
-            }' | head -c 500
+          npm install -g vercel@latest
+          vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+          vercel build --prod --token=$VERCEL_TOKEN
+          vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
