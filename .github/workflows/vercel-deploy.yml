@@ -1,0 +1,26 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel Production Deploy
+        run: |
+          curl -s -X POST "https://api.vercel.com/v13/deployments" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "scannerv2",
+              "target": "production",
+              "gitSource": {
+                "type": "github",
+                "org": "soareluna2025",
+                "repo": "scannerv2",
+                "ref": "main"
+              }
+            }' | head -c 500
