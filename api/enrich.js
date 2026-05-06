@@ -200,7 +200,7 @@ export default async function handler(req, res) {
       if (!oddsRaw && lgid) {
         try {
           const r5 = await fetch(
-            `https://v3.football.api-sports.io/odds?league=${lgid}&season=2026&bookmaker=8`,
+            `https://v3.football.api-sports.io/odds?league=${lgid}&season=${new Date().getFullYear()}&bookmaker=8`,
             { headers: hdr }
           );
           const d5 = await r5.json();

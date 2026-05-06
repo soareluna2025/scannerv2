@@ -213,7 +213,7 @@ export default async function handler(req, res) {
     if (!oddsRaw && fixture?.league?.id) {
       try {
         const rOdds2 = await fetch(
-          `https://v3.football.api-sports.io/odds?league=${fixture.league.id}&season=2026&bookmaker=8`,
+          `https://v3.football.api-sports.io/odds?league=${fixture.league.id}&season=${new Date().getFullYear()}&bookmaker=8`,
           { headers: hdr }
         );
         const dOdds2 = await rOdds2.json();
