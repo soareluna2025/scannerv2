@@ -1793,12 +1793,12 @@ function genTab(idx){
 function genOpenSim(){GEN.tabIdx=2;genOpen();}
 function genRender(){if(GEN.tabIdx===0)genRenderLive();else if(GEN.tabIdx===1)genRenderUpcoming();else genRenderSim();}
 
-function genRenderSim(){
+async function genRenderSim(){
   var body=document.getElementById('gen-body');
   body.innerHTML=
     '<div style="padding:4px 0 12px">'+
     '<div style="font-size:10px;color:var(--mu);margin-bottom:4px;font-weight:700;letter-spacing:.5px">SELECTEAZĂ MECI</div>'+
-    '<select id="sim-match-sel" class="sim-select"><option value="">— alege din meciurile active —</option></select>'+
+    '<select id="sim-match-sel" class="sim-select"><option value="">⏳ Se încarcă meciurile...</option></select>'+
     '<div style="margin-top:6px;display:flex;gap:6px">'+
     '<input id="sim-fid" class="sim-inp" placeholder="Fixture ID" type="number" style="flex:1">'+
     '<input id="sim-hid" class="sim-inp" placeholder="Home ID" type="number" style="flex:1">'+
@@ -1813,6 +1813,18 @@ function genRenderSim(){
     '<div id="sim-count-lbl" style="font-size:11px;color:var(--mu);margin-top:6px">0 / 10,000</div>'+
     '</div>'+
     '<div id="sim-results" style="display:none;padding-bottom:80px"></div>';
+
+  // Fetch upcoming matches if not yet loaded (same as genRenderUpcoming)
+  if(!_pmMatches.length){
+    try{
+      var r=await fetch('/api/today');
+      var d=await r.json();
+      if(GEN.tabIdx!==2)return;
+      var raw=Array.isArray(d.response)?d.response:Array.isArray(d)?d:[];
+      _pmMatches=raw.sort(function(a,b){return new Date(a.fixture.date)-new Date(b.fixture.date);});
+    }catch(e){}
+  }
+  if(GEN.tabIdx!==2)return;
   simPopulateDropdown();
   if(_simData)simRender(_simData);
 }
@@ -2165,32 +2177,38 @@ var _simData=null;
 
 function simPopulateDropdown(){
   var sel=document.getElementById('sim-match-sel');
-  var options='<option value="">— alege din meciurile active —</option>';
-  // Live matches
-  if(ST&&ST.ms&&ST.ms.length){
-    options+='<optgroup label="🔴 Live">';
+  if(!sel)return;
+  var liveCount=ST&&ST.ms?ST.ms.length:0;
+  var pmCount=_pmMatches?_pmMatches.length:0;
+  var options='<option value="">— alege meci ('+(liveCount+pmCount)+' disponibile) —</option>';
+  // Live matches — all of them
+  if(liveCount){
+    options+='<optgroup label="🔴 Live ('+liveCount+')">';
     ST.ms.forEach(function(m){
       var fid=m.fixture&&m.fixture.id;
       var hid=m.teams&&m.teams.home&&m.teams.home.id;
       var aid=m.teams&&m.teams.away&&m.teams.away.id;
       var lid=m.league&&m.league.id||0;
       if(!fid||!hid||!aid)return;
+      var mn=m.fixture.status&&m.fixture.status.elapsed?m.fixture.status.elapsed+"' ":"";
+      var sc=m.goals?(m.goals.home||0)+'-'+(m.goals.away||0):'';
       var label=(m.teams.home.name||'?')+' vs '+(m.teams.away.name||'?');
-      if(m.fixture.status&&m.fixture.status.elapsed)label+=' ('+m.fixture.status.elapsed+"')";
+      if(mn||sc)label+=' ('+mn+(sc?'| '+sc:'').trim()+')';
       options+='<option value="'+fid+','+hid+','+aid+','+lid+'">'+label+'</option>';
     });
     options+='</optgroup>';
   }
-  // Pre-match
-  if(_pmMatches&&_pmMatches.length){
-    options+='<optgroup label="📅 Pre-meci">';
-    _pmMatches.slice(0,20).forEach(function(m){
+  // Pre-match — all available matches
+  if(pmCount){
+    options+='<optgroup label="📅 Upcoming ('+pmCount+')">';
+    _pmMatches.forEach(function(m){
       var fid=m.fixture&&m.fixture.id;
       var hid=m.teams&&m.teams.home&&m.teams.home.id;
       var aid=m.teams&&m.teams.away&&m.teams.away.id;
       var lid=m.league&&m.league.id||0;
       if(!fid||!hid||!aid)return;
-      var label=(m.teams.home.name||'?')+' vs '+(m.teams.away.name||'?');
+      var time=m.fixture&&m.fixture.date?new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+      var label=(m.teams.home.name||'?')+' vs '+(m.teams.away.name||'?')+(time?' ('+time+')':'');
       options+='<option value="'+fid+','+hid+','+aid+','+lid+'">'+label+'</option>';
     });
     options+='</optgroup>';
