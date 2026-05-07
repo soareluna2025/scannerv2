@@ -116,6 +116,83 @@ function calcEV(matrix, oddsRaw, bankroll) {
   return ev;
 }
 
+function calcConfidence(result, oddsRaw, liveStats) {
+  const r2 = v => Math.round(v * 100) / 100;
+
+  // STRAT 1 — Poisson (25%)
+  const score1 = result.over15Prob ?? 50;
+
+  // STRAT 2 — Forma recentă (20%)
+  const homeAvg = result.homeAvgScored ?? 1.2;
+  const awayAvg = result.awayAvgScored ?? 1.0;
+  const score2 = Math.min(100, (homeAvg + awayAvg) / 3.5 * 100);
+
+  // STRAT 3 — H2H (15%)
+  const score3 = result.h2hOver15 != null ? result.h2hOver15 : score1;
+
+  // STRAT 4 — Live/fallback (15%)
+  let score4 = score1; // fallback pre-match
+  if (liveStats && liveStats.xg != null) {
+    score4 = Math.min(100, liveStats.xg * 25 + (liveStats.sot || 0) * 3 + (liveStats.da || 0) * 0.5);
+  }
+
+  // STRAT 5 — EV pe piața 1.30-1.50 (15%)
+  let score5 = 50;
+  let bestMarket = null, bestCota = null, bestEV = null;
+  if (oddsRaw) {
+    const markets = [
+      { name: 'Over 1.5', cota: oddsRaw.cotaOver15, prob: result.over15Prob / 100 },
+      { name: 'GG',       cota: oddsRaw.cotaGG,     prob: result.ggProb     / 100 },
+      { name: '1 Gazde',  cota: oddsRaw.cotaHome,   prob: result.homeWin    / 100 },
+      { name: 'X Egal',   cota: oddsRaw.cotaDraw,   prob: result.draw       / 100 },
+      { name: '2 Oasp.',  cota: oddsRaw.cotaAway,   prob: result.awayWin    / 100 },
+    ].filter(m => m.cota >= 1.30 && m.cota <= 1.50 && m.prob != null);
+
+    if (markets.length) {
+      const evMarkets = markets.map(m => ({ ...m, ev: m.prob * m.cota - 1 }))
+        .sort((a, b) => b.ev - a.ev);
+      const best = evMarkets[0];
+      if (best.ev > 0) {
+        score5 = Math.min(100, best.ev * 300);
+        bestMarket = best.name;
+        bestCota = best.cota;
+        bestEV = '+' + Math.round(best.ev * 100) + '%';
+      } else {
+        score5 = 20;
+      }
+    }
+  }
+
+  // STRAT 6 — Consistență (10%)
+  const scores = [score1, score2, score3, score4, score5];
+  const alignedCount = scores.filter(s => s > 60).length;
+  const score6 = (alignedCount / 5) * 100;
+
+  const confidenceScore = Math.round(
+    score1 * 0.25 +
+    score2 * 0.20 +
+    score3 * 0.15 +
+    score4 * 0.15 +
+    score5 * 0.15 +
+    score6 * 0.10
+  );
+
+  return {
+    confidenceScore,
+    breakdown: {
+      poisson:     Math.round(score1),
+      forma:       Math.round(score2),
+      h2h:         Math.round(score3),
+      live:        Math.round(score4),
+      ev:          Math.round(score5),
+      consistenta: Math.round(score6),
+    },
+    bestMarket,
+    bestCota,
+    bestEV,
+  };
+}
+
 function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
   if (!elapsed || elapsed <= 0) return { lambda: lambdaBase, dynamic: false };
   const minutesLeft = Math.max(1, 90 - elapsed);
@@ -260,6 +337,13 @@ export default async function handler(req, res) {
     const result  = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, xgh, xga, soth, sota);
     const evData  = calcEV(result, oddsRaw, bankroll);
 
+    const liveStats = (elapsed && parseInt(elapsed) > 0) ? {
+      xg:  (parseFloat(xgh)||0) + (parseFloat(xga)||0),
+      sot: (parseInt(soth)||0) + (parseInt(sota)||0),
+      da:  0,
+    } : null;
+    const confData = calcConfidence(result, oddsRaw, liveStats);
+
     // 50/25/25 weighting
     const h2hOver15W = result.h2hOver15 != null ? result.h2hOver15 / 100 : result.over15Prob / 100;
     const h2hGGW     = result.h2hGG     != null ? result.h2hGG     / 100 : result.ggProb     / 100;
@@ -290,6 +374,7 @@ export default async function handler(req, res) {
     const payload = {
       ...result,
       ...evData,
+      ...confData,
       weightForm,
       weightH2H,
       weightLive,
