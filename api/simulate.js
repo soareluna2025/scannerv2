@@ -75,7 +75,7 @@ export default async function handler(req, res) {
     sf(`team_id=eq.${hid}&order=fixture_id.desc`,              'homePlayers'),
     sf(`team_id=eq.${aid}&order=fixture_id.desc`,              'awayPlayers'),
     lid ? af(`/standings?league=${lid}&season=${season}`,      'standings') : Promise.resolve([]),
-    af(`/odds?fixture=${fid}&bookmaker=6`,                     'odds'),
+    af(`/odds?fixture=${fid}`,                                    'odds'),
   ]);
 
   // ── Fixture basics ────────────────────────────────────────────
@@ -227,7 +227,12 @@ export default async function handler(req, res) {
   const dqLevel = missing === 0 ? 'HIGH' : missing <= 2 ? 'MED' : 'LOW';
 
   // ── Odds & recommendation ─────────────────────────────────────
-  const bets = oddsRes[0]?.bookmakers?.[0]?.bets || [];
+  // Prefer Bet365 (6), then Bwin (2), William Hill (3), else first available
+  const allBookmakers = oddsRes[0]?.bookmakers || [];
+  const preferredIds = [6, 2, 3, 8, 1];
+  const bookmaker = preferredIds.map(id => allBookmakers.find(b => b.id === id)).find(Boolean)
+    || allBookmakers[0];
+  const bets = bookmaker?.bets || [];
   function odd(betName, val) {
     const bet = bets.find(b => b.name === betName);
     const ov  = bet?.values?.find(v => v.value === val);
