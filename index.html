@@ -286,6 +286,57 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   display:flex;flex-direction:column;overflow:hidden}
 .md-overlay.open{transform:translateY(0)}
 @keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}
+/* ── Simulator ────────────────────────────────────────────── */
+.sim-select{width:100%;background:var(--sur2);border:1px solid var(--bor);color:var(--txt);border-radius:8px;padding:8px 10px;font-size:12px}
+.sim-inp{background:var(--sur2);border:1px solid var(--bor);color:var(--txt);border-radius:8px;padding:8px 10px;font-size:12px;width:100%;box-sizing:border-box}
+.sim-run-btn{width:100%;margin-top:10px;padding:13px;background:var(--ac);color:#000;font-weight:900;font-size:13px;border:none;border-radius:10px;cursor:pointer;letter-spacing:.5px}
+.sim-progress-wrap{height:6px;background:var(--sur3);border-radius:3px;overflow:hidden;width:80%;margin:0 auto}
+.sim-progress-fill{height:100%;background:var(--ac);border-radius:3px;width:0%;transition:width .3s}
+.sim-section{margin-top:14px}
+.sim-section-title{font-size:10px;font-weight:700;color:var(--mu);letter-spacing:.8px;margin-bottom:8px}
+.sim-score-block{background:var(--sur2);border-radius:12px;padding:16px;text-align:center;margin-top:14px}
+.sim-teams{font-size:12px;color:var(--mu2);margin-bottom:4px}
+.sim-score-big{font-size:36px;font-weight:900;color:var(--ac);letter-spacing:2px}
+.sim-likely{font-size:12px;color:var(--mu);margin-top:4px}
+.sim-bar-row{display:flex;align-items:center;gap:8px;margin:5px 0}
+.sim-bar-lbl{font-size:11px;color:var(--mu2);width:100px;flex-shrink:0}
+.sim-bar{flex:1;height:8px;background:var(--sur3);border-radius:4px;overflow:hidden}
+.sim-bar-fill{height:100%;border-radius:4px;transition:width 1s ease}
+.sim-bar-val{font-size:11px;color:var(--mu2);width:40px;text-align:right;flex-shrink:0}
+.sim-score-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.sim-score-item{background:var(--sur2);border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center}
+.sim-score-name{font-size:13px;font-weight:700;color:var(--txt)}
+.sim-score-prob{font-size:12px;color:var(--mu)}
+.sim-score-badge{font-size:9px;background:var(--ac);color:#000;border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px}
+.sim-market-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.sim-market-item{background:var(--sur2);border-radius:8px;padding:10px;text-align:center}
+.sim-market-name{font-size:10px;color:var(--mu);margin-bottom:2px}
+.sim-market-val{font-size:18px;font-weight:900}
+.sim-timing-row{display:flex;align-items:center;gap:6px;margin:4px 0}
+.sim-timing-lbl{font-size:10px;color:var(--mu);width:42px;flex-shrink:0}
+.sim-timing-bar{flex:1;height:6px;background:var(--sur3);border-radius:3px;overflow:hidden}
+.sim-timing-fill{height:100%;background:#6366f1;border-radius:3px}
+.sim-timing-val{font-size:10px;color:var(--mu);width:28px;text-align:right;flex-shrink:0}
+.sim-momentum-wrap{position:relative;height:10px;background:var(--sur3);border-radius:5px;overflow:hidden;margin:8px 0}
+.sim-momentum-fill{position:absolute;height:100%;border-radius:5px;transition:width .6s,left .6s}
+.sim-data-tbl{width:100%;font-size:11px;border-collapse:collapse}
+.sim-data-tbl td{padding:4px 6px;border-bottom:1px solid var(--bor)}
+.sim-data-tbl td:first-child{color:var(--mu)}
+.sim-rec-box{background:var(--sur2);border:1px solid var(--ac);border-radius:12px;padding:14px;margin-top:14px}
+.sim-rec-title{font-size:10px;color:var(--ac);font-weight:700;letter-spacing:.8px;margin-bottom:6px}
+.sim-rec-bet{font-size:20px;font-weight:900;color:var(--txt)}
+.sim-rec-meta{font-size:11px;color:var(--mu);margin-top:4px}
+.sim-rec-reason{font-size:10px;color:var(--mu);margin-top:6px;font-style:italic}
+.sim-elo-row{display:flex;justify-content:space-between;margin-top:8px}
+.sim-elo-box{background:var(--sur2);border-radius:8px;padding:8px 12px;text-align:center;flex:1}
+.sim-elo-box+.sim-elo-box{margin-left:6px}
+.sim-elo-val{font-size:18px;font-weight:900;color:var(--ac)}
+.sim-elo-lbl{font-size:10px;color:var(--mu)}
+.sim-form-chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.sim-form-chip{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px}
+.sim-form-chip.W{background:#22c55e22;color:#22c55e}
+.sim-form-chip.D{background:#f59e0b22;color:#f59e0b}
+.sim-form-chip.L{background:#ef444422;color:#ef4444}
 .md-hdr{display:flex;align-items:center;justify-content:space-between;
   padding:0 16px;height:56px;flex-shrink:0;
   background:rgba(8,13,24,.95);border-bottom:1px solid var(--bor);
@@ -577,6 +628,41 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     </div>
   </div>
 
+  <!-- TAB: SIMULATOR -->
+  <div class="tab-content" id="tab-sim">
+    <div style="padding:12px 12px 0">
+      <div class="sim-header-row">
+        <div style="font-size:13px;font-weight:700;color:var(--mu2)">🔮 MATCH SIMULATOR</div>
+        <div style="font-size:10px;color:var(--mu);margin-top:2px">10,000 scenarii Monte Carlo</div>
+      </div>
+
+      <!-- Match selector -->
+      <div style="margin-top:12px">
+        <div style="font-size:10px;color:var(--mu);margin-bottom:4px;font-weight:700;letter-spacing:.5px">SELECTEAZĂ MECI</div>
+        <select id="sim-match-sel" class="sim-select">
+          <option value="">— alege din meciurile active —</option>
+        </select>
+        <div style="margin-top:6px;display:flex;gap:6px">
+          <input id="sim-fid"  class="sim-inp" placeholder="Fixture ID" type="number" style="flex:2">
+          <input id="sim-hid"  class="sim-inp" placeholder="Home ID"    type="number" style="flex:2">
+          <input id="sim-aid"  class="sim-inp" placeholder="Away ID"    type="number" style="flex:2">
+          <input id="sim-lid"  class="sim-inp" placeholder="Liga ID"    type="number" style="flex:2">
+        </div>
+        <button id="sim-run-btn" class="sim-run-btn" onclick="simRun()">🔮 SIMULEAZĂ 10,000 SCENARII</button>
+      </div>
+
+      <!-- Loading -->
+      <div id="sim-loading" style="display:none;text-align:center;padding:24px 0">
+        <div style="font-size:13px;color:var(--mu2);margin-bottom:8px">⚙️ Procesez scenarii...</div>
+        <div class="sim-progress-wrap"><div class="sim-progress-fill" id="sim-prog-fill"></div></div>
+        <div id="sim-count-lbl" style="font-size:11px;color:var(--mu);margin-top:6px">0 / 10,000</div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="sim-results" style="display:none;padding:0 12px 80px"></div>
+  </div>
+
 </main>
 
 <!-- MATCH DETAIL OVERLAY -->
@@ -634,6 +720,10 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   <button class="nav-btn" id="nav-gen" onclick="genOpen()">
     <span class="nav-icon" style="position:relative">⚡<span class="nav-badge" id="gen-badge" style="display:none">0</span></span>
     <span class="nav-label">Generează</span>
+  </button>
+  <button class="nav-btn" id="nav-sim" onclick="setTab('sim')">
+    <span class="nav-icon">🔮</span>
+    <span class="nav-label">Simulator</span>
   </button>
 </nav>
 <script>
@@ -694,10 +784,12 @@ document.getElementById('ag-start-time').textContent=new Date().toTimeString().s
 
 // ── TABS ─────────────────────────────────────────────────────
 function setTab(t){
-  ['live','pre','agent','fav'].forEach(function(x){
+  ['live','pre','agent','fav','sim'].forEach(function(x){
     document.getElementById('tab-'+x).classList.toggle('active',x===t);
-    document.getElementById('nav-'+x).classList.toggle('active',x===t);
+    var nb=document.getElementById('nav-'+x);
+    if(nb)nb.classList.toggle('active',x===t);
   });
+  if(t==='sim')simPopulateDropdown();
   var pg=document.getElementById('page');
   if(t==='agent'){
     pg.style.display='flex';pg.style.flexDirection='column';
@@ -2055,6 +2147,237 @@ setInterval(function(){
   }
   if(tabFav&&tabFav.classList.contains('active')){renderFavs();}
 },30000);
+
+// ══════════════════════════════════════════════════════════════
+// SIMULATOR
+// ══════════════════════════════════════════════════════════════
+var _simData=null;
+
+function simPopulateDropdown(){
+  var sel=document.getElementById('sim-match-sel');
+  var options='<option value="">— alege din meciurile active —</option>';
+  // Live matches
+  if(ST&&ST.ms&&ST.ms.length){
+    options+='<optgroup label="🔴 Live">';
+    ST.ms.forEach(function(m){
+      var fid=m.fixture&&m.fixture.id;
+      var hid=m.teams&&m.teams.home&&m.teams.home.id;
+      var aid=m.teams&&m.teams.away&&m.teams.away.id;
+      var lid=m.league&&m.league.id||0;
+      if(!fid||!hid||!aid)return;
+      var label=(m.teams.home.name||'?')+' vs '+(m.teams.away.name||'?');
+      if(m.fixture.status&&m.fixture.status.elapsed)label+=' ('+m.fixture.status.elapsed+"')";
+      options+='<option value="'+fid+','+hid+','+aid+','+lid+'">'+label+'</option>';
+    });
+    options+='</optgroup>';
+  }
+  // Pre-match
+  if(_pmMatches&&_pmMatches.length){
+    options+='<optgroup label="📅 Pre-meci">';
+    _pmMatches.slice(0,20).forEach(function(m){
+      var fid=m.fixture&&m.fixture.id;
+      var hid=m.teams&&m.teams.home&&m.teams.home.id;
+      var aid=m.teams&&m.teams.away&&m.teams.away.id;
+      var lid=m.league&&m.league.id||0;
+      if(!fid||!hid||!aid)return;
+      var label=(m.teams.home.name||'?')+' vs '+(m.teams.away.name||'?');
+      options+='<option value="'+fid+','+hid+','+aid+','+lid+'">'+label+'</option>';
+    });
+    options+='</optgroup>';
+  }
+  sel.innerHTML=options;
+  sel.onchange=function(){
+    var v=this.value;if(!v)return;
+    var parts=v.split(',');
+    document.getElementById('sim-fid').value=parts[0]||'';
+    document.getElementById('sim-hid').value=parts[1]||'';
+    document.getElementById('sim-aid').value=parts[2]||'';
+    document.getElementById('sim-lid').value=parts[3]||'';
+  };
+}
+
+async function simRun(){
+  var fid=parseInt(document.getElementById('sim-fid').value)||0;
+  var hid=parseInt(document.getElementById('sim-hid').value)||0;
+  var aid=parseInt(document.getElementById('sim-aid').value)||0;
+  var lid=parseInt(document.getElementById('sim-lid').value)||0;
+  if(!fid||!hid||!aid){alert('Completează Fixture ID, Home ID și Away ID!');return;}
+
+  document.getElementById('sim-run-btn').disabled=true;
+  document.getElementById('sim-results').style.display='none';
+  document.getElementById('sim-loading').style.display='block';
+
+  // Animate counter
+  var countEl=document.getElementById('sim-count-lbl');
+  var fillEl=document.getElementById('sim-prog-fill');
+  var step=0,total=10000,dur=2500,interval=50;
+  var steps=dur/interval;
+  var timer=setInterval(function(){
+    step++;
+    var pct=Math.min(100,Math.round(step/steps*100));
+    var cnt=Math.min(total,Math.round(step/steps*total));
+    fillEl.style.width=pct+'%';
+    countEl.textContent=cnt.toLocaleString()+' / 10,000 scenarii';
+    if(step>=steps)clearInterval(timer);
+  },interval);
+
+  try{
+    var url='/api/simulate?fixture_id='+fid+'&home_id='+hid+'&away_id='+aid+'&league_id='+lid;
+    var r=await fetch(url);
+    var d=await r.json();
+    clearInterval(timer);
+    fillEl.style.width='100%';
+    countEl.textContent='10,000 / 10,000 scenarii';
+    await new Promise(function(res){setTimeout(res,400);});
+    document.getElementById('sim-loading').style.display='none';
+    if(d.error){document.getElementById('sim-results').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+d.error+'</div></div>';document.getElementById('sim-results').style.display='block';return;}
+    _simData=d;
+    simRender(d);
+  }catch(e){
+    clearInterval(timer);
+    document.getElementById('sim-loading').style.display='none';
+    document.getElementById('sim-results').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare rețea</div><div class="empty-s">'+e.message+'</div></div>';
+    document.getElementById('sim-results').style.display='block';
+  }finally{
+    document.getElementById('sim-run-btn').disabled=false;
+  }
+}
+
+function simColor(v){return v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';}
+
+function simRender(d){
+  var fix=d.fixture||{};
+  var rd=d.realData||{};
+  var sim=d.simulation||{};
+  var mom=d.momentum;
+  var rec=d.recommendation;
+  var ec=simColor;
+
+  var html='';
+
+  // ── Expected score block ──────────────────────────────────
+  html+='<div class="sim-score-block">';
+  html+='<div class="sim-teams">'+(fix.homeTeam||'Gazde')+' vs '+(fix.awayTeam||'Oaspeți')+'</div>';
+  if(fix.status&&['1H','2H','HT','ET','BT','P','LIVE','INT'].indexOf(fix.status)>=0){
+    html+='<div style="font-size:11px;color:#ef4444;margin-bottom:4px">🔴 LIVE '+fix.minute+"' | "+fix.score+'</div>';
+  }
+  html+='<div class="sim-score-big">'+sim.expectedScore+'</div>';
+  html+='<div class="sim-likely">Scor probabil: <strong>'+(sim.mostLikelyScore||'?')+'</strong>';
+  var topProb=sim.scoreDistribution&&sim.scoreDistribution[0]?sim.scoreDistribution[0].prob:null;
+  if(topProb)html+=' ('+topProb+'%)';
+  html+='</div>';
+  html+='</div>';
+
+  // ── Result bars ───────────────────────────────────────────
+  html+='<div class="sim-section"><div class="sim-section-title">PROBABILITĂȚI REZULTAT</div>';
+  var results=[
+    ['1 '+fix.homeTeam,sim.results&&sim.results.homeWin||0,'#22c55e'],
+    ['X Egal',         sim.results&&sim.results.draw    ||0,'#f59e0b'],
+    ['2 '+fix.awayTeam,sim.results&&sim.results.awayWin ||0,'#ef4444'],
+  ];
+  results.forEach(function(row){
+    html+='<div class="sim-bar-row"><div class="sim-bar-lbl">'+row[0]+'</div>';
+    html+='<div class="sim-bar"><div class="sim-bar-fill" style="width:'+row[1]+'%;background:'+row[2]+'"></div></div>';
+    html+='<div class="sim-bar-val">'+row[1]+'%</div></div>';
+  });
+  html+='</div>';
+
+  // ── Score distribution ────────────────────────────────────
+  if(sim.scoreDistribution&&sim.scoreDistribution.length){
+    html+='<div class="sim-section"><div class="sim-section-title">DISTRIBUȚIE SCORURI (top '+sim.scoreDistribution.length+')</div>';
+    html+='<div class="sim-score-grid">';
+    sim.scoreDistribution.forEach(function(s,i){
+      html+='<div class="sim-score-item"><span class="sim-score-name">'+s.score+(i===0?'<span class="sim-score-badge">TOP</span>':'')+'</span><span class="sim-score-prob">'+s.prob+'%</span></div>';
+    });
+    html+='</div></div>';
+  }
+
+  // ── Markets ───────────────────────────────────────────────
+  if(sim.markets){
+    html+='<div class="sim-section"><div class="sim-section-title">PIEȚE</div>';
+    html+='<div class="sim-market-grid">';
+    var mkts=[
+      ['Over 1.5',sim.markets.over15],['Over 2.5',sim.markets.over25],
+      ['GG',sim.markets.gg],         ['BTTS No', sim.markets.bttsNo],
+      ['Over 0.5',sim.markets.over05],['Over 3.5', sim.markets.over35],
+    ];
+    mkts.forEach(function(m){
+      html+='<div class="sim-market-item"><div class="sim-market-name">'+m[0]+'</div>';
+      html+='<div class="sim-market-val" style="color:'+ec(m[1])+'">'+m[1]+'%</div></div>';
+    });
+    html+='</div></div>';
+  }
+
+  // ── Goal timing ───────────────────────────────────────────
+  if(sim.goalTiming){
+    html+='<div class="sim-section"><div class="sim-section-title">DISTRIBUȚIE MINUTE GOLURI</div>';
+    Object.entries(sim.goalTiming).forEach(function(e){
+      html+='<div class="sim-timing-row"><div class="sim-timing-lbl">'+e[0]+"'</div>";
+      html+='<div class="sim-timing-bar"><div class="sim-timing-fill" style="width:'+e[1]+'%"></div></div>';
+      html+='<div class="sim-timing-val">'+e[1]+'%</div></div>';
+    });
+    html+='</div>';
+  }
+
+  // ── Momentum ──────────────────────────────────────────────
+  if(mom){
+    html+='<div class="sim-section"><div class="sim-section-title">MOMENTUM LIVE</div>';
+    html+='<div style="background:var(--sur2);border-radius:10px;padding:12px">';
+    var ms=mom.score; // -100 to +100
+    var pct=Math.round((ms+100)/2); // 0-100% (50=balanced)
+    var mColor=ms>0?'#22c55e':ms<0?'#ef4444':'#f59e0b';
+    html+='<div class="sim-momentum-wrap">';
+    if(ms>=0){
+      html+='<div class="sim-momentum-fill" style="left:50%;width:'+Math.min(50,pct-50)+'%;background:'+mColor+'"></div>';
+    }else{
+      html+='<div class="sim-momentum-fill" style="left:'+pct+'%;width:'+(50-pct)+'%;background:'+mColor+'"></div>';
+    }
+    html+='</div>';
+    html+='<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mu);margin-top:4px">';
+    html+='<span>'+fix.homeTeam+' '+(ms>=0?'<strong style="color:'+mColor+'">+'+ ms+'</strong>':ms)+'</span>';
+    html+='<span>'+(ms<0?'<strong style="color:'+mColor+'">'+ms+'</strong>':ms)+' '+fix.awayTeam+'</span>';
+    html+='</div>';
+    html+='<div style="text-align:center;font-size:11px;color:var(--mu2);margin-top:6px">'+mom.description+'</div>';
+    html+='</div></div>';
+  }
+
+  // ── Elo ───────────────────────────────────────────────────
+  html+='<div class="sim-section"><div class="sim-section-title">ELO RATING</div>';
+  html+='<div class="sim-elo-row">';
+  html+='<div class="sim-elo-box"><div class="sim-elo-val">'+rd.homeElo+'</div><div class="sim-elo-lbl">'+fix.homeTeam+'</div>';
+  if(rd.homeForm&&rd.homeForm.form5){html+='<div class="sim-form-chips">';rd.homeForm.form5.forEach(function(f){html+='<span class="sim-form-chip '+f+'">'+f+'</span>';});html+='</div>';}
+  html+='</div>';
+  html+='<div style="display:flex;align-items:center;padding:0 8px;font-size:11px;color:var(--mu)">vs</div>';
+  html+='<div class="sim-elo-box"><div class="sim-elo-val">'+rd.awayElo+'</div><div class="sim-elo-lbl">'+fix.awayTeam+'</div>';
+  if(rd.awayForm&&rd.awayForm.form5){html+='<div class="sim-form-chips">';rd.awayForm.form5.forEach(function(f){html+='<span class="sim-form-chip '+f+'">'+f+'</span>';});html+='</div>';}
+  html+='</div></div></div>';
+
+  // ── Data sources ──────────────────────────────────────────
+  if(rd.dataSources){
+    html+='<div class="sim-section"><div class="sim-section-title">DATE REALE FOLOSITE';
+    html+='<span style="float:right;color:var(--ac)">'+rd.dataQuality+'</span></div>';
+    html+='<table class="sim-data-tbl">';
+    var srcLabels={fixture:'Meci curent',homeForm:'Formă gazde',awayForm:'Formă oaspeți',h2h:'H2H direct',lineups:'Formații',homePlayers:'Jucători gazde',awayPlayers:'Jucători oaspeți',standings:'Clasament',odds:'Cote Bet365'};
+    Object.entries(rd.dataSources).forEach(function(e){
+      html+='<tr><td>'+(srcLabels[e[0]]||e[0])+'</td><td style="text-align:right">'+e[1]+'</td></tr>';
+    });
+    html+='</table></div>';
+  }
+
+  // ── Recommendation ────────────────────────────────────────
+  if(rec){
+    html+='<div class="sim-rec-box">';
+    html+='<div class="sim-rec-title">🎯 BEST BET</div>';
+    html+='<div class="sim-rec-bet">'+rec.bestBet+' @ '+rec.cota+'</div>';
+    html+='<div class="sim-rec-meta">EV: <span style="color:#22c55e">'+rec.ev+'</span> | Încredere: <span style="color:var(--ac)">'+rec.confidence+'%</span></div>';
+    html+='<div class="sim-rec-reason">'+rec.reasoning+'</div>';
+    html+='</div>';
+  }
+
+  var out=document.getElementById('sim-results');
+  out.innerHTML=html;
+  out.style.display='block';
+}
 </script>
 </body>
 </html>
