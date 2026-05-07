@@ -48,12 +48,7 @@ Regula: **maxim Liga 1 + Liga 2 + Cupă per țară**. Nicio ligă 3 sau mai joas
 ```
 Aplicat în: `today.js` și `football.js` — elimină toate competițiile feminine.
 
-### 3. Filtru stale-data (LIVE)
-Aplicat în: `football.js`
-
-Dacă un meci este în minutul >10 și are statistici dar activitate = 0 (SOT + șuturi + atacuri + cornere = 0) → meci „fantomă", eliminat din răspuns.
-
-### 4. Filtru Safe Bets (PRE-MECI)
+### 3. Filtru Safe Bets (PRE-MECI)
 Condiții cumulative:
 - `confidenceScore > 75`
 - `bestCota >= 1.30` și `bestCota <= 1.50`
