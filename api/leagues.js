@@ -1,154 +1,382 @@
 export const ALLOWED_LEAGUE_IDS = new Set([
-  // EUROPA
-  39,    // England - Premier League
-  40,    // England - Championship (Liga 2)
-  45,    // England - FA Cup
-  135,   // Italy - Serie A
-  136,   // Italy - Serie B (Liga 2)
-  137,   // Italy - Coppa Italia
-  140,   // Spain - La Liga
-  141,   // Spain - Segunda Division (Liga 2)
-  143,   // Spain - Copa del Rey
-  78,    // Germany - Bundesliga
-  79,    // Germany - 2. Bundesliga
-  81,    // Germany - DFB Pokal
-  61,    // France - Ligue 1
-  62,    // France - Ligue 2
-  66,    // France - Coupe de France
-  88,    // Netherlands - Eredivisie
-  89,    // Netherlands - Eerste Divisie (Liga 2)
-  90,    // Netherlands - KNVB Cup
-  94,    // Portugal - Primeira Liga
-  95,    // Portugal - Liga Portugal 2
-  96,    // Portugal - Taca de Portugal
-  144,   // Belgium - Pro League
-  145,   // Belgium - Challenger Pro League (Liga 2)
-  146,   // Belgium - Belgian Cup
-  203,   // Turkey - Super Lig
-  204,   // Turkey - TFF First League (Liga 2)
-  205,   // Turkey - Turkish Cup
-  179,   // Scotland - Premiership
-  180,   // Scotland - Championship (Liga 2)
-  184,   // Scotland - Scottish Cup
-  345,   // Czech - First League
-  346,   // Czech - Cup
-  218,   // Austria - Bundesliga
-  219,   // Austria - 2. Liga
-  221,   // Austria - Cup
-  207,   // Switzerland - Super League
-  208,   // Switzerland - Challenge League (Liga 2)
-  209,   // Switzerland - Swiss Cup
-  119,   // Denmark - Superliga
-  120,   // Denmark - 1st Division (Liga 2)
-  123,   // Denmark - Cup
-  103,   // Norway - Eliteserien
-  104,   // Norway - First Division (Liga 2)
-  105,   // Norway - Cup
-  113,   // Sweden - Allsvenskan
-  114,   // Sweden - Superettan (Liga 2)
-  116,   // Sweden - Cup
-  106,   // Poland - Ekstraklasa
-  107,   // Poland - I Liga (Liga 2)
-  108,   // Poland - Cup
-  210,   // Croatia - Prva HNL
-  211,   // Croatia - Druga HNL (Liga 2)
-  212,   // Croatia - Cup
-  392,   // Serbia - SuperLiga
-  393,   // Serbia - Prva Liga (Liga 2)
-  783,   // Romania - Superliga (Liga 1)
-  787,   // Romania - Cupa Romaniei
+  // ── EUROPA ────────────────────────────────────────────────────
 
-  // AMERICAS
-  71,    // Brazil - Serie A
-  72,    // Brazil - Serie B (Liga 2)
-  73,    // Brazil - Copa do Brasil
-  128,   // Argentina - Primera Division
-  131,   // Argentina - Primera Nacional (Liga 2)
-  132,   // Argentina - Copa Argentina
-  262,   // Mexico - Liga MX
-  263,   // Mexico - Liga Expansion (Liga 2)
-  264,   // Mexico - Copa MX
-  239,   // Colombia - Primera A
-  240,   // Colombia - Primera B (Liga 2)
-  242,   // Colombia - Copa Colombia
-  243,   // Colombia - Torneo Betplay (Cup)
-  268,   // Uruguay - Primera Division
-  269,   // Uruguay - Segunda Division (Liga 2)
-  270,   // Uruguay - Copa Uruguay
-  265,   // Chile - Primera Division
-  266,   // Chile - Primera B (Liga 2)
-  267,   // Chile - Copa Chile
-  281,   // Peru - Primera Division
-  282,   // Peru - Liga 2
-  283,   // Peru - Copa Peru
-  286,   // Ecuador - LigaPro Serie A
-  287,   // Ecuador - LigaPro Serie B (Liga 2)
-  735,   // Ecuador - Copa Ecuador
-  278,   // Paraguay - Primera Division
-  279,   // Paraguay - Division Intermedia (Liga 2)
-  273,   // Bolivia - Primera Division
-  274,   // Bolivia - Liga de Ascenso (Liga 2)
-  253,   // USA - MLS
-  257,   // USA - US Open Cup
-  321,   // Canada - Canadian Premier League
-  258,   // Costa Rica - Liga FPD
-  261,   // Honduras - Liga Nacional
-  235,   // Guatemala - Liga Nacional
-  244,   // El Salvador - Primera Division
-  256,   // Nicaragua - Liga Primera
+  // England
+  39,    // Premier League
+  40,    // Championship (Liga 2)
+  45,    // FA Cup
+  48,    // EFL Cup (Carabao Cup)
 
-  // ASIA
-  307,   // Saudi Arabia - Saudi Pro League
-  308,   // Saudi Arabia - First Division (Liga 2)
-  98,    // Japan - J1 League
-  99,    // Japan - J2 League (Liga 2)
-  100,   // Japan - Emperor's Cup
-  292,   // South Korea - K League 1
-  293,   // South Korea - K League 2 (Liga 2)
-  294,   // South Korea - FA Cup
-  290,   // Iran - Pro League
-  291,   // Iran - Azadegan League (Liga 2)
-  13,    // Qatar - Stars League
-  433,   // UAE - Pro League
-  434,   // UAE - First Division (Liga 2)
-  169,   // China - Super League
-  170,   // China - League One (Liga 2)
-  171,   // China - FA Cup
-  296,   // Thailand - League 1
-  297,   // Thailand - League 2
-  335,   // Uzbekistan - Super League
-  149,   // Australia - A-League
-  188,   // India - ISL
-  323,   // Jordan - Pro League
-  302,   // Iraq - Premier League
-  340,   // Vietnam - V.League 1
-  341,   // Vietnam - V.League 2 (Liga 2)
-  324,   // Malaysia - Super League
-  325,   // Malaysia - Premier League (Liga 2)
-  499,   // Hong Kong - Premier League
-  391,   // Indonesia - Liga 1
-  501,   // Singapore - Premier League
-  299,   // Kuwait - Premier League
-  309,   // Oman - Professional League
+  // Spain
+  140,   // La Liga
+  141,   // Segunda Division (Liga 2)
+  143,   // Copa del Rey
 
-  // AFRICA
-  233,   // Egypt - Premier League
-  200,   // Morocco - Botola Pro
-  201,   // Morocco - Botola 2 (Liga 2)
-  288,   // South Africa - Premier Division
-  202,   // Tunisia - Ligue 1
-  197,   // Algeria - Ligue 1
-  332,   // Nigeria - NPFL
-  289,   // Ghana - Premier League
-  383,   // Ivory Coast - Ligue 1
-  357,   // Kenya - Premier League
+  // Germany
+  78,    // Bundesliga
+  79,    // 2. Bundesliga
+  81,    // DFB Pokal
 
-  // INTERNATIONALE
+  // Italy
+  135,   // Serie A
+  136,   // Serie B (Liga 2)
+  137,   // Coppa Italia
+
+  // France
+  61,    // Ligue 1
+  62,    // Ligue 2
+  66,    // Coupe de France
+
+  // Netherlands
+  88,    // Eredivisie
+  89,    // Eerste Divisie (Liga 2)
+  90,    // KNVB Cup
+
+  // Portugal
+  94,    // Primeira Liga
+  95,    // Liga Portugal 2
+  96,    // Taca de Portugal
+
+  // Belgium
+  144,   // Pro League
+  145,   // Challenger Pro League (Liga 2)
+  146,   // Belgian Cup
+
+  // Turkey
+  203,   // Super Lig
+  204,   // TFF First League (Liga 2)
+  205,   // Turkish Cup
+
+  // Scotland
+  179,   // Premiership
+  180,   // Championship (Liga 2)
+  184,   // Scottish Cup
+
+  // Czech Republic
+  345,   // Fortuna Liga (Liga 1)
+  346,   // FNL (Liga 2)
+  347,   // MOL Cup
+
+  // Austria
+  218,   // Bundesliga
+  219,   // 2. Liga
+  221,   // ÖFB Cup
+
+  // Switzerland
+  207,   // Super League
+  208,   // Challenge League (Liga 2)
+  209,   // Swiss Cup
+
+  // Denmark
+  119,   // Superliga
+  120,   // 1st Division (Liga 2)
+  123,   // DBU Pokalen
+
+  // Norway
+  103,   // Eliteserien
+  104,   // First Division (Liga 2)
+  105,   // Norwegian Cup
+
+  // Sweden
+  113,   // Allsvenskan
+  114,   // Superettan (Liga 2)
+  116,   // Svenska Cupen
+
+  // Poland
+  106,   // Ekstraklasa
+  107,   // I Liga (Liga 2)
+  108,   // Polish Cup
+
+  // Croatia
+  210,   // Prva HNL
+  211,   // Druga HNL (Liga 2)
+  212,   // Croatian Cup
+
+  // Serbia
+  392,   // SuperLiga
+  393,   // Prva Liga (Liga 2)
+  394,   // Kup Srbije
+
+  // Romania
+  783,   // Superliga (Liga 1)
+  785,   // Liga II
+  787,   // Cupa Romaniei
+
+  // Greece
+  551,   // Super League 1
+  552,   // Super League 2 (Liga 2)
+  556,   // Greek Cup
+
+  // Hungary
+  271,   // Nemzeti Bajnokság I (Liga 1)
+  272,   // Nemzeti Bajnokság II (Liga 2)
+  275,   // Magyar Kupa (Cup)
+
+  // Bulgaria
+  172,   // First Professional League
+  173,   // Second Professional League (Liga 2)
+  174,   // Bulgarian Cup
+
+  // Slovakia
+  392,   // Fortuna Liga — handled by Serbia entry (same Set)
+  393,   // Druhá liga (Liga 2)
+  496,   // Slovak Cup
+
+  // Finland
+  244,   // Veikkausliiga (Liga 1)
+  245,   // Ykkönen (Liga 2)
+  246,   // Finnish Cup
+
+  // Ukraine
+  333,   // Premier League
+  334,   // Persha Liha (Liga 2)
+  336,   // Ukrainian Cup
+
+  // ── AMERICAS ─────────────────────────────────────────────────
+
+  // Brazil
+  71,    // Serie A
+  72,    // Serie B (Liga 2)
+  73,    // Copa do Brasil
+
+  // Argentina
+  128,   // Primera Division
+  131,   // Primera Nacional (Liga 2)
+  132,   // Copa Argentina
+
+  // Mexico
+  262,   // Liga MX
+  263,   // Liga Expansion (Liga 2)
+  264,   // Copa MX
+
+  // Colombia
+  239,   // Primera A
+  240,   // Primera B (Liga 2)
+  242,   // Copa Colombia
+  243,   // Torneo Betplay
+
+  // Chile
+  265,   // Primera Division
+  266,   // Primera B (Liga 2)
+  267,   // Copa Chile
+
+  // Uruguay
+  268,   // Primera Division
+  269,   // Segunda Division (Liga 2)
+  270,   // Copa Uruguay
+
+  // Peru
+  281,   // Liga 1
+  282,   // Liga 2
+  283,   // Copa Peru
+
+  // Ecuador
+  286,   // LigaPro Serie A
+  287,   // LigaPro Serie B (Liga 2)
+  735,   // Copa Ecuador
+
+  // Paraguay
+  278,   // Primera Division
+  279,   // Division Intermedia (Liga 2)
+  280,   // Copa Paraguay
+
+  // Bolivia
+  273,   // Primera Division
+  274,   // Liga de Ascenso (Liga 2)
+  276,   // Copa Bolivia
+
+  // Venezuela
+  153,   // Liga FUTVE
+  154,   // Segunda Division (Liga 2)
+  155,   // Copa Venezuela
+
+  // USA
+  253,   // MLS
+  254,   // USL Championship (Liga 2)
+  257,   // US Open Cup
+
+  // Canada
+  321,   // Canadian Premier League
+  322,   // Canadian Championship (Cup)
+
+  // Costa Rica
+  258,   // Primera Division
+  259,   // Segunda Division (Liga 2)
+  260,   // Copa Costa Rica
+
+  // Honduras
+  261,   // Liga Nacional
+  319,   // Liga de Ascenso (Liga 2)
+  320,   // Copa Honduras
+
+  // Guatemala
+  235,   // Liga Nacional
+  247,   // Primera B (Liga 2)
+  248,   // Copa Guatemala
+
+  // El Salvador
+  344,   // Primera Division
+  349,   // Segunda Division (Liga 2)
+  350,   // Copa El Salvador
+
+  // Nicaragua
+  256,   // Primera Division
+  380,   // Segunda Division (Liga 2)
+
+  // ── ASIA ─────────────────────────────────────────────────────
+
+  // Saudi Arabia
+  307,   // Saudi Pro League
+  308,   // First Division (Liga 2)
+  313,   // King Cup
+
+  // Japan
+  98,    // J1 League
+  99,    // J2 League (Liga 2)
+  100,   // Emperor's Cup
+
+  // South Korea
+  292,   // K League 1
+  293,   // K League 2 (Liga 2)
+  294,   // Korean FA Cup
+
+  // Iran
+  290,   // Persian Gulf Pro League
+  291,   // Azadegan League (Liga 2)
+  295,   // Hazfi Cup
+
+  // Qatar
+  19,    // Qatar Stars League
+  21,    // QSL (Liga 2)
+  22,    // Emir Cup
+
+  // UAE
+  433,   // Pro League
+  434,   // First Division (Liga 2)
+  435,   // UAE Cup
+
+  // China
+  169,   // Super League
+  170,   // League One (Liga 2)
+  171,   // FA Cup
+
+  // Thailand
+  296,   // Thai League 1
+  297,   // Thai League 2
+  298,   // Thai FA Cup
+
+  // Uzbekistan
+  335,   // Super League
+  631,   // Pro League (Liga 2)
+  632,   // Uzbek Cup
+
+  // Australia
+  188,   // A-League Men
+  189,   // Australia Cup
+
+  // India
+  323,   // ISL (Indian Super League)
+  324,   // I-League (Liga 2)
+  325,   // Durand Cup
+
+  // Malaysia
+  518,   // Super League
+  519,   // Premier League (Liga 2)
+  520,   // Malaysia Cup
+
+  // Indonesia
+  391,   // Liga 1
+  460,   // Liga 2
+  461,   // Indonesian Cup
+
+  // Vietnam
+  340,   // V.League 1
+  341,   // V.League 2 (Liga 2)
+  342,   // Vietnamese Cup
+
+  // Iraq
+  302,   // Premier League
+  303,   // Division 1 (Liga 2)
+  304,   // Iraqi Cup
+
+  // Jordan
+  474,   // Pro League
+  475,   // Division 1 (Liga 2)
+  494,   // Jordan Cup
+
+  // Kuwait
+  299,   // Premier League
+  300,   // Division 1 (Liga 2)
+  493,   // Emir Cup
+
+  // Oman
+  309,   // Professional League
+  491,   // Division 1 (Liga 2)
+  492,   // Sultan Qaboos Cup
+
+  // Hong Kong
+  499,   // Premier League
+  500,   // First Division (Liga 2)
+  503,   // HK FA Cup
+
+  // Singapore
+  502,   // Premier League
+  503,   // Singapore Cup
+
+  // ── AFRICA ───────────────────────────────────────────────────
+
+  // Egypt
+  233,   // Premier League
+  234,   // Second Division (Liga 2)
+  238,   // Egyptian Cup
+
+  // Morocco
+  200,   // Botola Pro
+  201,   // Botola 2 (Liga 2)
+  204,   // Coupe du Trône
+
+  // Tunisia
+  202,   // Ligue 1
+  377,   // Ligue 2
+  378,   // Coupe de Tunisie
+
+  // Algeria
+  197,   // Ligue Professionnelle 1
+  198,   // Ligue Professionnelle 2 (Liga 2)
+  199,   // Coupe d'Algérie
+
+  // South Africa
+  288,   // Premier Division (PSL)
+  670,   // National First Division (Liga 2)
+  671,   // Nedbank Cup
+
+  // Nigeria
+  332,   // NPFL
+  666,   // Nigeria National League (Liga 2)
+  667,   // Nigerian FA Cup
+
+  // Ghana
+  289,   // Premier League
+  417,   // Division One (Liga 2)
+  418,   // Ghana FA Cup
+
+  // Ivory Coast
+  383,   // Ligue 1
+  384,   // Ligue 2
+  385,   // Coupe de Côte d'Ivoire
+
+  // Kenya
+  357,   // Premier League
+  358,   // National Super League (Liga 2)
+  500,   // FKF Cup
+
+  // ── INTERNAȚIONALE ───────────────────────────────────────────
+
+  13,    // Copa Libertadores (CONMEBOL)
+  11,    // Copa Sudamericana (CONMEBOL)
   2,     // UEFA Champions League
   3,     // UEFA Europa League
   848,   // UEFA Conference League
-  13,    // Copa Libertadores
-  11,    // Copa Sudamericana
   17,    // AFC Champions League
   18,    // AFC Cup
   12,    // CAF Champions League
@@ -157,4 +385,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   5,     // UEFA Nations League
   1,     // World Cup
   6,     // FIFA Club World Cup
+  9,     // Copa America
+  10,    // CONCACAF Champions Cup
+  26,    // CONCACAF Nations League
 ]);
