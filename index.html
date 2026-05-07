@@ -179,6 +179,46 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
 .pm-summary-t{font-size:11px;color:var(--mu2)}
 .pm-summary-v{font-size:13px;font-weight:800;color:var(--ac)}
+/* CONFIDENCE BAR */
+.conf-bar-wrap{margin-top:8px}
+.conf-bar-bg{height:5px;background:var(--sur3);border-radius:3px;overflow:hidden;margin-bottom:4px}
+.conf-bar-fill{height:100%;border-radius:3px;transition:width .4s ease}
+.conf-score-row{display:flex;align-items:center;justify-content:space-between}
+.conf-pct{font-size:12px;font-weight:900;letter-spacing:-.3px}
+.conf-label{font-size:9px;color:var(--mu);font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.safe-bet-badge{margin-top:5px;padding:5px 10px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:8px;font-size:10px;font-weight:800;color:#22c55e;text-align:center;letter-spacing:.3px}
+/* TEAM STRENGTH BADGE */
+.str-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);color:#818cf8}
+/* CONFIDENCE CIRCLE (SUMAR) */
+.conf-circle-wrap{padding:14px;background:rgba(255,255,255,.03);border-radius:12px;margin-bottom:12px}
+.conf-circle{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;margin:0 auto 8px;border:3px solid}
+.conf-circle.high{border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,.08)}
+.conf-circle.mid{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.08)}
+.conf-circle.low{border-color:#ef4444;color:#ef4444;background:rgba(239,68,68,.08)}
+.conf-breakdown{margin-top:10px;display:flex;flex-direction:column;gap:5px}
+.conf-bd-row{display:flex;align-items:center;gap:8px}
+.conf-bd-lbl{font-size:10px;color:var(--mu2);width:90px;flex-shrink:0}
+.conf-bd-bar{flex:1;height:4px;background:var(--sur3);border-radius:2px;overflow:hidden}
+.conf-bd-fill{height:100%;border-radius:2px}
+.conf-bd-val{font-size:10px;font-weight:700;color:var(--tx);min-width:30px;text-align:right}
+/* PLAYER INTELLIGENCE */
+.pi-section{margin-top:10px;padding:10px;background:rgba(99,102,241,.06);border-radius:10px;border:1px solid rgba(99,102,241,.15)}
+.pi-title{font-size:10px;font-weight:700;color:#818cf8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.pi-teams{display:flex;gap:8px}
+.pi-team{flex:1;background:rgba(255,255,255,.04);border-radius:8px;padding:8px}
+.pi-team-name{font-size:10px;color:var(--mu);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-str-val{font-size:18px;font-weight:900;color:#818cf8}
+.pi-str-bar{height:3px;background:var(--sur3);border-radius:2px;overflow:hidden;margin-top:4px}
+.pi-str-fill{height:100%;border-radius:2px;background:#818cf8}
+/* BACKFILL UI */
+.backfill-section{margin-top:16px;padding-top:16px;border-top:1px solid var(--bor)}
+.backfill-title{font-size:13px;font-weight:700;color:var(--tx);margin-bottom:4px}
+.backfill-sub{font-size:11px;color:var(--mu);margin-bottom:10px}
+.backfill-progress{height:6px;background:var(--sur3);border-radius:3px;overflow:hidden;margin:8px 0}
+.backfill-fill{height:100%;background:linear-gradient(90deg,var(--ac),#00b894);border-radius:3px;transition:width .4s ease}
+.backfill-status{font-size:11px;color:var(--mu2);text-align:center}
+.backfill-btn{width:100%;padding:10px;background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3);border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px}
+.backfill-btn:disabled{opacity:.5;cursor:default}
 
 /* AGENT */
 .agent-wrap{display:flex;flex-direction:column;height:100%}
@@ -420,6 +460,13 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
       </div>
       <input class="settings-input" type="number" id="bankroll-input" value="10" min="0.01" step="0.1">
     </div>
+    <div class="backfill-section">
+      <div class="backfill-title">Player Intelligence — Backfill</div>
+      <div class="backfill-sub">Colectează statistici jucători pentru calculul puterii echipelor (155 ligi)</div>
+      <div class="backfill-progress"><div class="backfill-fill" id="bf-fill" style="width:0%"></div></div>
+      <div class="backfill-status" id="bf-status">Apasă Start pentru a începe</div>
+      <button class="backfill-btn" id="bf-btn" onclick="startBackfill()">▶ Start Backfill</button>
+    </div>
     <button class="settings-save" onclick="settingsClose()">Salvează</button>
   </div>
 </div>
@@ -596,6 +643,42 @@ var BANKROLL_KEY='alohascan_bankroll';
 function getBankroll(){return parseFloat(localStorage.getItem(BANKROLL_KEY))||10;}
 function settingsOpen(){document.getElementById('bankroll-input').value=getBankroll();document.getElementById('settings-overlay').classList.add('open');}
 function settingsClose(){var v=parseFloat(document.getElementById('bankroll-input').value);if(v>0)localStorage.setItem(BANKROLL_KEY,v);document.getElementById('settings-overlay').classList.remove('open');}
+var _bfRunning=false,_bfIdx=0,_bfTotal=155;
+async function startBackfill(){
+  if(_bfRunning)return;
+  var btn=document.getElementById('bf-btn');
+  var fill=document.getElementById('bf-fill');
+  var status=document.getElementById('bf-status');
+  _bfRunning=true;btn.disabled=true;btn.textContent='⏳ Se procesează...';
+  _bfIdx=0;
+  async function step(){
+    if(_bfIdx>=_bfTotal){
+      _bfRunning=false;btn.disabled=false;btn.textContent='▶ Reîncepe Backfill';
+      status.textContent='Complet! '+_bfTotal+' ligi procesate.';
+      fill.style.width='100%';return;
+    }
+    try{
+      var r=await fetch('/api/players?action=backfill&league_index='+_bfIdx);
+      var d=await r.json();
+      _bfIdx++;
+      var pct=Math.round(_bfIdx/_bfTotal*100);
+      fill.style.width=pct+'%';
+      var next=d.next_index!=null?d.next_index:null;
+      status.textContent=pct+'% · Ligă '+(d.league_id||_bfIdx)+' · '+(_bfIdx)+'/'+_bfTotal;
+      if(next!=null&&_bfRunning)setTimeout(step,300);
+      else{_bfRunning=false;btn.disabled=false;btn.textContent='▶ Reîncepe Backfill';status.textContent='Complet!';}
+    }catch(e){
+      status.textContent='Eroare la liga '+_bfIdx+': '+e.message;
+      setTimeout(step,1000);
+    }
+  }
+  var progR=await fetch('/api/players?action=progress').catch(function(){return null;});
+  if(progR){
+    var pd=await progR.json().catch(function(){return null;});
+    if(pd&&pd.done>0){_bfIdx=pd.done;var pct2=Math.round(pd.done/pd.total*100);fill.style.width=pct2+'%';status.textContent=pct2+'% deja procesat · continuând...';}
+  }
+  step();
+}
 var ST={ms:[],connected:false,ws:null,region:'all',score:'all',searchQ:''};
 var TG_SENT=new Set();
 
@@ -1099,6 +1182,23 @@ function renderPM(){
           html+='<div class="ev-row"><span class="ev-val ev-neg" style="font-size:10px">EV: NO VALUE</span></div>';
         }
       }
+      if(enr.confidenceScore!=null){
+        var cs=enr.confidenceScore;
+        var confColor=cs>=80?'#22c55e':cs>=60?'#f59e0b':'#ef4444';
+        var safeBadge=(cs>75&&enr.bestCota&&enr.bestCota>=1.30&&enr.bestCota<=1.50&&enr.bestEV>0)
+          ?'<div class="safe-bet-badge">SAFE BET · '+(enr.bestMarket||enr.bestBet)+' @ '+enr.bestCota+'</div>':'';
+        html+='<div class="conf-bar-wrap">'+
+          '<div class="conf-bar-bg"><div class="conf-bar-fill" style="width:'+cs+'%;background:'+confColor+'"></div></div>'+
+          '<div class="conf-score-row">'+
+            '<span class="conf-pct" style="color:'+confColor+'">'+cs+'%</span>'+
+            '<span class="conf-label">ÎNCREDERE</span>'+
+          '</div>'+safeBadge+'</div>';
+      }
+      if(enr.teamStrengthHome!=null||enr.teamStrengthAway!=null){
+        var sh=enr.teamStrengthHome!=null?enr.teamStrengthHome:'?';
+        var sa=enr.teamStrengthAway!=null?enr.teamStrengthAway:'?';
+        html+='<div class="enrich-row" style="margin-top:6px"><span class="str-badge">STR: '+sh+' vs '+sa+'</span></div>';
+      }
       html+='</div>';
     }else{
       html+='<div class="pm-body" style="display:flex;align-items:center;justify-content:space-between">';
@@ -1244,7 +1344,9 @@ function mdRender(){
 
 function mdRenderSumar(d){
   var fix=d.fixture;
-  var en=d.enrich||{};
+  var enrichBase=d.enrich||{};
+  var cached=_pmEnrich&&_pmEnrich[_md&&_md.fixtureId]||{};
+  var en=Object.assign({},enrichBase,cached);
   var stats=(fix&&fix.statistics)||[];
   var hg=fix&&fix.goals?fix.goals.home??0:0;
   var ag=fix&&fix.goals?fix.goals.away??0:0;
@@ -1255,7 +1357,45 @@ function mdRenderSumar(d){
   var isLive=(['1H','2H','HT','ET','BT','P','LIVE','INT']).indexOf(sh)>=0;
   var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
 
-  var out='<div class="md-score-block">';
+  var out='';
+  // Confidence circle (from pre-match enrich cache)
+  if(en.confidenceScore!=null){
+    var cs=en.confidenceScore;
+    var ccls=cs>=80?'high':cs>=60?'mid':'low';
+    var confColor=cs>=80?'#22c55e':cs>=60?'#f59e0b':'#ef4444';
+    out+='<div class="conf-circle-wrap">';
+    out+='<div class="conf-circle '+ccls+'">'+cs+'%</div>';
+    if(en.bestMarket){
+      out+='<div style="text-align:center;font-size:12px;color:var(--mu2)">Best bet: <strong style="color:'+confColor+'">'+en.bestMarket+' @ '+en.bestCota+'</strong>'+(en.bestEV?' | EV: <span style="color:#22c55e">'+en.bestEV+'</span>':'')+'</div>';
+    }
+    if(en.breakdown){
+      var bd=en.breakdown;
+      var bItems=[['Poisson',bd.poisson],['Formă',bd.forma],['H2H',bd.h2h],['Live',bd.live],['EV',bd.ev],['Consistență',bd.consistenta],['Putere Echipe',bd.putereEchipe]];
+      out+='<div class="conf-breakdown">';
+      bItems.forEach(function(b){
+        if(b[1]==null)return;
+        var bc=b[1]>=80?'#22c55e':b[1]>=60?'#f59e0b':'#ef4444';
+        out+='<div class="conf-bd-row"><div class="conf-bd-lbl">'+b[0]+'</div>'+
+          '<div class="conf-bd-bar"><div class="conf-bd-fill" style="width:'+b[1]+'%;background:'+bc+'"></div></div>'+
+          '<div class="conf-bd-val">'+b[1]+'%</div></div>';
+      });
+      out+='</div>';
+    }
+    // Player Intelligence section
+    if(en.teamStrengthHome!=null||en.teamStrengthAway!=null){
+      var sh2=en.teamStrengthHome!=null?en.teamStrengthHome:0;
+      var sa2=en.teamStrengthAway!=null?en.teamStrengthAway:0;
+      out+='<div class="pi-section">';
+      out+='<div class="pi-title">⚡ Player Intelligence</div>';
+      out+='<div class="pi-teams">';
+      out+='<div class="pi-team"><div class="pi-team-name">'+hn+'</div><div class="pi-str-val">'+sh2+'</div><div class="pi-str-bar"><div class="pi-str-fill" style="width:'+sh2+'%"></div></div></div>';
+      out+='<div class="pi-team"><div class="pi-team-name">'+an+'</div><div class="pi-str-val">'+sa2+'</div><div class="pi-str-bar"><div class="pi-str-fill" style="width:'+sa2+'%"></div></div></div>';
+      out+='</div></div>';
+    }
+    out+='</div>';
+  }
+
+  out+='<div class="md-score-block">';
   out+='<div class="md-teams-row">';
   out+='<div class="md-team-name">'+hn+'</div>';
   out+='<div class="md-score">'+hg+' - '+ag+'</div>';
