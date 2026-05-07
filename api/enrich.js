@@ -130,13 +130,20 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
   const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
   const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
 
-  const homeAvgScored   = avg(hGames, m => m.goals?.home ?? 0);
-  const homeAvgConceded = avg(hGames, m => m.goals?.away ?? 0);
-  const awayAvgScored   = avg(aGames, m => m.goals?.away ?? 0);
-  const awayAvgConceded = avg(aGames, m => m.goals?.home ?? 0);
+  // Use all matches (home + away) with correct goal direction per team
+  const homeAvgScored   = avg(hGames, m => (m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away) ?? 0);
+  const homeAvgConceded = avg(hGames, m => (m.teams?.home?.id === hId ? m.goals?.away : m.goals?.home) ?? 0);
+  const awayAvgScored   = avg(aGames, m => (m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0);
+  const awayAvgConceded = avg(aGames, m => (m.teams?.away?.id === aId ? m.goals?.home : m.goals?.away) ?? 0);
 
-  let lambdaHome  = (homeAvgScored + awayAvgConceded) / 2;
-  let lambdaAway  = (awayAvgScored + homeAvgConceded) / 2;
+  // Fallback to league average (1.2 goals/team/match) if no data
+  const FALLBACK = 1.2;
+  let lambdaHome = hGames.length && aGames.length
+    ? (homeAvgScored + awayAvgConceded) / 2
+    : FALLBACK;
+  let lambdaAway = hGames.length && aGames.length
+    ? (awayAvgScored + homeAvgConceded) / 2
+    : FALLBACK;
 
   let isDynamic = false;
   const elapsedNum = parseInt(elapsedParam) || 0;
@@ -335,8 +342,8 @@ export default async function handler(req, res) {
       getTeamStrengths(hId, aId, sbUrl, sbKey),
     ]);
 
-    const hGames = (d1.response || []).filter(m => m.teams?.home?.id === hId).slice(0, 10);
-    const aGames = (d2.response || []).filter(m => m.teams?.away?.id === aId).slice(0, 10);
+    const hGames = (d1.response || []).slice(0, 10);
+    const aGames = (d2.response || []).slice(0, 10);
     const h2h    = (d3.response || []).slice(0, 10);
 
     // Parse odds; fallback to league-wide odds if fixture returns nothing

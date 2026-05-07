@@ -1118,6 +1118,20 @@ function enrichUrl(hid,aid,m){
     u+='&lg='+encodeURIComponent((m.league&&m.league.name)||'');
     u+='&lgid='+((m.league&&m.league.id)||0);
     u+='&dt='+encodeURIComponent((m.fixture&&m.fixture.date)||'');
+    // Pass live stats so enrich can calculate dynamic lambda
+    var sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'NS';
+    var live=['1H','2H','HT','ET','BT','P','LIVE','INT'].indexOf(sh)>=0;
+    if(live){
+      u+='&elapsed='+(m.fixture.status.elapsed||0);
+      u+='&hg='+(m.goals&&m.goals.home!=null?m.goals.home:0);
+      u+='&ag='+(m.goals&&m.goals.away!=null?m.goals.away:0);
+      var hSt=(m.statistics&&m.statistics[0]&&m.statistics[0].statistics)||[];
+      var aSt=(m.statistics&&m.statistics[1]&&m.statistics[1].statistics)||[];
+      var soth=hSt.find(function(s){return s.type==='Shots on Goal';});
+      var sota=aSt.find(function(s){return s.type==='Shots on Goal';});
+      u+='&soth='+(soth&&soth.value!=null?soth.value:0);
+      u+='&sota='+(sota&&sota.value!=null?sota.value:0);
+    }
   }
   return u;
 }
