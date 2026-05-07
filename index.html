@@ -1497,6 +1497,41 @@ function mdRenderSumar(d){
     out+='</div>';
   }
 
+  // Weighting breakdown
+  if(en.weightForm!=null){
+    var wf=Math.round(en.weightForm*100),wh=Math.round(en.weightH2H*100),wl=Math.round((en.weightLive||0)*100);
+    var ec2=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
+    out+='<div class="md-section"><div class="md-section-title">⚖️ Ponderare model</div>';
+    out+='<div class="weight-bars">';
+    out+='<div class="weight-row"><div class="weight-label">Formă</div><div class="weight-bar-bg"><div class="weight-bar-fill" style="width:'+wf+'%"></div></div><div class="weight-pct">'+wf+'%</div></div>';
+    out+='<div class="weight-row"><div class="weight-label">H2H</div><div class="weight-bar-bg"><div class="weight-bar-fill" style="width:'+(wh*4)+'%"></div></div><div class="weight-pct">'+wh+'%</div></div>';
+    if(wl>0)out+='<div class="weight-row"><div class="weight-label">Live</div><div class="weight-bar-bg"><div class="weight-bar-fill" style="width:'+(wl*4)+'%"></div></div><div class="weight-pct">'+wl+'%</div></div>';
+    out+='</div>';
+    if(en.blendedOver15!=null){
+      out+='<div class="blend-row">';
+      out+='<div class="blend-box"><div class="blend-val" style="color:'+ec2(en.blendedOver15)+'">'+en.blendedOver15+'%</div><div class="blend-lbl">Over 1.5 Ponderat</div></div>';
+      out+='<div class="blend-box"><div class="blend-val" style="color:'+ec2(en.blendedGG)+'">'+en.blendedGG+'%</div><div class="blend-lbl">GG Ponderat</div></div>';
+      out+='</div>';
+    }
+    out+='</div>';
+  }
+
+  // Next fixtures
+  var nhf=en.nextFixtures_home||[],naf=en.nextFixtures_away||[];
+  if(nhf.length||naf.length){
+    var homeTeamName=d.fixture&&d.fixture.teams&&d.fixture.teams.home&&d.fixture.teams.home.name||'Gazde';
+    var awayTeamName=d.fixture&&d.fixture.teams&&d.fixture.teams.away&&d.fixture.teams.away.name||'Oaspeți';
+    out+='<div class="md-section"><div class="md-section-title">📅 Următoarele 5 meciuri</div>';
+    out+='<div class="nxt-grid">';
+    out+='<div><div class="nxt-col-title">'+homeTeamName+'</div>';
+    nhf.forEach(function(fx){out+='<div class="nxt-row"><div class="nxt-date">'+fx.date+'</div><div class="nxt-opp">'+fx.opponent+'</div><div class="nxt-venue">'+(fx.isHome?'Acasă':'Deplasare')+'</div></div>';});
+    out+='</div>';
+    out+='<div><div class="nxt-col-title">'+awayTeamName+'</div>';
+    naf.forEach(function(fx){out+='<div class="nxt-row"><div class="nxt-date">'+fx.date+'</div><div class="nxt-opp">'+fx.opponent+'</div><div class="nxt-venue">'+(fx.isHome?'Acasă':'Deplasare')+'</div></div>';});
+    out+='</div>';
+    out+='</div></div>';
+  }
+
   document.getElementById('md-body').innerHTML=out;
 
   // Fetch standings asynchronously and append
@@ -1504,6 +1539,11 @@ function mdRenderSumar(d){
   var hn2=d.fixture&&d.fixture.teams&&d.fixture.teams.home&&d.fixture.teams.home.name||'';
   var an2=d.fixture&&d.fixture.teams&&d.fixture.teams.away&&d.fixture.teams.away.name||'';
   if(lgId)mdFetchStandings(lgId,hn2,an2);
+
+  // Fetch meteo async
+  var venue=d.fixture&&d.fixture.fixture&&d.fixture.fixture.venue;
+  var meteoCity=venue&&venue.city;
+  if(meteoCity)mdFetchMeteo(meteoCity);
 }
 
 async function mdFetchStandings(lgId,hn,an){
@@ -1531,6 +1571,28 @@ async function mdFetchStandings(lgId,hn,an){
     out+='</tbody></table></div>';
     var body=document.getElementById('md-body');
     if(body)body.insertAdjacentHTML('beforeend',out);
+  }catch(e){}
+}
+
+async function mdFetchMeteo(city){
+  try{
+    var r=await fetch('/api/meteo?city='+encodeURIComponent(city));
+    var d=await r.json();
+    if(d.error)return;
+    var icons={'sunny':'☀️','cloudy':'⛅','rain':'🌧','snow':'❄️'};
+    var icon=icons[d.condition]||'🌡';
+    var impactHtml=d.probImpact<0?'<span class="meteo-impact">Over 2.5 '+(d.probImpact)+'%</span>':'';
+    var html='<div class="md-section"><div class="md-section-title">🌤 Condiții meteo — '+city+'</div>'+
+      '<div class="meteo-block">'+
+      '<div class="meteo-icon">'+icon+'</div>'+
+      '<div class="meteo-info">'+
+        '<div class="meteo-temp">'+d.temperature+'°C</div>'+
+        '<div class="meteo-detail">Precipitații: '+d.precipitation+'mm · Vânt: '+d.wind+' km/h</div>'+
+      '</div>'+
+      impactHtml+
+      '</div></div>';
+    var body=document.getElementById('md-body');
+    if(body)body.insertAdjacentHTML('afterbegin',html);
   }catch(e){}
 }
 
