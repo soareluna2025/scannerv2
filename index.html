@@ -540,11 +540,11 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 
   <!-- TAB: PRE-MECI -->
   <div class="tab-content" id="tab-pre">
-    <div class="search-wrap">
-      <input class="search-inp" id="pm-search" placeholder="Cauta echipa..." oninput="pmSearchChange(this.value)" autocomplete="off">
-      <button class="search-clear" id="pm-search-clear" onclick="pmSearchClear()">✕</button>
-    </div>
-    <div style="display:flex;justify-content:flex-end;padding:4px 12px 0">
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 12px 4px">
+      <div class="search-wrap" style="flex:1;margin:0">
+        <input class="search-inp" id="pm-search" placeholder="Cauta echipa..." oninput="pmSearchChange(this.value)" autocomplete="off">
+        <button class="search-clear" id="pm-search-clear" onclick="pmSearchClear()">✕</button>
+      </div>
       <button class="refresh-btn" id="pre-rf-btn" onclick="manualRefreshPM()"><span class="rf-icon">↻</span> Refresh</button>
     </div>
     <div id="pm-body">
