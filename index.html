@@ -285,6 +285,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   transform:translateY(100%);transition:transform .35s cubic-bezier(.32,.72,0,1);
   display:flex;flex-direction:column;overflow:hidden}
 .md-overlay.open{transform:translateY(0)}
+@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}
 .md-hdr{display:flex;align-items:center;justify-content:space-between;
   padding:0 16px;height:56px;flex-shrink:0;
   background:rgba(8,13,24,.95);border-bottom:1px solid var(--bor);
@@ -583,7 +584,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   <div class="md-hdr">
     <button class="md-close" onclick="mdClose()">✕</button>
     <div class="md-title" id="md-title">Detalii meci</div>
-    <div style="width:36px"></div>
+    <div style="width:36px;display:flex;align-items:center;justify-content:center"><span id="md-live-ind" style="display:none;width:8px;height:8px;border-radius:50%;background:#ef4444;animation:livePulse 1s infinite"></span></div>
   </div>
   <div class="md-tabs">
     <button class="md-tab active" onclick="mdTab(0)">SUMAR</button>
@@ -1279,21 +1280,24 @@ async function agSend(){
 
 // ── MATCH DETAIL ──────────────────────────────────────────────
 var _md={data:null,tabIdx:0,fixtureId:0,homeId:0,awayId:0};
+var _mdRefreshTimer=null;
 
 function mdOpen(fid,hid,aid,srcEl){
   if(!fid||!hid||!aid)return;
   // stop click from bubbling into any inner button (e.g. analyze)
   if(window.event&&window.event.target&&window.event.target.tagName==='BUTTON'&&window.event.target!==srcEl)return;
+  if(_mdRefreshTimer){clearInterval(_mdRefreshTimer);_mdRefreshTimer=null;}
   _md.fixtureId=fid;_md.homeId=hid;_md.awayId=aid;_md.tabIdx=0;_md.data=null;
   var ov=document.getElementById('md-overlay');
   ov.classList.add('open');
   document.getElementById('md-body').innerHTML='<div class="spinner"><div class="spin"></div></div>';
   document.getElementById('md-title').textContent='Detalii meci';
   document.querySelectorAll('.md-tab').forEach(function(t,i){t.classList.toggle('active',i===0);});
-  mdFetch();
+  mdFetch(false);
 }
 function mdClose(){
   document.getElementById('md-overlay').classList.remove('open');
+  if(_mdRefreshTimer){clearInterval(_mdRefreshTimer);_mdRefreshTimer=null;}
 }
 
 // Swipe-down to close
@@ -1307,12 +1311,14 @@ function mdClose(){
   },{passive:true});
 })();
 
-async function mdFetch(){
+async function mdFetch(silent){
   try{
-    var url='/api/match?id='+_md.fixtureId+'&h='+_md.homeId+'&a='+_md.awayId+'&br='+getBankroll();
+    var fid=_md.fixtureId;
+    var url='/api/match?id='+fid+'&h='+_md.homeId+'&a='+_md.awayId+'&br='+getBankroll();
     var r=await fetch(url);
     var d=await r.json();
     if(d.error)throw new Error(d.error);
+    if(_md.fixtureId!==fid)return;
     _md.data=d;
     var fix=d.fixture;
     if(fix){
@@ -1320,21 +1326,38 @@ async function mdFetch(){
       var an=fix.teams&&fix.teams.away&&fix.teams.away.name||'?';
       document.getElementById('md-title').textContent=hn+' vs '+an;
     }
+    var sh=fix&&fix.fixture&&fix.fixture.status?fix.fixture.status.short||'NS':'NS';
+    var isLive=(['1H','2H','HT','ET','BT','P','LIVE','INT']).indexOf(sh)>=0;
+    var liveInd=document.getElementById('md-live-ind');
+    if(liveInd)liveInd.style.display=isLive?'inline-block':'none';
     mdRender();
-    // Fetch enrich if not already cached (needed for live matches)
-    var fid=_md.fixtureId;
-    var hasCached=(_pmEnrich&&_pmEnrich[fid]&&_pmEnrich[fid].confidenceScore!=null)||
-                  (_genLiveEnrich&&_genLiveEnrich[fid]&&_genLiveEnrich[fid].confidenceScore!=null);
+    // On silent refresh always fetch fresh enrich; on first load skip if cached
+    var hasCached=(!silent)&&((_pmEnrich&&_pmEnrich[fid]&&_pmEnrich[fid].confidenceScore!=null)||
+                  (_genLiveEnrich&&_genLiveEnrich[fid]&&_genLiveEnrich[fid].confidenceScore!=null));
     if(!hasCached&&_md.homeId&&_md.awayId){
       fetch(enrichUrl(_md.homeId,_md.awayId,fix||null)).then(function(er){return er.json();}).then(function(ed){
-        if(!ed.error){
+        if(!ed.error&&_md.fixtureId===fid){
           _genLiveEnrich[fid]=ed;
-          if(_md.fixtureId===fid)mdRender();
+          mdRender();
         }
       }).catch(function(){});
     }
+    // Start auto-refresh for live matches (10s interval)
+    if(isLive&&!silent&&!_mdRefreshTimer){
+      _mdRefreshTimer=setInterval(function(){
+        if(!document.getElementById('md-overlay').classList.contains('open')){
+          clearInterval(_mdRefreshTimer);_mdRefreshTimer=null;return;
+        }
+        mdFetch(true);
+      },10000);
+    }
+    if(!isLive&&_mdRefreshTimer){
+      clearInterval(_mdRefreshTimer);_mdRefreshTimer=null;
+    }
   }catch(e){
-    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+e.message+'</div></div>';
+    if(!silent){
+      document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+e.message+'</div></div>';
+    }
   }
 }
 
