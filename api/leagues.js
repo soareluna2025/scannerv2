@@ -71,17 +71,23 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   239,   // Colombia - Primera A
   240,   // Colombia - Primera B (Liga 2)
   242,   // Colombia - Copa Colombia
+  243,   // Colombia - Torneo Betplay (Cup)
   268,   // Uruguay - Primera Division
   269,   // Uruguay - Segunda Division (Liga 2)
+  270,   // Uruguay - Copa Uruguay
   265,   // Chile - Primera Division
   266,   // Chile - Primera B (Liga 2)
   267,   // Chile - Copa Chile
   281,   // Peru - Primera Division
   282,   // Peru - Liga 2
-  286,   // Ecuador - Serie A
-  287,   // Ecuador - Serie B (Liga 2)
+  283,   // Peru - Copa Peru
+  286,   // Ecuador - LigaPro Serie A
+  287,   // Ecuador - LigaPro Serie B (Liga 2)
+  735,   // Ecuador - Copa Ecuador
   278,   // Paraguay - Primera Division
+  279,   // Paraguay - Division Intermedia (Liga 2)
   273,   // Bolivia - Primera Division
+  274,   // Bolivia - Liga de Ascenso (Liga 2)
   253,   // USA - MLS
   257,   // USA - US Open Cup
   321,   // Canada - Canadian Premier League
@@ -141,10 +147,14 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   2,     // UEFA Champions League
   3,     // UEFA Europa League
   848,   // UEFA Conference League
+  13,    // Copa Libertadores
   11,    // Copa Sudamericana
   17,    // AFC Champions League
+  18,    // AFC Cup
   12,    // CAF Champions League
+  20,    // CAF Confederation Cup
   4,     // Euro Championship
   5,     // UEFA Nations League
   1,     // World Cup
+  6,     // FIFA Club World Cup
 ]);

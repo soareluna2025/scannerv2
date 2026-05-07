@@ -235,12 +235,12 @@ export default async function handler(req, res) {
         const hC    = getStat(stats, 0, 'Corner Kicks');
         const aC    = getStat(stats, 1, 'Corner Kicks');
 
-        // Stale-data guard: only applied when stats ARE present;
-        // if a match has stats but ALL activity = 0 after min 10 → ghost/stale
-        // Exception: if a goal has been scored the match is real regardless of stats
+        // Stale-data guard: only applies very late in match (min>80), score 0-0,
+        // stats present but zero activity — almost certainly a ghost fixture.
+        // Many cups/secondary leagues have zero stats but are real matches.
         const hgNow = m.goals?.home ?? 0;
         const agNow = m.goals?.away ?? 0;
-        if (stats.length > 0 && elapsed > 10 && hgNow === 0 && agNow === 0) {
+        if (stats.length > 0 && elapsed > 80 && hgNow === 0 && agNow === 0) {
           const activity = hSOT + aSOT + hSoff + aSoff + hDA + aDA + hC + aC;
           if (activity === 0) {
             log(`stale filtered: ${m.teams?.home?.name} vs ${m.teams?.away?.name} min=${elapsed}`);
