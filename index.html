@@ -1345,7 +1345,7 @@ function mdRender(){
 function mdRenderSumar(d){
   var fix=d.fixture;
   var enrichBase=d.enrich||{};
-  var cached=_pmEnrich&&_pmEnrich[_md&&_md.fixtureId]||{};
+  var cached=(_pmEnrich&&_pmEnrich[_md&&_md.fixtureId])||(_genLiveEnrich&&_genLiveEnrich[_md&&_md.fixtureId])||{};
   var en=Object.assign({},enrichBase,cached);
   var stats=(fix&&fix.statistics)||[];
   var hg=fix&&fix.goals?fix.goals.home??0:0;
