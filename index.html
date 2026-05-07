@@ -1314,7 +1314,6 @@ async function mdFetch(){
     var d=await r.json();
     if(d.error)throw new Error(d.error);
     _md.data=d;
-    // Pre-fill title from fixture or from existing ST.ms data
     var fix=d.fixture;
     if(fix){
       var hn=fix.teams&&fix.teams.home&&fix.teams.home.name||'?';
@@ -1322,6 +1321,18 @@ async function mdFetch(){
       document.getElementById('md-title').textContent=hn+' vs '+an;
     }
     mdRender();
+    // Fetch enrich if not already cached (needed for live matches)
+    var fid=_md.fixtureId;
+    var hasCached=(_pmEnrich&&_pmEnrich[fid]&&_pmEnrich[fid].confidenceScore!=null)||
+                  (_genLiveEnrich&&_genLiveEnrich[fid]&&_genLiveEnrich[fid].confidenceScore!=null);
+    if(!hasCached&&_md.homeId&&_md.awayId){
+      fetch(enrichUrl(_md.homeId,_md.awayId,fix||null)).then(function(er){return er.json();}).then(function(ed){
+        if(!ed.error){
+          _genLiveEnrich[fid]=ed;
+          if(_md.fixtureId===fid)mdRender();
+        }
+      }).catch(function(){});
+    }
   }catch(e){
     document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+e.message+'</div></div>';
   }
