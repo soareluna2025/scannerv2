@@ -9,9 +9,22 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Vercel Deploy Hook
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Get Vercel org ID and deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: prj_6KIlo6YA9b8LMJ31455I1abJUEld
         run: |
-          curl -s -X POST \
-            "https://api.vercel.com/v1/integrations/deploy/prj_6KIlo6YA9b8LMJ31455I1abJUEld/EvrYobtS20" \
-            --fail-with-body
-          echo "Deploy hook triggered successfully"
+          # For personal accounts, org ID = user ID
+          ORG_ID=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v2/user" | jq -r '.user.id')
+          echo "Resolved org ID: $ORG_ID"
+          export VERCEL_ORG_ID=$ORG_ID
+
+          vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+          vercel build --prod --token=$VERCEL_TOKEN
+          vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
