@@ -6,7 +6,8 @@ function poissonRandom(lambda) {
   return k - 1;
 }
 
-export function runSimulation(lambdaHome, lambdaAway, simCount = 10000) {
+// currentHome/currentAway = goals already scored (live matches)
+export function runSimulation(lambdaHome, lambdaAway, simCount = 10000, currentHome = 0, currentAway = 0) {
   const scoreCounts = {};
   let homeWins = 0, draws = 0, awayWins = 0;
   let over05 = 0, over15 = 0, over25 = 0, over35 = 0, gg = 0;
@@ -14,8 +15,11 @@ export function runSimulation(lambdaHome, lambdaAway, simCount = 10000) {
   let totalGoals = 0;
 
   for (let i = 0; i < simCount; i++) {
-    const hg = poissonRandom(lambdaHome);
-    const ag = poissonRandom(lambdaAway);
+    // Simulate remaining goals, then add current score
+    const addH = poissonRandom(lambdaHome);
+    const addA = poissonRandom(lambdaAway);
+    const hg = currentHome + addH;
+    const ag = currentAway + addA;
     const total = hg + ag;
 
     const key = `${hg}-${ag}`;
@@ -31,7 +35,8 @@ export function runSimulation(lambdaHome, lambdaAway, simCount = 10000) {
     if (total > 3) over35++;
     if (hg > 0 && ag > 0) gg++;
 
-    for (let g = 0; g < total; g++) {
+    // Goal timing tracks only additional goals (remaining time)
+    for (let g = 0; g < addH + addA; g++) {
       const min = Math.floor(Math.random() * 90) + 1;
       const bucket = Math.min(5, Math.floor((min - 1) / 15));
       minuteBuckets[bucket]++;
@@ -70,8 +75,8 @@ export function runSimulation(lambdaHome, lambdaAway, simCount = 10000) {
       bttsNo: Math.round((simCount - gg) / simCount * 1000) / 10,
     },
     scoreDistribution,
-    mostLikelyScore:       scoreDistribution[0]?.score || '1-0',
-    secondMostLikelyScore: scoreDistribution[1]?.score || '1-1',
+    mostLikelyScore:       scoreDistribution[0]?.score || `${currentHome}-${currentAway}`,
+    secondMostLikelyScore: scoreDistribution[1]?.score || `${currentHome + 1}-${currentAway}`,
     goalTiming,
     confidence,
   };

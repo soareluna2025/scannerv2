@@ -216,7 +216,8 @@ export default async function handler(req, res) {
   }
 
   // ── Monte Carlo ───────────────────────────────────────────────
-  const sim = runSimulation(lH, lA, 10000);
+  // Pass current score so live simulations show correct final scores
+  const sim = runSimulation(lH, lA, 10000, isLive ? hgCur : 0, isLive ? agCur : 0);
 
   // ── Momentum ─────────────────────────────────────────────────
   const momentum = liveStats ? calcMomentum(liveStats) : null;
@@ -278,7 +279,9 @@ export default async function handler(req, res) {
       scoreDistribution: sim.scoreDistribution,
       mostLikelyScore:   sim.mostLikelyScore,
       secondMostLikelyScore: sim.secondMostLikelyScore,
-      expectedScore:     `${+lH.toFixed(2)} - ${+lA.toFixed(2)}`,
+      expectedScore:     isLive
+        ? `${+(hgCur + lH).toFixed(2)} - ${+(agCur + lA).toFixed(2)}`
+        : `${+lH.toFixed(2)} - ${+lA.toFixed(2)}`,
       goalTiming:        sim.goalTiming,
       confidence:        sim.confidence,
     },
