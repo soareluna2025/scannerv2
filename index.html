@@ -1206,11 +1206,8 @@ function renderPM(){
   // Calculate TOP PICK threshold (top 25% by over15Prob)
   var probs=Object.values(_pmEnrich).map(function(e){return e.over15Prob||0;}).sort(function(a,b){return b-a;});
   var topThresh=probs.length?probs[Math.floor(probs.length*0.25)]||0:999;
-  // Sort by over15Prob desc, then by kickoff
+  // Sort chronologically by kickoff; TOP PICK badge still shown based on over15Prob threshold
   var sorted=_pmMatches.slice().sort(function(a,b){
-    var ea=_pmEnrich[a.fixture&&a.fixture.id];var eb=_pmEnrich[b.fixture&&b.fixture.id];
-    var pa=ea?ea.over15Prob||0:-1;var pb=eb?eb.over15Prob||0:-1;
-    if(pb!==pa)return pb-pa;
     return new Date(a.fixture.date)-new Date(b.fixture.date);
   });
   var analyzedCount=Object.keys(_pmEnrich).length;
