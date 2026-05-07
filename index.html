@@ -334,6 +334,40 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .md-event-detail{flex:1;font-size:12px;color:var(--tx)}
 .md-event-team{font-size:10px;color:var(--mu)}
 
+/* ISTORIC PREDICȚII */
+.pred-panel{display:none;flex:1;overflow-y:auto;padding:12px;-webkit-overflow-scrolling:touch}
+.pred-panel.open{display:block}
+.pred-panel::-webkit-scrollbar{display:none}
+.pred-summary{display:flex;gap:8px;margin-bottom:12px}
+.pred-sum-box{flex:1;background:var(--sur2);border-radius:10px;padding:10px;text-align:center}
+.pred-sum-val{font-size:20px;font-weight:900;color:var(--ac)}
+.pred-sum-lbl{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.pred-row{background:var(--sur2);border-radius:8px;padding:8px 10px;margin-bottom:6px}
+.pred-teams{font-size:12px;font-weight:700;color:var(--tx)}
+.pred-meta{display:flex;justify-content:space-between;align-items:center;margin-top:4px}
+.pred-league{font-size:10px;color:var(--mu)}
+.pred-prob{font-size:11px;font-weight:700}
+.pred-result{font-size:11px;font-weight:800;padding:2px 7px;border-radius:6px}
+.pred-result.win{background:rgba(6,214,160,.2);color:var(--green)}
+.pred-result.loss{background:rgba(255,77,109,.15);color:var(--red)}
+.pred-result.pending{background:var(--sur3);color:var(--mu)}
+.ag-hist-btn{background:none;border:1px solid var(--bor);border-radius:8px;
+  color:var(--mu2);font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;
+  transition:all .2s}
+.ag-hist-btn.active{border-color:var(--ac);color:var(--ac)}
+
+/* CLASAMENT */
+.std-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:6px}
+.std-table th{color:var(--mu);font-size:9px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;padding:4px 6px;text-align:center}
+.std-table th:first-child{text-align:left}
+.std-table td{padding:5px 6px;text-align:center;border-bottom:1px solid var(--sur3)}
+.std-table td:first-child{text-align:left}
+.std-table td:nth-child(2){text-align:left;font-weight:600;color:var(--tx)}
+.std-row-hl{background:rgba(0,212,168,.08);border-left:2px solid var(--ac)}
+.std-pos{font-size:11px;font-weight:800;color:var(--mu);min-width:18px}
+.std-pts{font-weight:800;color:var(--tx)}
+
 /* NAV BADGE */
 .nav-badge{position:absolute;top:-5px;right:-9px;background:var(--red);color:#fff;
   font-size:8px;font-weight:800;border-radius:10px;padding:1px 4px;min-width:15px;
@@ -514,6 +548,10 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
       <div class="ag-stat"><div class="ag-stat-v" id="ag-rec">—</div><div class="ag-stat-l">Recom.</div></div>
       <div class="ag-stat"><div class="ag-stat-v" id="ag-wr">—</div><div class="ag-stat-l">Win Rate</div></div>
       <div class="ag-stat"><div class="ag-stat-v" id="ag-ngp">—</div><div class="ag-stat-l">Top NGP</div></div>
+      <div class="ag-stat"><button class="ag-hist-btn" id="ag-hist-btn" onclick="toggleIstoricPred()">📊 Istoric</button></div>
+    </div>
+    <div class="pred-panel" id="pred-panel">
+      <div id="pred-content"><div class="spinner"><div class="spin"></div></div></div>
     </div>
     <div class="agent-msgs" id="ag-msgs">
       <div class="msg bot">
@@ -1177,6 +1215,53 @@ async function agSend(){
   }catch(e){agRemoveTyping();agAppend('bot','Eroare conexiune: '+e.message);}
 }
 
+// ── ISTORIC PREDICȚII ─────────────────────────────────────────
+var _predLoaded=false;
+function toggleIstoricPred(){
+  var panel=document.getElementById('pred-panel');
+  var msgs=document.getElementById('ag-msgs');
+  var btn=document.getElementById('ag-hist-btn');
+  var isOpen=panel.classList.contains('open');
+  panel.classList.toggle('open',!isOpen);
+  msgs.style.display=isOpen?'':'none';
+  btn.classList.toggle('active',!isOpen);
+  if(!isOpen&&!_predLoaded){loadIstoricPred();}
+}
+async function loadIstoricPred(){
+  try{
+    var r=await fetch('/api/predictions');
+    var d=await r.json();
+    if(d.error){document.getElementById('pred-content').innerHTML='<div class="empty"><div class="empty-t">Eroare</div><div class="empty-s">'+d.error+'</div></div>';return;}
+    _predLoaded=true;
+    var preds=d.predictions||[];
+    var wr=d.winRate;
+    var out='<div class="pred-summary">';
+    out+='<div class="pred-sum-box"><div class="pred-sum-val">'+d.total+'</div><div class="pred-sum-lbl">Total</div></div>';
+    out+='<div class="pred-sum-box"><div class="pred-sum-val">'+d.resolved+'</div><div class="pred-sum-lbl">Rezolvate</div></div>';
+    out+='<div class="pred-sum-box"><div class="pred-sum-val">'+(wr!=null?wr+'%':'—')+'</div><div class="pred-sum-lbl">Win Rate</div></div>';
+    out+='</div>';
+    if(!preds.length){out+='<div class="empty"><div class="empty-t">Fără predicții</div><div class="empty-s">Nicio predicție salvată încă</div></div>';}
+    preds.forEach(function(p){
+      var prob=p.over15_prob!=null?Math.round(p.over15_prob)+'%':'—';
+      var probColor=p.over15_prob>=70?'var(--green)':p.over15_prob>=50?'var(--yellow)':'var(--red)';
+      var resCls=p.result_over15===true?'win':p.result_over15===false?'loss':'pending';
+      var resText=p.result_over15===true?'WIN':p.result_over15===false?'LOSS':'—';
+      var dt=p.match_date?p.match_date.slice(0,10):'—';
+      out+='<div class="pred-row">';
+      out+='<div class="pred-teams">'+p.home_team+' vs '+p.away_team+'</div>';
+      out+='<div class="pred-meta">';
+      out+='<div class="pred-league">'+p.league_name+' · '+dt+'</div>';
+      out+='<div style="display:flex;gap:6px;align-items:center">';
+      out+='<div class="pred-prob" style="color:'+probColor+'">O1.5: '+prob+'</div>';
+      out+='<div class="pred-result '+resCls+'">'+resText+'</div>';
+      out+='</div></div></div>';
+    });
+    document.getElementById('pred-content').innerHTML=out;
+  }catch(e){
+    document.getElementById('pred-content').innerHTML='<div class="empty"><div class="empty-t">Eroare conexiune</div></div>';
+  }
+}
+
 // ── MATCH DETAIL ──────────────────────────────────────────────
 var _md={data:null,tabIdx:0,fixtureId:0,homeId:0,awayId:0};
 
@@ -1385,6 +1470,40 @@ function mdRenderSumar(d){
   }
 
   document.getElementById('md-body').innerHTML=out;
+
+  // Fetch standings asynchronously and append
+  var lgId=d.fixture&&d.fixture.league&&d.fixture.league.id;
+  var hn2=d.fixture&&d.fixture.teams&&d.fixture.teams.home&&d.fixture.teams.home.name||'';
+  var an2=d.fixture&&d.fixture.teams&&d.fixture.teams.away&&d.fixture.teams.away.name||'';
+  if(lgId)mdFetchStandings(lgId,hn2,an2);
+}
+
+async function mdFetchStandings(lgId,hn,an){
+  try{
+    var r=await fetch('/api/standings?league='+lgId);
+    var data=await r.json();
+    var groups=data.response&&data.response[0]&&data.response[0].league&&data.response[0].league.standings;
+    if(!groups||!groups.length)return;
+    var table=groups[0];
+    var out='<div class="md-section"><div class="md-section-title">Clasament ligă</div>';
+    out+='<table class="std-table"><thead><tr><th>#</th><th>Echipă</th><th>J</th><th>V</th><th>E</th><th>Î</th><th>Pct</th></tr></thead><tbody>';
+    table.forEach(function(row){
+      var name=row.team&&row.team.name||'';
+      var isHL=(name===hn||name===an);
+      out+='<tr class="'+(isHL?'std-row-hl':'')+'">';
+      out+='<td class="std-pos">'+row.rank+'</td>';
+      out+='<td>'+(isHL?'<strong>':'')+name+(isHL?'</strong>':'')+'</td>';
+      out+='<td>'+(row.all&&row.all.played||0)+'</td>';
+      out+='<td>'+(row.all&&row.all.win||0)+'</td>';
+      out+='<td>'+(row.all&&row.all.draw||0)+'</td>';
+      out+='<td>'+(row.all&&row.all.lose||0)+'</td>';
+      out+='<td class="std-pts">'+(row.points||0)+'</td>';
+      out+='</tr>';
+    });
+    out+='</tbody></table></div>';
+    var body=document.getElementById('md-body');
+    if(body)body.insertAdjacentHTML('beforeend',out);
+  }catch(e){}
 }
 
 function mdRenderFormatii(d){
