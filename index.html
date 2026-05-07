@@ -520,7 +520,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     </div>
     <div class="backfill-section">
       <div class="backfill-title">Player Intelligence — Backfill</div>
-      <div class="backfill-sub">Colectează statistici jucători pentru calculul puterii echipelor (155 ligi)</div>
+      <div class="backfill-sub" id="bf-sub">Colectează statistici jucători pentru calculul puterii echipelor</div>
       <div class="backfill-progress"><div class="backfill-fill" id="bf-fill" style="width:0%"></div></div>
       <div class="backfill-status" id="bf-status">Apasă Start pentru a începe</div>
       <button class="backfill-btn" id="bf-btn" onclick="startBackfill()">▶ Start Backfill</button>
@@ -706,7 +706,7 @@ var BANKROLL_KEY='alohascan_bankroll';
 function getBankroll(){return parseFloat(localStorage.getItem(BANKROLL_KEY))||10;}
 function settingsOpen(){document.getElementById('bankroll-input').value=getBankroll();document.getElementById('settings-overlay').classList.add('open');}
 function settingsClose(){var v=parseFloat(document.getElementById('bankroll-input').value);if(v>0)localStorage.setItem(BANKROLL_KEY,v);document.getElementById('settings-overlay').classList.remove('open');}
-var _bfRunning=false,_bfIdx=0,_bfTotal=155;
+var _bfRunning=false,_bfIdx=0,_bfTotal=0;
 async function startBackfill(){
   if(_bfRunning)return;
   var btn=document.getElementById('bf-btn');
@@ -738,8 +738,14 @@ async function startBackfill(){
   var progR=await fetch('/api/players?action=progress').catch(function(){return null;});
   if(progR){
     var pd=await progR.json().catch(function(){return null;});
-    if(pd&&pd.done>0){_bfIdx=pd.done;var pct2=Math.round(pd.done/pd.total*100);fill.style.width=pct2+'%';status.textContent=pct2+'% deja procesat · continuând...';}
+    if(pd&&pd.total){
+      _bfTotal=pd.total;
+      var sub=document.getElementById('bf-sub');
+      if(sub)sub.textContent='Colectează statistici jucători pentru calculul puterii echipelor ('+_bfTotal+' ligi)';
+    }
+    if(pd&&pd.done>0){_bfIdx=pd.done;var pct2=Math.round(pd.done/(_bfTotal||pd.total)*100);fill.style.width=pct2+'%';status.textContent=pct2+'% deja procesat · continuând...';}
   }
+  if(!_bfTotal){_bfRunning=false;btn.disabled=false;btn.textContent='▶ Start Backfill';status.textContent='Eroare: nu s-a putut obține lista de ligi.';return;}
   step();
 }
 var ST={ms:[],connected:false,ws:null,region:'all',score:'all',searchQ:''};
