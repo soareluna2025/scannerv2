@@ -9,43 +9,30 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via Vercel REST API
+      - name: Deploy to Vercel via REST API
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
-          # Get GitHub repo numeric ID
-          REPO_ID=$(curl -sf \
-            -H "Authorization: Bearer ${{ github.token }}" \
-            "https://api.github.com/repos/soareluna2025/scannerv2" \
-            | jq -r '.id')
+          # Repo ID (public API, no auth needed)
+          REPO_ID=$(curl -s "https://api.github.com/repos/soareluna2025/scannerv2" | jq -r '.id')
           echo "Repo ID: $REPO_ID"
+          echo "SHA: $COMMIT_SHA"
 
-          # Create production deployment from git source (no CLI needed)
-          RESP=$(curl -s -X POST \
-            "https://api.vercel.com/v13/deployments" \
+          # Deploy from git source
+          RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST "https://api.vercel.com/v13/deployments" \
             -H "Authorization: Bearer $VERCEL_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"name\": \"scannerv2\",
-              \"project\": \"prj_6KIlo6YA9b8LMJ31455I1abJUEld\",
-              \"target\": \"production\",
-              \"gitSource\": {
-                \"type\": \"github\",
-                \"repoId\": \"$REPO_ID\",
-                \"ref\": \"main\",
-                \"sha\": \"${{ github.sha }}\"
-              }
-            }")
+            -d "{\"name\":\"scannerv2\",\"project\":\"prj_6KIlo6YA9b8LMJ31455I1abJUEld\",\"target\":\"production\",\"gitSource\":{\"type\":\"github\",\"repoId\":$REPO_ID,\"ref\":\"main\",\"sha\":\"$COMMIT_SHA\"}}")
 
-          echo "=== Vercel Response ==="
-          echo "$RESP" | jq '.'
+          BODY=$(echo "$RESP" | head -n -1)
+          STATUS=$(echo "$RESP" | tail -n 1 | cut -d: -f2)
+          echo "HTTP Status: $STATUS"
+          echo "$BODY" | jq '.'
 
-          # Fail if there's an error
-          ERROR=$(echo "$RESP" | jq -r '.error.message // empty')
-          if [ -n "$ERROR" ]; then
-            echo "EROARE: $ERROR"
+          if [ "$STATUS" != "200" ] && [ "$STATUS" != "201" ]; then
+            echo "EROARE: deployment esuat cu HTTP $STATUS"
             exit 1
           fi
-
-          URL=$(echo "$RESP" | jq -r '.url // empty')
-          echo "Deployment URL: https://$URL"
+          echo "Deployment creat cu succes!"
