@@ -198,35 +198,44 @@ export default async function handler(req, res) {
   const hdr      = { 'x-apisports-key': key };
 
   try {
-    const [r1, r2, r3, r4, r5, r6] = await Promise.all([
+    const fetchNext = req.query.nf === '1';
+    const [r1, r2, r3, r4] = await Promise.all([
       fetch(`https://v3.football.api-sports.io/fixtures?team=${h}&last=20&status=FT`, { headers: hdr }),
       fetch(`https://v3.football.api-sports.io/fixtures?team=${a}&last=20&status=FT`, { headers: hdr }),
       fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${h}-${a}&last=10`, { headers: hdr }),
       fid ? fetch(`https://v3.football.api-sports.io/odds?fixture=${fid}&bookmaker=8`, { headers: hdr })
           : Promise.resolve(null),
-      fetch(`https://v3.football.api-sports.io/fixtures?team=${h}&next=5`, { headers: hdr }),
-      fetch(`https://v3.football.api-sports.io/fixtures?team=${a}&next=5`, { headers: hdr }),
     ]);
 
-    const [d1, d2, d3, d5raw, d6raw] = await Promise.all([r1.json(), r2.json(), r3.json(), r5.json(), r6.json()]);
+    const [d1, d2, d3] = await Promise.all([r1.json(), r2.json(), r3.json()]);
 
     const hGames = (d1.response || []).filter(m => m.teams?.home?.id === hId).slice(0, 10);
     const aGames = (d2.response || []).filter(m => m.teams?.away?.id === aId).slice(0, 10);
     const h2h    = (d3.response || []).slice(0, 10);
 
-    // Next fixtures
-    const nextFixtures_home = (d5raw.response || []).map(fx => ({
-      date:        fx.fixture?.date ? fx.fixture.date.substring(0, 10) : '',
-      opponent:    fx.teams?.home?.id === hId ? fx.teams?.away?.name : fx.teams?.home?.name,
-      isHome:      fx.teams?.home?.id === hId,
-      competition: fx.league?.name || '',
-    }));
-    const nextFixtures_away = (d6raw.response || []).map(fx => ({
-      date:        fx.fixture?.date ? fx.fixture.date.substring(0, 10) : '',
-      opponent:    fx.teams?.home?.id === aId ? fx.teams?.away?.name : fx.teams?.home?.name,
-      isHome:      fx.teams?.home?.id === aId,
-      competition: fx.league?.name || '',
-    }));
+    // Next fixtures — only fetched when ?nf=1 to save API quota
+    let nextFixtures_home = [], nextFixtures_away = [];
+    if (fetchNext) {
+      try {
+        const [r5, r6] = await Promise.all([
+          fetch(`https://v3.football.api-sports.io/fixtures?team=${h}&next=5`, { headers: hdr }),
+          fetch(`https://v3.football.api-sports.io/fixtures?team=${a}&next=5`, { headers: hdr }),
+        ]);
+        const [d5, d6] = await Promise.all([r5.json(), r6.json()]);
+        nextFixtures_home = (d5.response || []).map(fx => ({
+          date:        fx.fixture?.date ? fx.fixture.date.substring(0, 10) : '',
+          opponent:    fx.teams?.home?.id === hId ? fx.teams?.away?.name : fx.teams?.home?.name,
+          isHome:      fx.teams?.home?.id === hId,
+          competition: fx.league?.name || '',
+        }));
+        nextFixtures_away = (d6.response || []).map(fx => ({
+          date:        fx.fixture?.date ? fx.fixture.date.substring(0, 10) : '',
+          opponent:    fx.teams?.home?.id === aId ? fx.teams?.away?.name : fx.teams?.home?.name,
+          isHome:      fx.teams?.home?.id === aId,
+          competition: fx.league?.name || '',
+        }));
+      } catch (_) { /* next fixtures unavailable */ }
+    }
 
     // Parse odds; fallback to league-wide odds if fixture returns nothing
     let oddsRaw = null;
