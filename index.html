@@ -628,40 +628,6 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     </div>
   </div>
 
-  <!-- TAB: SIMULATOR -->
-  <div class="tab-content" id="tab-sim">
-    <div style="padding:12px 12px 0">
-      <div class="sim-header-row">
-        <div style="font-size:13px;font-weight:700;color:var(--mu2)">🔮 MATCH SIMULATOR</div>
-        <div style="font-size:10px;color:var(--mu);margin-top:2px">10,000 scenarii Monte Carlo</div>
-      </div>
-
-      <!-- Match selector -->
-      <div style="margin-top:12px">
-        <div style="font-size:10px;color:var(--mu);margin-bottom:4px;font-weight:700;letter-spacing:.5px">SELECTEAZĂ MECI</div>
-        <select id="sim-match-sel" class="sim-select">
-          <option value="">— alege din meciurile active —</option>
-        </select>
-        <div style="margin-top:6px;display:flex;gap:6px">
-          <input id="sim-fid"  class="sim-inp" placeholder="Fixture ID" type="number" style="flex:2">
-          <input id="sim-hid"  class="sim-inp" placeholder="Home ID"    type="number" style="flex:2">
-          <input id="sim-aid"  class="sim-inp" placeholder="Away ID"    type="number" style="flex:2">
-          <input id="sim-lid"  class="sim-inp" placeholder="Liga ID"    type="number" style="flex:2">
-        </div>
-        <button id="sim-run-btn" class="sim-run-btn" onclick="simRun()">🔮 SIMULEAZĂ 10,000 SCENARII</button>
-      </div>
-
-      <!-- Loading -->
-      <div id="sim-loading" style="display:none;text-align:center;padding:24px 0">
-        <div style="font-size:13px;color:var(--mu2);margin-bottom:8px">⚙️ Procesez scenarii...</div>
-        <div class="sim-progress-wrap"><div class="sim-progress-fill" id="sim-prog-fill"></div></div>
-        <div id="sim-count-lbl" style="font-size:11px;color:var(--mu);margin-top:6px">0 / 10,000</div>
-      </div>
-    </div>
-
-    <!-- Results -->
-    <div id="sim-results" style="display:none;padding:0 12px 80px"></div>
-  </div>
 
 </main>
 
@@ -693,6 +659,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   <div class="gen-tabs">
     <button class="gen-tab active" onclick="genTab(0)">⚽ LIVE</button>
     <button class="gen-tab" onclick="genTab(1)">📅 UPCOMING</button>
+    <button class="gen-tab" onclick="genTab(2)">🔮 SIM</button>
   </div>
   <div class="gen-body" id="gen-body">
     <div class="spinner"><div class="spin"></div></div>
@@ -720,10 +687,6 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   <button class="nav-btn" id="nav-gen" onclick="genOpen()">
     <span class="nav-icon" style="position:relative">⚡<span class="nav-badge" id="gen-badge" style="display:none">0</span></span>
     <span class="nav-label">Generează</span>
-  </button>
-  <button class="nav-btn" id="nav-sim" onclick="setTab('sim')">
-    <span class="nav-icon">🔮</span>
-    <span class="nav-label">Sim</span>
   </button>
 </nav>
 <script>
@@ -784,12 +747,11 @@ document.getElementById('ag-start-time').textContent=new Date().toTimeString().s
 
 // ── TABS ─────────────────────────────────────────────────────
 function setTab(t){
-  ['live','pre','agent','fav','sim'].forEach(function(x){
+  ['live','pre','agent','fav'].forEach(function(x){
     document.getElementById('tab-'+x).classList.toggle('active',x===t);
     var nb=document.getElementById('nav-'+x);
     if(nb)nb.classList.toggle('active',x===t);
   });
-  if(t==='sim')simPopulateDropdown();
   var pg=document.getElementById('page');
   if(t==='agent'){
     pg.style.display='flex';pg.style.flexDirection='column';
@@ -1805,7 +1767,31 @@ function genTab(idx){
   document.querySelectorAll('.gen-tab').forEach(function(t,i){t.classList.toggle('active',i===idx);});
   genRender();
 }
-function genRender(){if(GEN.tabIdx===0)genRenderLive();else genRenderUpcoming();}
+function genRender(){if(GEN.tabIdx===0)genRenderLive();else if(GEN.tabIdx===1)genRenderUpcoming();else genRenderSim();}
+
+function genRenderSim(){
+  var body=document.getElementById('gen-body');
+  body.innerHTML=
+    '<div style="padding:4px 0 12px">'+
+    '<div style="font-size:10px;color:var(--mu);margin-bottom:4px;font-weight:700;letter-spacing:.5px">SELECTEAZĂ MECI</div>'+
+    '<select id="sim-match-sel" class="sim-select"><option value="">— alege din meciurile active —</option></select>'+
+    '<div style="margin-top:6px;display:flex;gap:6px">'+
+    '<input id="sim-fid" class="sim-inp" placeholder="Fixture ID" type="number" style="flex:1">'+
+    '<input id="sim-hid" class="sim-inp" placeholder="Home ID" type="number" style="flex:1">'+
+    '<input id="sim-aid" class="sim-inp" placeholder="Away ID" type="number" style="flex:1">'+
+    '<input id="sim-lid" class="sim-inp" placeholder="Liga ID" type="number" style="flex:1">'+
+    '</div>'+
+    '<button id="sim-run-btn" class="sim-run-btn" onclick="simRun()">🔮 SIMULEAZĂ 10,000 SCENARII</button>'+
+    '</div>'+
+    '<div id="sim-loading" style="display:none;text-align:center;padding:24px 0">'+
+    '<div style="font-size:13px;color:var(--mu2);margin-bottom:8px">⚙️ Procesez scenarii...</div>'+
+    '<div class="sim-progress-wrap"><div class="sim-progress-fill" id="sim-prog-fill"></div></div>'+
+    '<div id="sim-count-lbl" style="font-size:11px;color:var(--mu);margin-top:6px">0 / 10,000</div>'+
+    '</div>'+
+    '<div id="sim-results" style="display:none;padding-bottom:80px"></div>';
+  simPopulateDropdown();
+  if(_simData)simRender(_simData);
+}
 
 function genScore(ed,type){
   if(!ed)return -1;
