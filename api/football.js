@@ -237,7 +237,10 @@ export default async function handler(req, res) {
 
         // Stale-data guard: only applied when stats ARE present;
         // if a match has stats but ALL activity = 0 after min 10 → ghost/stale
-        if (stats.length > 0 && elapsed > 10) {
+        // Exception: if a goal has been scored the match is real regardless of stats
+        const hgNow = m.goals?.home ?? 0;
+        const agNow = m.goals?.away ?? 0;
+        if (stats.length > 0 && elapsed > 10 && hgNow === 0 && agNow === 0) {
           const activity = hSOT + aSOT + hSoff + aSoff + hDA + aDA + hC + aC;
           if (activity === 0) {
             log(`stale filtered: ${m.teams?.home?.name} vs ${m.teams?.away?.name} min=${elapsed}`);
