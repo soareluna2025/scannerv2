@@ -258,10 +258,10 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   display:flex;height:64px;
   background:rgba(8,13,24,.95);backdrop-filter:blur(20px);
   border-top:1px solid var(--bor);}
-.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;cursor:pointer;border:none;background:none;transition:all .15s;padding:8px}
-.nav-icon{font-size:20px;line-height:1}
-.nav-label{font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--mu)}
+.nav-btn{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;cursor:pointer;border:none;background:none;transition:all .15s;padding:8px 4px}
+.nav-icon{font-size:18px;line-height:1}
+.nav-label{font-size:8px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;text-align:center}
 .nav-btn.active .nav-label{color:var(--ac)}
 .nav-btn.active .nav-icon{filter:drop-shadow(0 0 6px var(--ac))}
 
@@ -723,7 +723,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   </button>
   <button class="nav-btn" id="nav-sim" onclick="setTab('sim')">
     <span class="nav-icon">🔮</span>
-    <span class="nav-label">Simulator</span>
+    <span class="nav-label">Sim</span>
   </button>
 </nav>
 <script>
