@@ -9,22 +9,43 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-
-      - name: Get Vercel org ID and deploy
+      - name: Deploy via Vercel REST API
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: prj_6KIlo6YA9b8LMJ31455I1abJUEld
         run: |
-          # For personal accounts, org ID = user ID
-          ORG_ID=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v2/user" | jq -r '.user.id')
-          echo "Resolved org ID: $ORG_ID"
-          export VERCEL_ORG_ID=$ORG_ID
+          # Get GitHub repo numeric ID
+          REPO_ID=$(curl -sf \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            "https://api.github.com/repos/soareluna2025/scannerv2" \
+            | jq -r '.id')
+          echo "Repo ID: $REPO_ID"
 
-          vercel pull --yes --environment=production --token=$VERCEL_TOKEN
-          vercel build --prod --token=$VERCEL_TOKEN
-          vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+          # Create production deployment from git source (no CLI needed)
+          RESP=$(curl -s -X POST \
+            "https://api.vercel.com/v13/deployments" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"name\": \"scannerv2\",
+              \"project\": \"prj_6KIlo6YA9b8LMJ31455I1abJUEld\",
+              \"target\": \"production\",
+              \"gitSource\": {
+                \"type\": \"github\",
+                \"repoId\": \"$REPO_ID\",
+                \"ref\": \"main\",
+                \"sha\": \"${{ github.sha }}\"
+              }
+            }")
+
+          echo "=== Vercel Response ==="
+          echo "$RESP" | jq '.'
+
+          # Fail if there's an error
+          ERROR=$(echo "$RESP" | jq -r '.error.message // empty')
+          if [ -n "$ERROR" ]; then
+            echo "EROARE: $ERROR"
+            exit 1
+          fi
+
+          URL=$(echo "$RESP" | jq -r '.url // empty')
+          echo "Deployment URL: https://$URL"
