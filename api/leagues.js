@@ -152,8 +152,8 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Colombia
   239,   // Primera A
   240,   // Primera B (Liga 2)
-  242,   // Copa Colombia
-  243,   // Torneo Betplay
+  241,   // Copa Colombia
+  713,   // Superliga (Copa)
 
   // Chile
   265,   // Primera Division
@@ -192,8 +192,9 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // USA
   253,   // MLS
-  254,   // USL Championship (Liga 2)
+  255,   // USL Championship (Liga 2)
   257,   // US Open Cup
+  909,   // MLS Next Pro (Liga 3)
 
   // Canada
   321,   // Canadian Premier League
