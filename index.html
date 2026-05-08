@@ -789,7 +789,6 @@ async function runHealthCheck(){
   }
 }
 var ST={ms:[],connected:false,ws:null,region:'all',score:'all',searchQ:''};
-var TG_SENT=new Set();
 
 // ── CLOCK ────────────────────────────────────────────────────
 function tickClock(){
@@ -953,7 +952,6 @@ async function loadLive(cb){
     renderMatches();
     updateStats();
     trackWR();
-    tgCheck();
     genUpdateBadge();
     if(cb)cb(true);
   }catch(e){
@@ -1141,22 +1139,6 @@ function renderWR(data){
   document.getElementById('wr-l').textContent='L: '+l;
   document.getElementById('wr-p').textContent='P: '+pend;
   document.getElementById('wr-r').textContent=t>0?rate+'%':'—';
-}
-
-// ── TELEGRAM ──────────────────────────────────────────────────
-function tgCheck(){
-  ST.ms.forEach(function(m){
-    var s=m._s||{};
-    if((s.ng||0)<CFG.MC)return;
-    var fid=m.fixture&&m.fixture.id;
-    if(!fid||TG_SENT.has(fid))return;
-    TG_SENT.add(fid);
-    var hn=m.teams&&m.teams.home&&m.teams.home.name||'';
-    var an=m.teams&&m.teams.away&&m.teams.away.name||'';
-    var lg=m.league&&m.league.name||'';
-    var msg='⚡ ALERT AlohaScan\n⚽ '+hn+' vs '+an+'\n🏆 '+lg+' | '+s.mn+"'\n📊 NGP: "+s.ng+'%\n🔗 scannerv2-five.vercel.app';
-    fetch('/api/telegram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})}).catch(function(){});
-  });
 }
 
 // ── PRE-MECI ──────────────────────────────────────────────────
