@@ -741,7 +741,8 @@ async function startBackfill(){
       if(next!=null&&_bfRunning)setTimeout(step,300);
       else{_bfRunning=false;btn.disabled=false;btn.textContent='▶ Reîncepe Backfill';status.textContent='Complet!';}
     }catch(e){
-      status.textContent='Eroare la liga '+_bfIdx+': '+e.message;
+      status.textContent='Eroare la liga '+_bfIdx+' (skip): '+e.message;
+      _bfIdx++;
       setTimeout(step,1000);
     }
   }
@@ -753,7 +754,10 @@ async function startBackfill(){
       var sub=document.getElementById('bf-sub');
       if(sub)sub.textContent='Colectează statistici jucători pentru calculul puterii echipelor ('+_bfTotal+' ligi)';
     }
-    if(pd&&pd.done>0){_bfIdx=pd.done;var pct2=Math.round(pd.done/(_bfTotal||pd.total)*100);fill.style.width=pct2+'%';status.textContent=pct2+'% deja procesat · continuând...';}
+    if(pd&&pd.total){
+      var processed=(pd.done||0)+(pd.error||0);
+      if(processed>0){_bfIdx=processed;var pct2=Math.round(processed/_bfTotal*100);fill.style.width=pct2+'%';status.textContent=pct2+'% deja procesat ('+processed+'/'+_bfTotal+') · continuând...';}
+    }
   }
   if(!_bfTotal){_bfRunning=false;btn.disabled=false;btn.textContent='▶ Start Backfill';status.textContent='Eroare: nu s-a putut obține lista de ligi.';return;}
   step();
