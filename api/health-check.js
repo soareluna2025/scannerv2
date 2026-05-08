@@ -77,24 +77,18 @@ async function t1(sbUrl, sbKey) {
 async function t2(sbUrl, sbKey) {
   const hdr = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
 
-  const [totalCount, sampleRes, oldestRes] = await Promise.all([
+  const [totalCount, sampleRes] = await Promise.all([
     sbCount(sbUrl, sbKey, 'player_stats'),
     fetch(
-      `${sbUrl}/rest/v1/player_stats?select=fixture_id,team_id,created_at&order=created_at.desc&limit=2000`,
-      { headers: hdr }
-    ),
-    fetch(
-      `${sbUrl}/rest/v1/player_stats?select=created_at&order=created_at.asc&limit=1`,
+      `${sbUrl}/rest/v1/player_stats?select=fixture_id,team_id&order=player_id.desc&limit=2000`,
       { headers: hdr }
     ),
   ]);
 
-  const [sampleRows, oldestRows] = await Promise.all([sampleRes.json(), oldestRes.json()]);
+  const sampleRows = await sampleRes.json();
   const arr = Array.isArray(sampleRows) ? sampleRows : [];
-  const oldest = (Array.isArray(oldestRows) && oldestRows[0]?.created_at)
-    ? oldestRows[0].created_at.split('T')[0]
-    : null;
-  const newest = arr[0]?.created_at?.split('T')[0] ?? null;
+  const oldest = null;
+  const newest  = null;
   const totalFixtures = new Set(arr.map(r => r.fixture_id)).size;
   const totalTeams    = new Set(arr.map(r => r.team_id)).size;
 
@@ -171,7 +165,7 @@ async function t4(sbUrl, sbKey) {
   const { team_id, team_name } = teamRows[0];
 
   const dataRes = await fetch(
-    `${sbUrl}/rest/v1/player_stats?team_id=eq.${team_id}&select=rating,goals,pass_accuracy,shots_on_target&order=created_at.desc&limit=110`,
+    `${sbUrl}/rest/v1/player_stats?team_id=eq.${team_id}&select=rating,goals,pass_accuracy,shots_on_target&order=player_id.desc&limit=110`,
     { headers: hdr }
   );
   const playerRows = await dataRes.json();
@@ -221,8 +215,8 @@ async function t5(sbUrl, sbKey) {
   const [[homeId, homeName], [awayId, awayName]] = [...teamMap.entries()];
 
   const [homeRes, awayRes] = await Promise.all([
-    fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${homeId}&select=rating,goals,pass_accuracy,shots_on_target&order=created_at.desc&limit=110`, { headers: hdr }),
-    fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${awayId}&select=rating,goals,pass_accuracy,shots_on_target&order=created_at.desc&limit=110`, { headers: hdr }),
+    fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${homeId}&select=rating,goals,pass_accuracy,shots_on_target&order=player_id.desc&limit=110`, { headers: hdr }),
+    fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${awayId}&select=rating,goals,pass_accuracy,shots_on_target&order=player_id.desc&limit=110`, { headers: hdr }),
   ]);
   const [homeRows, awayRows] = await Promise.all([homeRes.json(), awayRes.json()]);
 

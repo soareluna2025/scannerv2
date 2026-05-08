@@ -192,10 +192,10 @@ async function getTeamStrengths(hId, aId, sbUrl, sbKey) {
   if (!sbUrl || !sbKey) return { home: null, away: null };
   try {
     const [rH, rA] = await Promise.all([
-      fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${hId}&select=rating,goals,pass_accuracy,shots_on_target&order=created_at.desc&limit=110`, {
+      fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${hId}&select=rating,goals,pass_accuracy,shots_on_target&order=player_id.desc&limit=110`, {
         headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
       }),
-      fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${aId}&select=rating,goals,pass_accuracy,shots_on_target&order=created_at.desc&limit=110`, {
+      fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${aId}&select=rating,goals,pass_accuracy,shots_on_target&order=player_id.desc&limit=110`, {
         headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
       }),
     ]);
