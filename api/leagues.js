@@ -80,7 +80,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Sweden
   113,   // Allsvenskan
   114,   // Superettan (Liga 2)
-  116,   // Svenska Cupen
+  115,   // Svenska Cupen
 
   // Poland
   106,   // Ekstraklasa
@@ -226,8 +226,8 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   320,   // Copa Honduras
 
   // Guatemala
-  235,   // Liga Nacional
-  247,   // Primera B (Liga 2)
+  339,   // Liga Nacional
+  338,   // Primera Division (Liga 2)
   248,   // Copa Guatemala
 
   // El Salvador
@@ -349,7 +349,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Morocco
   200,   // Botola Pro
   201,   // Botola 2 (Liga 2)
-  204,   // Coupe du Trône
+  822,   // Coupe du Trône
 
   // Tunisia
   202,   // Ligue 1
@@ -367,7 +367,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   671,   // Nedbank Cup
 
   // Nigeria
-  332,   // NPFL
+  399,   // NPFL
   666,   // Nigeria National League (Liga 2)
   667,   // Nigerian FA Cup
 
