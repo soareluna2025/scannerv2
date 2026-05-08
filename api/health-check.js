@@ -348,6 +348,26 @@ export default async function handler(req, res) {
   const sbKey  = process.env.SUPABASE_KEY;
   const apiKey = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
+  // ── LEAGUE SEARCH action ─────────────────────────────────────────────────
+  if (req.query.action === 'leagues') {
+    if (!apiKey) return res.status(500).json({ error: 'API key lipsă' });
+    const { country, name } = req.query;
+    const params = new URLSearchParams();
+    if (country) params.set('country', country);
+    if (name)    params.set('name',    name);
+    const r = await fetch(`https://v3.football.api-sports.io/leagues?${params}`, {
+      headers: { 'x-apisports-key': apiKey },
+    });
+    const data = await r.json();
+    const leagues = (data.response || []).map(l => ({
+      id:      l.league?.id,
+      name:    l.league?.name,
+      type:    l.league?.type,
+      country: l.country?.name,
+    }));
+    return res.status(200).json({ total: leagues.length, leagues });
+  }
+
   const [test1, test2, test3, test4, test5, test7, test8] = await Promise.all([
     safeRun('Supabase Connection', () => t1(sbUrl, sbKey)),
     safeRun('Player Stats Data',   () => t2(sbUrl, sbKey)),
