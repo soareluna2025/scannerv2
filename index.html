@@ -520,10 +520,20 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     </div>
     <div class="backfill-section">
       <div class="backfill-title">Player Intelligence — Backfill</div>
-      <div class="backfill-sub">Colectează statistici jucători pentru calculul puterii echipelor (155 ligi)</div>
+      <div class="backfill-sub" id="bf-sub">Colectează statistici jucători pentru calculul puterii echipelor</div>
       <div class="backfill-progress"><div class="backfill-fill" id="bf-fill" style="width:0%"></div></div>
       <div class="backfill-status" id="bf-status">Apasă Start pentru a începe</div>
       <button class="backfill-btn" id="bf-btn" onclick="startBackfill()">▶ Start Backfill</button>
+    </div>
+    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:8px;border-bottom:none">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="settings-label">🔍 Health Check</div>
+          <div class="settings-sub">Verifică că toate sistemele funcționează</div>
+        </div>
+        <button class="backfill-btn" style="width:auto;padding:8px 16px;margin-top:0" onclick="runHealthCheck()">TEST</button>
+      </div>
+      <div id="health-results" style="display:none;font-size:12px;margin-top:4px"></div>
     </div>
     <button class="settings-save" onclick="settingsClose()">Salvează</button>
   </div>
@@ -706,7 +716,7 @@ var BANKROLL_KEY='alohascan_bankroll';
 function getBankroll(){return parseFloat(localStorage.getItem(BANKROLL_KEY))||10;}
 function settingsOpen(){document.getElementById('bankroll-input').value=getBankroll();document.getElementById('settings-overlay').classList.add('open');}
 function settingsClose(){var v=parseFloat(document.getElementById('bankroll-input').value);if(v>0)localStorage.setItem(BANKROLL_KEY,v);document.getElementById('settings-overlay').classList.remove('open');}
-var _bfRunning=false,_bfIdx=0,_bfTotal=155;
+var _bfRunning=false,_bfIdx=0,_bfTotal=0;
 async function startBackfill(){
   if(_bfRunning)return;
   var btn=document.getElementById('bf-btn');
@@ -738,12 +748,47 @@ async function startBackfill(){
   var progR=await fetch('/api/players?action=progress').catch(function(){return null;});
   if(progR){
     var pd=await progR.json().catch(function(){return null;});
-    if(pd&&pd.done>0){_bfIdx=pd.done;var pct2=Math.round(pd.done/pd.total*100);fill.style.width=pct2+'%';status.textContent=pct2+'% deja procesat · continuând...';}
+    if(pd&&pd.total){
+      _bfTotal=pd.total;
+      var sub=document.getElementById('bf-sub');
+      if(sub)sub.textContent='Colectează statistici jucători pentru calculul puterii echipelor ('+_bfTotal+' ligi)';
+    }
+    if(pd&&pd.done>0){_bfIdx=pd.done;var pct2=Math.round(pd.done/(_bfTotal||pd.total)*100);fill.style.width=pct2+'%';status.textContent=pct2+'% deja procesat · continuând...';}
   }
+  if(!_bfTotal){_bfRunning=false;btn.disabled=false;btn.textContent='▶ Start Backfill';status.textContent='Eroare: nu s-a putut obține lista de ligi.';return;}
   step();
 }
+async function runHealthCheck(){
+  var el=document.getElementById('health-results');
+  var btn=event.currentTarget||event.target;
+  el.style.display='block';
+  el.innerHTML='<div style="color:var(--mu);padding:6px 0">⏳ Rulează teste...</div>';
+  btn.disabled=true;btn.textContent='⏳...';
+  try{
+    var r=await fetch('/api/health-check');
+    var d=await r.json();
+    var overallColor=d.overall.includes('✅')?'#22c55e':d.overall.includes('⚠️')?'#f59e0b':'#ef4444';
+    var html='<div style="font-weight:800;color:'+overallColor+';margin-bottom:8px;font-size:13px">'+d.overall+'</div>';
+    Object.entries(d.tests).forEach(function(entry){
+      var key=entry[0];var test=entry[1];
+      var color=test.status.startsWith('✅')?'#22c55e':test.status.startsWith('⚠️')?'#f59e0b':'#ef4444';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bor)">'
+        +'<span style="color:var(--mu2);flex:1;margin-right:8px">'+test.message+'</span>'
+        +'<span style="color:'+color+';font-weight:700;white-space:nowrap">'+test.status+'</span>'
+        +'</div>';
+    });
+    html+='<div style="margin-top:8px;font-size:11px;color:var(--mu)">✅ '+d.summary.passed+' trecut · ⚠️ '+d.summary.warnings+' avertismente · ❌ '+d.summary.failed+' eșuat</div>';
+    if(d.summary.critical_issues&&d.summary.critical_issues.length){
+      html+='<div style="margin-top:4px;font-size:11px;color:#ef4444">Critic: '+d.summary.critical_issues.join(', ')+'</div>';
+    }
+    el.innerHTML=html;
+  }catch(e){
+    el.innerHTML='<div style="color:#ef4444">❌ Eroare: '+e.message+'</div>';
+  }finally{
+    btn.disabled=false;btn.textContent='TEST';
+  }
+}
 var ST={ms:[],connected:false,ws:null,region:'all',score:'all',searchQ:''};
-var TG_SENT=new Set();
 
 // ── CLOCK ────────────────────────────────────────────────────
 function tickClock(){
@@ -907,7 +952,6 @@ async function loadLive(cb){
     renderMatches();
     updateStats();
     trackWR();
-    tgCheck();
     genUpdateBadge();
     if(cb)cb(true);
   }catch(e){
@@ -1095,22 +1139,6 @@ function renderWR(data){
   document.getElementById('wr-l').textContent='L: '+l;
   document.getElementById('wr-p').textContent='P: '+pend;
   document.getElementById('wr-r').textContent=t>0?rate+'%':'—';
-}
-
-// ── TELEGRAM ──────────────────────────────────────────────────
-function tgCheck(){
-  ST.ms.forEach(function(m){
-    var s=m._s||{};
-    if((s.ng||0)<CFG.MC)return;
-    var fid=m.fixture&&m.fixture.id;
-    if(!fid||TG_SENT.has(fid))return;
-    TG_SENT.add(fid);
-    var hn=m.teams&&m.teams.home&&m.teams.home.name||'';
-    var an=m.teams&&m.teams.away&&m.teams.away.name||'';
-    var lg=m.league&&m.league.name||'';
-    var msg='⚡ ALERT AlohaScan\n⚽ '+hn+' vs '+an+'\n🏆 '+lg+' | '+s.mn+"'\n📊 NGP: "+s.ng+'%\n🔗 scannerv2-five.vercel.app';
-    fetch('/api/telegram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})}).catch(function(){});
-  });
 }
 
 // ── PRE-MECI ──────────────────────────────────────────────────
