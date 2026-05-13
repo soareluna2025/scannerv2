@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="36" fill="#080d18"/>
+  <rect width="192" height="192" rx="36" fill="url(#g)"/>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="192" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f1729"/>
+      <stop offset="100%" stop-color="#080d18"/>
+    </linearGradient>
+  </defs>
+  <text x="96" y="100" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="28" font-weight="800" fill="#f0f4ff" text-anchor="middle" letter-spacing="2">ALOHA</text>
+  <text x="96" y="130" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="28" font-weight="800" fill="#00d4a8" text-anchor="middle" letter-spacing="2">SCAN</text>
+  <rect x="72" y="55" width="48" height="3" rx="1.5" fill="#00d4a8"/>
+</svg>
