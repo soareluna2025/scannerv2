@@ -5,6 +5,7 @@ function log(msg) {
 }
 
 const WOMEN_RE = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
+const LOWER_DIV_RE = /\b[3-9]\.\s*(liga|division|div)\b/i;
 
 function dateStr(offsetDays) {
   const d = new Date();
@@ -72,8 +73,12 @@ export default async function handler(req, res) {
     const afterWomen = afterLeague.filter(m => !WOMEN_RE.test(m.league?.name || ''));
     log(`after women filter: ${afterWomen.length} (removed ${afterLeague.length - afterWomen.length})`);
 
+    // Filter: remove 3rd division and below by name (safety net for mismatched IDs)
+    const afterDiv = afterWomen.filter(m => !LOWER_DIV_RE.test(m.league?.name || ''));
+    log(`after lower-div filter: ${afterDiv.length} (removed ${afterWomen.length - afterDiv.length})`);
+
     // Map to slim payload, sort by kickoff ascending — no count limit
-    const result = afterWomen
+    const result = afterDiv
       .map(m => ({
         fixture: { id: m.fixture.id, date: m.fixture.date, status: m.fixture.status },
         league:  { id: m.league.id, name: m.league.name, country: m.league.country, flag: m.league.flag },
@@ -94,6 +99,7 @@ export default async function handler(req, res) {
         rawTotal: raw.length,
         afterLeague: afterLeague.length,
         afterWomen: afterWomen.length,
+        afterLowerDiv: afterDiv.length,
         final: result.length,
       },
     });
