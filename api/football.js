@@ -1,358 +1,184 @@
-// In-memory cache to limit API-Football calls (55s TTL)
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
-
-let _cache = { data: null, ts: 0 };
-const CACHE_TTL = 55_000;
-
-// Per-fixture enrich cache (persists across requests on same instance)
-const enrichCache = new Map();
-
-function poissonProb(lambda, k) {
-  let result = Math.exp(-lambda);
-  for (let i = 1; i <= k; i++) result *= lambda / i;
-  return result;
-}
-
-function calcPoisson6x6(lambdaHome, lambdaAway) {
-  let probHomeWin = 0, probDraw = 0, probAwayWin = 0;
-  let probOver15 = 0, probOver25 = 0, probGG = 0;
-  for (let i = 0; i <= 5; i++) {
-    for (let j = 0; j <= 5; j++) {
-      const p = poissonProb(lambdaHome, i) * poissonProb(lambdaAway, j);
-      if (i > j) probHomeWin += p;
-      else if (i === j) probDraw += p;
-      else probAwayWin += p;
-      if (i + j >= 2) probOver15 += p;
-      if (i + j >= 3) probOver25 += p;
-      if (i > 0 && j > 0) probGG += p;
-    }
-  }
-  const total = probHomeWin + probDraw + probAwayWin;
-  return {
-    homeWin:    Math.round(probHomeWin / total * 100),
-    draw:       Math.round(probDraw    / total * 100),
-    awayWin:    Math.round(probAwayWin / total * 100),
-    over15Prob: Math.round(probOver15 * 100),
-    over25Prob: Math.round(probOver25 * 100),
-    ggProb:     Math.round(probGG     * 100),
-  };
-}
-
-async function enrichMatch(fixtureId, homeId, awayId, apiKey) {
-  if (enrichCache.has(fixtureId)) return;
-  try {
-    const hdr = { 'x-apisports-key': apiKey };
-    const [r1, r2, r3] = await Promise.all([
-      fetch(`https://v3.football.api-sports.io/fixtures?team=${homeId}&last=20&status=FT`, { headers: hdr }),
-      fetch(`https://v3.football.api-sports.io/fixtures?team=${awayId}&last=20&status=FT`, { headers: hdr }),
-      fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${homeId}-${awayId}&last=10`, { headers: hdr })
-    ]);
-    const [d1, d2, d3] = await Promise.all([r1.json(), r2.json(), r3.json()]);
-    const hGames = (d1.response || []).filter(m => m.teams?.home?.id === homeId).slice(0, 10);
-    const aGames = (d2.response || []).filter(m => m.teams?.away?.id === awayId).slice(0, 10);
-    const h2h    = (d3.response || []).slice(0, 10);
-
-    const avg    = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
-    const pct    = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
-    const round2 = v => Math.round(v * 100) / 100;
-
-    const homeAvgScored   = avg(hGames, m => m.goals?.home ?? 0);
-    const homeAvgConceded = avg(hGames, m => m.goals?.away ?? 0);
-    const awayAvgScored   = avg(aGames, m => m.goals?.away ?? 0);
-    const awayAvgConceded = avg(aGames, m => m.goals?.home ?? 0);
-
-    const lambdaHome  = (homeAvgScored + awayAvgConceded) / 2;
-    const lambdaAway  = (awayAvgScored + homeAvgConceded) / 2;
-    const lambdaTotal = lambdaHome + lambdaAway;
-
-    const matrix = calcPoisson6x6(lambdaHome, lambdaAway);
-
-    const confidence = (h2h.length >= 8 && hGames.length >= 8 && aGames.length >= 8) ? 'HIGH'
-                     : (h2h.length >= 5 && hGames.length >= 5 && aGames.length >= 5) ? 'MED'
-                     : 'LOW';
-
-    enrichCache.set(fixtureId, {
-      homeAvgScored: round2(homeAvgScored), homeAvgConceded: round2(homeAvgConceded),
-      homeScoreRate: pct(hGames, m => (m.goals?.home ?? 0) > 0),
-      awayAvgScored: round2(awayAvgScored), awayAvgConceded: round2(awayAvgConceded),
-      awayScoreRate: pct(aGames, m => (m.goals?.away ?? 0) > 0),
-      lambdaHome: round2(lambdaHome), lambdaAway: round2(lambdaAway), lambdaTotal: round2(lambdaTotal),
-      over15Prob: matrix.over15Prob, over25Prob: matrix.over25Prob, ggProb: matrix.ggProb,
-      homeWin: matrix.homeWin, draw: matrix.draw, awayWin: matrix.awayWin,
-      h2hOver15: pct(h2h, m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1),
-      h2hGG:     pct(h2h, m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0),
-      h2hSample: h2h.length, confidence
-    });
-  } catch (e) {
-    log(`enrich ${fixtureId}: ${e.message}`);
-  }
-}
-
-const COUNTRY_FLAG = {
-  'Afghanistan': '🇦🇫', 'Albania': '🇦🇱', 'Algeria': '🇩🇿', 'Angola': '🇦🇴',
-  'Argentina': '🇦🇷', 'Armenia': '🇦🇲', 'Australia': '🇦🇺', 'Austria': '🇦🇹',
-  'Azerbaijan': '🇦🇿', 'Bahrain': '🇧🇭', 'Bangladesh': '🇧🇩', 'Belarus': '🇧🇾',
-  'Belgium': '🇧🇪', 'Bolivia': '🇧🇴', 'Bosnia': '🇧🇦', 'Brazil': '🇧🇷',
-  'Bulgaria': '🇧🇬', 'Cambodia': '🇰🇭', 'Cameroon': '🇨🇲', 'Canada': '🇨🇦',
-  'Chile': '🇨🇱', 'China': '🇨🇳', 'Colombia': '🇨🇴', 'Congo': '🇨🇬',
-  'Costa Rica': '🇨🇷', 'Croatia': '🇭🇷', 'Cyprus': '🇨🇾', 'Czech Republic': '🇨🇿',
-  'Czechia': '🇨🇿', 'Denmark': '🇩🇰', 'Ecuador': '🇪🇨', 'Egypt': '🇪🇬',
-  'El Salvador': '🇸🇻', 'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Estonia': '🇪🇪', 'Ethiopia': '🇪🇹',
-  'Finland': '🇫🇮', 'France': '🇫🇷', 'Georgia': '🇬🇪', 'Germany': '🇩🇪',
-  'Ghana': '🇬🇭', 'Greece': '🇬🇷', 'Guatemala': '🇬🇹', 'Honduras': '🇭🇳',
-  'Hungary': '🇭🇺', 'Iceland': '🇮🇸', 'India': '🇮🇳', 'Indonesia': '🇮🇩',
-  'Iran': '🇮🇷', 'Iraq': '🇮🇶', 'Ireland': '🇮🇪', 'Israel': '🇮🇱',
-  'Italy': '🇮🇹', 'Ivory Coast': '🇨🇮', 'Jamaica': '🇯🇲', 'Japan': '🇯🇵',
-  'Jordan': '🇯🇴', 'Kazakhstan': '🇰🇿', 'Kenya': '🇰🇪', 'Kuwait': '🇰🇼',
-  'Latvia': '🇱🇻', 'Lebanon': '🇱🇧', 'Libya': '🇱🇾', 'Lithuania': '🇱🇹',
-  'Luxembourg': '🇱🇺', 'Malaysia': '🇲🇾', 'Mexico': '🇲🇽', 'Moldova': '🇲🇩',
-  'Montenegro': '🇲🇪', 'Morocco': '🇲🇦', 'Netherlands': '🇳🇱', 'New Zealand': '🇳🇿',
-  'Nicaragua': '🇳🇮', 'Nigeria': '🇳🇬', 'North Korea': '🇰🇵', 'North Macedonia': '🇲🇰',
-  'Norway': '🇳🇴', 'Oman': '🇴🇲', 'Pakistan': '🇵🇰', 'Palestine': '🇵🇸',
-  'Panama': '🇵🇦', 'Paraguay': '🇵🇾', 'Peru': '🇵🇪', 'Philippines': '🇵🇭',
-  'Poland': '🇵🇱', 'Portugal': '🇵🇹', 'Qatar': '🇶🇦', 'Romania': '🇷🇴',
-  'Russia': '🇷🇺', 'Saudi Arabia': '🇸🇦', 'Scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿', 'Senegal': '🇸🇳',
-  'Serbia': '🇷🇸', 'Singapore': '🇸🇬', 'Slovakia': '🇸🇰', 'Slovenia': '🇸🇮',
-  'South Africa': '🇿🇦', 'South Korea': '🇰🇷', 'Spain': '🇪🇸', 'Sudan': '🇸🇩',
-  'Sweden': '🇸🇪', 'Switzerland': '🇨🇭', 'Syria': '🇸🇾', 'Taiwan': '🇹🇼',
-  'Thailand': '🇹🇭', 'Tunisia': '🇹🇳', 'Turkey': '🇹🇷', 'USA': '🇺🇸',
-  'Ukraine': '🇺🇦', 'United Arab Emirates': '🇦🇪', 'United States': '🇺🇸',
-  'Uruguay': '🇺🇾', 'Uzbekistan': '🇺🇿', 'Venezuela': '🇻🇪', 'Vietnam': '🇻🇳',
-  'Wales': '🏴󠁧󠁢󠁷󠁬󠁳󠁿', 'Zambia': '🇿🇲', 'Zimbabwe': '🇿🇼',
-  'World': '🌍', 'Europe': '🇪🇺', 'Africa': '🌍', 'Asia': '🌏',
-  'South America': '🌎', 'North America': '🌎', 'CONCACAF': '🌎', 'UEFA': '🇪🇺',
-  'CAF': '🌍', 'AFC': '🌏', 'CONMEBOL': '🌎', 'OFC': '🌏',
-};
-const LIVE_STATUS = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'INT']);
 
 function log(msg) {
   console.log(`[football] ${new Date().toISOString()} ${msg}`);
 }
 
-function getStat(statistics, teamIdx, type) {
-  const team = statistics?.[teamIdx]?.statistics;
-  if (!Array.isArray(team)) return 0;
-  const entry = team.find(s => s.type === type);
-  const v = entry?.value;
-  if (v === null || v === undefined || v === 'N/A' || v === '') return 0;
-  return parseFloat(v) || 0;
+const STALE_MS = 5 * 60 * 1000; // 5 min — max age for a "live" match to stay visible
+
+async function fetchH2H(homeId, awayId, key) {
+  try {
+    const [d1, d2, d3] = await Promise.all([
+      fetch(`https://v3.football.api-sports.io/fixtures?team=${homeId}&last=10&status=FT`, { headers: { 'x-apisports-key': key } }).then(r => r.json()),
+      fetch(`https://v3.football.api-sports.io/fixtures?team=${awayId}&last=10&status=FT`, { headers: { 'x-apisports-key': key } }).then(r => r.json()),
+      fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${homeId}-${awayId}&last=10`, { headers: { 'x-apisports-key': key } }).then(r => r.json()),
+    ]);
+    const hGames = (d1.response || []).filter(m => m.teams?.home?.id === homeId).slice(0, 10);
+    const aGames = (d2.response || []).filter(m => m.teams?.away?.id === awayId).slice(0, 10);
+    const h2hGames = (d3.response || []).slice(0, 10);
+
+    const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : null;
+    const pct    = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
+    const goals  = m => (m.goals?.home ?? 0) + (m.goals?.away ?? 0);
+
+    return {
+      homeAvgScored:    avg(hGames, m => m.goals?.home ?? 0),
+      homeAvgConceded:  avg(hGames, m => m.goals?.away ?? 0),
+      awayAvgScored:    avg(aGames, m => m.goals?.away ?? 0),
+      awayAvgConceded:  avg(aGames, m => m.goals?.home ?? 0),
+      h2hOver15:        pct(h2hGames, m => goals(m) > 1),
+      h2hAvgGoals:      avg(h2hGames, goals),
+    };
+  } catch { return {}; }
 }
 
-function norm(n) { return (n || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+const enrichCache = new Map();
 
-// Estimate elapsed minutes when API returns null (free-tier limitation)
-function estimateElapsed(fixtureDate, statusShort) {
-  if (!fixtureDate) return 0;
-  const kickoffMs = new Date(fixtureDate).getTime();
-  const nowMs     = Date.now();
-  const totalMins = Math.max(0, Math.floor((nowMs - kickoffMs) / 60000));
+async function enrichOne(m, key, sbUrl, sbKey) {
+  const hId = m.teams?.home?.id;
+  const aId = m.teams?.away?.id;
+  if (!hId || !aId) return m;
+  const cacheKey = `${hId}-${aId}`;
+  if (enrichCache.has(cacheKey)) return { ...m, ...enrichCache.get(cacheKey) };
 
-  switch (statusShort) {
-    case '1H':  return Math.min(45, totalMins);
-    case 'HT':  return 45;
-    case '2H':  return Math.min(90, Math.max(46, totalMins - 15)); // ~15min halftime break
-    case 'ET':  return Math.min(120, Math.max(91, totalMins - 30));
-    case 'BT':  return 105; // break between ET halves
-    case 'P':   return 120;
-    default:    return Math.min(90, totalMins);
+  const stats = m.statistics || [];
+  const liveStats = {
+    xg: 0, sot: 0, da: 0, corners: 0,
+    possession_home: 0, possession_away: 0,
+  };
+  for (const team of stats) {
+    for (const st of (team.statistics || [])) {
+      const v = parseFloat(st.value) || 0;
+      if (st.type === 'expected_goals')      liveStats.xg         += v;
+      if (st.type === 'Shots on Goal')        liveStats.sot        += v;
+      if (st.type === 'Dangerous Attacks')    liveStats.da         += v;
+      if (st.type === 'Corner Kicks')         liveStats.corners    += v;
+      if (st.type === 'Ball Possession') {
+        if (team.team?.id === hId) liveStats.possession_home = v;
+        else                       liveStats.possession_away = v;
+      }
+    }
   }
+
+  const h2h = await fetchH2H(hId, aId, key);
+  const enriched = { ...h2h, liveStats };
+  enrichCache.set(cacheKey, enriched);
+  return { ...m, ...enriched };
 }
+
+const fdCompMap = {
+  2021: { id: 39,  name: 'Premier League',    country: 'England' },
+  2014: { id: 140, name: 'La Liga',            country: 'Spain' },
+  2002: { id: 78,  name: 'Bundesliga',         country: 'Germany' },
+  2019: { id: 135, name: 'Serie A',            country: 'Italy' },
+  2015: { id: 61,  name: 'Ligue 1',            country: 'France' },
+  2003: { id: 88,  name: 'Eredivisie',         country: 'Netherlands' },
+  2017: { id: 94,  name: 'Primeira Liga',      country: 'Portugal' },
+  2016: { id: 207, name: 'Super League',       country: 'Switzerland' },
+  2018: { id: 144, name: 'Pro League',         country: 'Belgium' },
+  2001: { id: 2,   name: 'Champions League',   country: 'Europe' },
+  2137: { id: 3,   name: 'Europa League',      country: 'Europe' },
+  2146: { id: 848, name: 'Conference League',  country: 'Europe' },
+};
+
+function mapFdMatch(m) {
+  const comp    = fdCompMap[m.competition?.id] || { id: 0, name: m.competition?.name || '', country: '' };
+  const elapsed = m.minute ?? (m.status?.elapsed ?? null);
+  return {
+    _src: 'fd',
+    fixture: {
+      id:      m.id,
+      date:    m.utcDate,
+      status:  {
+        short:   m.status?.short ?? m.status,
+        elapsed: elapsed,
+      },
+    },
+    league:  { id: comp.id, name: comp.name, country: comp.country, flag: null },
+    teams:   {
+      home: { id: m.homeTeam?.id, name: m.homeTeam?.name ?? m.homeTeam?.shortName ?? '' },
+      away: { id: m.awayTeam?.id, name: m.awayTeam?.name ?? m.awayTeam?.shortName ?? '' },
+    },
+    goals:   { home: m.score?.fullTime?.home ?? m.score?.fullTime?.homeTeam ?? null,
+               away: m.score?.fullTime?.away ?? m.score?.fullTime?.awayTeam ?? null },
+    statistics: [],
+    events:     [],
+    players:    [],
+  };
+}
+
+const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','SUSP','INT','LIVE']);
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, s-maxage=55, stale-while-revalidate=10');
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const afKey = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
-  const fdKey = process.env.FOOTBALL_DATA_KEY;
+  const key    = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
+  const fdKey  = process.env.FOOTBALL_DATA_KEY;
+  const sbUrl  = process.env.SUPABASE_URL;
+  const sbKey  = process.env.SUPABASE_KEY;
 
-  if (!afKey && !fdKey) {
-    log('ERROR: no API keys configured');
-    return res.status(200).json({ response: [], error: 'No API keys configured' });
-  }
+  if (!key) return res.status(500).json({ error: 'API_FOOTBALL_KEY neconfigurat' });
 
-  // Return cached response if still fresh
-  const now = Date.now();
-  if (_cache.data && now - _cache.ts < CACHE_TTL) {
-    log(`cache hit (${Math.round((now - _cache.ts) / 1000)}s old)`);
-    return res.status(200).json(_cache.data);
-  }
+  res.setHeader('Cache-Control', 'no-store');
 
-  // Fetch both APIs simultaneously
-  const [afRes, fdRes] = await Promise.allSettled([
-    afKey
-      ? fetch('https://v3.football.api-sports.io/fixtures?live=all', {
-          headers: { 'x-apisports-key': afKey }
-        }).then(r => r.json()).catch(e => ({ _err: e.message }))
-      : Promise.resolve(null),
-    fdKey
-      ? fetch('https://api.football-data.org/v4/matches?status=LIVE', {
-          headers: { 'X-Auth-Token': fdKey }
-        }).then(r => r.json()).catch(e => ({ _err: e.message }))
-      : Promise.resolve(null)
-  ]);
-
-  const combined = [];
-  const seen = new Set();
-
-  // --- API-Football (primary: wider league coverage) ---
+  // ── API-Football live ──────────────────────────────────────────
+  let afMatches = [];
   try {
-    const data = afRes.status === 'fulfilled' ? afRes.value : null;
-    if (data?._err) {
-      log(`af fetch error: ${data._err}`);
-    } else if (data?.errors && Object.keys(data.errors).length > 0) {
-      log(`af API errors: ${JSON.stringify(data.errors)}`);
-    }
-    if (data?.paging) {
-      log(`af paging: current=${data.paging.current} total=${data.paging.total}`);
-    }
-    if (data && !data._err && !data.errors?.token) {
-      const raw = Array.isArray(data.response) ? data.response : [];
-      log(`af raw: ${raw.length} (plan remaining: ${data.results ?? '?'})`);
+    const r = await fetch('https://v3.football.api-sports.io/fixtures?live=all', {
+      headers: { 'x-apisports-key': key },
+    });
+    const d = await r.json();
+    const raw = d.response || [];
+    log(`af raw live: ${raw.length}`);
 
-      let passedStatus = 0, passedStale = 0;
-      for (const m of raw) {
-        const sh = m.fixture?.status?.short || '';
+    const now = Date.now();
 
-        // Must be a recognised live status — trust the API on status
-        if (!LIVE_STATUS.has(sh)) continue;
-        passedStatus++;
+    // Status filter — keep only genuinely live statuses
+    const passedStatus = raw.filter(m => LIVE_STATUSES.has(m.fixture?.status?.short));
+    log(`af status-filter: ${passedStatus.length}/${raw.length} live; stale-guard kept: ${passedStatus.length}/${passedStatus.length}`);
 
-        // Elapsed: free tier often returns null — estimate from kickoff time as fallback
-        let elapsed = m.fixture?.status?.elapsed;
-        if (!elapsed && elapsed !== 0) {
-          // elapsed is null/undefined — estimate from fixture date
-          elapsed = estimateElapsed(m.fixture?.date, sh);
-        }
-        elapsed = elapsed || 0;
-
-        const stats = m.statistics || [];
-        const hSOT  = getStat(stats, 0, 'Shots on Goal');
-        const aSOT  = getStat(stats, 1, 'Shots on Goal');
-        const hSoff = getStat(stats, 0, 'Shots off Goal');
-        const aSoff = getStat(stats, 1, 'Shots off Goal');
-        const hDA   = getStat(stats, 0, 'Dangerous Attacks');
-        const aDA   = getStat(stats, 1, 'Dangerous Attacks');
-        const hC    = getStat(stats, 0, 'Corner Kicks');
-        const aC    = getStat(stats, 1, 'Corner Kicks');
-
-        // No stale-data filter — show all whitelisted leagues always.
-        // Cups and secondary leagues often have zero stats but are real matches.
-        const hgNow = m.goals?.home ?? 0;
-        const agNow = m.goals?.away ?? 0;
-
-        const hxg = getStat(stats, 0, 'expected_goals');
-        const axg = getStat(stats, 1, 'expected_goals');
-        const key  = norm(m.teams?.home?.name) + '|' + norm(m.teams?.away?.name);
-
-        if (seen.has(key)) continue;
-        seen.add(key);
-
-        passedStale++;
-        combined.push({
-          _src: 'af',
-          _validated: true,
-          fixture: {
-            id:     m.fixture.id,
-            date:   m.fixture.date,
-            status: { short: sh, long: m.fixture.status.long, elapsed }
-          },
-          league: {
-            id:      m.league.id,
-            name:    m.league.name,
-            country: m.league.country,
-            logo:    m.league.logo,
-            flag:    m.league.flag,
-            f:       COUNTRY_FLAG[m.league.country] || '🌐'
-          },
-          teams: {
-            home: { id: m.teams.home.id, name: m.teams.home.name, logo: m.teams.home.logo },
-            away: { id: m.teams.away.id, name: m.teams.away.name, logo: m.teams.away.logo }
-          },
-          goals:      { home: m.goals.home ?? 0, away: m.goals.away ?? 0 },
-          xg:         { home: hxg, away: axg },
-          statistics: stats,
-          events:     m.events  || [],
-          lineups:    m.lineups || []
-        });
-      }
-      log(`af status-filter: ${passedStatus}/${raw.length} live; stale-guard kept: ${passedStale}/${passedStatus}`);
-    }
+    afMatches = passedStatus.map(m => ({ ...m, _src: 'af' }));
   } catch (e) {
-    log(`af parse error: ${e.message}`);
+    log(`af error: ${e.message}`);
   }
 
-  // --- football-data.org (supplementary: real-time top European leagues) ---
-  const FD_LIVE  = new Set(['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT']);
-  const FD_SHORT = { IN_PLAY: '1H', PAUSED: 'HT', EXTRA_TIME: 'ET', PENALTY_SHOOTOUT: 'P' };
-
-  try {
-    const data = fdRes.status === 'fulfilled' ? fdRes.value : null;
-    if (data && !data._err && !data.errorCode && Array.isArray(data.matches)) {
-      log(`fd raw: ${data.matches.length}`);
-      for (const m of data.matches) {
-        if (!FD_LIVE.has(m.status)) continue;
-        const key = norm(m.homeTeam?.shortName || m.homeTeam?.name) + '|' +
-                    norm(m.awayTeam?.shortName || m.awayTeam?.name);
-        if (seen.has(key)) continue; // already covered by af
-        seen.add(key);
-
-        combined.push({
-          _src: 'fd',
-          _validated: true,
-          fixture: {
-            id:     m.id,
-            date:   m.utcDate,
-            status: { short: FD_SHORT[m.status] || m.status, long: m.status, elapsed: m.minute || 0 }
-          },
-          league: {
-            id:      m.competition.id,
-            name:    m.competition.name,
-            country: m.area?.name || '',
-            logo:    m.competition.emblem || '',
-            flag:    '',
-            f:       COUNTRY_FLAG[m.area?.name] || '🌐'
-          },
-          teams: {
-            home: { id: m.homeTeam.id, name: m.homeTeam.shortName || m.homeTeam.name, logo: m.homeTeam.crest || '' },
-            away: { id: m.awayTeam.id, name: m.awayTeam.shortName || m.awayTeam.name, logo: m.awayTeam.crest || '' }
-          },
-          goals: {
-            home: m.score.fullTime.home ?? m.score.halfTime.home ?? 0,
-            away: m.score.fullTime.away ?? m.score.halfTime.away ?? 0
-          },
-          xg: { home: 0, away: 0 },
-          statistics: [], events: [], lineups: []
-        });
-      }
-    }
-  } catch (e) {
-    log(`fd parse error: ${e.message}`);
-  }
-
-  // Enrich uncached matches (max 50 per call)
-  // Skip fd-source: their team IDs are football-data.org IDs, incompatible with api-sports endpoints
-  if (afKey) {
-    const toEnrich = combined
-      .filter(m => m._src !== 'fd' && m.teams?.home?.id && m.teams?.away?.id && !enrichCache.has(m.fixture.id))
-      .slice(0, 50);
-    if (toEnrich.length > 0) {
-      log(`enriching ${toEnrich.length} new matches`);
-      await Promise.all(toEnrich.map(m =>
-        enrichMatch(m.fixture.id, m.teams.home.id, m.teams.away.id, afKey)
-      ));
+  // ── football-data.org live ─────────────────────────────────────
+  let fdMatches = [];
+  if (fdKey) {
+    try {
+      const r = await fetch('https://api.football-data.org/v4/matches?status=IN_PLAY,PAUSED,HALFTIME', {
+        headers: { 'X-Auth-Token': fdKey },
+      });
+      const d = await r.json();
+      const raw = (d.matches || []).filter(m => fdCompMap[m.competition?.id]);
+      fdMatches = raw.map(m => mapFdMatch(m));
+      log(`fd raw: ${(d.matches||[]).length} → after comp-filter: ${fdMatches.length}`);
+    } catch (e) {
+      log(`fd error: ${e.message}`);
     }
   }
-  for (const m of combined) {
-    m.enrichData = enrichCache.get(m.fixture.id) || null;
-  }
-  const firstWithEnrich = combined.find(m => m.enrichData);
-  if (firstWithEnrich) log(`enrichData sample: ${JSON.stringify(firstWithEnrich.enrichData)}`);
+
+  // ── Merge: af primary, fd fills gaps ──────────────────────────
+  const afFixtureIds = new Set(afMatches.map(m => m.fixture?.id));
+  const afTeamPairs  = new Set(afMatches.map(m => `${m.teams?.home?.id}-${m.teams?.away?.id}`));
+
+  const fdNew = fdMatches.filter(m => {
+    const pair = `${m.teams?.home?.id}-${m.teams?.away?.id}`;
+    return !afFixtureIds.has(m.fixture?.id) && !afTeamPairs.has(pair);
+  });
+  log(`fd contributing ${fdNew.length} new matches (not in af)`);
+
+  const combined = [...afMatches, ...fdNew];
+  log(`combined before league-filter: ${combined.length}`);
 
   // Strict whitelist: af-source uses API-Football IDs; fd-source uses football-data.org
   // competition IDs (different numbering) — for fd we only apply the women's filter.
   const WOMEN_RE = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
+  const LOWER_DIV_RE = /\b[3-9]\.\s*(liga|division|div)\b/i;
   const filtered = combined.filter(m => {
     if (WOMEN_RE.test(m.league?.name || '')) return false;
+    if (LOWER_DIV_RE.test(m.league?.name || '')) return false;
     if (m._src === 'fd') return true; // fd IDs differ — league already curated by fd.org
     return ALLOWED_LEAGUE_IDS.has(m.league?.id);
   });
@@ -369,6 +195,15 @@ export default async function handler(req, res) {
 
   log(`final combined: ${filtered.length}`);
   const result = { response: filtered };
-  _cache = { data: result, ts: now };
+
+  // ── Optional enrichment ────────────────────────────────────────
+  const toEnrich = filtered
+    .filter(m => m._src !== 'fd' && m.teams?.home?.id && m.teams?.away?.id && !enrichCache.has(m.fixture.id))
+    .slice(0, 5);
+
+  if (toEnrich.length && key) {
+    await Promise.allSettled(toEnrich.map(m => enrichOne(m, key, sbUrl, sbKey)));
+  }
+
   return res.status(200).json(result);
 }
