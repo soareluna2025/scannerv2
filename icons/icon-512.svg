@@ -1,13 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="96" fill="#080d18"/>
-  <rect width="512" height="512" rx="96" fill="url(#g)"/>
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#0f1729"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f1e35"/>
       <stop offset="100%" stop-color="#080d18"/>
     </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00e8b0"/>
+      <stop offset="100%" stop-color="#00a878"/>
+    </linearGradient>
+    <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#b0c4d8"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
-  <text x="256" y="268" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="74" font-weight="800" fill="#f0f4ff" text-anchor="middle" letter-spacing="5">ALOHA</text>
-  <text x="256" y="346" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="74" font-weight="800" fill="#00d4a8" text-anchor="middle" letter-spacing="5">SCAN</text>
-  <rect x="192" y="148" width="128" height="8" rx="4" fill="#00d4a8"/>
+
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <path d="M 116,347 A 165,165 0 1,1 394,165" fill="none" stroke="url(#teal)" stroke-width="12" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="398" cy="157" r="15" fill="#00e8b0" filter="url(#glow)"/>
+
+  <line x1="58"  y1="208" x2="122" y2="208" stroke="url(#teal)" stroke-width="8"   stroke-linecap="round" opacity="0.9"/>
+  <line x1="72"  y1="234" x2="122" y2="234" stroke="url(#teal)" stroke-width="6.5" stroke-linecap="round" opacity="0.7"/>
+  <line x1="86"  y1="258" x2="122" y2="258" stroke="url(#teal)" stroke-width="5"   stroke-linecap="round" opacity="0.5"/>
+
+  <polygon points="132,342 192,128 224,128 164,342" fill="url(#teal)"/>
+  <polygon points="192,128 224,128 288,342 256,342" fill="url(#teal)"/>
+  <polygon points="152,262 176,196 208,196 184,262" fill="url(#bg)" opacity="0.95"/>
+
+  <text x="272" y="340" font-family="-apple-system,Arial Black,sans-serif" font-size="218" font-weight="900" fill="url(#silver)" letter-spacing="-4">S</text>
+
+  <text x="256" y="452" font-family="-apple-system,Arial,sans-serif" font-size="42" font-weight="800" fill="white" text-anchor="middle" letter-spacing="4">ALOHA<tspan fill="#00d4a8">SCAN</tspan></text>
 </svg>
