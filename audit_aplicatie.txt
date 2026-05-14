@@ -1,0 +1,568 @@
+================================================================================
+AUDIT COMPLET AlohaScan — 2026-05-14
+================================================================================
+
+================================================================================
+=== SECTIUNEA 1: CE VEDE UTILIZATORUL ===
+================================================================================
+
+--- HEADER (vizibil permanent) ---
+- Logo "ALOHASCAN" cu numărul versiunii
+- Indicator "LIVE" (apare doar când e conectat)
+- Ceas timp real (tick la 1 secundă)
+- Buton ⚙ Setări
+
+--- SETĂRI (overlay modal) ---
+- Input Bankroll (LTC, default 10) → folosit în calculele Kelly
+- Secțiune "Player Intelligence — Backfill":
+    Buton [▶ Start Backfill] → pornește backfill ligu pe liguă
+    Afișaj progres: X/Y ligi procesate
+- Buton [TEST] → rulează health-check și afișează JSON rezultat
+
+--- NAVIGARE (bara de jos, 5 butoane) ---
+1. LIVE    → tab meciuri live
+2. PRE-MECI → tab meciuri pre-meci
+3. AGENT AI → tab chat AI
+4. FAVORITE → tab meciuri favorite (⭐)
+5. 🌐 Generator → deschide modal Generator
+
+================================================================================
+TAB 1 — LIVE
+================================================================================
+Elemente afișate înainte de conectare:
+- Buton [CONECTARE]
+
+Elemente afișate după conectare:
+- Bara de statistici: nr. meciuri live | NGP mediu | best EV
+- Bara "Win Rate" (predicții corecte)
+- Input search cu buton ✕ clear
+- Buton [↻ Refresh] manual
+- Lista de carduri meci live
+
+Fiecare card meci live conține:
+- Echipa acasă vs. echipa deplasare
+- Scor curent + minutul
+- Bara colorată NGP (Next Goal Probability 0-100%)
+- Markete calculate: Over 0.5 / 1.5 / 2.5 / GG (%)
+- Badge EV pozitiv dacă bestEV > 0
+- Buton ⭐ favorite
+- Click pe card → deschide Modal Meci
+
+Modal Meci (4 tab-uri):
+  [SUMAR]
+    - Statistici live: xG, șuturi pe poartă, posesie, cornere, atacuri periculoase
+    - Probabilități Poisson: 1X2 + Over 1.5/2.5 + GG
+    - Confidence Score (0-100) cu breakdown 7 straturi
+    - Best Bet + cotă + EV + Kelly
+    - Grafic lambda dinamic (dacă meci live)
+
+  [FORMAȚII]
+    - Formația tactică a ambelor echipe (jucători pe pozitii)
+
+  [JUCĂTORI]
+    - Tabel jucători: Rating | Minute | Goluri | Assist | Pase% | Dribling | Cartonașe
+    - Sortare după rating descrescător
+
+  [FORMĂ]
+    - Ultimele 5 meciuri per echipă (W/D/L, scor, adversar, dată)
+    - Ultimele 5 meciuri H2H
+    - Elo rating: homeElo / awayElo / eloDiff / homeWinProb
+
+Auto-refresh modal: la interval (din _mdRefreshTimer), re-fetch /api/match silențios
+
+================================================================================
+TAB 2 — PRE-MECI
+================================================================================
+- Input search
+- Buton [↻ Refresh] manual
+- Buton [Încarcă Pre-meci] → fetch /api/today (prima pornire manuală)
+- Lista carduri meciuri programate (azi + 24h)
+
+Fiecare card pre-meci conține:
+- Ora kickoff + echipe
+- Over 1.5 prob (%) din Poisson
+- Badge EV dacă bestEV > 0
+- Badge "SAFE BET · [market] @ [cotă]" dacă:
+    confidenceScore > 75 AND bestCota [1.30, 1.50] AND bestEV > 0
+- Buton ⭐ favorite
+- Buton [ANALIZEAZĂ] → fetch /api/enrich, afișează panel detalii
+
+Panel analiză expandat (sub card):
+- Confidence Score cu bară colorată
+- Probabilități 1X2 + Over 1.5/2.5 + GG
+- EV, cotă recomandată, Kelly
+- Best Bet highlight
+
+================================================================================
+TAB 3 — AGENT AI
+================================================================================
+- Istoric mesaje (chat bubbles)
+- Input text + buton [➤ Trimite]
+- System prompt construit dinamic cu context meciuri live curente
+- Răspuns de la Claude (sau Grok ca fallback)
+- Conversația se pierde la refresh (nu e persistată)
+
+================================================================================
+TAB 4 — FAVORITE
+================================================================================
+- Nr. meciuri salvate în header
+- Buton [↻ Refresh] → re-fetch /api/today și re-enrich favoritele
+- Buton [Șterge toate]
+- Lista carduri favorite cu EV, confidence, buton ✕ eliminare individuală
+- Date stocate în localStorage (supraviețuiesc refresh)
+
+================================================================================
+MODAL GENERATOR (butonul 🌐)
+================================================================================
+3 tab-uri:
+  [⚽ LIVE]   — top meciuri live cu NGP + markete, sortate după scor/relevanță
+  [📅 UPCOMING] — meciuri urmÄtoare cu probabilități (fetch /api/today + /api/enrich)
+  [🔮 SIM]    — simulator per meci:
+    Selectezi meci → click [🔮 SIMULEAZĂ 10,000 SCENARII] → fetch /api/simulate
+    Afișează: scoreDistribution top 10, results %, markets %, goalTiming, momentum
+
+Buton flotant [🔮] pe ecranul principal → deschide direct tab SIM
+
+
+================================================================================
+=== SECTIUNEA 2: FLUXUL COMPLET ===
+================================================================================
+
+--- LA PRIMA DESCHIDERE A APLICAȚIEI ---
+1. Se încarcă index.html (static, din cache service-worker dacă offline)
+2. Ceasul pornește (tick 1s)
+3. Nu se face NICIUN fetch automat
+4. Dacă sessionStorage conține 'wasConnected'=1 → se reconectează automat
+
+--- FLUXUL LIVE (după click CONECTARE) ---
+1. fetch POST /api/football
+   ← răspuns: { response: [...meciuri live merged AF + FD] }
+2. Dacă ok → pornire setInterval(loadLive, 30000) [CFG.RI = 30s]
+3. renderMatches() → afișează carduri cu NGP calculat în frontend
+4. La fiecare 30s → re-fetch /api/football → re-render
+
+--- FLUXUL ANALIZĂ MECI LIVE ---
+1. Click pe card meci live
+2. fetch /api/match?id={fid}&h={hid}&a={aid}&br={bankroll}
+   ← { fixture, lineups, players, events, enrich }
+3. Modal se deschide cu date complete
+4. setInterval → re-fetch /api/match la interval (mod silențios)
+5. Match.js salvează predicția în Supabase.predictions (fire-and-forget)
+
+--- FLUXUL PRE-MECI ---
+1. Click "Încarcă Pre-meci"
+2. fetch /api/today
+   ← { response: [...meciuri NS azi+24h], _debug: { source: 'supabase'|'api-football' } }
+3. renderPM() → afișează lista
+4. Click [ANALIZEAZĂ] pe un meci
+5. fetch /api/enrich?h={hid}&a={aid}&fid={fid}&hn=...&an=...&lg=...&lgid=...&dt=...&br=...
+   ← { lambdaHome, lambdaAway, over15Prob, ..., confidenceScore, bestBet, bestEV, bestCota }
+6. Enrich.js salvează în Supabase.predictions (fire-and-forget)
+7. Dacă confidenceScore>75 + cotă [1.30-1.50] + EV>0 → badge SAFE BET
+
+--- FLUXUL SIMULATOR ---
+1. Click 🔮 → genOpen() → genRenderSim()
+2. fetch /api/today → populate lista meciuri
+3. Selectezi meci → click SIMULEAZĂ
+4. fetch /api/simulate?fixture_id=&home_id=&away_id=&league_id=
+   ← { fixture, realData, simulation:{results,markets,scoreDistribution,goalTiming}, momentum, recommendation }
+5. Afișare: distribuție scoruri, probabilități, timing goluri, momentum
+
+--- FLUXUL AGENT AI ---
+1. Utilizator scrie mesaj → click ➤
+2. Frontend construiește system prompt cu context live curent
+3. fetch POST /api/agent { messages: [...], max_tokens: 500 }
+4. Agent.js → Anthropic API (fallback Grok dacă Anthropic eșuează)
+   ← { choices: [{ message: { content: "..." } }] }
+5. Răspuns afișat în chat
+
+--- FLUXUL BACKFILL (din Setări) ---
+1. Click Start Backfill
+2. Loop: pentru fiecare ligă (din ALLOWED_LEAGUE_IDS):
+   fetch /api/players?action=backfill&league_index={idx}
+   → fetch 10 meciuri FT per ligă
+   → fetch /fixtures/players per meci
+   → upsert în player_stats
+   → upsert în backfill_progress
+3. Progres afișat: X/Y ligi
+4. Interval: 300ms între ligi
+
+--- CRON-URI AUTOMATE ---
+00:00 /api/cron/scan       → scan live + pre-meci, snapshot-uri, H2H, form, alerts
+02:00 /api/update-results  → actualizează result_over15/gg în predictions
+06:00 /api/cron/collect-daily → fixtures, teams, standings, leagues, injuries
+23:00 /api/cron/collect-finished → player_stats, match_stats, match_events, odds
+
+
+================================================================================
+=== SECTIUNEA 3: BACKEND — API ENDPOINTS ===
+================================================================================
+
+--- api/football.js ---
+GET /api/football
+Primește: nimic (fără parametri)
+Face:
+  1. fetch API-Football /fixtures?live=all → filtrare status live (1H/HT/2H/ET/BT/P/SUSP/INT/LIVE)
+  2. fetch football-data.org /matches?status=IN_PLAY,PAUSED,HALFTIME (dacă FOOTBALL_DATA_KEY)
+  3. Merge: AF primar, FD completează golurile
+  4. Filtrare: whitelist ALLOWED_LEAGUE_IDS (doar AF), filtru feminin+div3+
+  5. Îmbogățire opțională (max 5 meciuri): H2H + liveStats din calcFeatures
+  6. Cache îmbogățire în Map (key: homeId-awayId)
+Returnează: { response: [...meciuri merged și filtrate] }
+
+--- api/today.js ---
+GET /api/today
+Cache: 120s (s-maxage)
+Face:
+  SURSA 1 (Supabase-first):
+    - Citește fixtures din Supabase (kickoff azi+24h, status NS)
+    - Dacă ≥ 5 rezultate: aplică whitelist → fetch league names → transformare format AF
+  SURSA 2 (fallback API-Football):
+    - /fixtures?date={azi}&status=NS + /fixtures?date={mâine}&status=NS
+    - Deduplicare + fereastră 24h
+  Filtrare: whitelist ligi + feminin + div3+
+Returnează: { response: [...], _debug: { source: 'supabase'|'api-football', ... } }
+
+--- api/enrich.js ---
+GET /api/enrich?h={homeId}&a={awayId}&fid={fixtureId}&hn=&an=&lg=&lgid=&dt=&br=&elapsed=&hg=&ag=&soth=&sota=
+Face:
+  BATCH 1 (paralel):
+    - Supabase form_stats per echipă (limit 10)
+    - Supabase h2h bidirectional (limit 10)
+    - Supabase odds (bookmaker_id=8, dacă fid prezent)
+    - getTeamStrengths (player_stats per echipă, limit 110)
+  BATCH 2 (fallback API-Football unde Supabase < 3 rânduri):
+    - /fixtures?team={h}&last=20&status=FT
+    - /fixtures?team={a}&last=20&status=FT
+    - /fixtures/headtohead?h2h={h}-{a}&last=10
+    - /odds?fixture={fid}&bookmaker=8
+  Calcule: calcPoisson → calcEV → calcConfidence (7 straturi)
+  Lambda dinamic dacă elapsed > 0
+  Salvare fire-and-forget în Supabase.predictions
+Returnează: { lambdaHome, lambdaAway, lambdaTotal, over15Prob, over25Prob, ggProb,
+              homeWin, draw, awayWin, evHome, evDraw, evAway, evOver15, evGG,
+              bestBet, bestEV, bestCota, bestKelly, confidenceScore, breakdown,
+              teamStrengthHome, teamStrengthAway, bestMarket }
+
+--- api/match.js ---
+GET /api/match?id={fixtureId}&h={homeId}&a={awayId}&br={bankroll}
+Face (8 fetch-uri în paralel):
+  - /fixtures?id={id}
+  - /fixtures/lineups?fixture={id}
+  - /fixtures/players?fixture={id}
+  - /fixtures/events?fixture={id}
+  - /fixtures?team={h}&last=20&status=FT
+  - /fixtures?team={a}&last=20&status=FT
+  - /fixtures/headtohead?h2h={h}-{a}&last=10
+  - /odds?fixture={id}&bookmaker=8
+  Fallback odds: /odds?league={lid}&season={year}&bookmaker=8
+  Calcule: calcPoisson + calcEV
+  Salvare fire-and-forget în Supabase.predictions
+Returnează: { fixture, lineups, players: [...flatPlayers], events, enrich: {...} }
+
+--- api/simulate.js ---
+GET /api/simulate?fixture_id=&home_id=&away_id=&league_id=
+Cache în-memorie 2 minute (Map keyed by fixture_id)
+Face:
+  BATCH 1 (paralel): fixture+lineups (AF) + form_stats/h2h/standings/odds (Supabase)
+  BATCH 2: fallback AF unde Supabase insuficient
+  Calcule: calcForm → calcSquad → calcElo → lambda Dixon-Coles adaptat (eloFactor + pfHome/pfAway)
+  Monte Carlo 10,000 iterații (runSimulation)
+  calcMomentum dacă meci live
+Returnează: { fixture, realData:{homeForm, awayForm, elo, homeSquad, awaySquad,
+              leagueAvgGoals, dataQuality, dataSources},
+              simulation:{lambdaHome, lambdaAway, results, markets, scoreDistribution,
+              mostLikelyScore, goalTiming, confidence},
+              momentum, recommendation:{bestBet, confidence, ev, cota, reasoning} }
+
+--- api/agent.js ---
+POST /api/agent { messages: [...], max_tokens: N }
+Face: Anthropic API (claude-sonnet-4-6) → fallback Grok (grok-3-mini)
+Returnează: { choices: [{ message: { content: "..." } }] }
+
+--- api/players.js ---
+GET /api/players?action=collect&fixture_id={id}
+  → fetch /fixtures/players?fixture={id} → upsert player_stats
+  ← { ok, players: N, fixture_id }
+
+GET /api/players?action=backfill&league_index={idx}
+  → fetch /fixtures?league={id}&last=10&status=FT → collectFixture per meci
+  → upsert backfill_progress
+  ← { ok, league_id, fixtures, players, next_index, total_leagues }
+
+GET /api/players?action=progress
+  → citire backfill_progress
+  ← { total, done, error, pending, rows: [...] }
+
+--- api/health-check.js ---
+GET /api/health-check
+GET /api/health-check?action=leagues&country=&name=
+  (căutare ligi în API-Football)
+Face: 17 teste paralele (t1-t18, t6 sincron)
+Returnează: { timestamp, overall, tests:{supabase_connection, player_stats_data,
+              backfill_progress, team_strength, layer7_active, weights_sum, cron_logs,
+              api_football, fixtures, standings, h2h, form_stats, match_stats,
+              match_events, odds, alerts, live_stats_24h, collect_daily_cron},
+              summary:{passed, warnings, failed, critical_issues} }
+
+--- api/cron/scan.js ---
+GET /api/cron/scan (zilnic 00:00, CRON_SECRET auth)
+Face:
+  1. fetch /fixtures?live=all → filtrare LIVE_STATUS
+  2. fetch /fixtures?status=FT-AET-PEN&from=...&to=... (ultimele 2h)
+  3. Per meci live: calcFeatures → calcNextGoal → calcMarkets
+     → upsert match_snapshots
+     → save live_stats (non-blocking)
+     → save alert dacă NGP>85 sau over15>82 (non-blocking)
+  4. Per meci terminat: resolveOutcome WIN/LOSS în match_snapshots
+  5. La fiecare 10 rulări: recalculare league_patterns din match_snapshots
+  6. Pre-meci (startează în 30 min):
+     → fetch H2H + form per meci
+     → calculare composite score (GG + Over15)
+     → insert pre_match_snapshots
+     → resolve outcome PENDING→DONE pentru meciuri terminate
+Returnează: { run, snapshots, resolved, prematch, live, outcomes, prematch_list }
+
+--- api/cron/collect-daily.js ---
+GET /api/cron/collect-daily (zilnic 06:00)
+Face:
+  1. Fixtures azi + mâine (/fixtures?date=...&status=NS-1H-HT-2H)
+     → upsert fixtures (on_conflict=id)
+     → upsert teams (on_conflict=id)
+  2. Standings per 20 ligi prioritare (/standings?league=...&season=...)
+     → upsert leagues (on_conflict=id)
+     → upsert standings (on_conflict=league_id,season,team_id)
+     → upsert teams (on_conflict=id)
+  3. Injuries pentru primele 30 meciuri de azi
+     → upsert injuries (on_conflict=player_id,fixture_id)
+  → log în cron_logs (job_name='collect-daily')
+Returnează: { success, duration_ms, stats:{leagues,teams,fixtures,standings,injuries,errors} }
+
+--- api/cron/collect-finished.js ---
+GET /api/cron/collect-finished (zilnic 23:00)
+Face:
+  1. fetch /fixtures?date={azi}&status=FT
+  2. Filtrare fixture_id-uri deja procesate (din player_stats)
+  3. Per fixture neprocesat (cu sleep 200ms):
+     a. collectFixture → /fixtures/players → upsert player_stats (21 câmpuri)
+     b. collectMatchStats → /fixtures/statistics → upsert match_stats (on_conflict=fixture_id,team_id)
+     c. collectMatchEvents → /fixtures/events → insert match_events (FĂRĂ on_conflict!)
+     d. collectOdds → /odds?fixture=...&bookmaker=8 → upsert odds (on_conflict=fixture_id,bookmaker_id,market,label)
+  → log în cron_logs (job_name='collect-finished')
+Returnează: { ok, date, total_ft, processed, skipped, players, match_stats, events, odds }
+
+--- api/update-results.js ---
+GET /api/update-results (zilnic 02:00)
+Face:
+  1. Citire predictions cu actual_home_goals IS NULL și match_date < now (max 100)
+  2. Per predicție: fetch /fixtures?id={fixture_id}
+     → dacă status FT/AET/PEN → PATCH predictions cu actual_home_goals, actual_away_goals,
+       result_over15, result_gg
+Returnează: { updated, total }
+
+--- Module pure (fără handler HTTP) ---
+api/leagues.js      → exportă ALLOWED_LEAGUE_IDS (Set cu ~390 ID-uri ligi)
+api/elo.js          → exportă calcElo(homeMatches, awayMatches, homeId, awayId, h2h)
+api/monte-carlo.js  → exportă runSimulation(lambdaHome, lambdaAway, simCount, currentHome, currentAway)
+api/match-momentum.js → exportă calcMomentum(liveStats)
+
+
+================================================================================
+=== SECTIUNEA 4: SUPABASE — DATE SALVATE ===
+================================================================================
+
+--- SALVATE AUTOMAT (cron-uri) ---
+
+[cron/scan.js — zilnic 00:00]
+  live_stats          → snapshot per meci live per minut (fixture_id, minute, home/away xG/shots/attacks/corners/possession, recorded_at)
+  match_snapshots     → snapshot complet per meci live (NGP, markete, outcome=LIVE→WIN/LOSS)
+  pre_match_snapshots → snapshot pre-meci (GG/Over15 composite score, outcome=PENDING→DONE)
+  form_stats          → rezultate meciuri recente per echipă (fixture_id, team_id, goals_scored/conceded, result, over/gg flags)
+  h2h                 → meciuri H2H (fixture_id, home/away_team_id, goals, result, over/gg flags)
+  alerts              → alerte NGP>85 sau over15>82 (fixture_id, alert_type, market, message, confidence)
+  league_patterns     → tipare per ligă recalculate la fiecare 10 rulări (win_rate, avg_ng, avg_over*)
+
+[update-results.js — zilnic 02:00]
+  predictions         → UPDATE actual_home_goals, actual_away_goals, result_over15, result_gg
+
+[collect-daily.js — zilnic 06:00]
+  fixtures            → meciuri azi+mâine (id, league_id, home/away teams, kickoff_time, status, venue, referee)
+  teams               → echipe (id, name, logo, league_id)
+  leagues             → ligi (id, name, country, logo, season, active)
+  standings           → clasamente (league_id, season, team_id, rank, points, goals, played/won/drawn/lost, form)
+  injuries            → accidentări (player_id, fixture_id, team_id, player_name, injury_type/reason, active)
+
+[collect-finished.js — zilnic 23:00]
+  player_stats        → statistici jucători per meci FT (21 câmpuri: rating, goals, assists, pass_accuracy, shots_on_target, minutes_played, player_score, position, age, yellow/red_cards, offsides, duels, dribbles)
+  match_stats         → statistici echipă per meci (posesie, șuturi, xG, cornere, fault, pase, atacuri)
+  match_events        → evenimente meci (goluri, cartonașe, substituții — INSERT pur, fără upsert)
+  odds                → cote bookmaker (fixture_id, bookmaker_id, market, label, odd_value)
+
+--- SALVATE LA CERERE (user action) ---
+
+[match.js — la click pe meci live]
+  predictions         → INSERT cu resolution=ignore-duplicates (fixture_id, home/away_team, league, match_date, lambda, probabilities, confidence)
+
+[enrich.js — la click ANALIZEAZĂ pre-meci]
+  predictions         → INSERT cu resolution=ignore-duplicates (același format ca match.js)
+
+[players.js?action=backfill — buton Start Backfill din Setări]
+  player_stats        → upsert cu resolution=merge-duplicates (dar fără ?on_conflict= în URL!)
+  backfill_progress   → status per ligă (pending/running/done/error, fixtures_processed, players_upserted)
+
+[cron_logs — auto după fiecare cron]
+  cron_logs           → log rulare (job_name, ran_at, fixtures_processed, players_upserted, status, error_msg)
+
+--- NU SE SALVEAZĂ DELOC ---
+- Conversațiile cu Agent AI (se pierd la refresh)
+- Simulările Monte Carlo (calcule efemere, fără persistare)
+- Datele meteorologice (api/meteo.js menționat în CLAUDE.md dar LIPSĂ din repo)
+- Notificările Telegram (api/telegram.js menționat în CLAUDE.md dar LIPSĂ din repo)
+- Favoritele utilizatorului (salvate doar în localStorage, nu în Supabase)
+- Bankroll-ul utilizatorului (localStorage only)
+- Win rate-ul predicțiilor din frontend (localStorage only, cheia WR_KEY)
+- Formațiile echipelor (fetch la cerere, nu se cacheaza în Supabase)
+- Istoricul alertelor NGP trimise pe Telegram (sent_telegram=false, dar serviciul lipsă)
+
+
+================================================================================
+=== SECTIUNEA 5: CE LIPSESTE / PROBLEME ===
+================================================================================
+
+--- FIȘIERE LIPSĂ DIN REPO ---
+
+1. [CRITIC] api/meteo.js — menționat în CLAUDE.md cu logică de impact meteo
+   (-10% Over2.5 la ploaie, -12% la zăpadă), afișat în detalii meci.
+   Fișierul NU există în repository. Funcționalitatea meteo este complet absentă.
+
+2. [CRITIC] api/telegram.js — menționat în CLAUDE.md pentru alerte NGP.
+   scan.js setează sent_telegram=false în alerts dar nu are nicio logică de trimitere.
+   Alertele se salvează în Supabase dar nu se trimit nicăieri.
+
+--- BUGS DE DATE ---
+
+3. [BUG] match_events fără upsert — collect-finished.js face INSERT pur în match_events:
+   ```javascript
+   await fetch(`${sbUrl}/rest/v1/match_events`, { method: 'POST', ... })
+   ```
+   Nu are ?on_conflict= și nu are resolution=merge-duplicates.
+   Dacă cronul rulează de două ori pe același fixture (sau manual), evenimentele
+   se duplică în baza de date.
+
+4. [BUG] player_stats upsert fără on_conflict în URL:
+   În api/players.js (backfill) și api/cron/collect-finished.js:
+   ```javascript
+   await fetch(`${sbUrl}/rest/v1/player_stats`, { method: 'POST',
+     headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' }, ... })
+   ```
+   PostgREST necesită ?on_conflict=player_id,fixture_id în URL pentru
+   resolution=merge-duplicates. Fără aceasta, conflictele nu se rezolvă corect
+   și pot apărea duplicate sau erori silențioase.
+   (Notă: collect-finished.js are corect ?on_conflict= pentru match_stats și odds,
+   dar NU pentru player_stats)
+
+5. [BUG] scan.js comentariu incorect: "// Vercel Cron Job — runs every minute"
+   Dar vercel.json îl rulează ZILNIC la 00:00 (schedule: "0 0 * * *").
+   NGP și alertele live se calculează o singură dată pe zi, nu în timp real.
+   Aceasta înseamnă că funcționalitatea live din frontend (refresh 30s) calculează
+   NGP în JavaScript pe client, nu pe server.
+
+--- DATE ARUNCATE / NEUTILIZATE ---
+
+6. [AVERTISMENT] injuries nu sunt folosite nicăieri:
+   collect-daily.js colectează injuries în Supabase dar niciun endpoint
+   (enrich.js, simulate.js, match.js) nu le citește. Datele sunt colectate
+   dar nu influențează nicio predicție.
+
+7. [AVERTISMENT] pre_match_snapshots nu sunt afișate în frontend:
+   scan.js calculează composite scores (GG + Over15) pentru meciuri pre-meci și
+   le salvează în pre_match_snapshots, dar index.html nu le afișează și nu există
+   endpoint care să le returneze pentru UI.
+
+8. [AVERTISMENT] league_patterns nu sunt afișate:
+   scan.js calculează și salvează tipare per ligă în league_patterns dar
+   frontend-ul nu le citește și nu le afișează utilizatorului.
+
+9. [AVERTISMENT] match_stats nu sunt folosite în calcule:
+   collect-finished.js colectează statistici detaliate per echipă în match_stats,
+   dar enrich.js, simulate.js și match.js nu le citesc din Supabase.
+   Datele sunt stocate dar nu îmbunătățesc calculele.
+
+10. [AVERTISMENT] Scorul Win Rate (WR) calculat incorect:
+    Frontend-ul tracked win rate în localStorage (cheia WR_KEY) bazat pe predicțiile
+    făcute în sesiunea curentă. Nu folosește datele din Supabase.predictions
+    (care au result_over15 actualizat de update-results.js). Cele două surse nu sunt sincronizate.
+
+--- FUNCȚIONALITĂȚI INCOMPLETE ---
+
+11. [INCOMPLET] Lambda dinamic în enrich.js folosit incorect:
+    Când elapsed > 0, enrich.js calculează liveStats.xg ca:
+    ```javascript
+    xg: (parseFloat(soth) || 0) * 0.4 + (parseFloat(sota) || 0) * 0.4
+    ```
+    Aceasta nu este xG real — e o aproximare din șuturile pe poartă.
+    xG real ar trebui să vină din API-Football (/fixtures/statistics) sau din live_stats.
+
+12. [INCOMPLET] Agent AI fără context Supabase:
+    buildSysPrompt() construiește contextul din meciurile live afișate pe ecran,
+    dar nu include date din Supabase (predictions, player_stats, standings).
+    Agentul nu știe de predicții anterioare sau de contextul statistic complet.
+
+13. [INCOMPLET] simulate.js: lambdaHome include factor eloFactor * 1.15 hardcodat:
+    ```javascript
+    let lH = Math.max(0.3, Math.min(4.0, hAtt * aDef * lgH * eloFactor * pfHome * 1.15));
+    ```
+    Factorul 1.15 avantajează sistematic echipa gazdă indiferent de context.
+    Nu există justificare statistică în cod.
+
+14. [INCOMPLET] collect-daily.js nu colectează fixtures pentru ligi din whitelist complet:
+    Colectează fixtures doar pentru azi și mâine, din toate ligile (nu doar cele 20 prioritare).
+    Colectează standings doar pentru 20 ligi prioritare, nu pentru toate cele ~390 din ALLOWED_LEAGUE_IDS.
+    Deci today.js are date Supabase incomplete pentru ligile non-prioritare.
+
+15. [INCOMPLET] Meteo complet absent (vezi punct 1):
+    CLAUDE.md documentează reduceri de probabilitate pentru ploaie/zăpadă,
+    dar funcționalitatea nu există în cod.
+
+--- PROBLEME DE ARHITECTURĂ ---
+
+16. [ARHITECTURĂ] Limita Vercel Hobby Plan atinsă:
+    12/12 funcții serverless active. Adăugarea oricărei funcții noi va depăși limita.
+    Soluție: upgrade la Pro sau consolidare funcții (ex: un router comun).
+
+17. [ARHITECTURĂ] Duplicare logică Poisson:
+    calcPoisson6x6, calcEV, parseOddsItem sunt duplicate identic în enrich.js și match.js.
+    Nicio importare între ele — dacă se modifică logica într-un loc, trebuie modificată și în celălalt.
+
+18. [ARHITECTURĂ] football.js apelează API-Football H2H per fiecare meci live (max 5):
+    3 request-uri per meci × 5 meciuri = 15 request-uri la fiecare 30s.
+    Cu limita API-Football de 100 req/zi pe plan gratuit, aceasta poate epuiza quota rapid.
+
+19. [SECURITATE] scan.js expune SUPABASE_URL hardcodat ca fallback:
+    ```javascript
+    const SUPABASE_URL = process.env.SUPABASE_URL || 'https://kdyafjlwbximefwdhbnc.supabase.co';
+    ```
+    URL-ul proiectului Supabase este hardcodat în codul sursă public (GitHub).
+
+================================================================================
+SUMAR EXECUTIVE
+================================================================================
+
+Aplicația funcționează pentru fluxul principal (LIVE + PRE-MECI + ANALIZARE).
+Infrastructura de date (CRON-uri) este bine structurată cu fallback consistent.
+
+Probleme critice care necesită rezolvare:
+  - telegram.js lipsă: alertele NGP nu se trimit
+  - meteo.js lipsă: funcționalitate documentată dar neimplementată
+  - match_events duplicate la re-rulare cron
+  - player_stats upsert fără on_conflict corect
+
+Date colectate dar neutilizate (potențial de îmbunătățire):
+  - injuries → poate reduce confidenceScore dacă jucători cheie sunt accidentați
+  - match_stats → poate înlocui lambda calculation cu date reale post-meci
+  - pre_match_snapshots / league_patterns → pot alimenta un tab nou "Statistici"
+  - league_patterns → pot calibra pragurile NGP per ligă
+
+================================================================================
+Generat automat de audit — AlohaScan 2026-05-14
+================================================================================
