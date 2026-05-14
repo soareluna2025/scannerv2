@@ -340,6 +340,17 @@ async function getOddsFromSupabase(fixtureId, sbUrl, sbKey) {
   } catch (_) { return []; }
 }
 
+async function getInjuriesFromSupabase(fixtureId, sbUrl, sbKey) {
+  try {
+    const url = `${sbUrl}/rest/v1/injuries?fixture_id=eq.${fixtureId}&active=eq.true`;
+    const res = await fetch(url, {
+      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
+    });
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch (_) { return []; }
+}
+
 // Transform form_stats rows → API-Football-like format expected by calcPoisson
 function formStatsToFixtures(rows, teamId) {
   return rows.map(row => ({
@@ -396,13 +407,14 @@ export default async function handler(req, res) {
   const sbKey    = process.env.SUPABASE_KEY;
 
   try {
-    // --- Batch 1: Supabase queries + team strengths in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths] = await Promise.all([
+    // --- Batch 1: Supabase queries + team strengths + injuries in parallel ---
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries] = await Promise.all([
       sbUrl && sbKey ? getFormFromSupabase(hId, sbUrl, sbKey)              : Promise.resolve([]),
       sbUrl && sbKey ? getFormFromSupabase(aId, sbUrl, sbKey)              : Promise.resolve([]),
       sbUrl && sbKey ? getH2HFromSupabase(hId, aId, sbUrl, sbKey)         : Promise.resolve([]),
       fid && sbUrl && sbKey ? getOddsFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
       getTeamStrengths(hId, aId, sbUrl, sbKey),
+      fid && sbUrl && sbKey ? getInjuriesFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
     ]);
 
     // --- Batch 2: API-Football fallbacks only where Supabase had insufficient data ---
@@ -464,6 +476,20 @@ export default async function handler(req, res) {
     } : null;
 
     const confData = calcConfidence(result, oddsRaw, liveStats, teamStrengths);
+
+    // --- Injuries adjustment (only when fid is present) ---
+    if (fid && Array.isArray(injuries) && injuries.length >= 3) {
+      let injuryPenalty = 0;
+      if (injuries.length >= 8)      injuryPenalty = 15;
+      else if (injuries.length >= 5) injuryPenalty = 10;
+      else if (injuries.length >= 3) injuryPenalty = 5;
+      confData.confidenceScore = Math.max(10, confData.confidenceScore - injuryPenalty);
+      confData.breakdown.injuries = {
+        layer: 'injuries',
+        value: -injuryPenalty,
+        note:  `${injuries.length} jucători accidentați`,
+      };
+    }
 
     const payload = { ...result, ...evData, ...confData };
 
