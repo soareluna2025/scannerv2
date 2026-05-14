@@ -145,13 +145,22 @@ async function collectMatchEvents(fixtureId, key, sbUrl, sbKey) {
     extra_time:    ev.time?.extra   || null,
   }));
 
-  await fetch(`${sbUrl}/rest/v1/match_events`, {
+  // Delete existing events for this fixture before re-inserting (prevents duplicates on re-run)
+  await fetch(`${sbUrl}/rest/v1/match_events?fixture_id=eq.${fixtureId}`, {
+    method: 'DELETE',
+    headers: {
+      'apikey':        sbKey,
+      'Authorization': `Bearer ${sbKey}`,
+    },
+  });
+
+  await fetch(`${sbUrl}/rest/v1/match_events?on_conflict=fixture_id,team_id,minute,event_type`, {
     method: 'POST',
     headers: {
       'apikey':        sbKey,
       'Authorization': `Bearer ${sbKey}`,
       'Content-Type':  'application/json',
-      'Prefer':        'return=minimal',
+      'Prefer':        'resolution=ignore-duplicates,return=minimal',
     },
     body: JSON.stringify(rows),
   });
