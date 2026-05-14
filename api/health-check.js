@@ -39,6 +39,21 @@ async function sbCount(sbUrl, sbKey, table) {
   return parseInt(parts[parts.length - 1] || '0') || 0;
 }
 
+// Count rows with an extra filter query string
+async function sbCountFiltered(sbUrl, sbKey, table, filter) {
+  const r = await fetch(`${sbUrl}/rest/v1/${table}?${filter}`, {
+    headers: {
+      apikey: sbKey,
+      Authorization: `Bearer ${sbKey}`,
+      Prefer: 'count=exact',
+      Range: '0-0',
+    },
+  });
+  const cr = r.headers.get('content-range') || '';
+  const parts = cr.split('/');
+  return parseInt(parts[parts.length - 1] || '0') || 0;
+}
+
 // Same formula as enrich.js getTeamStrengths → calcStr
 function calcStr(rows) {
   if (!Array.isArray(rows) || !rows.length) return null;
@@ -87,8 +102,6 @@ async function t2(sbUrl, sbKey) {
 
   const sampleRows = await sampleRes.json();
   const arr = Array.isArray(sampleRows) ? sampleRows : [];
-  const oldest = null;
-  const newest  = null;
   const totalFixtures = new Set(arr.map(r => r.fixture_id)).size;
   const totalTeams    = new Set(arr.map(r => r.team_id)).size;
 
@@ -96,20 +109,14 @@ async function t2(sbUrl, sbKey) {
     return {
       status: '⚠️ WARN',
       message: 'player_stats GOL — backfill nu a rulat încă',
-      data: { total_players: 0, total_fixtures: 0, total_teams: 0, oldest_match: null, newest_match: null },
+      data: { total_players: 0, total_fixtures: 0, total_teams: 0 },
     };
   }
 
   return {
     status: '✅ PASS',
     message: `${totalCount.toLocaleString()} jucători din ${totalFixtures}+ meciuri`,
-    data: {
-      total_players:  totalCount,
-      total_fixtures: totalFixtures,
-      total_teams:    totalTeams,
-      oldest_match:   oldest,
-      newest_match:   newest,
-    },
+    data: { total_players: totalCount, total_fixtures: totalFixtures, total_teams: totalTeams },
   };
 }
 
@@ -122,11 +129,11 @@ async function t3(sbUrl, sbKey) {
   const rows = await r.json();
   const arr = Array.isArray(rows) ? rows : [];
 
-  const done       = arr.filter(x => x.status === 'done').length;
-  const pending    = arr.filter(x => x.status === 'pending').length;
+  const done        = arr.filter(x => x.status === 'done').length;
+  const pending     = arr.filter(x => x.status === 'pending').length;
   const in_progress = arr.filter(x => x.status === 'running').length;
-  const error      = arr.filter(x => x.status === 'error').length;
-  const total      = arr.length;
+  const error       = arr.filter(x => x.status === 'error').length;
+  const total       = arr.length;
 
   if (!total) {
     return {
@@ -190,7 +197,6 @@ async function t4(sbUrl, sbKey) {
 async function t5(sbUrl, sbKey) {
   const hdr = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
 
-  // Get 2 distinct teams
   const listRes = await fetch(
     `${sbUrl}/rest/v1/player_stats?select=team_id,team_name&limit=500`,
     { headers: hdr }
@@ -232,7 +238,6 @@ async function t5(sbUrl, sbKey) {
     };
   }
 
-  // Verify Layer 7 formula produces a valid confidence score (sanity check)
   const h = homeStrength ?? 50;
   const a = awayStrength ?? 50;
   const strScore = Math.round((h + a) / 2);
@@ -253,7 +258,7 @@ async function t5(sbUrl, sbKey) {
 
 // ── TEST 6: Ponderi sumă = 100% ──────────────────────────────────────────────
 function t6() {
-  const withPlayerData = { poisson: 20, forma: 18, h2h: 13, live: 13, ev: 13, consistenta: 8, jucatori: 15 };
+  const withPlayerData    = { poisson: 20, forma: 18, h2h: 13, live: 13, ev: 13, consistenta: 8, jucatori: 15 };
   const withoutPlayerData = { poisson: 25, forma: 20, h2h: 15, live: 15, ev: 15, consistenta: 10 };
 
   const sumWith    = Object.values(withPlayerData).reduce((a, b) => a + b, 0);
@@ -328,14 +333,213 @@ async function t8(key) {
 
   if (!account) throw new Error('Răspuns invalid de la API-Football');
 
-  const today     = requests?.current   ?? 0;
-  const limitDay  = requests?.limit_day ?? 100;
-  const remaining = limitDay - today;
+  const today    = requests?.current   ?? 0;
+  const limitDay = requests?.limit_day ?? 100;
 
   return {
     status: '✅ PASS',
     message: `API-Football activ — ${today.toLocaleString()}/${limitDay.toLocaleString()} requests azi`,
-    data: { requests_today: today, requests_limit: limitDay, remaining },
+    data: { requests_today: today, requests_limit: limitDay, remaining: limitDay - today },
+  };
+}
+
+// ── TEST 9: fixtures table ───────────────────────────────────────────────────
+async function t9(sbUrl, sbKey) {
+  const count = await sbCount(sbUrl, sbKey, 'fixtures');
+  if (count === 0) {
+    return {
+      status: '⚠️ WARNING',
+      message: 'fixtures gol — collect-daily nu a rulat încă',
+      data: { count: 0 },
+    };
+  }
+  return {
+    status: '✅ PASS',
+    message: `${count.toLocaleString()} meciuri stocate în fixtures`,
+    data: { count },
+  };
+}
+
+// ── TEST 10: standings table ─────────────────────────────────────────────────
+async function t10(sbUrl, sbKey) {
+  const count = await sbCount(sbUrl, sbKey, 'standings');
+  if (count === 0) {
+    return {
+      status: '⚠️ WARNING',
+      message: 'standings gol — collect-daily nu a rulat încă',
+      data: { count: 0 },
+    };
+  }
+  return {
+    status: '✅ PASS',
+    message: `${count.toLocaleString()} clasamente stocate în standings`,
+    data: { count },
+  };
+}
+
+// ── TEST 11: h2h table ───────────────────────────────────────────────────────
+async function t11(sbUrl, sbKey) {
+  const count = await sbCount(sbUrl, sbKey, 'h2h');
+  if (count === 0) {
+    return {
+      status: '⚠️ WARNING',
+      message: 'h2h gol — scan.js nu a salvat încă date H2H',
+      data: { count: 0 },
+    };
+  }
+  return {
+    status: '✅ PASS',
+    message: `${count.toLocaleString()} meciuri H2H stocate`,
+    data: { count },
+  };
+}
+
+// ── TEST 12: form_stats table ────────────────────────────────────────────────
+async function t12(sbUrl, sbKey) {
+  const count = await sbCount(sbUrl, sbKey, 'form_stats');
+  if (count === 0) {
+    return {
+      status: '⚠️ WARNING',
+      message: 'form_stats gol — scan.js nu a salvat încă date de formă',
+      data: { count: 0 },
+    };
+  }
+  return {
+    status: '✅ PASS',
+    message: `${count.toLocaleString()} înregistrări în form_stats`,
+    data: { count },
+  };
+}
+
+// ── TEST 13: match_stats table ───────────────────────────────────────────────
+async function t13(sbUrl, sbKey) {
+  const count = await sbCount(sbUrl, sbKey, 'match_stats');
+  if (count === 0) {
+    return {
+      status: '⚠️ WARNING',
+      message: 'match_stats gol — collect-finished nu a rulat încă',
+      data: { count: 0 },
+    };
+  }
+  return {
+    status: '✅ PASS',
+    message: `${count.toLocaleString()} înregistrări în match_stats`,
+    data: { count },
+  };
+}
+
+// ── TEST 14: match_events table ──────────────────────────────────────────────
+async function t14(sbUrl, sbKey) {
+  const count = await sbCount(sbUrl, sbKey, 'match_events');
+  if (count === 0) {
+    return {
+      status: '⚠️ WARNING',
+      message: 'match_events gol — collect-finished nu a rulat încă',
+      data: { count: 0 },
+    };
+  }
+  return {
+    status: '✅ PASS',
+    message: `${count.toLocaleString()} evenimente stocate în match_events`,
+    data: { count },
+  };
+}
+
+// ── TEST 15: odds table ──────────────────────────────────────────────────────
+async function t15(sbUrl, sbKey) {
+  const count = await sbCount(sbUrl, sbKey, 'odds');
+  if (count === 0) {
+    return {
+      status: '⚠️ WARNING',
+      message: 'odds gol — collect-finished nu a salvat cote încă',
+      data: { count: 0 },
+    };
+  }
+  return {
+    status: '✅ PASS',
+    message: `${count.toLocaleString()} cote stocate în odds`,
+    data: { count },
+  };
+}
+
+// ── TEST 16: alerts table (total + azi) ──────────────────────────────────────
+async function t16(sbUrl, sbKey) {
+  const today = new Date().toISOString().split('T')[0];
+  const [countTotal, countToday] = await Promise.all([
+    sbCount(sbUrl, sbKey, 'alerts'),
+    sbCountFiltered(sbUrl, sbKey, 'alerts', `select=*&created_at=gte.${today}`),
+  ]);
+
+  if (countTotal === 0) {
+    return {
+      status: '⚠️ WARNING',
+      message: 'alerts gol — nicio alertă NGP generată încă',
+      data: { count_total: 0, count_today: 0 },
+    };
+  }
+  return {
+    status: '✅ PASS',
+    message: `${countTotal.toLocaleString()} alerte total, ${countToday} alerte NGP azi`,
+    data: { count_total: countTotal, count_today: countToday },
+  };
+}
+
+// ── TEST 17: live_stats (ultimele 24h) ───────────────────────────────────────
+async function t17(sbUrl, sbKey) {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const count24h = await sbCountFiltered(
+    sbUrl, sbKey, 'live_stats',
+    `select=*&recorded_at=gte.${since}`
+  );
+
+  if (count24h === 0) {
+    return {
+      status: '⚠️ WARNING',
+      message: 'live_stats gol în ultimele 24h — niciun meci live înregistrat',
+      data: { count_last_24h: 0 },
+    };
+  }
+  return {
+    status: '✅ PASS',
+    message: `${count24h.toLocaleString()} snapshot-uri live în ultimele 24h`,
+    data: { count_last_24h: count24h },
+  };
+}
+
+// ── TEST 18: collect-daily cron activ ────────────────────────────────────────
+async function t18(sbUrl, sbKey) {
+  const r = await fetch(
+    `${sbUrl}/rest/v1/cron_logs?job_name=eq.collect-daily&select=*&order=ran_at.desc&limit=1`,
+    { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
+  );
+  const rows = await r.json();
+  const arr  = Array.isArray(rows) ? rows : [];
+
+  if (!arr.length) {
+    return {
+      status: '⚠️ WARNING',
+      message: 'collect-daily nu a rulat niciodată — verifică cron-ul de la 06:00',
+      data: { last_run: null },
+    };
+  }
+
+  const last    = arr[0];
+  const minsAgo = last.ran_at
+    ? Math.round((Date.now() - new Date(last.ran_at).getTime()) / 60000)
+    : null;
+  const ageStr  = minsAgo == null ? ''
+    : minsAgo < 60 ? `acum ${minsAgo} minute`
+    : `acum ${Math.round(minsAgo / 60)} ore`;
+
+  return {
+    status: last.status === 'success' ? '✅ PASS' : '⚠️ WARNING',
+    message: `collect-daily: ${ageStr} (${last.status})`,
+    data: {
+      last_run:           last.ran_at,
+      status:             last.status,
+      fixtures_processed: last.fixtures_processed,
+      error_msg:          last.error_msg || null,
+    },
   };
 }
 
@@ -368,7 +572,10 @@ export default async function handler(req, res) {
     return res.status(200).json({ total: leagues.length, leagues });
   }
 
-  const [test1, test2, test3, test4, test5, test7, test8] = await Promise.all([
+  const [
+    test1, test2, test3, test4, test5, test7, test8,
+    test9, test10, test11, test12, test13, test14, test15, test16, test17, test18,
+  ] = await Promise.all([
     safeRun('Supabase Connection', () => t1(sbUrl, sbKey)),
     safeRun('Player Stats Data',   () => t2(sbUrl, sbKey)),
     safeRun('Backfill Progress',   () => t3(sbUrl, sbKey)),
@@ -376,6 +583,16 @@ export default async function handler(req, res) {
     safeRun('Layer 7 Active',      () => t5(sbUrl, sbKey)),
     safeRun('Cron Logs',           () => t7(sbUrl, sbKey)),
     safeRun('API Football',        () => t8(apiKey)),
+    safeRun('Fixtures Table',      () => t9(sbUrl, sbKey)),
+    safeRun('Standings Table',     () => t10(sbUrl, sbKey)),
+    safeRun('H2H Table',           () => t11(sbUrl, sbKey)),
+    safeRun('Form Stats Table',    () => t12(sbUrl, sbKey)),
+    safeRun('Match Stats Table',   () => t13(sbUrl, sbKey)),
+    safeRun('Match Events Table',  () => t14(sbUrl, sbKey)),
+    safeRun('Odds Table',          () => t15(sbUrl, sbKey)),
+    safeRun('Alerts Table',        () => t16(sbUrl, sbKey)),
+    safeRun('Live Stats (24h)',     () => t17(sbUrl, sbKey)),
+    safeRun('Collect Daily Cron',  () => t18(sbUrl, sbKey)),
   ]);
   const test6 = t6(); // synchronous
 
@@ -388,6 +605,16 @@ export default async function handler(req, res) {
     weights_sum:         test6,
     cron_logs:           test7,
     api_football:        test8,
+    fixtures:            test9,
+    standings:           test10,
+    h2h:                 test11,
+    form_stats:          test12,
+    match_stats:         test13,
+    match_events:        test14,
+    odds:                test15,
+    alerts:              test16,
+    live_stats_24h:      test17,
+    collect_daily_cron:  test18,
   };
 
   const passed   = Object.values(tests).filter(t => t.status.startsWith('✅')).length;
