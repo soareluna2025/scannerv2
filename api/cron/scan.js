@@ -142,15 +142,17 @@ function calcMarkets(f) {
 }
 
 // --- Supabase REST helpers ---
-async function sbFetch(path, method = 'GET', body = null) {
+async function sbFetch(path, method = 'GET', body = null, preferExtra = '') {
   if (!SUPABASE_KEY) throw new Error('SUPABASE_KEY not configured');
+  let prefer = '';
+  if (method === 'POST') prefer = preferExtra ? `return=minimal,${preferExtra}` : 'return=minimal';
   const opts = {
     method,
     headers: {
       'apikey': SUPABASE_KEY,
       'Authorization': `Bearer ${SUPABASE_KEY}`,
       'Content-Type': 'application/json',
-      'Prefer': method === 'POST' ? 'return=minimal' : '',
+      'Prefer': prefer,
     },
   };
   if (body) opts.body = JSON.stringify(body);
@@ -183,6 +185,88 @@ async function leagueSnapshots(leagueId, limit = 200) {
 
 async function upsertLeaguePattern(row) {
   await sbFetch('/league_patterns?on_conflict=league_id', 'POST', row);
+}
+
+async function saveLiveStats(m, f) {
+  const row = {
+    fixture_id:      m.fixture.id,
+    minute:          f.mn,
+    home_goals:      f.hg,
+    away_goals:      f.ag,
+    home_possession: f.hp || null,
+    away_possession: f.hp ? Math.round(100 - f.hp) : null,
+    home_xg:         f.hxg || null,
+    away_xg:         f.axg || null,
+    home_shots:      f.hSh,
+    away_shots:      f.aSh,
+    home_attacks:    f.hDA,
+    away_attacks:    f.aDA,
+    home_dangerous:  f.hDA,
+    away_dangerous:  f.aDA,
+    home_corners:    f.hC,
+    away_corners:    f.aC,
+    recorded_at:     new Date().toISOString(),
+  };
+  await sbFetch('/live_stats', 'POST', row);
+}
+
+async function saveH2H(matches) {
+  for (const match of matches) {
+    const hg = match.goals?.home ?? 0;
+    const ag = match.goals?.away ?? 0;
+    const row = {
+      fixture_id:   match.fixture.id,
+      home_team_id: match.teams?.home?.id,
+      away_team_id: match.teams?.away?.id,
+      match_date:   match.fixture?.date,
+      home_goals:   hg,
+      away_goals:   ag,
+      result:       hg > ag ? 'H' : hg < ag ? 'A' : 'D',
+      over05:       (hg + ag) > 0,
+      over15:       (hg + ag) > 1,
+      over25:       (hg + ag) > 2,
+      gg:           hg > 0 && ag > 0,
+    };
+    await sbFetch('/h2h?on_conflict=fixture_id', 'POST', row, 'resolution=merge-duplicates');
+  }
+}
+
+async function saveFormStats(matches, teamId) {
+  for (const match of matches) {
+    const hg = match.goals?.home ?? 0;
+    const ag = match.goals?.away ?? 0;
+    const isHome   = match.teams?.home?.id === teamId;
+    const scored   = isHome ? hg : ag;
+    const conceded = isHome ? ag : hg;
+    const result   = scored > conceded ? 'W' : scored < conceded ? 'L' : 'D';
+    const row = {
+      fixture_id:     match.fixture.id,
+      team_id:        teamId,
+      league_id:      match.league?.id,
+      match_date:     match.fixture?.date,
+      is_home:        isHome,
+      goals_scored:   scored,
+      goals_conceded: conceded,
+      result,
+      over05: (hg + ag) > 0,
+      over15: (hg + ag) > 1,
+      over25: (hg + ag) > 2,
+      gg:     hg > 0 && ag > 0,
+    };
+    await sbFetch('/form_stats?on_conflict=fixture_id,team_id', 'POST', row, 'resolution=merge-duplicates');
+  }
+}
+
+async function saveAlert(fixtureId, alertType, market, message, confidence) {
+  await sbFetch('/alerts', 'POST', {
+    fixture_id:    fixtureId,
+    alert_type:    alertType,
+    market,
+    message,
+    confidence,
+    sent_telegram: false,
+    created_at:    new Date().toISOString(),
+  });
 }
 
 let _runCount = 0;
@@ -285,6 +369,19 @@ export default async function handler(req, res) {
 
       await upsertSnapshot(row);
       snapshotResults.push({ id: m.fixture.id, ng, status: sh, minute: elapsed });
+
+      // Save live_stats (non-blocking, fiecare minut per meci)
+      saveLiveStats(m, f).catch(e => log(`live_stats error ${m.fixture.id}: ${e.message}`));
+
+      // Save alert dacă NGP > 85 sau over15 > 82
+      if (ng > 85 || mk.over15 > 82) {
+        const alertType = ng > 85 ? 'HIGH_NGP' : 'HIGH_OVER15';
+        const market    = ng > 85 ? 'ng' : 'over15';
+        const conf      = ng > 85 ? ng / 100 : mk.over15 / 100;
+        const msg       = `${m.teams?.home?.name} vs ${m.teams?.away?.name} — ${alertType} ${Math.round(conf * 100)}% min ${elapsed}`;
+        saveAlert(m.fixture.id, alertType, market, msg, conf)
+          .catch(e => log(`alert error ${m.fixture.id}: ${e.message}`));
+      }
     } catch (e) {
       log(`snapshot error fixture ${m.fixture?.id}: ${e.message}`);
     }
@@ -381,6 +478,11 @@ export default async function handler(req, res) {
         const aForm = afData.response || [];
 
         if (h2h.length < 3 || hForm.length < 3 || aForm.length < 3) continue;
+
+        // Salvează h2h și form_stats (non-blocking)
+        saveH2H(h2h).catch(e => log(`h2h save error ${m.fixture?.id}: ${e.message}`));
+        saveFormStats(hForm, hid).catch(e => log(`form home error ${m.fixture?.id}: ${e.message}`));
+        saveFormStats(aForm, aid).catch(e => log(`form away error ${m.fixture?.id}: ${e.message}`));
 
         const h2hN = h2h.length;
         const ggH2HN = h2h.filter(g => g.goals?.home > 0 && g.goals?.away > 0).length;
