@@ -624,8 +624,10 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
         <div class="empty-s">Apasă butonul pentru a încărca meciurile de azi</div>
       </div>
     </div>
-    <div style="padding:0 12px 12px">
+    <div id="top-opps-panel" style="display:none;padding:0 12px 8px"></div>
+    <div style="padding:0 12px 12px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn-connect" onclick="loadPM()" id="btn-pm">Încarcă Pre-meci</button>
+      <button class="btn-connect" onclick="loadTopOpps()" id="btn-topopps" style="background:linear-gradient(135deg,#1a5c3a,#0d3d26)">📊 Top Oportunități</button>
     </div>
   </div>
 
@@ -1250,6 +1252,50 @@ async function loadPM(){
     btn.textContent='Reîncarcă';btn.disabled=false;
   }
 }
+
+async function loadTopOpps(){
+  var btn=document.getElementById('btn-topopps');
+  var panel=document.getElementById('top-opps-panel');
+  if(panel.style.display!=='none'){panel.style.display='none';btn.textContent='📊 Top Oportunități';return;}
+  btn.textContent='Se încarcă...';btn.disabled=true;
+  panel.style.display='block';
+  panel.innerHTML='<div class="spinner"><div class="spin"></div></div>';
+  try{
+    var r=await fetch('/api/today?action=snapshots');
+    var d=await r.json();
+    var snaps=Array.isArray(d.snapshots)?d.snapshots:[];
+    if(!snaps.length){
+      panel.innerHTML='<div class="empty" style="padding:12px"><div class="empty-icon">📊</div><div class="empty-t">Nicio oportunitate</div><div class="empty-s">'+(d.error||'Nu există snapshot-uri PENDING')+'</div></div>';
+      btn.textContent='📊 Top Oportunități';btn.disabled=false;return;
+    }
+    var html='<div style="padding:4px 0 8px"><div style="font-weight:700;font-size:13px;color:#a3e635;margin-bottom:8px">📊 Top '+ snaps.length +' Oportunități</div>';
+    snaps.forEach(function(s){
+      var cs=Math.round(s.composite_score||0);
+      var gg=Math.round(s.gg_score||0);
+      var o15=Math.round(s.over15_score||0);
+      var isTop=cs>70;
+      var barColor=cs>70?'#22c55e':cs>50?'#eab308':'#f97316';
+      var kick=s.kickoff_time?new Date(s.kickoff_time).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}):'';
+      html+='<div style="background:#1e2530;border-radius:8px;padding:10px 12px;margin-bottom:8px;border-left:3px solid '+barColor+'">';
+      if(isTop)html+='<span style="background:#22c55e;color:#000;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-right:6px">TOP</span>';
+      html+='<span style="font-weight:600;font-size:13px">'+htmlEsc(s.home_team||'')+' vs '+htmlEsc(s.away_team||'')+'</span>';
+      if(kick)html+=' <span style="color:#94a3b8;font-size:11px">'+kick+'</span>';
+      if(s.league_name)html+='<div style="color:#64748b;font-size:11px;margin-top:2px">'+htmlEsc(s.league_name)+'</div>';
+      html+='<div style="margin-top:8px">';
+      html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:11px;color:#94a3b8;width:100px">Composite</span><div style="flex:1;background:#374151;border-radius:4px;height:8px"><div style="width:'+cs+'%;background:'+barColor+';border-radius:4px;height:8px;transition:width .3s"></div></div><span style="font-size:12px;font-weight:700;color:'+barColor+';margin-left:6px">'+cs+'</span></div>';
+      html+='<div style="display:flex;gap:12px;font-size:11px;color:#94a3b8"><span>GG: <b style="color:#cbd5e1">'+gg+'</b></span><span>Over1.5: <b style="color:#cbd5e1">'+o15+'</b></span></div>';
+      html+='</div></div>';
+    });
+    html+='</div>';
+    panel.innerHTML=html;
+    btn.textContent='✕ Închide Oportunități';btn.disabled=false;
+  }catch(e){
+    panel.innerHTML='<div class="empty" style="padding:12px"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+e.message+'</div></div>';
+    btn.textContent='📊 Top Oportunități';btn.disabled=false;
+  }
+}
+
+function htmlEsc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 async function analyzeMatch(fid,hid,aid){
   var btn=document.getElementById('abtn-'+fid);
   if(btn){btn.textContent='⏳';btn.disabled=true;}
