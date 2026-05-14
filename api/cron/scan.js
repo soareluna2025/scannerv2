@@ -348,7 +348,7 @@ export default async function handler(req, res) {
         status_short: sh,
         minute:      elapsed,
         extra_time:  extra,
-        home_goals:  m.goans?.home ?? 0,
+        home_goals:  m.goals?.home ?? 0,
         away_goals:  m.goals?.away ?? 0,
         home_xg:     f.hxg,
         away_xg:     f.axg,
@@ -442,16 +442,20 @@ export default async function handler(req, res) {
   // 6. Scan pre-match fixtures (starting in next 24h)
   const pmResults = [];
   try {
-    const today = new Date().toISOString().split('T')[0];
     const nowMs = Date.now();
     const in24h = nowMs + 24 * 60 * 60 * 1000;
+    const today    = new Date(nowMs).toISOString().split('T')[0];
+    const tomorrow = new Date(in24h).toISOString().split('T')[0];
 
-    const todayR = await fetch(
-      `https://v3.football.api-sports.io/fixtures?date=${today}&status=NS`,
-      { headers: { 'x-apisports-key': FOOTBALL_KEY } }
-    );
-    const todayData = await todayR.json();
-    const allFixtures = Array.isArray(todayData.response) ? todayData.response : [];
+    const [todayR, tomorrowR] = await Promise.all([
+      fetch(`https://v3.football.api-sports.io/fixtures?date=${today}&status=NS`,    { headers: { 'x-apisports-key': FOOTBALL_KEY } }),
+      fetch(`https://v3.football.api-sports.io/fixtures?date=${tomorrow}&status=NS`, { headers: { 'x-apisports-key': FOOTBALL_KEY } }),
+    ]);
+    const [todayData, tomorrowData] = await Promise.all([todayR.json(), tomorrowR.json()]);
+    const allFixtures = [
+      ...(Array.isArray(todayData.response)    ? todayData.response    : []),
+      ...(Array.isArray(tomorrowData.response) ? tomorrowData.response : []),
+    ];
 
     const upcoming = allFixtures.filter(m => {
       const fd = m.fixture?.date ? new Date(m.fixture.date).getTime() : 0;
@@ -495,7 +499,7 @@ export default async function handler(req, res) {
         const ggHF = hf5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / hf5.length;
         const ggAF = af5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / af5.length;
         const o15HF = hf5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / hf5.length;
-        const o15AF = af5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goans?.away || 0), 0) / af5.length;
+        const o15AF = af5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / af5.length;
 
         const ggScore   = ggH2H * 0.30 + ggHF * 0.25 + ggAF * 0.25 + over15H2H * 0.20;
         const o15Score  = over15H2H * 0.30 + (o15HF / 3) * 0.25 + (o15AF / 3) * 0.25 + ggH2H * 0.20;
@@ -530,14 +534,16 @@ export default async function handler(req, res) {
     const pmResolved = [];
     for (const m of finishedMatches) {
       try {
-        const fh = m.goals?.home ?? 0;
-        const fa = m.goals?.away ?? 0;
-        const gg = fh > 0 && fa > 0;
+        const fh = m.goals?.home ?? null;
+        const fa = m.goals?.away ?? null;
+        if (fh === null || fa === null) continue;
+        const gg  = fh > 0 && fa > 0;
         const o15 = fh + fa >= 2;
+        const outcome = (fh + fa) === 0 ? 'PUSH' : o15 ? 'WIN' : 'LOSS';
         await sbFetch(
           `/pre_match_snapshots?fixture_id=eq.${m.fixture.id}&outcome=eq.PENDING`,
           'PATCH',
-          { outcome: o15 ? 'WIN' : 'LOSS', actual_gg: gg, actual_over15: o15, actual_home: fh, actual_away: fa, resolved_at: new Date().toISOString() }
+          { outcome, actual_gg: gg, actual_over15: o15, actual_home: fh, actual_away: fa, resolved_at: new Date().toISOString() }
         );
         pmResolved.push(m.fixture.id);
       } catch (e) { /* ignore */ }

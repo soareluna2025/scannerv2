@@ -543,16 +543,18 @@ async function t18(sbUrl, sbKey) {
   };
 }
 
-// ── WIN RATE din predictions ─────────────────────────────────────────────────
+// ── WIN RATE din pre_match_snapshots ─────────────────────────────────────────
 async function tWinRate(sbUrl, sbKey) {
   if (!sbUrl || !sbKey) return { correct: 0, total: 0, incorrect: 0, pending: 0, percentage: 0 };
-  const [total, correct, pending] = await Promise.all([
-    sbCountFiltered(sbUrl, sbKey, 'predictions', 'select=*&result_over15=not.is.null'),
-    sbCountFiltered(sbUrl, sbKey, 'predictions', 'select=*&result_over15=eq.true'),
-    sbCountFiltered(sbUrl, sbKey, 'predictions', 'select=*&result_over15=is.null'),
+  const [wins, losses, pushes, pending] = await Promise.all([
+    sbCountFiltered(sbUrl, sbKey, 'pre_match_snapshots', 'select=*&outcome=eq.WIN'),
+    sbCountFiltered(sbUrl, sbKey, 'pre_match_snapshots', 'select=*&outcome=eq.LOSS'),
+    sbCountFiltered(sbUrl, sbKey, 'pre_match_snapshots', 'select=*&outcome=eq.PUSH'),
+    sbCountFiltered(sbUrl, sbKey, 'pre_match_snapshots', 'select=*&outcome=eq.PENDING'),
   ]);
-  const percentage = total > 0 ? Math.round(correct / total * 100) : 0;
-  return { correct, total, incorrect: total - correct, pending, percentage };
+  const total = wins + losses + pushes;
+  const percentage = total > 0 ? Math.round(wins / total * 100) : 0;
+  return { correct: wins, total, incorrect: losses + pushes, pending, percentage };
 }
 
 // ── HANDLER ──────────────────────────────────────────────────────────────────
