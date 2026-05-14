@@ -51,7 +51,7 @@ async function collectFixture(fixtureId, key, sbUrl, sbKey) {
 
   if (!rows.length) return 0;
 
-  await fetch(`${sbUrl}/rest/v1/player_stats`, {
+  await fetch(`${sbUrl}/rest/v1/player_stats?on_conflict=player_id,fixture_id`, {
     method: 'POST',
     headers: {
       'apikey':        sbKey,
