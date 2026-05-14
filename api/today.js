@@ -50,6 +50,32 @@ export default async function handler(req, res) {
   const sbUrl = process.env.SUPABASE_URL;
   const sbKey = process.env.SUPABASE_KEY;
 
+  // --- Snapshots action: returns top pre_match_snapshots by composite_score ---
+  const action = (req.query && req.query.action) ||
+    new URL(req.url || '', 'http://localhost').searchParams.get('action');
+  if (action === 'snapshots') {
+    if (!sbUrl || !sbKey) {
+      return res.status(200).json({ snapshots: [], error: 'Supabase not configured' });
+    }
+    try {
+      const r = await fetch(
+        `${sbUrl}/rest/v1/pre_match_snapshots` +
+        `?outcome=eq.PENDING` +
+        `&order=composite_score.desc` +
+        `&limit=10` +
+        `&select=*`,
+        { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+      );
+      const data = await r.json();
+      const snapshots = Array.isArray(data) ? data : [];
+      log(`snapshots: ${snapshots.length}`);
+      return res.status(200).json({ snapshots });
+    } catch (e) {
+      log(`snapshots error: ${e.message}`);
+      return res.status(200).json({ snapshots: [], error: e.message });
+    }
+  }
+
   if (!key) {
     log('ERROR: no API-Football key configured');
     return res.status(200).json({ response: [], error: 'API key not configured' });
