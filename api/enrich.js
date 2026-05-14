@@ -351,6 +351,18 @@ async function getInjuriesFromSupabase(fixtureId, sbUrl, sbKey) {
   } catch (_) { return []; }
 }
 
+async function getMatchStatsFromSupabase(fixtureId, sbUrl, sbKey) {
+  if (!fixtureId) return [];
+  try {
+    const url = `${sbUrl}/rest/v1/match_stats?fixture_id=eq.${fixtureId}`;
+    const res = await fetch(url, {
+      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
+    });
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch (_) { return []; }
+}
+
 // Transform form_stats rows → API-Football-like format expected by calcPoisson
 function formStatsToFixtures(rows, teamId) {
   return rows.map(row => ({
@@ -407,14 +419,15 @@ export default async function handler(req, res) {
   const sbKey    = process.env.SUPABASE_KEY;
 
   try {
-    // --- Batch 1: Supabase queries + team strengths + injuries in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries] = await Promise.all([
+    // --- Batch 1: Supabase queries + team strengths + injuries + match_stats in parallel ---
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats] = await Promise.all([
       sbUrl && sbKey ? getFormFromSupabase(hId, sbUrl, sbKey)              : Promise.resolve([]),
       sbUrl && sbKey ? getFormFromSupabase(aId, sbUrl, sbKey)              : Promise.resolve([]),
       sbUrl && sbKey ? getH2HFromSupabase(hId, aId, sbUrl, sbKey)         : Promise.resolve([]),
       fid && sbUrl && sbKey ? getOddsFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
       getTeamStrengths(hId, aId, sbUrl, sbKey),
       fid && sbUrl && sbKey ? getInjuriesFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
+      fid && sbUrl && sbKey ? getMatchStatsFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
     ]);
 
     // --- Batch 2: API-Football fallbacks only where Supabase had insufficient data ---
@@ -465,17 +478,42 @@ export default async function handler(req, res) {
       }
     }
 
-    // --- Calculations (unchanged) ---
-    const result   = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota);
-    const evData   = calcEV(result, oddsRaw, bankroll);
+    // --- Calculations ---
+    const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota);
+    const evData = calcEV(result, oddsRaw, bankroll);
+
+    // --- Resolve xG: real from match_stats if available, else estimate from shots ---
+    let xgSource = 'estimated';
+    let xgValue  = (parseFloat(soth) || 0) * 0.4 + (parseFloat(sota) || 0) * 0.4;
+
+    if (Array.isArray(matchStats) && matchStats.length) {
+      // Flat schema: single row with home_xg / away_xg columns
+      if (matchStats[0].home_xg != null || matchStats[0].away_xg != null) {
+        xgValue  = (parseFloat(matchStats[0].home_xg) || 0) + (parseFloat(matchStats[0].away_xg) || 0);
+        xgSource = 'supabase';
+      } else {
+        // Per-team rows with an xg column
+        const homeRow = matchStats.find(r => r.team_id === hId && r.xg != null);
+        const awayRow = matchStats.find(r => r.team_id === aId && r.xg != null);
+        if (homeRow || awayRow) {
+          xgValue  = (parseFloat(homeRow?.xg) || 0) + (parseFloat(awayRow?.xg) || 0);
+          xgSource = 'supabase';
+        }
+      }
+    }
 
     const liveStats = (elapsed && parseInt(elapsed) > 0) ? {
-      xg:  (parseFloat(soth) || 0) * 0.4 + (parseFloat(sota) || 0) * 0.4,
+      xg:  xgValue,
       sot: (parseInt(soth) || 0) + (parseInt(sota) || 0),
       da:  0,
     } : null;
 
     const confData = calcConfidence(result, oddsRaw, liveStats, teamStrengths);
+
+    // Add xg_source flag to breakdown when in live mode
+    if (elapsed && parseInt(elapsed) > 0) {
+      confData.breakdown.xg_source = xgSource;
+    }
 
     // --- Injuries adjustment (only when fid is present) ---
     if (fid && Array.isArray(injuries) && injuries.length >= 3) {
