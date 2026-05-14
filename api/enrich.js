@@ -162,10 +162,18 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
     score7 = Math.round((h + a) / 2);
   }
 
+  const layers = [
+    { score: score1, w: 0.22 },
+    { score: score2, w: 0.20 },
+    { score: score3, w: 0.10 },
+    { score: score4, w: 0.15 },
+    { score: score5, w: 0.08 },
+    { score: score6, w: 0.05 },
+    { score: score7, w: 0.20 },
+  ].filter(l => l.score != null);
+  const totalW = layers.reduce((s, l) => s + l.w, 0);
+  const confidenceScore = Math.round(layers.reduce((s, l) => s + l.score * (l.w / totalW), 0));
   const hasStr = score7 != null;
-  const confidenceScore = hasStr
-    ? Math.round(score1 * 0.20 + score2 * 0.18 + score3 * 0.13 + score4 * 0.13 + score5 * 0.13 + score6 * 0.08 + score7 * 0.15)
-    : Math.round(score1 * 0.25 + score2 * 0.20 + score3 * 0.15 + score4 * 0.15 + score5 * 0.15 + score6 * 0.10);
 
   return {
     confidenceScore,
