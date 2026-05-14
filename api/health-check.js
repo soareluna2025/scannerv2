@@ -543,6 +543,18 @@ async function t18(sbUrl, sbKey) {
   };
 }
 
+// ── WIN RATE din predictions ─────────────────────────────────────────────────
+async function tWinRate(sbUrl, sbKey) {
+  if (!sbUrl || !sbKey) return { correct: 0, total: 0, incorrect: 0, pending: 0, percentage: 0 };
+  const [total, correct, pending] = await Promise.all([
+    sbCountFiltered(sbUrl, sbKey, 'predictions', 'select=*&result_over15=not.is.null'),
+    sbCountFiltered(sbUrl, sbKey, 'predictions', 'select=*&result_over15=eq.true'),
+    sbCountFiltered(sbUrl, sbKey, 'predictions', 'select=*&result_over15=is.null'),
+  ]);
+  const percentage = total > 0 ? Math.round(correct / total * 100) : 0;
+  return { correct, total, incorrect: total - correct, pending, percentage };
+}
+
 // ── HANDLER ──────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -575,6 +587,7 @@ export default async function handler(req, res) {
   const [
     test1, test2, test3, test4, test5, test7, test8,
     test9, test10, test11, test12, test13, test14, test15, test16, test17, test18,
+    winRateData,
   ] = await Promise.all([
     safeRun('Supabase Connection', () => t1(sbUrl, sbKey)),
     safeRun('Player Stats Data',   () => t2(sbUrl, sbKey)),
@@ -593,6 +606,7 @@ export default async function handler(req, res) {
     safeRun('Alerts Table',        () => t16(sbUrl, sbKey)),
     safeRun('Live Stats (24h)',     () => t17(sbUrl, sbKey)),
     safeRun('Collect Daily Cron',  () => t18(sbUrl, sbKey)),
+    tWinRate(sbUrl, sbKey).catch(() => ({ correct: 0, total: 0, incorrect: 0, pending: 0, percentage: 0 })),
   ]);
   const test6 = t6(); // synchronous
 
@@ -634,5 +648,6 @@ export default async function handler(req, res) {
     overall,
     tests,
     summary: { passed, warnings, failed, critical_issues },
+    winRate: winRateData,
   });
 }
