@@ -946,6 +946,7 @@ function connect(){
       document.getElementById('live-badge').style.display='flex';
       document.getElementById('stats-bar').style.display='flex';
       document.getElementById('wr-bar').style.display='flex';
+      fetchSupabaseWinRate();
       _autoIt=setInterval(function(){loadLive();},CFG.RI);
     } else {
       btn.textContent='CONECTARE';
@@ -1160,6 +1161,19 @@ function renderWR(data){
   document.getElementById('wr-l').textContent='L: '+l;
   document.getElementById('wr-p').textContent='P: '+pend;
   document.getElementById('wr-r').textContent=t>0?rate+'%':'—';
+}
+async function fetchSupabaseWinRate(){
+  try{
+    var r=await fetch('/api/health-check');
+    var d=await r.json();
+    var wr=d&&d.winRate;
+    if(wr&&wr.total>0){
+      document.getElementById('wr-w').textContent='W: '+wr.correct;
+      document.getElementById('wr-l').textContent='L: '+wr.incorrect;
+      document.getElementById('wr-p').textContent='P: '+wr.pending;
+      document.getElementById('wr-r').textContent=wr.percentage+'%';
+    }
+  }catch(e){}
 }
 
 // ── PRE-MECI ──────────────────────────────────────────────────
@@ -2195,7 +2209,7 @@ function renderFavs(){
 }
 
 // ── INIT ──────────────────────────────────────────────────────
-renderWR(loadWR());
+renderWR(loadWR());fetchSupabaseWinRate();
 updateFavBadge();
 if(sessionStorage.getItem('wasConnected')==='1') connect();
 // 30s auto-refresh for PM and Favs tabs
