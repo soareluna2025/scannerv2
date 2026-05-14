@@ -363,6 +363,18 @@ async function getMatchStatsFromSupabase(fixtureId, sbUrl, sbKey) {
   } catch (_) { return []; }
 }
 
+async function getLeaguePatternFromSupabase(leagueId, sbUrl, sbKey) {
+  if (!leagueId) return null;
+  try {
+    const url = `${sbUrl}/rest/v1/league_patterns?league_id=eq.${leagueId}&limit=1`;
+    const res = await fetch(url, {
+      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
+    });
+    const data = await res.json();
+    return data?.[0] || null;
+  } catch (_) { return null; }
+}
+
 // Transform form_stats rows → API-Football-like format expected by calcPoisson
 function formStatsToFixtures(rows, teamId) {
   return rows.map(row => ({
@@ -419,8 +431,8 @@ export default async function handler(req, res) {
   const sbKey    = process.env.SUPABASE_KEY;
 
   try {
-    // --- Batch 1: Supabase queries + team strengths + injuries + match_stats in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats] = await Promise.all([
+    // --- Batch 1: Supabase queries + team strengths + injuries + match_stats + league_pattern in parallel ---
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leaguePattern] = await Promise.all([
       sbUrl && sbKey ? getFormFromSupabase(hId, sbUrl, sbKey)              : Promise.resolve([]),
       sbUrl && sbKey ? getFormFromSupabase(aId, sbUrl, sbKey)              : Promise.resolve([]),
       sbUrl && sbKey ? getH2HFromSupabase(hId, aId, sbUrl, sbKey)         : Promise.resolve([]),
@@ -428,6 +440,7 @@ export default async function handler(req, res) {
       getTeamStrengths(hId, aId, sbUrl, sbKey),
       fid && sbUrl && sbKey ? getInjuriesFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
       fid && sbUrl && sbKey ? getMatchStatsFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
+      lgid && sbUrl && sbKey ? getLeaguePatternFromSupabase(Number(lgid), sbUrl, sbKey) : Promise.resolve(null),
     ]);
 
     // --- Batch 2: API-Football fallbacks only where Supabase had insufficient data ---
@@ -527,6 +540,27 @@ export default async function handler(req, res) {
         value: -injuryPenalty,
         note:  `${injuries.length} jucători accidentați`,
       };
+    }
+
+    // --- League pattern adjustment (only when lgid present and pattern found) ---
+    if (leaguePattern) {
+      const avgOver15 = parseFloat(leaguePattern.avg_over15) || 0;
+      const avgGG     = parseFloat(leaguePattern.avg_gg)     || 0;
+      let leagueAdj = 0;
+
+      if (avgOver15 > 0.65)      leagueAdj += 3;
+      else if (avgOver15 < 0.45) leagueAdj -= 3;
+
+      if (avgGG > 0.60) leagueAdj += 2;
+
+      if (leagueAdj !== 0) {
+        confData.confidenceScore = Math.max(10, confData.confidenceScore + leagueAdj);
+        confData.breakdown.league_pattern = {
+          layer: 'league_pattern',
+          value: leagueAdj,
+          note:  `avg_over15: ${Math.round(avgOver15 * 100)}%`,
+        };
+      }
     }
 
     const payload = { ...result, ...evData, ...confData };
