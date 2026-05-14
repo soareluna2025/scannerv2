@@ -49,10 +49,10 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
   return {
     homeAvgScored:   r2(homeAvgScored),
     homeAvgConceded: r2(homeAvgConceded),
-    homeScoreRate:   pct(hGames, m => (m.goals?.home ?? 0) > 0),
+    homeScoreRate:   pct(hGames, m => (m.goals?.home ?? 0) > 0) ?? Math.round((1 - Math.exp(-lambdaHome)) * 100),
     awayAvgScored:   r2(awayAvgScored),
     awayAvgConceded: r2(awayAvgConceded),
-    awayScoreRate:   pct(aGames, m => (m.goals?.away ?? 0) > 0),
+    awayScoreRate:   pct(aGames, m => (m.goals?.away ?? 0) > 0) ?? Math.round((1 - Math.exp(-lambdaAway)) * 100),
     lambdaHome:      r2(lambdaHome),
     lambdaAway:      r2(lambdaAway),
     lambdaTotal:     r2(lambdaTotal),
@@ -62,8 +62,8 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
     homeWin:         matrix.homeWin,
     draw:            matrix.draw,
     awayWin:         matrix.awayWin,
-    h2hOver15:       pct(h2h, m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1),
-    h2hGG:           pct(h2h, m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0),
+    h2hOver15:       pct(h2h, m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1) ?? matrix.over15Prob,
+    h2hGG:           pct(h2h, m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0) ?? matrix.ggProb,
     h2hSample:       h2h.length,
     confidence,
     isDynamic
@@ -143,7 +143,7 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
         bestCota   = best.cota;
         bestEV     = '+' + Math.round(best.ev * 100) + '%';
       } else {
-        score5 = 20;
+        score5 = 50;
       }
     }
   }
