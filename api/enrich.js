@@ -1,5 +1,13 @@
 import { calcPoisson6x6, parseOddsItem, calcEV } from './calc-utils.js';
 
+async function fetchWithRetry(url, opts, attempts = 2) {
+  for (let i = 0; i < attempts; i++) {
+    try { return await fetch(url, opts); } catch (e) {
+      if (i === attempts - 1) throw e;
+    }
+  }
+}
+
 function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
   if (!elapsed || elapsed <= 0) return { lambda: lambdaBase, dynamic: false };
   const minutesLeft = Math.max(1, 90 - elapsed);
@@ -119,7 +127,7 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
 
   let score4 = score1;
   if (liveStats && liveStats.xg != null) {
-    score4 = Math.min(100, liveStats.xg * 25 + (liveStats.sot || 0) * 3 + (liveStats.da || 0) * 0.5);
+    score4 = Math.max(50, Math.min(100, liveStats.xg * 25 + (liveStats.sot || 0) * 3 + (liveStats.da || 0) * 0.5));
   }
 
   let score5 = 50;
@@ -157,8 +165,8 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
   if (teamStrengths && (teamStrengths.home != null || teamStrengths.away != null)) {
     teamStrengthHome = teamStrengths.home;
     teamStrengthAway = teamStrengths.away;
-    const h = teamStrengths.home ?? 50;
-    const a = teamStrengths.away ?? 50;
+    const h = teamStrengths.home || 50;
+    const a = teamStrengths.away || 50;
     score7 = Math.round((h + a) / 2);
   }
 
@@ -342,10 +350,10 @@ export default async function handler(req, res) {
     const needOdds  = fid && sbOddsRows.length === 0;
 
     const [apiFbHForm, apiFbAForm, apiFbH2H, apiFbOdds] = await Promise.all([
-      needHForm ? fetch(`https://v3.football.api-sports.io/fixtures?team=${h}&last=20&status=FT`, { headers: hdr }).then(r => r.json()) : null,
-      needAForm ? fetch(`https://v3.football.api-sports.io/fixtures?team=${a}&last=20&status=FT`, { headers: hdr }).then(r => r.json()) : null,
-      needH2H   ? fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${h}-${a}&last=10`, { headers: hdr }).then(r => r.json()) : null,
-      needOdds  ? fetch(`https://v3.football.api-sports.io/odds?fixture=${fid}&bookmaker=8`, { headers: hdr }).then(r => r.json()) : null,
+      needHForm ? fetchWithRetry(`https://v3.football.api-sports.io/fixtures?team=${h}&last=20&status=FT`, { headers: hdr }).then(r => r.json()) : null,
+      needAForm ? fetchWithRetry(`https://v3.football.api-sports.io/fixtures?team=${a}&last=20&status=FT`, { headers: hdr }).then(r => r.json()) : null,
+      needH2H   ? fetchWithRetry(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${h}-${a}&last=10`, { headers: hdr }).then(r => r.json()) : null,
+      needOdds  ? fetchWithRetry(`https://v3.football.api-sports.io/odds?fixture=${fid}&bookmaker=8`, { headers: hdr }).then(r => r.json()) : null,
     ]);
 
     // Resolve final datasets

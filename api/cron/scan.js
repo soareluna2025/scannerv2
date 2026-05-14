@@ -537,7 +537,7 @@ export default async function handler(req, res) {
         await sbFetch(
           `/pre_match_snapshots?fixture_id=eq.${m.fixture.id}&outcome=eq.PENDING`,
           'PATCH',
-          { outcome: 'DONE', actual_gg: gg, actual_over15: o15, actual_home: fh, actual_away: fa, resolved_at: new Date().toISOString() }
+          { outcome: o15 ? 'WIN' : 'LOSS', actual_gg: gg, actual_over15: o15, actual_home: fh, actual_away: fa, resolved_at: new Date().toISOString() }
         );
         pmResolved.push(m.fixture.id);
       } catch (e) { /* ignore */ }
