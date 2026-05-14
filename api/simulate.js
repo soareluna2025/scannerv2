@@ -20,6 +20,126 @@ async function apiFetch(path, key) {
   return d.response || [];
 }
 
+// --- Supabase helpers ---
+
+async function sfFormStats(teamId, sbUrl, sbKey) {
+  try {
+    const r = await fetch(
+      `${sbUrl}/rest/v1/form_stats?team_id=eq.${teamId}&order=match_date.desc&limit=10`,
+      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    );
+    const d = await r.json();
+    return Array.isArray(d) ? d : [];
+  } catch (_) { return []; }
+}
+
+async function sfH2HStats(homeId, awayId, sbUrl, sbKey) {
+  try {
+    const r = await fetch(
+      `${sbUrl}/rest/v1/h2h` +
+      `?or=(and(home_team_id.eq.${homeId},away_team_id.eq.${awayId}),` +
+      `and(home_team_id.eq.${awayId},away_team_id.eq.${homeId}))` +
+      `&order=match_date.desc&limit=10`,
+      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    );
+    const d = await r.json();
+    return Array.isArray(d) ? d : [];
+  } catch (_) { return []; }
+}
+
+async function sfStandingsData(leagueId, sbUrl, sbKey) {
+  try {
+    const season = new Date().getFullYear();
+    const r = await fetch(
+      `${sbUrl}/rest/v1/standings?league_id=eq.${leagueId}&season=eq.${season}&order=rank.asc`,
+      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    );
+    const d = await r.json();
+    return Array.isArray(d) ? d : [];
+  } catch (_) { return []; }
+}
+
+async function sfOddsData(fixtureId, sbUrl, sbKey) {
+  try {
+    const r = await fetch(
+      `${sbUrl}/rest/v1/odds?fixture_id=eq.${fixtureId}&order=bookmaker_id.asc`,
+      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    );
+    const d = await r.json();
+    return Array.isArray(d) ? d : [];
+  } catch (_) { return []; }
+}
+
+// --- Data format transformers ---
+
+function formStatsToSimFormat(rows, teamId) {
+  return rows.map(row => ({
+    fixture:    { date: row.match_date },
+    teams:      {
+      home: { id: row.is_home ? teamId : 0 },
+      away: { id: row.is_home ? 0 : teamId },
+    },
+    goals:      {
+      home: row.is_home ? (row.goals_scored ?? 0) : (row.goals_conceded ?? 0),
+      away: row.is_home ? (row.goals_conceded ?? 0) : (row.goals_scored ?? 0),
+    },
+    statistics: [],
+  }));
+}
+
+function h2hToSimFormat(rows) {
+  return rows.map(row => ({
+    fixture:    { date: row.match_date },
+    teams:      { home: { id: row.home_team_id }, away: { id: row.away_team_id } },
+    goals:      { home: row.home_goals ?? 0, away: row.away_goals ?? 0 },
+    statistics: [],
+  }));
+}
+
+function sbStandingsToApiFormat(rows) {
+  return [{
+    league: {
+      standings: [rows.map(row => ({
+        team:      { id: row.team_id, name: row.team_name },
+        rank:      row.rank,
+        points:    row.points,
+        goalsDiff: row.goal_diff,
+        form:      row.form,
+        all: {
+          played: row.played,
+          win:    row.won,
+          draw:   row.drawn,
+          lose:   row.lost,
+          goals:  { for: row.goals_for, against: row.goals_against },
+        },
+        home: { played: row.home_played },
+        away: { played: row.away_played },
+      }))]
+    }
+  }];
+}
+
+function sbOddsToApiFormat(rows) {
+  if (!rows.length) return [];
+  const bkmMap = {};
+  for (const row of rows) {
+    if (!bkmMap[row.bookmaker_id]) {
+      bkmMap[row.bookmaker_id] = { id: row.bookmaker_id, name: row.bookmaker_name, bets: {} };
+    }
+    if (!bkmMap[row.bookmaker_id].bets[row.market]) {
+      bkmMap[row.bookmaker_id].bets[row.market] = [];
+    }
+    bkmMap[row.bookmaker_id].bets[row.market].push({ value: row.label, odd: String(row.odd_value) });
+  }
+  return [{
+    bookmakers: Object.values(bkmMap).map(bkm => ({
+      id:   bkm.id,
+      name: bkm.name,
+      bets: Object.entries(bkm.bets).map(([name, values]) => ({ name, values })),
+    })),
+  }];
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -38,11 +158,10 @@ export default async function handler(req, res) {
   if (!fid || !hid || !aid)
     return res.status(400).json({ error: 'fixture_id, home_id, away_id required' });
 
-  const ck = String(fid);
+  const ck  = String(fid);
   const hit = cache.get(ck);
   if (hit && Date.now() - hit.ts < CACHE_TTL) return res.status(200).json(hit.data);
 
-  // ── Parallel data collection ──────────────────────────────────
   const dq = {};
 
   async function af(path, label) {
@@ -65,18 +184,53 @@ export default async function handler(req, res) {
   }
 
   const season = new Date().getFullYear();
-  const [fixRes, homeFx, awayFx, h2hFx, lineupsRes,
-         homePlayers, awayPlayers, standingsRes, oddsRes] = await Promise.all([
-    af(`/fixtures?id=${fid}`,                                  'fixture'),
-    af(`/fixtures?team=${hid}&last=10&status=FT`,              'homeForm'),
-    af(`/fixtures?team=${aid}&last=10&status=FT`,              'awayForm'),
-    af(`/fixtures/headtohead?h2h=${hid}-${aid}&last=10`,       'h2h'),
-    af(`/fixtures/lineups?fixture=${fid}`,                     'lineups'),
-    sf(`team_id=eq.${hid}&order=fixture_id.desc`,              'homePlayers'),
-    sf(`team_id=eq.${aid}&order=fixture_id.desc`,              'awayPlayers'),
-    lid ? af(`/standings?league=${lid}&season=${season}`,      'standings') : Promise.resolve([]),
-    af(`/odds?fixture=${fid}`,                                    'odds'),
+
+  // ── Batch 1: fixture + lineups (always API-Football) + all Supabase sources in parallel ──
+  const [
+    fixRes, lineupsRes,
+    sbHomeFx, sbAwayFx, sbH2HData, sbStdData, sbOddsData,
+    homePlayers, awayPlayers,
+  ] = await Promise.all([
+    af(`/fixtures?id=${fid}`,              'fixture'),
+    af(`/fixtures/lineups?fixture=${fid}`, 'lineups'),
+    sbUrl && sbKey ? sfFormStats(hid, sbUrl, sbKey)            : Promise.resolve([]),
+    sbUrl && sbKey ? sfFormStats(aid, sbUrl, sbKey)            : Promise.resolve([]),
+    sbUrl && sbKey ? sfH2HStats(hid, aid, sbUrl, sbKey)        : Promise.resolve([]),
+    lid && sbUrl && sbKey ? sfStandingsData(lid, sbUrl, sbKey) : Promise.resolve([]),
+    sbUrl && sbKey ? sfOddsData(fid, sbUrl, sbKey)             : Promise.resolve([]),
+    sf(`team_id=eq.${hid}&order=fixture_id.desc`, 'homePlayers'),
+    sf(`team_id=eq.${aid}&order=fixture_id.desc`, 'awayPlayers'),
   ]);
+
+  dq['homeForm']  = sbHomeFx.length   ? '✅' : '⚠️';
+  dq['awayForm']  = sbAwayFx.length   ? '✅' : '⚠️';
+  dq['h2h']       = sbH2HData.length  ? '✅' : '⚠️';
+  dq['standings'] = sbStdData.length  ? '✅' : '⚠️';
+  dq['odds']      = sbOddsData.length ? '✅' : '⚠️';
+
+  // ── Batch 2: API-Football fallbacks only where Supabase had insufficient data ──
+  const needHomeFx = sbHomeFx.length  < 3;
+  const needAwayFx = sbAwayFx.length  < 3;
+  const needH2H    = sbH2HData.length < 3;
+  const needStd    = lid && sbStdData.length === 0;
+  const needOdds   = sbOddsData.length === 0;
+
+  const [apiFbHomeFx, apiFbAwayFx, apiFbH2H, apiFbStd, apiFbOdds] = await Promise.all([
+    needHomeFx ? af(`/fixtures?team=${hid}&last=10&status=FT`,        'homeFormFb')  : Promise.resolve(null),
+    needAwayFx ? af(`/fixtures?team=${aid}&last=10&status=FT`,        'awayFormFb')  : Promise.resolve(null),
+    needH2H    ? af(`/fixtures/headtohead?h2h=${hid}-${aid}&last=10`, 'h2hFb')      : Promise.resolve(null),
+    needStd    ? af(`/standings?league=${lid}&season=${season}`,      'standingsFb') : Promise.resolve(null),
+    needOdds   ? af(`/odds?fixture=${fid}`,                           'oddsFb')     : Promise.resolve(null),
+  ]);
+
+  // Resolve final datasets
+  const homeFx     = needHomeFx ? (apiFbHomeFx || []) : formStatsToSimFormat(sbHomeFx, hid);
+  const awayFx     = needAwayFx ? (apiFbAwayFx || []) : formStatsToSimFormat(sbAwayFx, aid);
+  const h2hFx      = needH2H    ? (apiFbH2H    || []) : h2hToSimFormat(sbH2HData);
+  const standingsRes = needStd
+    ? (apiFbStd || [])
+    : (sbStdData.length ? sbStandingsToApiFormat(sbStdData) : []);
+  const oddsRes    = needOdds ? (apiFbOdds || []) : sbOddsToApiFormat(sbOddsData);
 
   // ── Fixture basics ────────────────────────────────────────────
   const fix      = fixRes[0] || null;
@@ -91,15 +245,15 @@ export default async function handler(req, res) {
   // ── Live stats ────────────────────────────────────────────────
   const hSt = fix?.statistics?.[0]?.statistics || [];
   const aSt = fix?.statistics?.[1]?.statistics || [];
-  const homePoss      = statVal(hSt, 'Ball Possession') || 50;
-  const homeSoT       = statVal(hSt, 'Shots on Goal');
-  const awaySoT       = statVal(aSt, 'Shots on Goal');
-  const homeDngAtt    = statVal(hSt, 'Dangerous Attacks');
-  const awayDngAtt    = statVal(aSt, 'Dangerous Attacks');
-  const homeCorners   = statVal(hSt, 'Corner Kicks');
-  const awayCorners   = statVal(aSt, 'Corner Kicks');
-  const homexGLive    = statVal(hSt, 'expected_goals') || statVal(hSt, 'xG');
-  const awayxGLive    = statVal(aSt, 'expected_goals') || statVal(aSt, 'xG');
+  const homePoss   = statVal(hSt, 'Ball Possession') || 50;
+  const homeSoT    = statVal(hSt, 'Shots on Goal');
+  const awaySoT    = statVal(aSt, 'Shots on Goal');
+  const homeDngAtt = statVal(hSt, 'Dangerous Attacks');
+  const awayDngAtt = statVal(aSt, 'Dangerous Attacks');
+  const homeCorners = statVal(hSt, 'Corner Kicks');
+  const awayCorners = statVal(aSt, 'Corner Kicks');
+  const homexGLive  = statVal(hSt, 'expected_goals') || statVal(hSt, 'xG');
+  const awayxGLive  = statVal(aSt, 'expected_goals') || statVal(aSt, 'xG');
 
   const liveStats = isLive ? {
     minute: elapsed, homeGoals: hgCur, awayGoals: agCur,
@@ -113,7 +267,7 @@ export default async function handler(req, res) {
   function calcForm(matches, teamId) {
     if (!matches.length) return null;
     let gS = 0, gC = 0, xgF = 0, xgA = 0, sot = 0, poss = 0, wins = 0, cs = 0;
-    const form5 = [];
+    const form5  = [];
     const sorted = [...matches].sort((a, b) => new Date(b.fixture?.date) - new Date(a.fixture?.date));
     for (const m of sorted) {
       const ih = m.teams?.home?.id === teamId;
@@ -150,10 +304,10 @@ export default async function handler(req, res) {
   // ── Squad strength from Supabase ──────────────────────────────
   function calcSquad(players) {
     if (!players.length) return null;
-    const ratings = players.map(p => p.rating).filter(r => r != null);
+    const ratings    = players.map(p => p.rating).filter(r => r != null);
     const avgRating  = ratings.length ? ratings.reduce((s, r) => s + r, 0) / ratings.length : 7.0;
-    const avgPassAcc = players.reduce((s, p) => s + (p.pass_accuracy || 0), 0) / players.length;
-    const avgSOT     = players.reduce((s, p) => s + (p.shots_on_target || 0), 0) / players.length;
+    const avgPassAcc = players.reduce((s, p) => s + (p.pass_accuracy    || 0), 0) / players.length;
+    const avgSOT     = players.reduce((s, p) => s + (p.shots_on_target  || 0), 0) / players.length;
     const topScorer  = players.reduce((b, p) => (p.goals || 0) > (b.goals || 0) ? p : b, {});
     const key3       = [...players].sort((a, b) => (b.player_score || 0) - (a.player_score || 0)).slice(0, 3);
     const strength   = Math.round(
@@ -163,13 +317,13 @@ export default async function handler(req, res) {
       Math.min(100, (topScorer.goals || 0) * 20) * 0.20
     );
     return {
-      avgRating:    +avgRating.toFixed(2),
-      avgPassAccuracy: +avgPassAcc.toFixed(1),
+      avgRating:        +avgRating.toFixed(2),
+      avgPassAccuracy:  +avgPassAcc.toFixed(1),
       avgShotsOnTarget: +avgSOT.toFixed(1),
-      topScorer:    { name: topScorer.player_name || '—', goals: topScorer.goals || 0 },
-      keyPlayers:   key3.map(p => ({ name: p.player_name, score: p.player_score })),
+      topScorer:        { name: topScorer.player_name || '—', goals: topScorer.goals || 0 },
+      keyPlayers:       key3.map(p => ({ name: p.player_name, score: p.player_score })),
       strength,
-      playerCount:  players.length,
+      playerCount:      players.length,
     };
   }
 
@@ -182,27 +336,27 @@ export default async function handler(req, res) {
   const awayStd = leagueTable.find(s => s.team?.id === aid) || null;
   let leagueAvgGoals = 2.5;
   if (leagueTable.length) {
-    const tGF  = leagueTable.reduce((s, t) => s + (t.all?.goals?.for  || 0), 0);
-    const tPld = leagueTable.reduce((s, t) => s + (t.all?.played       || 0), 0);
+    const tGF  = leagueTable.reduce((s, t) => s + (t.all?.goals?.for || 0), 0);
+    const tPld = leagueTable.reduce((s, t) => s + (t.all?.played      || 0), 0);
     if (tPld) leagueAvgGoals = +(tGF / tPld).toFixed(2);
   }
 
   // ── Elo ───────────────────────────────────────────────────────
   const elo = calcElo(homeFx, awayFx, hid, aid, h2hFx);
 
-  // ── Lambda ───────────────────────────────────────────────────
-  const lgH = leagueAvgGoals / 2; // per-team average
-  const hAvgS  = homeForm?.goalsScored   || lgH;
-  const hAvgC  = homeForm?.goalsConceded || lgH;
-  const aAvgS  = awayForm?.goalsScored   || lgH;
-  const aAvgC  = awayForm?.goalsConceded || lgH;
+  // ── Lambda ────────────────────────────────────────────────────
+  const lgH   = leagueAvgGoals / 2;
+  const hAvgS = homeForm?.goalsScored   || lgH;
+  const hAvgC = homeForm?.goalsConceded || lgH;
+  const aAvgS = awayForm?.goalsScored   || lgH;
+  const aAvgC = awayForm?.goalsConceded || lgH;
 
   const hAtt = hAvgS / lgH;
   const hDef = hAvgC / lgH;
   const aAtt = aAvgS / lgH;
   const aDef = aAvgC / lgH;
 
-  const eloFactor  = 1 + (elo.eloDiff / 4000);
+  const eloFactor = 1 + (elo.eloDiff / 4000);
   const pfHome = homeSquad ? homeSquad.avgRating / 7.0 : 1.0;
   const pfAway = awaySquad ? awaySquad.avgRating / 7.0 : 1.0;
 
@@ -216,7 +370,6 @@ export default async function handler(req, res) {
   }
 
   // ── Monte Carlo ───────────────────────────────────────────────
-  // Pass current score so live simulations show correct final scores
   const sim = runSimulation(lH, lA, 10000, isLive ? hgCur : 0, isLive ? agCur : 0);
 
   // ── Momentum ─────────────────────────────────────────────────
@@ -227,9 +380,8 @@ export default async function handler(req, res) {
   const dqLevel = missing === 0 ? 'HIGH' : missing <= 2 ? 'MED' : 'LOW';
 
   // ── Odds & recommendation ─────────────────────────────────────
-  // Prefer Bet365 (6), then Bwin (2), William Hill (3), else first available
   const allBookmakers = oddsRes[0]?.bookmakers || [];
-  const preferredIds = [6, 2, 3, 8, 1];
+  const preferredIds  = [6, 2, 3, 8, 1];
   const bookmaker = preferredIds.map(id => allBookmakers.find(b => b.id === id)).find(Boolean)
     || allBookmakers[0];
   const bets = bookmaker?.bets || [];
@@ -240,12 +392,12 @@ export default async function handler(req, res) {
   }
 
   const candidates = [
-    { name: 'Over 1.5', prob: sim.markets.over15, cota: odd('Goals Over/Under', 'Over 1.5') },
-    { name: 'Over 2.5', prob: sim.markets.over25, cota: odd('Goals Over/Under', 'Over 2.5') },
-    { name: 'GG',       prob: sim.markets.gg,     cota: odd('Both Teams Score', 'Yes') },
-    { name: '1 Gazde',  prob: sim.results.homeWin, cota: odd('Match Winner', 'Home') },
-    { name: 'X Egal',   prob: sim.results.draw,    cota: odd('Match Winner', 'Draw') },
-    { name: '2 Oaspeți',prob: sim.results.awayWin, cota: odd('Match Winner', 'Away') },
+    { name: 'Over 1.5',  prob: sim.markets.over15,  cota: odd('Goals Over/Under', 'Over 1.5') },
+    { name: 'Over 2.5',  prob: sim.markets.over25,  cota: odd('Goals Over/Under', 'Over 2.5') },
+    { name: 'GG',        prob: sim.markets.gg,       cota: odd('Both Teams Score', 'Yes')      },
+    { name: '1 Gazde',   prob: sim.results.homeWin,  cota: odd('Match Winner', 'Home')         },
+    { name: 'X Egal',    prob: sim.results.draw,     cota: odd('Match Winner', 'Draw')         },
+    { name: '2 Oaspeți', prob: sim.results.awayWin,  cota: odd('Match Winner', 'Away')         },
   ];
   let bestBet = null, bestEV = -Infinity;
   for (const c of candidates) {
@@ -267,8 +419,8 @@ export default async function handler(req, res) {
       homeElo: elo.homeElo, awayElo: elo.awayElo, eloDiff: elo.eloDiff,
       homeSquadStrength: homeSquad?.strength ?? null,
       awaySquadStrength: awaySquad?.strength ?? null,
-      homeTopScorer: homeSquad?.topScorer || null,
-      awayTopScorer: awaySquad?.topScorer || null,
+      homeTopScorer:  homeSquad?.topScorer || null,
+      awayTopScorer:  awaySquad?.topScorer || null,
       homeStanding: homeStd ? { position: homeStd.rank, points: homeStd.points } : null,
       awayStanding: awayStd ? { position: awayStd.rank, points: awayStd.points } : null,
       leagueAvgGoals,
@@ -279,16 +431,16 @@ export default async function handler(req, res) {
       lambdaHome: +lH.toFixed(2),
       lambdaAway: +lA.toFixed(2),
       simCount: 10000,
-      results:           sim.results,
-      markets:           sim.markets,
-      scoreDistribution: sim.scoreDistribution,
-      mostLikelyScore:   sim.mostLikelyScore,
+      results:               sim.results,
+      markets:               sim.markets,
+      scoreDistribution:     sim.scoreDistribution,
+      mostLikelyScore:       sim.mostLikelyScore,
       secondMostLikelyScore: sim.secondMostLikelyScore,
-      expectedScore:     isLive
+      expectedScore: isLive
         ? `${+(hgCur + lH).toFixed(2)} - ${+(agCur + lA).toFixed(2)}`
         : `${+lH.toFixed(2)} - ${+lA.toFixed(2)}`,
-      goalTiming:        sim.goalTiming,
-      confidence:        sim.confidence,
+      goalTiming:  sim.goalTiming,
+      confidence:  sim.confidence,
     },
     momentum,
     recommendation: bestBet ? {
