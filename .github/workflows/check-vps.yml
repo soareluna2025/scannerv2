@@ -1,0 +1,39 @@
+name: Check VPS Status
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check crons and service on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: root
+          password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 2m
+          script: |
+            echo "====== systemctl status alohascan ======"
+            systemctl status alohascan --no-pager || true
+
+            echo ""
+            echo "====== crontab -l ======"
+            crontab -l 2>/dev/null || echo "(crontab gol)"
+
+            echo ""
+            echo "====== /var/log/alohascan-cron.log (ultimele 50 linii) ======"
+            tail -50 /var/log/alohascan-cron.log 2>/dev/null || echo "(log inexistent)"
+
+            echo ""
+            echo "====== pm2 list (dacă există) ======"
+            pm2 list 2>/dev/null || echo "(pm2 indisponibil)"
+
+            echo ""
+            echo "====== porturi ascultate ======"
+            ss -tlnp | grep -E "3000|80|443" || echo "(niciun port relevant)"
+
+            echo ""
+            echo "====== disk și memorie ======"
+            df -h / && free -h
