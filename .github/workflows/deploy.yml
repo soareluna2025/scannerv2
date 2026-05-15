@@ -69,13 +69,20 @@ jobs:
             true
 
             # 4. Nginx config
-            apt-get install -y nginx -qq 2>/dev/null; true
+            apt-get install -y nginx fuser -qq 2>/dev/null; true
 
-            # Opreste orice altceva pe portul 80 inainte de nginx
-            echo "=== CE OCUPA PORTUL 80 INAINTE ==="
-            ss -tlnp | grep ':80' || echo "nimic pe 80"
+            # Opreste Coolify/Traefik/Docker care ocupa portul 80
+            echo "=== CE OCUPA PORTUL 80 ==="
+            ss -tlnp | grep ':80' || echo "nimic"
+            systemctl stop coolify 2>/dev/null; true
+            systemctl disable coolify 2>/dev/null; true
+            docker ps -q --filter "publish=80" 2>/dev/null | xargs -r docker stop 2>/dev/null; true
+            docker ps -q --filter "publish=443" 2>/dev/null | xargs -r docker stop 2>/dev/null; true
             fuser -k 80/tcp 2>/dev/null; true
-            sleep 1
+            lsof -ti:80 2>/dev/null | xargs -r kill -9 2>/dev/null; true
+            sleep 2
+            echo "=== DUPA ELIBERARE PORT 80 ==="
+            ss -tlnp | grep ':80' || echo "portul 80 liber"
 
             python3 -c "
             cfg = 'server {\n    listen 80 default_server;\n    server_name _;\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade \$http_upgrade;\n        proxy_set_header Connection \$http_connection;\n        proxy_set_header Host \$host;\n        proxy_set_header X-Real-IP \$remote_addr;\n        proxy_cache_bypass \$http_upgrade;\n    }\n}\n'
