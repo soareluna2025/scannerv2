@@ -19,6 +19,7 @@ jobs:
           command_timeout: 5m
           script: |
             export PATH="/snap/bin:$PATH"
+            trap '' TERM
 
             # 1. Opreste orice node rulat manual (fara sa afecteze sesiunea curenta)
             pkill -f "node server.js" 2>/dev/null; sleep 1; true
@@ -88,7 +89,8 @@ jobs:
             nginx -t && systemctl restart nginx && systemctl enable nginx
             true
 
+            sleep 3
             echo "DONE: $(date)"
-            pm2 list
+            pm2 list || true
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
