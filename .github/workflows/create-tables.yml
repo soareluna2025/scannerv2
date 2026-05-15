@@ -1,0 +1,93 @@
+name: Create DB Tables on VPS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-tables:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run SQL on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: root
+          password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 10m
+          script: |
+            export PATH="/snap/bin:$PATH"
+            trap '' TERM
+
+            echo "=== 1. Verifica PostgreSQL ==="
+            systemctl is-active postgresql && echo "PostgreSQL: ACTIV" || {
+              echo "PostgreSQL oprit - pornire..."
+              systemctl start postgresql
+              sleep 3
+            }
+
+            echo "=== 2. Copie SQL pe VPS ==="
+            mkdir -p /root/scannerv2/scripts
+
+      - name: Upload SQL file
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: root
+          password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 15m
+          script_stop: false
+          script: |
+            export PATH="/snap/bin:$PATH"
+            trap '' TERM
+
+            echo "=== 3. Scriere SQL din GitHub ==="
+            python3 << 'PYEOF'
+import subprocess, sys
+
+# Pull latest code to get scripts/create-tables.sql
+r = subprocess.run(['git', '-C', '/root/scannerv2', 'pull', 'origin', 'main'],
+                   capture_output=True, text=True)
+print(r.stdout.strip())
+if r.returncode != 0:
+    print('WARN git pull:', r.stderr.strip())
+
+import os
+sql_path = '/root/scannerv2/scripts/create-tables.sql'
+if not os.path.exists(sql_path):
+    print('EROARE: fisierul SQL nu exista:', sql_path)
+    sys.exit(1)
+print('SQL gasit:', sql_path, '—', os.path.getsize(sql_path), 'bytes')
+PYEOF
+
+            echo "=== 4. Executie SQL ==="
+            PGPASSWORD=Firenze225854 psql \
+              -U alohascan \
+              -d elefant \
+              -h 127.0.0.1 \
+              -f /root/scannerv2/scripts/create-tables.sql
+
+            echo ""
+            echo "=== 5. Verificare tabele ==="
+            PGPASSWORD=Firenze225854 psql \
+              -U alohascan \
+              -d elefant \
+              -h 127.0.0.1 \
+              -c "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;"
+
+            echo ""
+            echo "=== 6. Verificare ligi ==="
+            PGPASSWORD=Firenze225854 psql \
+              -U alohascan \
+              -d elefant \
+              -h 127.0.0.1 \
+              -c "SELECT tier, COUNT(*) as total FROM leagues GROUP BY tier ORDER BY tier;"
+
+            echo ""
+            echo "================================================"
+            echo "  Tabele create cu succes!"
+            echo "  Ruleaza: SELECT COUNT(*) FROM leagues;"
+            echo "================================================"
+            echo "DONE: $(date)"
