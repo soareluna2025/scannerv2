@@ -16,7 +16,7 @@ jobs:
           username: root
           password: ${{ secrets.VPS_PASSWORD }}
           envs: API_FOOTBALL_KEY,SUPABASE_URL,SUPABASE_KEY
-          command_timeout: 5m
+          command_timeout: 8m
           script: |
             export PATH="/snap/bin:$PATH"
             trap '' TERM
@@ -51,52 +51,36 @@ jobs:
             systemctl restart alohascan
             sleep 2
             systemctl is-active alohascan && echo "APP: ONLINE" || echo "APP: ERROR"
-            journalctl -u alohascan -n 10 --no-pager 2>/dev/null || true
 
-            # 4. Nginx - elibereaza portul 80
+            # 4. Nginx
             apt-get install -y nginx -qq 2>/dev/null; true
             systemctl stop coolify 2>/dev/null; true
             docker ps -q --filter "publish=80" 2>/dev/null | xargs -r docker stop 2>/dev/null; true
             fuser -k 80/tcp 2>/dev/null; true
             lsof -ti:80 2>/dev/null | xargs -r kill -9 2>/dev/null; true
             sleep 1
-
             python3 -c "
             cfg = 'server {\n    listen 80 default_server;\n    server_name _;\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade \$http_upgrade;\n        proxy_set_header Connection \$http_connection;\n        proxy_set_header Host \$host;\n        proxy_set_header X-Real-IP \$remote_addr;\n        proxy_cache_bypass \$http_upgrade;\n    }\n}\n'
             open('/etc/nginx/sites-available/alohascan','w').write(cfg)
-            print('nginx config scrisa OK')
             "
             ln -sf /etc/nginx/sites-available/alohascan /etc/nginx/sites-enabled/alohascan
             rm -f /etc/nginx/sites-enabled/default
-            nginx -t 2>&1
-            systemctl restart nginx
-            systemctl enable nginx
-            sleep 2
+            nginx -t 2>&1 && systemctl restart nginx && systemctl enable nginx; true
 
-            # 5. Cron jobs - la fiecare ora (python3, fara heredoc)
-            python3 -c "
-import subprocess
-result = subprocess.run(['crontab','-l'], capture_output=True, text=True)
-existing = [l for l in result.stdout.splitlines() if 'localhost:3000' not in l]
-jobs = [
-  '0 * * * * curl -sf http://localhost:3000/api/cron/scan >> /var/log/alohascan-cron.log 2>&1',
-  '15 * * * * curl -sf http://localhost:3000/api/cron/collect-daily >> /var/log/alohascan-cron.log 2>&1',
-  '30 * * * * curl -sf http://localhost:3000/api/update-results >> /var/log/alohascan-cron.log 2>&1',
-  '45 * * * * curl -sf http://localhost:3000/api/cron/collect-finished >> /var/log/alohascan-cron.log 2>&1',
-]
-crontab = '\n'.join(existing + jobs) + '\n'
-open('/tmp/crontab_new','w').write(crontab)
-print('crontab pregatit: ' + str(len(jobs)) + ' joburi')
-"
+            # 5. Cron jobs - fiecare ora (echo simplu, fara heredoc)
+            crontab -l 2>/dev/null | grep -v "localhost:3000" > /tmp/crontab_new || true
+            echo "0 * * * * curl -sf --max-time 60 http://localhost:3000/api/cron/scan >> /var/log/alohascan-cron.log 2>&1" >> /tmp/crontab_new
+            echo "15 * * * * curl -sf --max-time 60 http://localhost:3000/api/cron/collect-daily >> /var/log/alohascan-cron.log 2>&1" >> /tmp/crontab_new
+            echo "30 * * * * curl -sf --max-time 60 http://localhost:3000/api/update-results >> /var/log/alohascan-cron.log 2>&1" >> /tmp/crontab_new
+            echo "45 * * * * curl -sf --max-time 60 http://localhost:3000/api/cron/collect-finished >> /var/log/alohascan-cron.log 2>&1" >> /tmp/crontab_new
             crontab /tmp/crontab_new
             echo "CRON: $(crontab -l | grep -c localhost:3000) joburi active"
 
-            # 6. Ruleaza cron-urile imediat prima data
-            echo "=== RULARE INITIALA CRON-URI ==="
-            curl -sf http://localhost:3000/api/cron/scan >> /var/log/alohascan-cron.log 2>&1 && echo "scan: OK" || echo "scan: SKIP"
-            curl -sf http://localhost:3000/api/cron/collect-daily >> /var/log/alohascan-cron.log 2>&1 && echo "collect-daily: OK" || echo "collect-daily: SKIP"
-            curl -sf http://localhost:3000/api/cron/collect-finished >> /var/log/alohascan-cron.log 2>&1 && echo "collect-finished: OK" || echo "collect-finished: SKIP"
-            curl -sf http://localhost:3000/api/update-results >> /var/log/alohascan-cron.log 2>&1 && echo "update-results: OK" || echo "update-results: SKIP"
+            # 6. Rulare initiala imediata
+            curl -sf --max-time 60 http://localhost:3000/api/cron/scan >> /var/log/alohascan-cron.log 2>&1 && echo "scan: OK" || echo "scan: SKIP"
+            curl -sf --max-time 60 http://localhost:3000/api/cron/collect-daily >> /var/log/alohascan-cron.log 2>&1 && echo "collect-daily: OK" || echo "collect-daily: SKIP"
+            curl -sf --max-time 60 http://localhost:3000/api/cron/collect-finished >> /var/log/alohascan-cron.log 2>&1 && echo "collect-finished: OK" || echo "collect-finished: SKIP"
+            curl -sf --max-time 60 http://localhost:3000/api/update-results >> /var/log/alohascan-cron.log 2>&1 && echo "update-results: OK" || echo "update-results: SKIP"
 
             echo "NGINX: $(systemctl is-active nginx)"
             echo "ALOHASCAN: $(systemctl is-active alohascan)"
