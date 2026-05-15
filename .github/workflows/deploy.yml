@@ -16,88 +16,79 @@ jobs:
           username: root
           password: ${{ secrets.VPS_PASSWORD }}
           envs: VERCEL_TOKEN
+          command_timeout: 5m
           script: |
             export PATH="/snap/bin:$PATH"
 
-            # 0. Opreste orice proces node rulat manual
-            pkill -f "node server.js" 2>/dev/null || true
-            sleep 2
+            # 1. Opreste orice node rulat manual (fara sa afecteze sesiunea curenta)
+            pkill -f "node server.js" 2>/dev/null; sleep 1; true
 
-            # 1. Pull latest code
+            # 2. Pull cod si instaleaza dependente
             cd /root/scannerv2
             git pull origin main
             npm install --silent
+            true
 
-            # 2. Fetch env vars din Vercel si scrie .env
-            PROJECT_ID=$(curl -s "https://api.vercel.com/v9/projects" \
-              -H "Authorization: Bearer $VERCEL_TOKEN" | \
+            # 3. Scrie .env din Vercel
+            PROJECT_ID=$(curl -sf "https://api.vercel.com/v9/projects" \
+              -H "Authorization: Bearer $VERCEL_TOKEN" 2>/dev/null | \
               python3 -c "
             import sys,json
-            data=json.load(sys.stdin)
-            p=[x for x in data.get('projects',[]) if 'scannerv2' in x.get('name','')]
-            print(p[0]['id'] if p else '')
-            " 2>/dev/null)
+            try:
+              data=json.load(sys.stdin)
+              p=[x for x in data.get('projects',[]) if 'scannerv2' in x.get('name','')]
+              print(p[0]['id'] if p else '')
+            except: print('')
+            " 2>/dev/null || echo "")
 
             if [ -n "$PROJECT_ID" ]; then
-              curl -s "https://api.vercel.com/v9/projects/$PROJECT_ID/env" \
-                -H "Authorization: Bearer $VERCEL_TOKEN" | \
+              curl -sf "https://api.vercel.com/v9/projects/$PROJECT_ID/env" \
+                -H "Authorization: Bearer $VERCEL_TOKEN" 2>/dev/null | \
                 python3 -c "
-            import sys, json
-            data = json.load(sys.stdin)
-            envs = data.get('envs', [])
-            lines = []
-            for e in envs:
-                key = e.get('key','')
-                val = e.get('value','') or e.get('decryptedValue','')
-                if key and val:
-                    lines.append(f'{key}={val}')
-            print('\n'.join(lines))
-            " > /root/scannerv2/.env
+            import sys,json
+            try:
+              data=json.load(sys.stdin)
+              lines=[f\"{e['key']}={e.get('value','') or e.get('decryptedValue','')}\" for e in data.get('envs',[]) if e.get('key')]
+              print('\n'.join(lines))
+            except: pass
+            " > /root/scannerv2/.env 2>/dev/null
               chmod 600 /root/scannerv2/.env
-              echo "ENV: $(wc -l < /root/scannerv2/.env) chei scrise"
-            else
-              echo "WARNING: nu am gasit proiectul Vercel - folosesc .env existent"
+              echo "ENV: $(wc -l < /root/scannerv2/.env) chei"
             fi
+            true
 
-            # 3. Porneste/restarteza aplicatia cu PM2
-            pm2 restart alohascan 2>/dev/null || pm2 start ecosystem.config.cjs
-            pm2 save
+            # 4. Porneste aplicatia cu PM2
+            pm2 delete alohascan 2>/dev/null; true
+            sleep 1
+            pm2 start /root/scannerv2/server.js --name alohascan --interpreter /snap/bin/node
+            sleep 2
+            pm2 save --force
+            true
 
-            # 4. Instaleaza si configureaza nginx (prima data)
-            if ! command -v nginx &>/dev/null; then
-              apt-get install -y nginx -qq
-            fi
-
-            cat > /etc/nginx/sites-available/alohascan << 'NGINX'
-            server {
+            # 5. Nginx config (python3 pentru a evita heredoc issues)
+            apt-get install -y nginx -qq 2>/dev/null; true
+            python3 -c "
+            config = '''server {
                 listen 80;
                 server_name _;
-
                 location / {
                     proxy_pass http://127.0.0.1:3000;
                     proxy_http_version 1.1;
-                    proxy_set_header Upgrade $http_upgrade;
-                    proxy_set_header Connection 'upgrade';
-                    proxy_set_header Host $host;
-                    proxy_set_header X-Real-IP $remote_addr;
-                    proxy_cache_bypass $http_upgrade;
+                    proxy_set_header Upgrade \$http_upgrade;
+                    proxy_set_header Connection upgrade;
+                    proxy_set_header Host \$host;
+                    proxy_set_header X-Real-IP \$remote_addr;
+                    proxy_cache_bypass \$http_upgrade;
                 }
-            }
-            NGINX
-
+            }'''
+            open('/etc/nginx/sites-available/alohascan','w').write(config)
+            "
             ln -sf /etc/nginx/sites-available/alohascan /etc/nginx/sites-enabled/alohascan
             rm -f /etc/nginx/sites-enabled/default
-            nginx -t && systemctl restart nginx
-            systemctl enable nginx
+            nginx -t && systemctl restart nginx && systemctl enable nginx
+            true
 
-            # 5. Deschide porturile in firewall
-            ufw allow 80/tcp 2>/dev/null || true
-            ufw allow 3000/tcp 2>/dev/null || true
-
-            echo "=============================="
-            echo "Deploy complet: $(date)"
-            echo "App: http://$(curl -s ifconfig.me 2>/dev/null || echo '192.248.183.230')"
-            echo "=============================="
+            echo "DONE: $(date)"
             pm2 list
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
