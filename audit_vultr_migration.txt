@@ -1,0 +1,474 @@
+================================================================================
+  AUDIT MIGRARE VULTR — AlohaScan
+  Data: 2026-05-15
+  Analizat: 17 fișiere (api/ + cron/)
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+LEGENDĂ VERDICTE
+────────────────────────────────────────────────────────────────────────────────
+  PĂSTREAZĂ        → Fișier pur (modul/utilitar), fără handler, zero modificări
+  RESTRUCTUREAZĂ   → Are handler Vercel (req/res); convertit la Express route sau node-cron
+  AVANTAJ VULTR    → Cod care era limitat pe Vercel și poate fi deblocat pe Vultr
+
+================================================================================
+SECȚIUNEA 1 — AUDIT PER FIȘIER
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+1. api/agent.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Proxy AI — primește mesaje de la frontend, le trimite la Anthropic (claude-sonnet-4-6)
+  cu fallback automat la Grok (grok-3-mini) dacă Anthropic eșuează.
+
+Importat de altcineva:
+  NU — apelat direct de frontend via fetch('/api/agent').
+
+Cod specific Vercel:
+  DA — `export default async function handler(req, res)` (pattern Vercel serverless).
+  Altfel neutru: nu folosește @anthropic-ai/sdk, apelează raw fetch la Anthropic REST API.
+
+Verdict: RESTRUCTUREAZĂ
+  Pe Vultr: înlocuiește handler cu Express route → app.post('/api/agent', ...).
+
+────────────────────────────────────────────────────────────────────────────────
+2. api/calc-utils.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Modul pur cu 3 funcții exportate: calcPoisson6x6 (matrice 6×6), parseOddsItem
+  (extrage cote din structura API-Football), calcEV + Kelly criterion.
+
+Importat de altcineva:
+  DA — enrich.js (linia 1), match.js (linia 1).
+
+Cod specific Vercel:
+  NU — modul ESM pur, fără handler, fără variabile de mediu.
+
+Verdict: PĂSTREAZĂ — zero modificări necesare.
+
+────────────────────────────────────────────────────────────────────────────────
+3. api/elo.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Calcul rating Elo pentru echipe pe baza istoricului de meciuri; returnează
+  homeElo, awayElo, eloDiff, homeWinProb, forma recentă (ultimele 5).
+
+Importat de altcineva:
+  DA — simulate.js (linia 3).
+
+Cod specific Vercel:
+  NU — modul ESM pur, fără handler.
+
+Verdict: PĂSTREAZĂ — zero modificări necesare.
+
+────────────────────────────────────────────────────────────────────────────────
+4. api/enrich.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Analiză completă per meci: Poisson dinamic, EV, confidence score 7 straturi
+  (inclusiv team strength din Supabase), ajustări pentru accidentări + league patterns.
+  Prioritizează Supabase (form_stats, h2h, odds), cu fallback la API-Football.
+  Salvează automat în tabelul predictions.
+
+Importat de altcineva:
+  NU — apelat direct de frontend via fetch('/api/enrich?h=...&a=...').
+
+Cod specific Vercel:
+  DA — handler pattern. Fire-and-forget save la Supabase (nu blochează răspunsul).
+
+Verdict: RESTRUCTUREAZĂ
+  Pe Vultr: Express route app.get('/api/enrich', handler).
+  Nicio logică de bussiness nu necesită modificări.
+
+────────────────────────────────────────────────────────────────────────────────
+5. api/football.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Meciuri LIVE: combină API-Football (sursa primară, cu whitelist ALLOWED_LEAGUE_IDS)
+  și football-data.org (fallback pentru top 12 ligi europene). Filtrează feminine +
+  ligi inferioare. Opțional enrichment H2H pentru primele 5 meciuri.
+
+Importat de altcineva:
+  NU — apelat direct de frontend.
+
+Cod specific Vercel:
+  DA — handler pattern + `res.setHeader('Cache-Control', 'no-store')`.
+  Cache in-memory (Map `enrichCache`) funcționează MAI BINE pe Vultr (server persistent,
+  nu se resetează la fiecare invocație cum se întâmplă pe Vercel serverless).
+
+Verdict: RESTRUCTUREAZĂ + AVANTAJ VULTR
+  Pe Vultr: enrichCache-ul persistă între cereri → mai puține apeluri API-Football.
+  Express route app.get('/api/football', handler).
+
+────────────────────────────────────────────────────────────────────────────────
+6. api/health-check.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Dashboard diagnostic cu 18 teste: conectivitate Supabase, tabele (player_stats,
+  fixtures, standings, h2h, form_stats, match_stats, match_events, odds, alerts,
+  live_stats, pre_match_snapshots), API-Football status, backfill progress,
+  win rate cron. Suportă și acțiunea 'leagues' pentru căutare ligi.
+
+Importat de altcineva:
+  NU — apelat direct de frontend/admin.
+
+Cod specific Vercel:
+  DA — handler pattern.
+  NOTĂ: funcția calcStr este duplicată față de enrich.js (copy-paste, nu import).
+
+Verdict: RESTRUCTUREAZĂ
+  Pe Vultr: Express route app.get('/api/health-check', handler).
+  Opțional: elimina duplicarea calcStr printr-un import din calc-utils.js.
+
+────────────────────────────────────────────────────────────────────────────────
+7. api/leagues.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Exportă constanta ALLOWED_LEAGUE_IDS — un Set cu ~220 ID-uri de ligi
+  (Liga 1 + Liga 2 + Cupă per țară, ~139 țări, inclusiv competiții internaționale).
+
+Importat de altcineva:
+  DA — football.js (linia 1), players.js (linia 1), today.js (linia 1).
+
+Cod specific Vercel:
+  NU — exportă doar o constantă, nu este o funcție serverless.
+  (Confirmat: nu numără în limita de 12 funcții Vercel.)
+
+Verdict: PĂSTREAZĂ — zero modificări necesare.
+
+────────────────────────────────────────────────────────────────────────────────
+8. api/match-momentum.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Calculează un scor de momentum live (-100 la +100) din SOT, Dangerous Attacks,
+  posesie, corners, xG. Returnează score, team dominant, intensitate, descriere.
+
+Importat de altcineva:
+  DA — simulate.js (linia 2).
+
+Cod specific Vercel:
+  NU — modul ESM pur, fără handler.
+
+Verdict: PĂSTREAZĂ — zero modificări necesare.
+
+────────────────────────────────────────────────────────────────────────────────
+9. api/match.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Detalii complete per meci: formații, jucători cu statistici, evenimente,
+  Poisson + EV din ultimele 20 meciuri per echipă + H2H + odds.
+  Salvează automat în predictions.
+
+Importat de altcineva:
+  NU — apelat direct de frontend.
+
+Cod specific Vercel:
+  DA — handler pattern.
+
+Verdict: RESTRUCTUREAZĂ
+  Pe Vultr: Express route app.get('/api/match', handler).
+
+────────────────────────────────────────────────────────────────────────────────
+10. api/monte-carlo.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Simulare Monte Carlo (10.000 iterații implicit) pentru distribuție scoruri,
+  piețe (Over 0.5/1.5/2.5/3.5, GG), goal timing pe ferestre de 15 minute.
+  Suportă meciuri live (currentHome/currentAway ca punct de start).
+
+Importat de altcineva:
+  DA — simulate.js (linia 1).
+
+Cod specific Vercel:
+  NU — modul ESM pur, fără handler.
+
+Verdict: PĂSTREAZĂ — zero modificări necesare.
+
+────────────────────────────────────────────────────────────────────────────────
+11. api/players.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  3 acțiuni via ?action=: 'collect' (statistici jucători per meci),
+  'backfill' (procesare ultimelor 10 meciuri dintr-o ligă), 'progress' (raport).
+  Scrie în tabelul player_stats + backfill_progress din Supabase.
+
+Importat de altcineva:
+  NU — apelat direct de frontend (backfill UI din Settings).
+
+Cod specific Vercel:
+  DA — handler pattern.
+  Notă: funcția calcPlayerScore este duplicată față de collect-finished.js.
+
+Verdict: RESTRUCTUREAZĂ
+  Pe Vultr: Express route app.get('/api/players', handler).
+  Pe Vultr, backfill-ul poate procesa TOATE ligile fără timeout de 10s.
+
+────────────────────────────────────────────────────────────────────────────────
+12. api/simulate.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Simulare avansată per meci: Monte Carlo (via monte-carlo.js) + Elo (via elo.js)
+  + Momentum (via match-momentum.js) + date din Supabase (form, H2H, standings, odds).
+  Cache in-memory de 2 minute per fixture. Returnează recomandare bestBet cu EV.
+
+Importat de altcineva:
+  NU — apelat direct de frontend.
+
+Cod specific Vercel:
+  DA — handler pattern.
+  Cache-ul în memorie (Map + TTL 120s) este INEFICIENT pe Vercel serverless
+  (se resetează la cold start). Pe Vultr cu server persistent = AVANTAJ REAL.
+
+Verdict: RESTRUCTUREAZĂ + AVANTAJ VULTR
+  Pe Vultr: cache-ul supraviețuiește între cereri → latență mai mică, mai puține
+  apeluri API-Football. Express route app.get('/api/simulate', handler) sau POST.
+
+────────────────────────────────────────────────────────────────────────────────
+13. api/today.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Meciuri PRE-MECI (azi + mâine). Prioritizează Supabase (tabel fixtures) dacă
+  există ≥5 înregistrări, altfel fallback la API-Football. Suportă acțiunea
+  'snapshots' (top pre_match_snapshots pentru win rate).
+  Aplică filtre whitelist, feminine, ligi inferioare.
+
+Importat de altcineva:
+  NU — apelat direct de frontend.
+
+Cod specific Vercel:
+  DA — handler pattern + header `Cache-Control: public, s-maxage=120,
+  stale-while-revalidate=30`. s-maxage este specific CDN-ului Vercel.
+
+Verdict: RESTRUCTUREAZĂ
+  Pe Vultr: Express route. Înlocuiește s-maxage cu `max-age=120` sau folosește
+  nginx ca reverse proxy cu cache propriu.
+
+────────────────────────────────────────────────────────────────────────────────
+14. api/update-results.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Verifică predicțiile fără rezultat (actual_home_goals IS NULL) din Supabase,
+  interoghează API-Football pentru fiecare fixture și actualizează
+  actual_home_goals, actual_away_goals, result_over15, result_gg.
+
+Importat de altcineva:
+  NU — rulat ca cron sau apelat manual.
+
+Cod specific Vercel:
+  DA — handler pattern (în vercel.json rulează zilnic la 02:00).
+
+Verdict: RESTRUCTUREAZĂ
+  Pe Vultr: node-cron sau cron sistem la 02:00. Logica rămâne identică.
+
+────────────────────────────────────────────────────────────────────────────────
+15. api/cron/collect-daily.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Cron zilnic (06:00 pe Vercel) — colectează standings, leagues și teams din
+  API-Football pentru DOAR top 5 ligi (PL, LaLiga, Serie A, Bundesliga, Ligue 1).
+  Scrie în tabelele standings, leagues, teams din Supabase.
+
+Importat de altcineva:
+  NU — rulat de Vercel cron.
+
+Cod specific Vercel:
+  DA — EXPLICIT: linia 69: `if (Date.now() - startTime > 8000) break;`
+  → comentariul explică: "stop if we're past 8 seconds to avoid Vercel's 10s timeout".
+  Și handler pattern.
+
+Verdict: RESTRUCTUREAZĂ + AVANTAJ VULTR (major)
+  Pe Vultr: ELIMINA time budget de 8s. Extinde PRIORITY_LEAGUES la toate
+  cele ~139 ligi din leagues.js. Convertit la node-cron: cron.schedule('0 6 * * *', ...).
+
+────────────────────────────────────────────────────────────────────────────────
+16. api/cron/collect-finished.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Cron zilnic (23:00) — pentru meciurile FT din ziua curentă colectează:
+  statistici jucători (player_stats), statistici meci (match_stats),
+  evenimente (match_events), cote (odds). Scrie log în cron_logs.
+
+Importat de altcineva:
+  NU — rulat de Vercel cron.
+
+Cod specific Vercel:
+  DA — handler pattern (dar fără limite explicite de timp).
+  Notă: funcția calcPlayerScore este duplicată față de players.js.
+
+Verdict: RESTRUCTUREAZĂ
+  Pe Vultr: node-cron la 23:00. Elimina handler, apelează direct funcția.
+  Recomandare: extrage calcPlayerScore într-un modul comun.
+
+────────────────────────────────────────────────────────────────────────────────
+17. api/cron/scan.js
+────────────────────────────────────────────────────────────────────────────────
+Ce face:
+  Cel mai complex cron — face 5 lucruri per rulare:
+  (1) Snapshots live: calcul NGP + piețe per meci live, salvare în match_snapshots
+  (2) Resolve outcomes: marchează WIN/LOSS la meciurile terminate
+  (3) League patterns: recalculează la fiecare 10 rulări (_runCount % 10)
+  (4) Pre-match scan: H2H + form pentru meciuri în 24h, salvare pre_match_snapshots
+  (5) Resolve pre-match: actualizează outcome PENDING → WIN/LOSS/PUSH
+
+  ATENȚIE INCONSISTENȚĂ: comentariul din linia 1 spune "runs every minute" dar
+  în vercel.json este setat la "0 0 * * *" (zilnic la 00:00).
+  Pe Vercel Hobby nu sunt permise cron-uri mai frecvente decât zilnic.
+
+Importat de altcineva:
+  NU — rulat de Vercel cron sau apelat manual.
+
+Cod specific Vercel:
+  DA — handler pattern + CRON_SECRET check în header Authorization.
+  Variabila _runCount (contor pentru league patterns) se RESETEAZĂ la fiecare
+  cold start pe Vercel — pe Vultr cu server persistent va funcționa corect.
+
+Verdict: RESTRUCTUREAZĂ + AVANTAJ VULTR (major)
+  Pe Vultr: node-cron poate rula la 1-5 minute (nu zilnic). Aceasta este
+  funcționalitatea INTENȚIONATĂ — comentariul "every minute" confirmă intenția.
+  _runCount va persista corect între rulări → league patterns recalculate regulat.
+  Autentificarea via CRON_SECRET devine opțională (cron intern, nu HTTP).
+
+================================================================================
+SECȚIUNEA 2 — FIȘIERE MENȚIONATE ÎN CLAUDE.md DAR LIPSESC DE PE DISK
+================================================================================
+
+  api/stats.js    → Menționat ca: "Supabase — Istoricul predicțiilor + clasamente ligi"
+                    LIPSEȘTE COMPLET. Unele funcționalități pot fi preluate de health-check.js
+                    sau de un endpoint nou pe Vultr.
+
+  api/meteo.js    → Menționat ca: "Open-Meteo (gratuit, fără cheie) — Condiții meteo per stadion"
+                    LIPSEȘTE COMPLET. API-ul Open-Meteo nu necesită cheie → ușor de reimplementat.
+
+  api/telegram.js → Menționat ca: "Telegram Bot API — Notificări alerte NGP"
+                    LIPSEȘTE COMPLET. scan.js salvează alertele cu sent_telegram: false
+                    în tabelul alerts — aceasta presupune că telegram.js le citea și trimitea.
+                    Variabilele TELEGRAM_BOT_TOKEN și TELEGRAM_CHAT_ID sunt nedefinite în cod
+                    dar menționate în CLAUDE.md.
+
+  IMPACT MIGRARE: Aceste 3 fișiere lipsesc și pe Vercel, deci NU introduc o problemă nouă
+  la migrare. Pot fi (re)implementate pe Vultr după migrarea fișierelor existente.
+
+================================================================================
+SECȚIUNEA 3 — VARIABILE DE MEDIU NECESARE PENTRU .env VULTR
+================================================================================
+
+  # API-Football (oricare dintre cele 3 variante — codul acceptă toate 3)
+  API_FOOTBALL_KEY=             # OBLIGATORIU — alias primar recomandat
+  # FOOTBALL_API_KEY=           # alias 2 (echivalent)
+  # APIFOOTBALL_KEY=            # alias 3 (echivalent)
+
+  # football-data.org
+  FOOTBALL_DATA_KEY=            # OPȚIONAL — folosit doar în football.js (live FD.org)
+
+  # Supabase
+  SUPABASE_URL=                 # OBLIGATORIU
+  SUPABASE_KEY=                 # OBLIGATORIU (service role key)
+  # SUPABASE_SERVICE_KEY=       # alias pentru SUPABASE_KEY (folosit în scan.js)
+
+  # AI
+  ANTHROPIC_API_KEY=            # OPȚIONAL (dacă nu e setat, agent.js cade pe Grok)
+  XAI_API_KEY=                  # OPȚIONAL — Grok API key
+  # GROQ_KEY=                   # alias pentru XAI_API_KEY în agent.js
+
+  # Cron security (dacă se dorește autentificare HTTP pentru cron endpoint)
+  CRON_SECRET=                  # OPȚIONAL — scan.js verifică Bearer token
+
+  # Lipsesc din cod (necesare pentru telegram.js dacă va fi reimplementat)
+  TELEGRAM_BOT_TOKEN=           # NEDECLARAT în cod, menționat în CLAUDE.md
+  TELEGRAM_CHAT_ID=             # NEDECLARAT în cod, menționat în CLAUDE.md
+
+  TOTAL: 5 variabile OBLIGATORII + 8 OPȚIONALE
+
+================================================================================
+SECȚIUNEA 4 — DEPENDENȚE DIN package.json
+================================================================================
+
+  Dependență declarată: @anthropic-ai/sdk ^0.39.0
+
+  CONCLUZIE: NEUTILIZATĂ.
+  agent.js apelează Anthropic direct via fetch() la https://api.anthropic.com/v1/messages
+  fără a importa nicio funcție din SDK. Nu există niciun `import ... from '@anthropic-ai/sdk'`
+  în întreg proiectul.
+
+  RECOMANDARE: Elimina din package.json la migrare sau verifică dacă există
+  un plan de a migra la SDK în viitor.
+
+  package.json conține și `"type": "module"` — aceasta înseamnă că toate fișierele
+  .js sunt tratate ca ESM. Pe Vultr cu Node.js, aceasta este compatibilă, dar
+  serverul Express trebuie creat cu `import` (nu `require`).
+
+================================================================================
+SECȚIUNEA 5 — REZUMAT EXECUTIV PENTRU MIGRARE
+================================================================================
+
+┌─────────────────────────┬───────────────────────┬──────────────────────────┐
+│ Fișier                  │ Vercel-specific?       │ Verdict                  │
+├─────────────────────────┼───────────────────────┼──────────────────────────┤
+│ api/agent.js            │ DA (handler)           │ RESTRUCTUREAZĂ           │
+│ api/calc-utils.js       │ NU                     │ PĂSTREAZĂ                │
+│ api/elo.js              │ NU                     │ PĂSTREAZĂ                │
+│ api/enrich.js           │ DA (handler)           │ RESTRUCTUREAZĂ           │
+│ api/football.js         │ DA (handler)           │ RESTRUCTUREAZĂ +AVANTAJ  │
+│ api/health-check.js     │ DA (handler)           │ RESTRUCTUREAZĂ           │
+│ api/leagues.js          │ NU                     │ PĂSTREAZĂ                │
+│ api/match-momentum.js   │ NU                     │ PĂSTREAZĂ                │
+│ api/match.js            │ DA (handler)           │ RESTRUCTUREAZĂ           │
+│ api/monte-carlo.js      │ NU                     │ PĂSTREAZĂ                │
+│ api/players.js          │ DA (handler)           │ RESTRUCTUREAZĂ +AVANTAJ  │
+│ api/simulate.js         │ DA (handler + cache)   │ RESTRUCTUREAZĂ +AVANTAJ  │
+│ api/today.js            │ DA (handler, s-maxage) │ RESTRUCTUREAZĂ           │
+│ api/update-results.js   │ DA (handler)           │ RESTRUCTUREAZĂ           │
+│ cron/collect-daily.js   │ DA (timeout 8s explicit│ RESTRUCTUREAZĂ +AVANTAJ  │
+│ cron/collect-finished.js│ DA (handler)           │ RESTRUCTUREAZĂ           │
+│ cron/scan.js            │ DA (handler, secret)   │ RESTRUCTUREAZĂ +AVANTAJ  │
+└─────────────────────────┴───────────────────────┴──────────────────────────┘
+
+  PĂSTREAZĂ fără modificări:  5 fișiere (calc-utils, elo, leagues, match-momentum, monte-carlo)
+  RESTRUCTUREAZĂ (Express):  12 fișiere (toți handlerii — modificare mecanică, nu logică)
+  AVANTAJE VULTR față de Vercel:
+    - football.js/simulate.js: cache in-memory persistent (nu se mai pierde la cold start)
+    - scan.js: poate rula la 1 minut (nu zilnic cum e blocat pe Hobby)
+    - collect-daily.js: elimina limita de 8s → procesează toate cele ~139 ligi
+    - players.js: backfill poate rula nelimitat în timp
+
+================================================================================
+SECȚIUNEA 6 — PAȘI DE MIGRARE RECOMANDAȚI
+================================================================================
+
+1. Creează server.js cu Express:
+   import express from 'express'
+   const app = express()
+   app.use(express.json())
+   app.use(express.urlencoded({ extended: true }))
+   // Mount routes:
+   import agentHandler   from './api/agent.js'
+   app.post('/api/agent',         agentHandler)
+   app.get('/api/enrich',         enrichHandler)
+   app.get('/api/football',       footballHandler)
+   app.get('/api/health-check',   healthCheckHandler)
+   app.get('/api/match',          matchHandler)
+   app.get('/api/players',        playersHandler)
+   app.get('/api/simulate',       simulateHandler) // sau POST
+   app.get('/api/today',          todayHandler)
+   app.get('/api/update-results', updateResultsHandler)
+
+2. Înlocuiește vercel.json cu node-cron (server.js sau cron.js separat):
+   import cron from 'node-cron'
+   cron.schedule('* * * * *',   scanHandler)            // la 1 minut!
+   cron.schedule('0 2 * * *',   updateResultsHandler)
+   cron.schedule('0 6 * * *',   collectDailyHandler)    // fără limita 8s
+   cron.schedule('0 23 * * *',  collectFinishedHandler)
+
+3. Elimina din package.json: @anthropic-ai/sdk (neutilizat).
+   Adaugă: express, node-cron.
+
+4. Înlocuiește vercel.json cu nginx.conf (pentru Cache-Control, SPA rewrite).
+
+5. Creează .env din lista variabilelor din Secțiunea 3.
+
+6. Reimplementează fișierele lipsă: api/stats.js, api/meteo.js, api/telegram.js.
+
+================================================================================
+END OF AUDIT — AlohaScan Vultr Migration Report
+================================================================================
