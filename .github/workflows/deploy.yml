@@ -21,35 +21,32 @@ jobs:
             export PATH="/snap/bin:$PATH"
             trap '' TERM
 
-            # 1. Opreste orice node rulat manual (fara sa afecteze sesiunea curenta)
-            pkill -f "node server.js" 2>/dev/null; sleep 1; true
-
-            # 2. Pull cod si instaleaza dependente
+            # 1. Pull cod si instaleaza dependente
+            pkill -f "node server.js" 2>/dev/null; true
             cd /root/scannerv2
             git pull origin main
             npm install --silent
             true
 
-            # 3. Scrie .env din Vercel
+            # 2. Scrie .env din Vercel
             PROJECT_ID=$(curl -sf "https://api.vercel.com/v9/projects" \
               -H "Authorization: Bearer $VERCEL_TOKEN" 2>/dev/null | \
               python3 -c "
             import sys,json
             try:
-              data=json.load(sys.stdin)
-              p=[x for x in data.get('projects',[]) if 'scannerv2' in x.get('name','')]
+              d=json.load(sys.stdin)
+              p=[x for x in d.get('projects',[]) if 'scannerv2' in x.get('name','')]
               print(p[0]['id'] if p else '')
             except: print('')
             " 2>/dev/null || echo "")
-
             if [ -n "$PROJECT_ID" ]; then
               curl -sf "https://api.vercel.com/v9/projects/$PROJECT_ID/env" \
                 -H "Authorization: Bearer $VERCEL_TOKEN" 2>/dev/null | \
                 python3 -c "
             import sys,json
             try:
-              data=json.load(sys.stdin)
-              lines=[f\"{e['key']}={e.get('value','') or e.get('decryptedValue','')}\" for e in data.get('envs',[]) if e.get('key')]
+              d=json.load(sys.stdin)
+              lines=[f\"{e['key']}={e.get('value','') or e.get('decryptedValue','')}\" for e in d.get('envs',[]) if e.get('key')]
               print('\n'.join(lines))
             except: pass
             " > /root/scannerv2/.env 2>/dev/null
@@ -58,58 +55,30 @@ jobs:
             fi
             true
 
-            # 4. Creeaza serviciu systemd pentru alohascan
-            cat > /etc/systemd/system/alohascan.service << 'SVCEOF'
-[Unit]
-Description=AlohaScan Node.js
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/root/scannerv2
-ExecStart=/snap/bin/node /root/scannerv2/server.js
-EnvironmentFile=/root/scannerv2/.env
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-SVCEOF
+            # 3. Serviciu systemd (python3 - fara heredoc)
+            python3 -c "
+            svc = '[Unit]\nDescription=AlohaScan Node.js\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/root/scannerv2\nExecStart=/snap/bin/node /root/scannerv2/server.js\nEnvironmentFile=-/root/scannerv2/.env\nRestart=always\nRestartSec=5\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n'
+            open('/etc/systemd/system/alohascan.service','w').write(svc)
+            print('systemd service scris OK')
+            "
             systemctl daemon-reload
             systemctl enable alohascan
             systemctl restart alohascan
             sleep 2
-            systemctl is-active alohascan && echo "APP: ONLINE" || echo "APP: ERROR"
+            systemctl is-active alohascan && echo "APP: ONLINE" || echo "APP: ERROR - vezi: journalctl -u alohascan -n 20"
             true
 
-            # 5. Nginx config (python3 pentru a evita heredoc issues)
+            # 4. Nginx config
             apt-get install -y nginx -qq 2>/dev/null; true
             python3 -c "
-            config = '''server {
-                listen 80;
-                server_name _;
-                location / {
-                    proxy_pass http://127.0.0.1:3000;
-                    proxy_http_version 1.1;
-                    proxy_set_header Upgrade \$http_upgrade;
-                    proxy_set_header Connection upgrade;
-                    proxy_set_header Host \$host;
-                    proxy_set_header X-Real-IP \$remote_addr;
-                    proxy_cache_bypass \$http_upgrade;
-                }
-            }'''
-            open('/etc/nginx/sites-available/alohascan','w').write(config)
+            cfg = 'server {\n    listen 80;\n    server_name _;\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade \$http_upgrade;\n        proxy_set_header Connection upgrade;\n        proxy_set_header Host \$host;\n        proxy_set_header X-Real-IP \$remote_addr;\n        proxy_cache_bypass \$http_upgrade;\n    }\n}\n'
+            open('/etc/nginx/sites-available/alohascan','w').write(cfg)
             "
             ln -sf /etc/nginx/sites-available/alohascan /etc/nginx/sites-enabled/alohascan
             rm -f /etc/nginx/sites-enabled/default
-            nginx -t && systemctl restart nginx && systemctl enable nginx
-            true
+            nginx -t && systemctl restart nginx && systemctl enable nginx; true
 
-            sleep 3
+            sleep 2
             echo "DONE: $(date)"
-            pm2 list || true
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
