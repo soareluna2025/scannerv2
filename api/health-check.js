@@ -330,8 +330,20 @@ async function t8(key) {
   const data = await r.json();
   const account  = data.response?.account;
   const requests = data.response?.requests;
+  const errors   = data.errors;
 
-  if (!account) throw new Error('Răspuns invalid de la API-Football');
+  if (!account) {
+    // Rate limit temporar — nu e eroare critica
+    if (errors && (JSON.stringify(errors).includes('rate') || JSON.stringify(errors).includes('limit') || JSON.stringify(errors).includes('Too many'))) {
+      return {
+        status: '⚠️ WARNING',
+        message: `API-Football rate limit temporar — retry in 1 min`,
+        data: { errors },
+      };
+    }
+    const errMsg = errors ? JSON.stringify(errors) : `HTTP ${r.status}`;
+    throw new Error(`API-Football: ${errMsg}`);
+  }
 
   const today    = requests?.current   ?? 0;
   const limitDay = requests?.limit_day ?? 100;
