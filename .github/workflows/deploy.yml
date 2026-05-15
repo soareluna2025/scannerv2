@@ -73,8 +73,17 @@ jobs:
             systemctl enable nginx
             sleep 2
 
-            echo "PORT 80: $(ss -tlnp | grep ':80' || echo 'liber')"
-            echo "PORT 3000: $(ss -tlnp | grep ':3000' || echo 'nimic')"
+            # 5. Cron jobs
+            crontab -l 2>/dev/null | grep -v "alohascan\|localhost:3000" > /tmp/crontab_clean || true
+            cat >> /tmp/crontab_clean << 'CRONEOF'
+0 0 * * * curl -sf http://localhost:3000/api/cron/scan >> /var/log/alohascan-cron.log 2>&1
+0 2 * * * curl -sf http://localhost:3000/api/update-results >> /var/log/alohascan-cron.log 2>&1
+0 6 * * * curl -sf http://localhost:3000/api/cron/collect-daily >> /var/log/alohascan-cron.log 2>&1
+0 23 * * * curl -sf http://localhost:3000/api/cron/collect-finished >> /var/log/alohascan-cron.log 2>&1
+CRONEOF
+            crontab /tmp/crontab_clean
+            echo "CRON: $(crontab -l | grep -c localhost:3000) joburi configurate"
+
             echo "NGINX: $(systemctl is-active nginx)"
             echo "ALOHASCAN: $(systemctl is-active alohascan)"
             echo "DONE: $(date)"
