@@ -15,47 +15,32 @@ jobs:
           host: ${{ secrets.VPS_IP }}
           username: root
           password: ${{ secrets.VPS_PASSWORD }}
-          envs: VERCEL_TOKEN
+          envs: API_FOOTBALL_KEY,SUPABASE_URL,SUPABASE_KEY
           command_timeout: 5m
           script: |
             export PATH="/snap/bin:$PATH"
             trap '' TERM
 
             # 1. Pull cod si instaleaza dependente
-            pkill -f "node server.js" 2>/dev/null; true
             cd /root/scannerv2
             git pull origin main
             npm install --silent
             true
 
-            # 2. Scrie .env din Vercel
-            PROJECT_ID=$(curl -sf "https://api.vercel.com/v9/projects" \
-              -H "Authorization: Bearer $VERCEL_TOKEN" 2>/dev/null | \
-              python3 -c "
-            import sys,json
-            try:
-              d=json.load(sys.stdin)
-              p=[x for x in d.get('projects',[]) if 'scannerv2' in x.get('name','')]
-              print(p[0]['id'] if p else '')
-            except: print('')
-            " 2>/dev/null || echo "")
-            if [ -n "$PROJECT_ID" ]; then
-              curl -sf "https://api.vercel.com/v9/projects/$PROJECT_ID/env" \
-                -H "Authorization: Bearer $VERCEL_TOKEN" 2>/dev/null | \
-                python3 -c "
-            import sys,json
-            try:
-              d=json.load(sys.stdin)
-              lines=[f\"{e['key']}={e.get('value','') or e.get('decryptedValue','')}\" for e in d.get('envs',[]) if e.get('key')]
-              print('\n'.join(lines))
-            except: pass
-            " > /root/scannerv2/.env 2>/dev/null
-              chmod 600 /root/scannerv2/.env
-              echo "ENV: $(wc -l < /root/scannerv2/.env) chei"
-            fi
-            true
+            # 2. Scrie .env cu cheile din GitHub Secrets
+            python3 -c "
+            import os
+            lines = []
+            lines.append('API_FOOTBALL_KEY=' + os.environ.get('API_FOOTBALL_KEY',''))
+            lines.append('SUPABASE_URL=' + os.environ.get('SUPABASE_URL',''))
+            lines.append('SUPABASE_KEY=' + os.environ.get('SUPABASE_KEY',''))
+            open('/root/scannerv2/.env','w').write('\n'.join(lines) + '\n')
+            print('ENV scris: ' + str(len(lines)) + ' chei')
+            "
+            chmod 600 /root/scannerv2/.env
+            echo "ENV OK: $(wc -l < /root/scannerv2/.env) chei"
 
-            # 3. Serviciu systemd (python3 - fara heredoc)
+            # 3. Serviciu systemd
             python3 -c "
             svc = '[Unit]\nDescription=AlohaScan Node.js\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/root/scannerv2\nExecStart=/snap/bin/node /root/scannerv2/server.js\nEnvironmentFile=-/root/scannerv2/.env\nRestart=always\nRestartSec=5\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n'
             open('/etc/systemd/system/alohascan.service','w').write(svc)
@@ -65,24 +50,16 @@ jobs:
             systemctl enable alohascan
             systemctl restart alohascan
             sleep 2
-            systemctl is-active alohascan && echo "APP: ONLINE" || echo "APP: ERROR - vezi: journalctl -u alohascan -n 20"
-            true
+            systemctl is-active alohascan && echo "APP: ONLINE" || echo "APP: ERROR"
+            journalctl -u alohascan -n 10 --no-pager 2>/dev/null || true
 
-            # 4. Nginx config
-            apt-get install -y nginx fuser -qq 2>/dev/null; true
-
-            # Opreste Coolify/Traefik/Docker care ocupa portul 80
-            echo "=== CE OCUPA PORTUL 80 ==="
-            ss -tlnp | grep ':80' || echo "nimic"
+            # 4. Nginx - elibereaza portul 80
+            apt-get install -y nginx -qq 2>/dev/null; true
             systemctl stop coolify 2>/dev/null; true
-            systemctl disable coolify 2>/dev/null; true
             docker ps -q --filter "publish=80" 2>/dev/null | xargs -r docker stop 2>/dev/null; true
-            docker ps -q --filter "publish=443" 2>/dev/null | xargs -r docker stop 2>/dev/null; true
             fuser -k 80/tcp 2>/dev/null; true
             lsof -ti:80 2>/dev/null | xargs -r kill -9 2>/dev/null; true
-            sleep 2
-            echo "=== DUPA ELIBERARE PORT 80 ==="
-            ss -tlnp | grep ':80' || echo "portul 80 liber"
+            sleep 1
 
             python3 -c "
             cfg = 'server {\n    listen 80 default_server;\n    server_name _;\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade \$http_upgrade;\n        proxy_set_header Connection \$http_connection;\n        proxy_set_header Host \$host;\n        proxy_set_header X-Real-IP \$remote_addr;\n        proxy_cache_bypass \$http_upgrade;\n    }\n}\n'
@@ -96,17 +73,12 @@ jobs:
             systemctl enable nginx
             sleep 2
 
-            echo "=== DIAGNOSTICS ==="
-            echo "PORT 80:"
-            ss -tlnp | grep ':80' || echo "nimic"
-            echo "PORT 3000:"
-            ss -tlnp | grep ':3000' || echo "nimic"
+            echo "PORT 80: $(ss -tlnp | grep ':80' || echo 'liber')"
+            echo "PORT 3000: $(ss -tlnp | grep ':3000' || echo 'nimic')"
             echo "NGINX: $(systemctl is-active nginx)"
             echo "ALOHASCAN: $(systemctl is-active alohascan)"
-            echo "--- ALOHASCAN LOGS ---"
-            journalctl -u alohascan -n 20 --no-pager 2>/dev/null || true
-            echo "--- CURL LOCALHOST ---"
-            curl -si http://localhost/ 2>&1 | head -20 || echo "nginx nu raspunde"
             echo "DONE: $(date)"
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
