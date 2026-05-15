@@ -80,5 +80,21 @@ jobs:
 
             sleep 2
             echo "DONE: $(date)"
+
+            # 5. Diagnostics
+            echo "=== PORT 80 PROCESS ==="
+            ss -tlnp | grep ':80' || echo "nothing on 80"
+            echo "=== PORT 3000 PROCESS ==="
+            ss -tlnp | grep ':3000' || echo "nothing on 3000"
+            echo "=== NGINX STATUS ==="
+            systemctl is-active nginx || true
+            echo "=== ALOHASCAN STATUS ==="
+            systemctl is-active alohascan || true
+            echo "=== ALOHASCAN LOGS ==="
+            journalctl -u alohascan -n 30 --no-pager || true
+            echo "=== NGINX CONFIG TEST ==="
+            nginx -t 2>&1 || true
+            echo "=== CURL LOCALHOST:3000 ==="
+            curl -sf http://localhost:3000/ 2>&1 | head -c 200 || echo "port 3000 not responding"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
