@@ -70,31 +70,36 @@ jobs:
 
             # 4. Nginx config
             apt-get install -y nginx -qq 2>/dev/null; true
+
+            # Opreste orice altceva pe portul 80 inainte de nginx
+            echo "=== CE OCUPA PORTUL 80 INAINTE ==="
+            ss -tlnp | grep ':80' || echo "nimic pe 80"
+            fuser -k 80/tcp 2>/dev/null; true
+            sleep 1
+
             python3 -c "
-            cfg = 'server {\n    listen 80;\n    server_name _;\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade \$http_upgrade;\n        proxy_set_header Connection upgrade;\n        proxy_set_header Host \$host;\n        proxy_set_header X-Real-IP \$remote_addr;\n        proxy_cache_bypass \$http_upgrade;\n    }\n}\n'
+            cfg = 'server {\n    listen 80 default_server;\n    server_name _;\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade \$http_upgrade;\n        proxy_set_header Connection \$http_connection;\n        proxy_set_header Host \$host;\n        proxy_set_header X-Real-IP \$remote_addr;\n        proxy_cache_bypass \$http_upgrade;\n    }\n}\n'
             open('/etc/nginx/sites-available/alohascan','w').write(cfg)
+            print('nginx config scrisa OK')
             "
             ln -sf /etc/nginx/sites-available/alohascan /etc/nginx/sites-enabled/alohascan
             rm -f /etc/nginx/sites-enabled/default
-            nginx -t && systemctl restart nginx && systemctl enable nginx; true
-
+            nginx -t 2>&1
+            systemctl restart nginx
+            systemctl enable nginx
             sleep 2
-            echo "DONE: $(date)"
 
-            # 5. Diagnostics
-            echo "=== PORT 80 PROCESS ==="
-            ss -tlnp | grep ':80' || echo "nothing on 80"
-            echo "=== PORT 3000 PROCESS ==="
-            ss -tlnp | grep ':3000' || echo "nothing on 3000"
-            echo "=== NGINX STATUS ==="
-            systemctl is-active nginx || true
-            echo "=== ALOHASCAN STATUS ==="
-            systemctl is-active alohascan || true
-            echo "=== ALOHASCAN LOGS ==="
-            journalctl -u alohascan -n 30 --no-pager || true
-            echo "=== NGINX CONFIG TEST ==="
-            nginx -t 2>&1 || true
-            echo "=== CURL LOCALHOST:3000 ==="
-            curl -sf http://localhost:3000/ 2>&1 | head -c 200 || echo "port 3000 not responding"
+            echo "=== DIAGNOSTICS ==="
+            echo "PORT 80:"
+            ss -tlnp | grep ':80' || echo "nimic"
+            echo "PORT 3000:"
+            ss -tlnp | grep ':3000' || echo "nimic"
+            echo "NGINX: $(systemctl is-active nginx)"
+            echo "ALOHASCAN: $(systemctl is-active alohascan)"
+            echo "--- ALOHASCAN LOGS ---"
+            journalctl -u alohascan -n 20 --no-pager 2>/dev/null || true
+            echo "--- CURL LOCALHOST ---"
+            curl -si http://localhost/ 2>&1 | head -20 || echo "nginx nu raspunde"
+            echo "DONE: $(date)"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
