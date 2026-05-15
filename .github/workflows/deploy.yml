@@ -39,12 +39,11 @@ jobs:
             chmod 600 /root/scannerv2/.env
             echo "ENV OK: $(wc -l < /root/scannerv2/.env) chei"
 
-            # Start or restart app
-            pm2 restart alohascan 2>/dev/null || pm2 start ecosystem.config.cjs
-            pm2 save
+            # Restart serviciu systemd
+            systemctl restart alohascan
+            systemctl is-active alohascan && echo "ALOHASCAN: ONLINE" || echo "ALOHASCAN: ERROR"
 
             echo "Deploy complet: $(date)"
-            pm2 list
         env:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
