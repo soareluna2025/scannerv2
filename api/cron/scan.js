@@ -233,8 +233,8 @@ async function saveH2H(matches) {
 
 async function saveFormStats(matches, teamId) {
   for (const match of matches) {
-    const hg = match.goans?.home ?? 0;
-    const ag = match.goans?.away ?? 0;
+    const hg = match.goals?.home ?? 0;
+    const ag = match.goals?.away ?? 0;
     const isHome   = match.teams?.home?.id === teamId;
     const scored   = isHome ? hg : ag;
     const conceded = isHome ? ag : hg;
