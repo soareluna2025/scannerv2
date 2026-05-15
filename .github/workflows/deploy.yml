@@ -2,7 +2,7 @@ name: Deploy AlohaScan to VPS
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/generate-ssh-key-vultr-8S9YY]
   workflow_dispatch:
 
 jobs:
