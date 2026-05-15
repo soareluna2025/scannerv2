@@ -1,0 +1,58 @@
+name: Verify DB on VPS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify PostgreSQL on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: root
+          password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            export PATH="/snap/bin:$PATH"
+            trap '' TERM
+            PG="PGPASSWORD=Firenze225854 psql -U alohascan -d elefant -h 127.0.0.1"
+
+            echo "================================================"
+            echo "  VERIFICARE BAZA DE DATE PostgreSQL — elefant"
+            echo "================================================"
+
+            echo ""
+            echo "=== 1. VERIFICARE TABELE ==="
+            $PG -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;"
+
+            echo ""
+            echo "=== 2. NUMAR TOTAL TABELE ==="
+            $PG -c "SELECT COUNT(*) as total_tabele FROM information_schema.tables WHERE table_schema = 'public';"
+
+            echo ""
+            echo "=== 3. NUMAR LIGI PE TIER ==="
+            $PG -c "SELECT tier, COUNT(*) as total FROM leagues GROUP BY tier ORDER BY tier;"
+
+            echo ""
+            echo "=== 4. TOTAL LIGI ==="
+            $PG -c "SELECT COUNT(*) as total_ligi FROM leagues;"
+
+            echo ""
+            echo "=== 5. VERIFICARE POSTGRESQL ACTIV ==="
+            $PG -c "SELECT version();"
+
+            echo ""
+            echo "=== 6. VERIFICARE USER SI BAZA DE DATE ==="
+            $PG -c "SELECT current_user, current_database();"
+
+            echo ""
+            echo "=== 7. DIMENSIUNE BAZA DE DATE ==="
+            $PG -c "SELECT pg_size_pretty(pg_database_size('elefant')) as dimensiune;"
+
+            echo ""
+            echo "================================================"
+            echo "  Verificare completa!"
+            echo "================================================"
+            echo "DONE: $(date)"
