@@ -19,6 +19,10 @@ jobs:
           script: |
             export PATH="/snap/bin:$PATH"
 
+            # 0. Opreste orice proces node rulat manual
+            pkill -f "node server.js" 2>/dev/null || true
+            sleep 2
+
             # 1. Pull latest code
             cd /root/scannerv2
             git pull origin main
