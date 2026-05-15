@@ -96,35 +96,46 @@ async function collectMatchStats(fixtureId, homeTeamId, key) {
     const s = {};
     for (const entry of teamStat.statistics) s[entry.type] = entry.value;
 
+    const isHome = teamStat.team.id === homeTeamId;
+
     await query(
       `INSERT INTO match_stats
-         (fixture_id, team_id, team_name, ball_possession, shots_total, shots_on_goal,
-          blocked_shots, expected_goals, corner_kicks, fouls, yellow_cards, red_cards,
-          offsides, total_passes, passes_accurate, pass_percentage)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+         (fixture_id, team_id, team_name, is_home,
+          shots_on_goal, shots_off_goal, shots_total, shots_blocked,
+          shots_inside_box, shots_outside_box,
+          xg, possession, passes_total, passes_accurate, passes_pct,
+          fouls, yellow_cards, red_cards, corners, offsides, goalkeeper_saves)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        ON CONFLICT (fixture_id, team_id) DO UPDATE SET
-         team_name=EXCLUDED.team_name, ball_possession=EXCLUDED.ball_possession,
-         shots_total=EXCLUDED.shots_total, shots_on_goal=EXCLUDED.shots_on_goal,
-         blocked_shots=EXCLUDED.blocked_shots, expected_goals=EXCLUDED.expected_goals,
-         corner_kicks=EXCLUDED.corner_kicks, fouls=EXCLUDED.fouls,
+         team_name=EXCLUDED.team_name, is_home=EXCLUDED.is_home,
+         shots_on_goal=EXCLUDED.shots_on_goal, shots_off_goal=EXCLUDED.shots_off_goal,
+         shots_total=EXCLUDED.shots_total, shots_blocked=EXCLUDED.shots_blocked,
+         shots_inside_box=EXCLUDED.shots_inside_box, shots_outside_box=EXCLUDED.shots_outside_box,
+         xg=EXCLUDED.xg, possession=EXCLUDED.possession,
+         passes_total=EXCLUDED.passes_total, passes_accurate=EXCLUDED.passes_accurate,
+         passes_pct=EXCLUDED.passes_pct, fouls=EXCLUDED.fouls,
          yellow_cards=EXCLUDED.yellow_cards, red_cards=EXCLUDED.red_cards,
-         offsides=EXCLUDED.offsides, total_passes=EXCLUDED.total_passes,
-         passes_accurate=EXCLUDED.passes_accurate, pass_percentage=EXCLUDED.pass_percentage`,
+         corners=EXCLUDED.corners, offsides=EXCLUDED.offsides,
+         goalkeeper_saves=EXCLUDED.goalkeeper_saves`,
       [
-        fixtureId, teamStat.team.id, teamStat.team.name,
-        parseFloat(s['Ball Possession']) || null,
-        parseInt(s['Total Shots'])       || 0,
-        parseInt(s['Shots on Goal'])     || 0,
-        parseInt(s['Blocked Shots'])     || 0,
-        parseFloat(s['expected_goals'])  || null,
-        parseInt(s['Corner Kicks'])      || 0,
+        fixtureId, teamStat.team.id, teamStat.team.name, isHome,
+        parseInt(s['Shots on Goal'])      || 0,
+        parseInt(s['Shots off Goal'])     || 0,
+        parseInt(s['Total Shots'])        || 0,
+        parseInt(s['Blocked Shots'])      || 0,
+        parseInt(s['Shots insidebox'])    || 0,
+        parseInt(s['Shots outsidebox'])   || 0,
+        parseFloat(s['expected_goals'])   || null,
+        parseFloat(s['Ball Possession'])  || null,
+        parseInt(s['Total passes'])       || 0,
+        parseInt(s['Passes accurate'])    || 0,
+        parseFloat(s['Passes %'])         || null,
         parseInt(s['Fouls'])              || 0,
         parseInt(s['Yellow Cards'])       || 0,
         parseInt(s['Red Cards'])          || 0,
+        parseInt(s['Corner Kicks'])       || 0,
         parseInt(s['Offsides'])           || 0,
-        parseInt(s['Total passes'])      || 0,
-        parseInt(s['Passes accurate'])   || 0,
-        parseFloat(s['Passes %'])        || null,
+        parseInt(s['Goalkeeper Saves'])   || 0,
       ]
     );
   }
@@ -180,24 +191,50 @@ async function collectOdds(fixtureId, key) {
 
   let count = 0;
   for (const bookmaker of oddsResponse.bookmakers || []) {
+    // Build flat lookup: "BetName:Label" → odd value
+    const vals = {};
     for (const bet of bookmaker.bets || []) {
-      for (const value of bet.values || []) {
-        await query(
-          `INSERT INTO odds (fixture_id, bookmaker_id, bookmaker_name, bet_id, bet_name, value_name, value_odd)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)
-           ON CONFLICT (fixture_id, bookmaker_id, bet_id, value_name) DO UPDATE SET
-             value_odd=EXCLUDED.value_odd`,
-          [
-            fixtureId, bookmaker.id, bookmaker.name,
-            0,           // bet_id placeholder (not provided by this API endpoint)
-            bet.name,    // bet_name
-            value.value, // value_name
-            parseFloat(value.odd),
-          ]
-        );
-        count++;
+      for (const v of bet.values || []) {
+        vals[`${bet.name}:${v.value}`] = parseFloat(v.odd) || null;
       }
     }
+    const g = (betName, label) => vals[`${betName}:${label}`] ?? null;
+
+    await query(
+      `INSERT INTO odds
+         (fixture_id, bookmaker_id, bookmaker_name,
+          odd_home, odd_draw, odd_away,
+          over_05, under_05, over_15, under_15,
+          over_25, under_25, over_35, under_35,
+          btts_yes, btts_no, ah)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       ON CONFLICT (fixture_id, bookmaker_id) DO UPDATE SET
+         odd_home=EXCLUDED.odd_home, odd_draw=EXCLUDED.odd_draw, odd_away=EXCLUDED.odd_away,
+         over_05=EXCLUDED.over_05, under_05=EXCLUDED.under_05,
+         over_15=EXCLUDED.over_15, under_15=EXCLUDED.under_15,
+         over_25=EXCLUDED.over_25, under_25=EXCLUDED.under_25,
+         over_35=EXCLUDED.over_35, under_35=EXCLUDED.under_35,
+         btts_yes=EXCLUDED.btts_yes, btts_no=EXCLUDED.btts_no,
+         ah=EXCLUDED.ah`,
+      [
+        fixtureId, bookmaker.id, bookmaker.name,
+        g('Match Winner',     'Home'),
+        g('Match Winner',     'Draw'),
+        g('Match Winner',     'Away'),
+        g('Goals Over/Under', 'Over 0.5'),
+        g('Goals Over/Under', 'Under 0.5'),
+        g('Goals Over/Under', 'Over 1.5'),
+        g('Goals Over/Under', 'Under 1.5'),
+        g('Goals Over/Under', 'Over 2.5'),
+        g('Goals Over/Under', 'Under 2.5'),
+        g('Goals Over/Under', 'Over 3.5'),
+        g('Goals Over/Under', 'Under 3.5'),
+        g('Both Teams Score', 'Yes'),
+        g('Both Teams Score', 'No'),
+        g('Asian Handicap',   'Home'),
+      ]
+    );
+    count++;
   }
 
   return count;

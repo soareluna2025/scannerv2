@@ -162,32 +162,34 @@ async function upsertLeaguePattern(row) {
   return null;
 }
 
-async function saveLiveStats(m, f) {
-  const row = [
-    m.fixture.id,
-    f.mn,                                     // elapsed
-    f.hg,                                     // home_goals
-    f.ag,                                     // away_goals
-    f.hSOT,                                   // home_sot
-    f.aSOT,                                   // away_sot
-    f.hSh,                                    // home_shots (total)
-    f.aSh,                                    // away_shots (total)
-    f.hp || null,                             // home_possession
-    f.hp ? Math.round(100 - f.hp) : null,     // away_possession
-    f.hC,                                     // home_corners
-    f.aC,                                     // away_corners
-    f.hDA,                                    // home_da (dangerous attacks)
-    f.aDA,                                    // away_da
-    f.hxg || null,                            // home_xg
-    f.axg || null,                            // away_xg
-  ];
+async function saveLiveStats(m, f, status) {
+  const st = m.statistics || [];
+  const yc = getStat(st, 0, 'Yellow Cards') + getStat(st, 1, 'Yellow Cards');
+  const rc = getStat(st, 0, 'Red Cards')    + getStat(st, 1, 'Red Cards');
   await query(
     `INSERT INTO live_stats
-       (fixture_id, elapsed, home_goals, away_goals, home_sot, away_sot,
-        home_shots, away_shots, home_possession, away_possession,
-        home_corners, away_corners, home_da, away_da, home_xg, away_xg)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-    row
+       (fixture_id, minute, status, home_goals, away_goals,
+        xg, possession, shots_on_goal, shots_total,
+        corners, yellow_cards, red_cards,
+        odd_home, odd_draw, odd_away)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+    [
+      m.fixture.id,
+      f.mn,
+      status || null,
+      f.hg,
+      f.ag,
+      f.txg  || null,
+      f.hp   || null,
+      f.tSOT,
+      f.tSh,
+      f.tC,
+      yc,
+      rc,
+      null,  // odd_home — nu e disponibil în datele live fără apel separat
+      null,  // odd_draw
+      null,  // odd_away
+    ]
   );
 }
 
@@ -225,9 +227,10 @@ async function saveFormStats(matches, teamId) {
 
 async function saveAlert(fixtureId, alertType, market, message, confidence) {
   await query(
-    `INSERT INTO alerts (fixture_id, alert_type, message, ngp_value, telegram_ok)
-     VALUES ($1,$2,$3,$4,$5)`,
-    [fixtureId, alertType, message, confidence || null, false]
+    `INSERT INTO alerts
+       (fixture_id, type, message, confidence, is_sent, telegram_sent)
+     VALUES ($1,$2,$3,$4,$5,$6)`,
+    [fixtureId, alertType, message, confidence || null, false, false]
   );
 }
 
@@ -304,7 +307,7 @@ export default async function handler(req, res) {
       snapshotResults.push({ id: m.fixture.id, ng, status: sh, minute: elapsed });
 
       // Save live_stats (non-blocking)
-      saveLiveStats(m, f).catch(e => log(`live_stats error ${m.fixture.id}: ${e.message}`));
+      saveLiveStats(m, f, sh).catch(e => log(`live_stats error ${m.fixture.id}: ${e.message}`));
 
       // Save alert if NGP > 85 or over15 > 82
       if (ng > 85 || mk.over15 > 82) {

@@ -64,23 +64,23 @@ export default async function handler(req, res) {
           await query(
             `INSERT INTO standings
                (league_id, season, team_id, team_name, rank, points,
-                goals_for, goals_against, goals_diff, played, win, draw, lose, form, updated_at)
+                goals_for, goals_against, goal_diff, played, wins, draws, losses, form, updated_at)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
              ON CONFLICT (league_id, season, team_id) DO UPDATE SET
                team_name=EXCLUDED.team_name, rank=EXCLUDED.rank, points=EXCLUDED.points,
                goals_for=EXCLUDED.goals_for, goals_against=EXCLUDED.goals_against,
-               goals_diff=EXCLUDED.goals_diff, played=EXCLUDED.played,
-               win=EXCLUDED.win, draw=EXCLUDED.draw, lose=EXCLUDED.lose,
+               goal_diff=EXCLUDED.goal_diff, played=EXCLUDED.played,
+               wins=EXCLUDED.wins, draws=EXCLUDED.draws, losses=EXCLUDED.losses,
                form=EXCLUDED.form, updated_at=EXCLUDED.updated_at`,
             [
               leagueId, SEASON, row.team.id, row.team.name, row.rank, row.points,
-              row.all?.goals?.for   || 0,
+              row.all?.goals?.for     || 0,
               row.all?.goals?.against || 0,
-              row.goalsDiff || 0,
-              row.all?.played || 0,
-              row.all?.win    || 0,
-              row.all?.draw   || 0,
-              row.all?.lose   || 0,
+              row.goalsDiff           || 0,
+              row.all?.played         || 0,
+              row.all?.win            || 0,
+              row.all?.draw           || 0,
+              row.all?.lose           || 0,
               row.form || null,
               new Date().toISOString(),
             ]
