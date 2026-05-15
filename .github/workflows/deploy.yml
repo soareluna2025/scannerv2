@@ -2,14 +2,14 @@ name: Deploy AlohaScan to VPS
 
 on:
   push:
-    branches: [main, claude/generate-ssh-key-vultr-8S9YY]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch env vars from Vercel and deploy to VPS
+      - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_IP }}
@@ -19,18 +19,20 @@ jobs:
           script: |
             export PATH="/snap/bin:$PATH"
 
-            # Pull latest code
+            # 1. Pull latest code
             cd /root/scannerv2
             git pull origin main
             npm install --silent
 
-            # Fetch all env vars from Vercel API and write .env
-            echo "Fetching env vars from Vercel..."
+            # 2. Fetch env vars din Vercel si scrie .env
             PROJECT_ID=$(curl -s "https://api.vercel.com/v9/projects" \
               -H "Authorization: Bearer $VERCEL_TOKEN" | \
-              python3 -c "import sys,json; projects=json.load(sys.stdin)['projects']; \
-              p=[x for x in projects if 'scannerv2' in x.get('name','')]; \
-              print(p[0]['id'] if p else '')" 2>/dev/null)
+              python3 -c "
+            import sys,json
+            data=json.load(sys.stdin)
+            p=[x for x in data.get('projects',[]) if 'scannerv2' in x.get('name','')]
+            print(p[0]['id'] if p else '')
+            " 2>/dev/null)
 
             if [ -n "$PROJECT_ID" ]; then
               curl -s "https://api.vercel.com/v9/projects/$PROJECT_ID/env" \
@@ -48,16 +50,50 @@ jobs:
             print('\n'.join(lines))
             " > /root/scannerv2/.env
               chmod 600 /root/scannerv2/.env
-              echo "ENV vars written: $(wc -l < /root/scannerv2/.env) keys"
+              echo "ENV: $(wc -l < /root/scannerv2/.env) chei scrise"
             else
-              echo "WARNING: Could not fetch Vercel env vars - using existing .env"
+              echo "WARNING: nu am gasit proiectul Vercel - folosesc .env existent"
             fi
 
-            # Start or restart app
+            # 3. Porneste/restarteza aplicatia cu PM2
             pm2 restart alohascan 2>/dev/null || pm2 start ecosystem.config.cjs
             pm2 save
 
+            # 4. Instaleaza si configureaza nginx (prima data)
+            if ! command -v nginx &>/dev/null; then
+              apt-get install -y nginx -qq
+            fi
+
+            cat > /etc/nginx/sites-available/alohascan << 'NGINX'
+            server {
+                listen 80;
+                server_name _;
+
+                location / {
+                    proxy_pass http://127.0.0.1:3000;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade $http_upgrade;
+                    proxy_set_header Connection 'upgrade';
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_cache_bypass $http_upgrade;
+                }
+            }
+            NGINX
+
+            ln -sf /etc/nginx/sites-available/alohascan /etc/nginx/sites-enabled/alohascan
+            rm -f /etc/nginx/sites-enabled/default
+            nginx -t && systemctl restart nginx
+            systemctl enable nginx
+
+            # 5. Deschide porturile in firewall
+            ufw allow 80/tcp 2>/dev/null || true
+            ufw allow 3000/tcp 2>/dev/null || true
+
+            echo "=============================="
             echo "Deploy complet: $(date)"
+            echo "App: http://$(curl -s ifconfig.me 2>/dev/null || echo '192.248.183.230')"
+            echo "=============================="
             pm2 list
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
