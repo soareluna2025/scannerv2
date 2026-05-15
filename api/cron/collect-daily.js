@@ -1,13 +1,10 @@
 // api/cron/collect-daily.js
 // Rulează zilnic la 06:00
-// Colectează: fixtures, teams, standings, leagues, injuries
+// Colectează: standings, leagues, teams pentru top 5 ligi europene
+// Limitat la 5 ligi + budget de 8s pentru a nu depăși timeout-ul Vercel de 10s
 
 const PRIORITY_LEAGUES = [
   39, 140, 135, 78, 61,   // PL, LaLiga, SerieA, Bundesliga, Ligue1
-  2, 3, 848,              // UCL, UEL, UECL
-  94, 88, 144, 203,       // Primeira, Eredivisie, Jupiler, SuperLig
-  71, 128, 253,           // Brazil, Argentina, MLS
-  197, 169, 262,          // SuperLeague, Liga1, Liga MX
 ];
 
 const SEASON = new Date().getFullYear();
@@ -20,8 +17,9 @@ async function fetchAPI(endpoint, key) {
   return data.response || [];
 }
 
-async function sbPost(sbUrl, sbKey, path, body) {
-  await fetch(`${sbUrl}/rest/v1${path}`, {
+async function sbUpsert(sbUrl, sbKey, table, onConflict, rows) {
+  if (!rows.length) return;
+  await fetch(`${sbUrl}/rest/v1/${table}?on_conflict=${onConflict}`, {
     method: 'POST',
     headers: {
       'apikey':        sbKey,
@@ -29,11 +27,9 @@ async function sbPost(sbUrl, sbKey, path, body) {
       'Content-Type':  'application/json',
       'Prefer':        'resolution=merge-duplicates,return=minimal',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(rows),
   });
 }
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function logCron(sbUrl, sbKey, stats, status, errorMsg) {
   try {
@@ -47,7 +43,7 @@ async function logCron(sbUrl, sbKey, stats, status, errorMsg) {
       },
       body: JSON.stringify({
         job_name:           'collect-daily',
-        fixtures_processed: stats.fixtures,
+        fixtures_processed: stats.standings,
         players_upserted:   stats.teams,
         status,
         error_msg:          errorMsg,
@@ -65,62 +61,20 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Environment vars lipsa' });
 
   const startTime = Date.now();
-  const stats = { leagues: 0, teams: 0, fixtures: 0, standings: 0, injuries: 0, errors: [] };
+  const stats = { leagues: 0, teams: 0, standings: 0, errors: [] };
 
   try {
-    // ============================================
-    // 1. FIXTURES AZI + MÂINE
-    // ============================================
-    const today    = new Date().toISOString().split('T')[0];
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-
-    for (const date of [today, tomorrow]) {
-      try {
-        const fixtures = await fetchAPI(`/fixtures?date=${date}&status=NS-1H-HT-2H`, key);
-        for (const f of fixtures) {
-          await sbPost(sbUrl, sbKey, '/fixtures?on_conflict=id', {
-            id:             f.fixture.id,
-            league_id:      f.league.id,
-            season:         f.league.season,
-            home_team_id:   f.teams.home.id,
-            away_team_id:   f.teams.away.id,
-            home_team_name: f.teams.home.name,
-            away_team_name: f.teams.away.name,
-            kickoff_time:   f.fixture.date,
-            status_short:   f.fixture.status.short,
-            status_long:    f.fixture.status.long,
-            venue:          f.fixture.venue?.name || null,
-            referee:        f.fixture.referee || null,
-            updated_at:     new Date().toISOString(),
-          });
-
-          for (const team of [f.teams.home, f.teams.away]) {
-            await sbPost(sbUrl, sbKey, '/teams?on_conflict=id', {
-              id:         team.id,
-              name:       team.name,
-              logo:       team.logo,
-              updated_at: new Date().toISOString(),
-            });
-            stats.teams++;
-          }
-          stats.fixtures++;
-        }
-      } catch (e) {
-        stats.errors.push(`fixtures ${date}: ${e.message}`);
-      }
-    }
-
-    // ============================================
-    // 2. STANDINGS + LEAGUES + TEAMS
-    // ============================================
     for (const leagueId of PRIORITY_LEAGUES) {
+      // Time budget: stop if we're past 8 seconds to avoid Vercel's 10s timeout
+      if (Date.now() - startTime > 8000) break;
+
       try {
         const standings = await fetchAPI(`/standings?league=${leagueId}&season=${SEASON}`, key);
         if (!standings.length) continue;
 
         const league = standings[0]?.league;
         if (league) {
-          await sbPost(sbUrl, sbKey, '/leagues?on_conflict=id', {
+          await sbUpsert(sbUrl, sbKey, 'leagues', 'id', [{
             id:         league.id,
             name:       league.name,
             country:    league.country,
@@ -128,87 +82,58 @@ export default async function handler(req, res) {
             season:     SEASON,
             active:     true,
             updated_at: new Date().toISOString(),
-          });
+          }]);
           stats.leagues++;
         }
 
         const rows = standings[0]?.league?.standings?.[0] || [];
+        const standingRows = [];
+        const teamRows = [];
+
         for (const row of rows) {
-          await sbPost(sbUrl, sbKey, '/standings?on_conflict=league_id,season,team_id', {
+          standingRows.push({
             league_id:     leagueId,
             season:        SEASON,
             team_id:       row.team.id,
             team_name:     row.team.name,
             rank:          row.rank,
             points:        row.points,
-            goals_for:     row.all.goals.for,
-            goals_against: row.all.goals.against,
+            goals_for:     row.all?.goals?.for   || 0,
+            goals_against: row.all?.goals?.against || 0,
             goal_diff:     row.goalsDiff,
-            played:        row.all.played,
-            won:           row.all.win,
-            drawn:         row.all.draw,
-            lost:          row.all.lose,
-            form:          row.form,
-            home_played:   row.home.played,
-            away_played:   row.away.played,
+            played:        row.all?.played || 0,
+            won:           row.all?.win    || 0,
+            drawn:         row.all?.draw   || 0,
+            lost:          row.all?.lose   || 0,
+            form:          row.form || null,
             updated_at:    new Date().toISOString(),
           });
-
-          await sbPost(sbUrl, sbKey, '/teams?on_conflict=id', {
+          teamRows.push({
             id:         row.team.id,
             name:       row.team.name,
             logo:       row.team.logo,
             league_id:  leagueId,
             updated_at: new Date().toISOString(),
           });
-
           stats.standings++;
           stats.teams++;
         }
+
+        // Batch upsert — o singură cerere per ligă în loc de una per echipă
+        await sbUpsert(sbUrl, sbKey, 'standings', 'league_id,season,team_id', standingRows);
+        await sbUpsert(sbUrl, sbKey, 'teams', 'id', teamRows);
       } catch (e) {
-        stats.errors.push(`standings league ${leagueId}: ${e.message}`);
+        stats.errors.push(`league ${leagueId}: ${e.message}`);
       }
-      await sleep(100);
     }
 
-    // ============================================
-    // 3. INJURIES PENTRU MECIURILE DE AZI
-    // ============================================
-    try {
-      const todayFixtures = await fetchAPI(`/fixtures?date=${today}&status=NS`, key);
-      for (const f of todayFixtures.slice(0, 30)) {
-        try {
-          const injuries = await fetchAPI(`/injuries?fixture=${f.fixture.id}`, key);
-          for (const inj of injuries) {
-            await sbPost(sbUrl, sbKey, '/injuries?on_conflict=player_id,fixture_id', {
-              player_id:     inj.player.id,
-              team_id:       inj.team.id,
-              league_id:     f.league.id,
-              fixture_id:    f.fixture.id,
-              player_name:   inj.player.name,
-              injury_type:   inj.player.type,
-              injury_reason: inj.player.reason,
-              match_date:    f.fixture.date,
-              active:        true,
-              updated_at:    new Date().toISOString(),
-            });
-            stats.injuries++;
-          }
-        } catch (_) {}
-        await sleep(150);
-      }
-    } catch (e) {
-      stats.errors.push(`injuries: ${e.message}`);
-    }
-
-    await logCron(sbUrl, sbKey, stats, 'success', null);
+    await logCron(sbUrl, sbKey, stats, 'success', stats.errors.length ? stats.errors.join('; ') : null);
 
     return res.status(200).json({
-      success: true,
+      success:     true,
       duration_ms: Date.now() - startTime,
       stats,
     });
-
   } catch (error) {
     await logCron(sbUrl, sbKey, stats, 'error', error.message);
     return res.status(500).json({ error: error.message });
