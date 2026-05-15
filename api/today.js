@@ -1,4 +1,5 @@
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
+import { query } from './db.js';
 
 function log(msg) {
   console.log(`[today] ${new Date().toISOString()} ${msg}`);
@@ -13,32 +14,30 @@ function dateStr(offsetDays) {
   return d.toISOString().split('T')[0];
 }
 
-async function getFixturesFromSupabase(sbUrl, sbKey) {
+async function getFixturesFromDB() {
   try {
     const now  = new Date();
     const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const res = await fetch(
-      `${sbUrl}/rest/v1/fixtures` +
-      `?kickoff_time=gte.${now.toISOString()}` +
-      `&kickoff_time=lte.${in24h.toISOString()}` +
-      `&status_short=eq.NS` +
-      `&order=kickoff_time.asc`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const r = await query(
+      `SELECT fixture_id AS id, match_date AS kickoff_time, status_short, status_long,
+              league_id, home_team_id, home_team_name, away_team_id, away_team_name
+       FROM fixtures
+       WHERE match_date >= $1 AND match_date <= $2 AND status_short = 'NS'
+       ORDER BY match_date ASC`,
+      [now.toISOString(), in24h.toISOString()]
     );
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    return r.rows;
   } catch (_) { return []; }
 }
 
-async function getLeaguesFromSupabase(leagueIds, sbUrl, sbKey) {
+async function getLeaguesFromDB(leagueIds) {
   try {
     if (!leagueIds.length) return [];
-    const res = await fetch(
-      `${sbUrl}/rest/v1/leagues?id=in.(${leagueIds.join(',')})&select=id,name,country,logo`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const r = await query(
+      'SELECT league_id AS id, name, country, logo FROM leagues WHERE league_id = ANY($1)',
+      [leagueIds]
     );
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    return r.rows;
   } catch (_) { return []; }
 }
 
@@ -46,34 +45,14 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=30');
 
-  const key   = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
-  const sbUrl = process.env.SUPABASE_URL;
-  const sbKey = process.env.SUPABASE_KEY;
+  const key = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
-  // --- Snapshots action: returns top pre_match_snapshots by composite_score ---
+  // --- Snapshots action ---
   const action = (req.query && req.query.action) ||
     new URL(req.url || '', 'http://localhost').searchParams.get('action');
   if (action === 'snapshots') {
-    if (!sbUrl || !sbKey) {
-      return res.status(200).json({ snapshots: [], error: 'Supabase not configured' });
-    }
-    try {
-      const r = await fetch(
-        `${sbUrl}/rest/v1/pre_match_snapshots` +
-        `?outcome=eq.PENDING` +
-        `&order=composite_score.desc` +
-        `&limit=10` +
-        `&select=*`,
-        { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
-      );
-      const data = await r.json();
-      const snapshots = Array.isArray(data) ? data : [];
-      log(`snapshots: ${snapshots.length}`);
-      return res.status(200).json({ snapshots });
-    } catch (e) {
-      log(`snapshots error: ${e.message}`);
-      return res.status(200).json({ snapshots: [], error: e.message });
-    }
+    // pre_match_snapshots schema does not have composite_score or outcome columns
+    return res.status(200).json({ snapshots: [] });
   }
 
   if (!key) {
@@ -82,21 +61,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    // --- Try Supabase first ---
-    const sbFixtures = sbUrl && sbKey ? await getFixturesFromSupabase(sbUrl, sbKey) : [];
-    log(`supabase fixtures: ${sbFixtures.length}`);
+    // --- Try PostgreSQL first ---
+    const dbFixtures = await getFixturesFromDB();
+    log(`db fixtures: ${dbFixtures.length}`);
 
-    if (sbFixtures.length >= 5) {
-      // Apply league whitelist filter
-      const afterLeague = sbFixtures.filter(f => ALLOWED_LEAGUE_IDS.has(f.league_id));
-      log(`after league filter (supabase): ${afterLeague.length}`);
+    if (dbFixtures.length >= 5) {
+      const afterLeague = dbFixtures.filter(f => ALLOWED_LEAGUE_IDS.has(f.league_id));
+      log(`after league filter (db): ${afterLeague.length}`);
 
-      // Fetch league names for the filtered fixtures in one batch
       const leagueIds = [...new Set(afterLeague.map(f => f.league_id))];
-      const leagueRows = await getLeaguesFromSupabase(leagueIds, sbUrl, sbKey);
+      const leagueRows = await getLeaguesFromDB(leagueIds);
       const leagueMap  = Object.fromEntries((leagueRows || []).map(l => [l.id, l]));
 
-      // Transform to API-Football-like format with league names
       const raw = afterLeague.map(f => {
         const lg = leagueMap[f.league_id] || {};
         return {
@@ -108,17 +84,16 @@ export default async function handler(req, res) {
         };
       });
 
-      // Apply name-based filters now that we have league names
       const afterWomen = raw.filter(m => !WOMEN_RE.test(m.league?.name || ''));
       const afterDiv   = afterWomen.filter(m => !LOWER_DIV_RE.test(m.league?.name || ''));
 
-      log(`final (supabase): ${afterDiv.length}`);
+      log(`final (db): ${afterDiv.length}`);
 
       return res.status(200).json({
         response: afterDiv.sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date)),
         _debug: {
-          source:        'supabase',
-          rawTotal:      sbFixtures.length,
+          source:        'postgres',
+          rawTotal:      dbFixtures.length,
           afterLeague:   afterLeague.length,
           afterWomen:    afterWomen.length,
           afterLowerDiv: afterDiv.length,
@@ -128,7 +103,7 @@ export default async function handler(req, res) {
     }
 
     // --- Fallback: API-Football ---
-    log('supabase insufficient, falling back to API-Football');
+    log('db insufficient, falling back to API-Football');
     const [d0, d1] = [dateStr(0), dateStr(1)];
     log(`fetching 2 days: ${d0} / ${d1}`);
 

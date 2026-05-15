@@ -1,3 +1,5 @@
+import { query } from '../db.js';
+
 function calcPlayerScore(rating, goals, assists, passAcc, sot) {
   const ratingNorm = rating ? (rating / 10 * 100) : 50;
   const goalsScore  = Math.min(100, (goals  || 0) * 25);
@@ -8,7 +10,7 @@ function calcPlayerScore(rating, goals, assists, passAcc, sot) {
   return isNaN(score) ? 0 : score;
 }
 
-async function collectFixture(fixtureId, key, sbUrl, sbKey) {
+async function collectFixture(fixtureId, key) {
   const r = await fetch(
     `https://v3.football.api-sports.io/fixtures/players?fixture=${fixtureId}`,
     { headers: { 'x-apisports-key': key } }
@@ -31,27 +33,22 @@ async function collectFixture(fixtureId, key, sbUrl, sbKey) {
       const sot     = stat.shots?.on       || 0;
       const mins    = stat.games?.minutes  || 0;
       rows.push({
-        player_id:          pl.id,
-        fixture_id:         fixtureId,
-        team_id:            teamId,
-        team_name:          teamName,
-        player_name:        pl.name || '',
+        player_id:         pl.id,
+        fixture_id:        fixtureId,
+        team_id:           teamId,
+        team_name:         teamName,
+        player_name:       pl.name || '',
+        position:          stat.games?.position || null,
         rating,
         goals,
         assists,
-        pass_accuracy:      passAcc,
-        shots_on_target:    sot,
-        minutes_played:     mins,
-        player_score:       calcPlayerScore(rating, goals, assists, passAcc, sot),
-        position:           stat.games?.position || null,
-        age:                pl.age || null,
-        yellow_cards:       stat.cards?.yellow || 0,
-        red_cards:          stat.cards?.red || 0,
-        offsides:           stat.offsides || 0,
-        duels_total:        stat.duels?.total || 0,
-        duels_won:          stat.duels?.won || 0,
-        dribbles_attempts:  stat.dribbles?.attempts || 0,
-        dribbles_success:   stat.dribbles?.success || 0,
+        pass_accuracy:     passAcc,
+        shots_on_target:   sot,
+        minutes_played:    mins,
+        yellow_cards:      stat.cards?.yellow || 0,
+        red_cards:         stat.cards?.red || 0,
+        dribbles_success:  stat.dribbles?.success || 0,
+        player_score:      calcPlayerScore(rating, goals, assists, passAcc, sot),
       });
     }
   }
@@ -59,21 +56,34 @@ async function collectFixture(fixtureId, key, sbUrl, sbKey) {
   rows = rows.filter(r => r.player_id != null && r.player_id !== undefined && r.fixture_id != null);
   if (!rows.length) return 0;
 
-  await fetch(`${sbUrl}/rest/v1/player_stats?on_conflict=player_id,fixture_id`, {
-    method: 'POST',
-    headers: {
-      'apikey':        sbKey,
-      'Authorization': `Bearer ${sbKey}`,
-      'Content-Type':  'application/json',
-      'Prefer':        'resolution=merge-duplicates,return=minimal',
-    },
-    body: JSON.stringify(rows),
-  });
+  for (const row of rows) {
+    await query(
+      `INSERT INTO player_stats
+         (player_id, fixture_id, team_id, team_name, player_name, position, rating,
+          goals, assists, pass_accuracy, shots_on_target, minutes_played,
+          yellow_cards, red_cards, dribbles_success, player_score)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+       ON CONFLICT (player_id, fixture_id) DO UPDATE SET
+         team_id=EXCLUDED.team_id, team_name=EXCLUDED.team_name,
+         player_name=EXCLUDED.player_name, position=EXCLUDED.position,
+         rating=EXCLUDED.rating, goals=EXCLUDED.goals, assists=EXCLUDED.assists,
+         pass_accuracy=EXCLUDED.pass_accuracy, shots_on_target=EXCLUDED.shots_on_target,
+         minutes_played=EXCLUDED.minutes_played, yellow_cards=EXCLUDED.yellow_cards,
+         red_cards=EXCLUDED.red_cards, dribbles_success=EXCLUDED.dribbles_success,
+         player_score=EXCLUDED.player_score`,
+      [
+        row.player_id, row.fixture_id, row.team_id, row.team_name, row.player_name,
+        row.position, row.rating, row.goals, row.assists, row.pass_accuracy,
+        row.shots_on_target, row.minutes_played, row.yellow_cards, row.red_cards,
+        row.dribbles_success, row.player_score,
+      ]
+    );
+  }
 
   return rows.length;
 }
 
-async function collectMatchStats(fixtureId, homeTeamId, key, sbUrl, sbKey) {
+async function collectMatchStats(fixtureId, homeTeamId, key) {
   const r = await fetch(
     `https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,
     { headers: { 'x-apisports-key': key } }
@@ -82,49 +92,47 @@ async function collectMatchStats(fixtureId, homeTeamId, key, sbUrl, sbKey) {
   const teamStats = data.response || [];
   if (!teamStats.length) return 0;
 
-  const rows = [];
   for (const teamStat of teamStats) {
     const s = {};
     for (const entry of teamStat.statistics) s[entry.type] = entry.value;
-    rows.push({
-      fixture_id:        fixtureId,
-      team_id:           teamStat.team.id,
-      team_name:         teamStat.team.name,
-      is_home:           teamStat.team.id === homeTeamId,
-      possession:        parseFloat(s['Ball Possession']) || null,
-      shots_total:       parseInt(s['Total Shots'])       || 0,
-      shots_on_target:   parseInt(s['Shots on Goal'])     || 0,
-      shots_off_target:  parseInt(s['Shots off Goal'])    || 0,
-      shots_blocked:     parseInt(s['Blocked Shots'])     || 0,
-      xg:                parseFloat(s['expected_goals'])  || null,
-      corners:           parseInt(s['Corner Kicks'])      || 0,
-      fouls:             parseInt(s['Fouls'])              || 0,
-      yellow_cards:      parseInt(s['Yellow Cards'])       || 0,
-      red_cards:         parseInt(s['Red Cards'])          || 0,
-      offsides:          parseInt(s['Offsides'])           || 0,
-      passes_total:      parseInt(s['Total passes'])      || 0,
-      passes_accurate:   parseInt(s['Passes accurate'])   || 0,
-      pass_accuracy:     parseFloat(s['Passes %'])        || null,
-      attacks:           parseInt(s['Attacks'])            || 0,
-      dangerous_attacks: parseInt(s['Dangerous Attacks']) || 0,
-    });
+
+    await query(
+      `INSERT INTO match_stats
+         (fixture_id, team_id, team_name, ball_possession, shots_total, shots_on_goal,
+          blocked_shots, expected_goals, corner_kicks, fouls, yellow_cards, red_cards,
+          offsides, total_passes, passes_accurate, pass_percentage)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+       ON CONFLICT (fixture_id, team_id) DO UPDATE SET
+         team_name=EXCLUDED.team_name, ball_possession=EXCLUDED.ball_possession,
+         shots_total=EXCLUDED.shots_total, shots_on_goal=EXCLUDED.shots_on_goal,
+         blocked_shots=EXCLUDED.blocked_shots, expected_goals=EXCLUDED.expected_goals,
+         corner_kicks=EXCLUDED.corner_kicks, fouls=EXCLUDED.fouls,
+         yellow_cards=EXCLUDED.yellow_cards, red_cards=EXCLUDED.red_cards,
+         offsides=EXCLUDED.offsides, total_passes=EXCLUDED.total_passes,
+         passes_accurate=EXCLUDED.passes_accurate, pass_percentage=EXCLUDED.pass_percentage`,
+      [
+        fixtureId, teamStat.team.id, teamStat.team.name,
+        parseFloat(s['Ball Possession']) || null,
+        parseInt(s['Total Shots'])       || 0,
+        parseInt(s['Shots on Goal'])     || 0,
+        parseInt(s['Blocked Shots'])     || 0,
+        parseFloat(s['expected_goals'])  || null,
+        parseInt(s['Corner Kicks'])      || 0,
+        parseInt(s['Fouls'])              || 0,
+        parseInt(s['Yellow Cards'])       || 0,
+        parseInt(s['Red Cards'])          || 0,
+        parseInt(s['Offsides'])           || 0,
+        parseInt(s['Total passes'])      || 0,
+        parseInt(s['Passes accurate'])   || 0,
+        parseFloat(s['Passes %'])        || null,
+      ]
+    );
   }
 
-  await fetch(`${sbUrl}/rest/v1/match_stats?on_conflict=fixture_id,team_id`, {
-    method: 'POST',
-    headers: {
-      'apikey':        sbKey,
-      'Authorization': `Bearer ${sbKey}`,
-      'Content-Type':  'application/json',
-      'Prefer':        'resolution=merge-duplicates,return=minimal',
-    },
-    body: JSON.stringify(rows),
-  });
-
-  return rows.length;
+  return teamStats.length;
 }
 
-async function collectMatchEvents(fixtureId, key, sbUrl, sbKey) {
+async function collectMatchEvents(fixtureId, key) {
   const r = await fetch(
     `https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,
     { headers: { 'x-apisports-key': key } }
@@ -133,44 +141,35 @@ async function collectMatchEvents(fixtureId, key, sbUrl, sbKey) {
   const events = data.response || [];
   if (!events.length) return 0;
 
-  const rows = events.map(ev => ({
-    fixture_id:    fixtureId,
-    team_id:       ev.team?.id    || null,
-    player_id:     ev.player?.id  || null,
-    player_name:   ev.player?.name || null,
-    assist_id:     ev.assist?.id   || null,
-    assist_name:   ev.assist?.name || null,
-    event_type:    ev.type,
-    event_detail:  ev.detail,
-    event_comment: ev.comments    || null,
-    minute:        ev.time?.elapsed || 0,
-    extra_time:    ev.time?.extra   || null,
-  }));
+  // Delete existing events before re-inserting
+  await query('DELETE FROM match_events WHERE fixture_id = $1', [fixtureId]);
 
-  // Delete existing events for this fixture before re-inserting (prevents duplicates on re-run)
-  await fetch(`${sbUrl}/rest/v1/match_events?fixture_id=eq.${fixtureId}`, {
-    method: 'DELETE',
-    headers: {
-      'apikey':        sbKey,
-      'Authorization': `Bearer ${sbKey}`,
-    },
-  });
+  for (const ev of events) {
+    await query(
+      `INSERT INTO match_events
+         (fixture_id, elapsed, elapsed_extra, team_id, player_id, player_name,
+          assist_id, assist_name, type, detail, comments)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [
+        fixtureId,
+        ev.time?.elapsed || 0,
+        ev.time?.extra   || null,
+        ev.team?.id      || null,
+        ev.player?.id    || null,
+        ev.player?.name  || null,
+        ev.assist?.id    || null,
+        ev.assist?.name  || null,
+        ev.type,
+        ev.detail,
+        ev.comments      || null,
+      ]
+    );
+  }
 
-  await fetch(`${sbUrl}/rest/v1/match_events?on_conflict=fixture_id,team_id,minute,event_type`, {
-    method: 'POST',
-    headers: {
-      'apikey':        sbKey,
-      'Authorization': `Bearer ${sbKey}`,
-      'Content-Type':  'application/json',
-      'Prefer':        'resolution=ignore-duplicates,return=minimal',
-    },
-    body: JSON.stringify(rows),
-  });
-
-  return rows.length;
+  return events.length;
 }
 
-async function collectOdds(fixtureId, key, sbUrl, sbKey) {
+async function collectOdds(fixtureId, key) {
   const r = await fetch(
     `https://v3.football.api-sports.io/odds?fixture=${fixtureId}&bookmaker=8`,
     { headers: { 'x-apisports-key': key } }
@@ -179,37 +178,39 @@ async function collectOdds(fixtureId, key, sbUrl, sbKey) {
   const oddsResponse = data.response?.[0] || null;
   if (!oddsResponse) return 0;
 
-  const rows = [];
+  let count = 0;
   for (const bookmaker of oddsResponse.bookmakers || []) {
     for (const bet of bookmaker.bets || []) {
       for (const value of bet.values || []) {
-        rows.push({
-          fixture_id:     fixtureId,
-          bookmaker_id:   bookmaker.id,
-          bookmaker_name: bookmaker.name,
-          market:         bet.name,
-          label:          value.value,
-          odd_value:      parseFloat(value.odd),
-          recorded_at:    new Date().toISOString(),
-        });
+        await query(
+          `INSERT INTO odds (fixture_id, bookmaker_id, bookmaker_name, bet_id, bet_name, value_name, value_odd)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (fixture_id, bookmaker_id, bet_id, value_name) DO UPDATE SET
+             value_odd=EXCLUDED.value_odd`,
+          [
+            fixtureId, bookmaker.id, bookmaker.name,
+            0,           // bet_id placeholder (not provided by this API endpoint)
+            bet.name,    // bet_name
+            value.value, // value_name
+            parseFloat(value.odd),
+          ]
+        );
+        count++;
       }
     }
   }
 
-  if (!rows.length) return 0;
+  return count;
+}
 
-  await fetch(`${sbUrl}/rest/v1/odds?on_conflict=fixture_id,bookmaker_id,market,label`, {
-    method: 'POST',
-    headers: {
-      'apikey':        sbKey,
-      'Authorization': `Bearer ${sbKey}`,
-      'Content-Type':  'application/json',
-      'Prefer':        'resolution=merge-duplicates,return=minimal',
-    },
-    body: JSON.stringify(rows),
-  });
-
-  return rows.length;
+async function logCron(fixtures, players, status, errorMsg) {
+  try {
+    await query(
+      `INSERT INTO cron_logs (job_name, fixtures_processed, players_upserted, status, error_msg)
+       VALUES ($1,$2,$3,$4,$5)`,
+      ['collect-finished', fixtures, players, status, errorMsg || null]
+    );
+  } catch (_) {}
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -217,12 +218,9 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  const key   = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
-  const sbUrl = process.env.SUPABASE_URL;
-  const sbKey = process.env.SUPABASE_KEY;
+  const key = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
-  if (!key || !sbUrl || !sbKey)
-    return res.status(500).json({ error: 'Environment vars lipsa' });
+  if (!key) return res.status(500).json({ error: 'Environment vars lipsa' });
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -236,18 +234,17 @@ export default async function handler(req, res) {
     const fixtures = fxData.response || [];
 
     if (!fixtures.length) {
-      await logCron(sbUrl, sbKey, 0, 0, 'ok', null);
+      await logCron(0, 0, 'ok', null);
       return res.status(200).json({ ok: true, message: 'No FT fixtures today', date: today });
     }
 
     // Filter out fixtures already in player_stats
     const fixtureIds = fixtures.map(f => f.fixture.id);
-    const existRes = await fetch(
-      `${sbUrl}/rest/v1/player_stats?fixture_id=in.(${fixtureIds.join(',')})&select=fixture_id`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const existRes = await query(
+      'SELECT DISTINCT fixture_id FROM player_stats WHERE fixture_id = ANY($1)',
+      [fixtureIds]
     );
-    const existRows = await existRes.json();
-    const existSet  = new Set(Array.isArray(existRows) ? existRows.map(r => r.fixture_id) : []);
+    const existSet = new Set(existRes.rows.map(r => r.fixture_id));
 
     const toProcess = fixtures.filter(f => !existSet.has(f.fixture.id));
 
@@ -261,29 +258,29 @@ export default async function handler(req, res) {
       const homeTeamId = fx.teams?.home?.id;
 
       try {
-        const count = await collectFixture(fixtureId, key, sbUrl, sbKey);
+        const count = await collectFixture(fixtureId, key);
         totalPlayers += count;
       } catch (e) { console.error('collectFixture error:', fixtureId, e.message); }
 
       try {
-        const count = await collectMatchStats(fixtureId, homeTeamId, key, sbUrl, sbKey);
+        const count = await collectMatchStats(fixtureId, homeTeamId, key);
         totalMatchStats += count;
       } catch (_) {}
 
       try {
-        const count = await collectMatchEvents(fixtureId, key, sbUrl, sbKey);
+        const count = await collectMatchEvents(fixtureId, key);
         totalEvents += count;
       } catch (_) {}
 
       try {
-        const count = await collectOdds(fixtureId, key, sbUrl, sbKey);
+        const count = await collectOdds(fixtureId, key);
         totalOdds += count;
       } catch (_) {}
 
       await sleep(200);
     }
 
-    await logCron(sbUrl, sbKey, toProcess.length, totalPlayers, 'ok', null);
+    await logCron(toProcess.length, totalPlayers, 'ok', null);
     return res.status(200).json({
       ok: true,
       date: today,
@@ -296,28 +293,7 @@ export default async function handler(req, res) {
       odds:        totalOdds,
     });
   } catch (e) {
-    await logCron(sbUrl, sbKey, 0, 0, 'error', e.message);
+    await logCron(0, 0, 'error', e.message);
     return res.status(500).json({ error: e.message });
   }
-}
-
-async function logCron(sbUrl, sbKey, fixtures, players, status, errorMsg) {
-  try {
-    await fetch(`${sbUrl}/rest/v1/cron_logs`, {
-      method: 'POST',
-      headers: {
-        'apikey':        sbKey,
-        'Authorization': `Bearer ${sbKey}`,
-        'Content-Type':  'application/json',
-        'Prefer':        'return=minimal',
-      },
-      body: JSON.stringify({
-        job_name:           'collect-finished',
-        fixtures_processed: fixtures,
-        players_upserted:   players,
-        status,
-        error_msg:          errorMsg,
-      }),
-    });
-  } catch (_) {}
 }

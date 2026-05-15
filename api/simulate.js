@@ -1,6 +1,7 @@
 import { runSimulation } from './monte-carlo.js';
 import { calcMomentum }  from './match-momentum.js';
 import { calcElo }       from './elo.js';
+import { query }         from './db.js';
 
 const cache = new Map();
 const CACHE_TTL = 120000; // 2 minutes
@@ -20,72 +21,57 @@ async function apiFetch(path, key) {
   return d.response || [];
 }
 
-// --- Supabase helpers ---
+// --- PostgreSQL helpers ---
 
-async function sfFormStats(teamId, sbUrl, sbKey) {
+async function sfFormStats(teamId) {
+  // form_stats schema uses aggregate columns (avg_scored_home, etc.), not per-match rows
+  // Return empty so the handler falls back to API-Football
+  return [];
+}
+
+async function sfH2HStats(homeId, awayId) {
   try {
-    const r = await fetch(
-      `${sbUrl}/rest/v1/form_stats?team_id=eq.${teamId}&order=match_date.desc&limit=10`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const r = await query(
+      'SELECT * FROM h2h WHERE (home_team_id = $1 AND away_team_id = $2) OR (home_team_id = $2 AND away_team_id = $1) ORDER BY match_date DESC LIMIT 10',
+      [homeId, awayId]
     );
-    const d = await r.json();
-    return Array.isArray(d) ? d : [];
+    return r.rows;
   } catch (_) { return []; }
 }
 
-async function sfH2HStats(homeId, awayId, sbUrl, sbKey) {
-  try {
-    const r = await fetch(
-      `${sbUrl}/rest/v1/h2h` +
-      `?or=(and(home_team_id.eq.${homeId},away_team_id.eq.${awayId}),` +
-      `and(home_team_id.eq.${awayId},away_team_id.eq.${homeId}))` +
-      `&order=match_date.desc&limit=10`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
-    );
-    const d = await r.json();
-    return Array.isArray(d) ? d : [];
-  } catch (_) { return []; }
-}
-
-async function sfStandingsData(leagueId, sbUrl, sbKey) {
+async function sfStandingsData(leagueId) {
   try {
     const season = new Date().getFullYear();
-    const r = await fetch(
-      `${sbUrl}/rest/v1/standings?league_id=eq.${leagueId}&season=eq.${season}&order=rank.asc`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const r = await query(
+      'SELECT * FROM standings WHERE league_id = $1 AND season = $2 ORDER BY rank ASC',
+      [leagueId, season]
     );
-    const d = await r.json();
-    return Array.isArray(d) ? d : [];
+    return r.rows;
   } catch (_) { return []; }
 }
 
-async function sfOddsData(fixtureId, sbUrl, sbKey) {
+async function sfOddsData(fixtureId) {
   try {
-    const r = await fetch(
-      `${sbUrl}/rest/v1/odds?fixture_id=eq.${fixtureId}&order=bookmaker_id.asc`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const r = await query(
+      'SELECT *, bet_name AS market, value_name AS label, value_odd AS odd_value FROM odds WHERE fixture_id = $1 ORDER BY bookmaker_id ASC',
+      [fixtureId]
     );
-    const d = await r.json();
-    return Array.isArray(d) ? d : [];
+    return r.rows;
   } catch (_) { return []; }
+}
+
+async function sfPlayerStats(teamId, label, dq) {
+  try {
+    const r = await query(
+      'SELECT * FROM player_stats WHERE team_id = $1 ORDER BY fixture_id DESC LIMIT 100',
+      [teamId]
+    );
+    dq[label] = r.rows.length ? '✅' : '⚠️';
+    return r.rows;
+  } catch (_) { dq[label] = '❌'; return []; }
 }
 
 // --- Data format transformers ---
-
-function formStatsToSimFormat(rows, teamId) {
-  return rows.map(row => ({
-    fixture:    { date: row.match_date },
-    teams:      {
-      home: { id: row.is_home ? teamId : 0 },
-      away: { id: row.is_home ? 0 : teamId },
-    },
-    goals:      {
-      home: row.is_home ? (row.goals_scored ?? 0) : (row.goals_conceded ?? 0),
-      away: row.is_home ? (row.goals_conceded ?? 0) : (row.goals_scored ?? 0),
-    },
-    statistics: [],
-  }));
-}
 
 function h2hToSimFormat(rows) {
   return rows.map(row => ({
@@ -103,17 +89,17 @@ function sbStandingsToApiFormat(rows) {
         team:      { id: row.team_id, name: row.team_name },
         rank:      row.rank,
         points:    row.points,
-        goalsDiff: row.goal_diff,
+        goalsDiff: row.goals_diff,
         form:      row.form,
         all: {
           played: row.played,
-          win:    row.won,
-          draw:   row.drawn,
-          lose:   row.lost,
+          win:    row.win,
+          draw:   row.draw,
+          lose:   row.lose,
           goals:  { for: row.goals_for, against: row.goals_against },
         },
-        home: { played: row.home_played },
-        away: { played: row.away_played },
+        home: { played: null },
+        away: { played: null },
       }))]
     }
   }];
@@ -144,9 +130,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const key   = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
-  const sbUrl = process.env.SUPABASE_URL;
-  const sbKey = process.env.SUPABASE_KEY;
+  const key = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
   if (!key) return res.status(500).json({ error: 'API_FOOTBALL_KEY neconfigurat' });
 
   const q = req.method === 'POST' ? (req.body || {}) : req.query;
@@ -172,20 +156,9 @@ export default async function handler(req, res) {
     } catch { dq[label] = '❌'; return []; }
   }
 
-  async function sf(query, label) {
-    if (!sbUrl || !sbKey) { dq[label] = '❌'; return []; }
-    try {
-      const r = await fetch(`${sbUrl}/rest/v1/player_stats?${query}&limit=100`,
-        { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } });
-      const d = await r.json();
-      dq[label] = Array.isArray(d) && d.length ? '✅' : '⚠️';
-      return Array.isArray(d) ? d : [];
-    } catch { dq[label] = '❌'; return []; }
-  }
-
   const season = new Date().getFullYear();
 
-  // ── Batch 1: fixture + lineups (always API-Football) + all Supabase sources in parallel ──
+  // ── Batch 1: fixture + lineups (always API-Football) + all DB sources in parallel ──
   const [
     fixRes, lineupsRes,
     sbHomeFx, sbAwayFx, sbH2HData, sbStdData, sbOddsData,
@@ -193,13 +166,13 @@ export default async function handler(req, res) {
   ] = await Promise.all([
     af(`/fixtures?id=${fid}`,              'fixture'),
     af(`/fixtures/lineups?fixture=${fid}`, 'lineups'),
-    sbUrl && sbKey ? sfFormStats(hid, sbUrl, sbKey)            : Promise.resolve([]),
-    sbUrl && sbKey ? sfFormStats(aid, sbUrl, sbKey)            : Promise.resolve([]),
-    sbUrl && sbKey ? sfH2HStats(hid, aid, sbUrl, sbKey)        : Promise.resolve([]),
-    lid && sbUrl && sbKey ? sfStandingsData(lid, sbUrl, sbKey) : Promise.resolve([]),
-    sbUrl && sbKey ? sfOddsData(fid, sbUrl, sbKey)             : Promise.resolve([]),
-    sf(`team_id=eq.${hid}&order=fixture_id.desc`, 'homePlayers'),
-    sf(`team_id=eq.${aid}&order=fixture_id.desc`, 'awayPlayers'),
+    sfFormStats(hid),
+    sfFormStats(aid),
+    sfH2HStats(hid, aid),
+    lid ? sfStandingsData(lid) : Promise.resolve([]),
+    sfOddsData(fid),
+    sfPlayerStats(hid, 'homePlayers', dq),
+    sfPlayerStats(aid, 'awayPlayers', dq),
   ]);
 
   dq['homeForm']  = sbHomeFx.length   ? '✅' : '⚠️';
@@ -208,7 +181,7 @@ export default async function handler(req, res) {
   dq['standings'] = sbStdData.length  ? '✅' : '⚠️';
   dq['odds']      = sbOddsData.length ? '✅' : '⚠️';
 
-  // ── Batch 2: API-Football fallbacks only where Supabase had insufficient data ──
+  // ── Batch 2: API-Football fallbacks only where DB had insufficient data ──
   const needHomeFx = sbHomeFx.length  < 3;
   const needAwayFx = sbAwayFx.length  < 3;
   const needH2H    = sbH2HData.length < 3;
@@ -224,8 +197,8 @@ export default async function handler(req, res) {
   ]);
 
   // Resolve final datasets
-  const homeFx     = needHomeFx ? (apiFbHomeFx || []) : formStatsToSimFormat(sbHomeFx, hid);
-  const awayFx     = needAwayFx ? (apiFbAwayFx || []) : formStatsToSimFormat(sbAwayFx, aid);
+  const homeFx     = needHomeFx ? (apiFbHomeFx || []) : [];
+  const awayFx     = needAwayFx ? (apiFbAwayFx || []) : [];
   const h2hFx      = needH2H    ? (apiFbH2H    || []) : h2hToSimFormat(sbH2HData);
   const standingsRes = needStd
     ? (apiFbStd || [])
@@ -301,7 +274,7 @@ export default async function handler(req, res) {
   const homeForm = calcForm(homeFx, hid);
   const awayForm = calcForm(awayFx, aid);
 
-  // ── Squad strength from Supabase ──────────────────────────────
+  // ── Squad strength from DB ────────────────────────────────────
   function calcSquad(players) {
     if (!players.length) return null;
     const ratings    = players.map(p => p.rating).filter(r => r != null);

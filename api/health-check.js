@@ -1,3 +1,5 @@
+import { query } from './db.js';
+
 const TIMEOUT_MS = 8000;
 
 function withTimeout(promise) {
@@ -24,34 +26,14 @@ async function safeRun(label, fn) {
   }
 }
 
-// Count rows using Supabase Content-Range header
-async function sbCount(sbUrl, sbKey, table) {
-  const r = await fetch(`${sbUrl}/rest/v1/${table}?select=*`, {
-    headers: {
-      apikey: sbKey,
-      Authorization: `Bearer ${sbKey}`,
-      Prefer: 'count=exact',
-      Range: '0-0',
-    },
-  });
-  const cr = r.headers.get('content-range') || '';
-  const parts = cr.split('/');
-  return parseInt(parts[parts.length - 1] || '0') || 0;
+async function pgCount(table) {
+  const r = await query(`SELECT COUNT(*) AS count FROM ${table}`);
+  return parseInt(r.rows[0].count) || 0;
 }
 
-// Count rows with an extra filter query string
-async function sbCountFiltered(sbUrl, sbKey, table, filter) {
-  const r = await fetch(`${sbUrl}/rest/v1/${table}?${filter}`, {
-    headers: {
-      apikey: sbKey,
-      Authorization: `Bearer ${sbKey}`,
-      Prefer: 'count=exact',
-      Range: '0-0',
-    },
-  });
-  const cr = r.headers.get('content-range') || '';
-  const parts = cr.split('/');
-  return parseInt(parts[parts.length - 1] || '0') || 0;
+async function pgCountWhere(table, whereClause, params) {
+  const r = await query(`SELECT COUNT(*) AS count FROM ${table} WHERE ${whereClause}`, params);
+  return parseInt(r.rows[0].count) || 0;
 }
 
 // Same formula as enrich.js getTeamStrengths → calcStr
@@ -77,31 +59,25 @@ function calcStr(rows) {
   );
 }
 
-// ── TEST 1: Supabase conectat ────────────────────────────────────────────────
-async function t1(sbUrl, sbKey) {
-  if (!sbUrl || !sbKey) throw new Error('SUPABASE_URL / SUPABASE_KEY lipsă');
-  const count = await sbCount(sbUrl, sbKey, 'player_stats');
+// ── TEST 1: PostgreSQL conectat ──────────────────────────────────────────────
+async function t1() {
+  const count = await pgCount('player_stats');
   return {
     status: '✅ PASS',
-    message: 'Supabase conectat, tabel player_stats accesibil',
+    message: 'PostgreSQL conectat, tabel player_stats accesibil',
     data: { count },
   };
 }
 
 // ── TEST 2: player_stats are date ────────────────────────────────────────────
-async function t2(sbUrl, sbKey) {
-  const hdr = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
-
-  const [totalCount, sampleRes] = await Promise.all([
-    sbCount(sbUrl, sbKey, 'player_stats'),
-    fetch(
-      `${sbUrl}/rest/v1/player_stats?select=fixture_id,team_id&order=player_id.desc&limit=2000`,
-      { headers: hdr }
-    ),
+async function t2() {
+  const [totalRes, sampleRes] = await Promise.all([
+    query('SELECT COUNT(*) AS count FROM player_stats'),
+    query('SELECT fixture_id, team_id FROM player_stats ORDER BY player_id DESC LIMIT 2000'),
   ]);
 
-  const sampleRows = await sampleRes.json();
-  const arr = Array.isArray(sampleRows) ? sampleRows : [];
+  const totalCount = parseInt(totalRes.rows[0].count) || 0;
+  const arr = sampleRes.rows;
   const totalFixtures = new Set(arr.map(r => r.fixture_id)).size;
   const totalTeams    = new Set(arr.map(r => r.team_id)).size;
 
@@ -121,13 +97,9 @@ async function t2(sbUrl, sbKey) {
 }
 
 // ── TEST 3: backfill_progress status ────────────────────────────────────────
-async function t3(sbUrl, sbKey) {
-  const r = await fetch(
-    `${sbUrl}/rest/v1/backfill_progress?select=status`,
-    { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
-  );
-  const rows = await r.json();
-  const arr = Array.isArray(rows) ? rows : [];
+async function t3() {
+  const r = await query('SELECT status FROM backfill_progress');
+  const arr = r.rows;
 
   const done        = arr.filter(x => x.status === 'done').length;
   const pending     = arr.filter(x => x.status === 'pending').length;
@@ -153,15 +125,10 @@ async function t3(sbUrl, sbKey) {
 }
 
 // ── TEST 4: team strength funcționează ───────────────────────────────────────
-async function t4(sbUrl, sbKey) {
-  const hdr = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
-
-  const teamRes = await fetch(
-    `${sbUrl}/rest/v1/player_stats?select=team_id,team_name&limit=1`,
-    { headers: hdr }
-  );
-  const teamRows = await teamRes.json();
-  if (!Array.isArray(teamRows) || !teamRows.length) {
+async function t4() {
+  const teamRes = await query('SELECT team_id, team_name FROM player_stats LIMIT 1');
+  const teamRows = teamRes.rows;
+  if (!teamRows.length) {
     return {
       status: '❌ FAIL',
       message: 'Nu există date în player_stats — rulează Backfill mai întâi',
@@ -170,13 +137,11 @@ async function t4(sbUrl, sbKey) {
   }
 
   const { team_id, team_name } = teamRows[0];
-
-  const dataRes = await fetch(
-    `${sbUrl}/rest/v1/player_stats?team_id=eq.${team_id}&select=rating,goals,pass_accuracy,shots_on_target&order=player_id.desc&limit=110`,
-    { headers: hdr }
+  const dataRes = await query(
+    'SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY player_id DESC LIMIT 110',
+    [team_id]
   );
-  const playerRows = await dataRes.json();
-  const strength = calcStr(Array.isArray(playerRows) ? playerRows : []);
+  const strength = calcStr(dataRes.rows);
 
   if (strength === null) {
     return {
@@ -194,40 +159,27 @@ async function t4(sbUrl, sbKey) {
 }
 
 // ── TEST 5: Stratul 7 se activează în enrich ────────────────────────────────
-async function t5(sbUrl, sbKey) {
-  const hdr = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
+async function t5() {
+  const listRes = await query('SELECT DISTINCT team_id, team_name FROM player_stats LIMIT 2');
+  const arr = listRes.rows;
 
-  const listRes = await fetch(
-    `${sbUrl}/rest/v1/player_stats?select=team_id,team_name&limit=500`,
-    { headers: hdr }
-  );
-  const listRows = await listRes.json();
-  const arr = Array.isArray(listRows) ? listRows : [];
-
-  const teamMap = new Map();
-  for (const r of arr) {
-    if (!teamMap.has(r.team_id)) teamMap.set(r.team_id, r.team_name);
-    if (teamMap.size >= 2) break;
-  }
-
-  if (teamMap.size < 2) {
+  if (arr.length < 2) {
     return {
       status: '❌ FAIL',
-      message: `Echipe insuficiente (${teamMap.size}/2) — rulează Backfill`,
-      data: { hasPlayerData: false, teams_found: teamMap.size },
+      message: `Echipe insuficiente (${arr.length}/2) — rulează Backfill`,
+      data: { hasPlayerData: false, teams_found: arr.length },
     };
   }
 
-  const [[homeId, homeName], [awayId, awayName]] = [...teamMap.entries()];
+  const [{ team_id: homeId, team_name: homeName }, { team_id: awayId, team_name: awayName }] = arr;
 
   const [homeRes, awayRes] = await Promise.all([
-    fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${homeId}&select=rating,goals,pass_accuracy,shots_on_target&order=player_id.desc&limit=110`, { headers: hdr }),
-    fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${awayId}&select=rating,goals,pass_accuracy,shots_on_target&order=player_id.desc&limit=110`, { headers: hdr }),
+    query('SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY player_id DESC LIMIT 110', [homeId]),
+    query('SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY player_id DESC LIMIT 110', [awayId]),
   ]);
-  const [homeRows, awayRows] = await Promise.all([homeRes.json(), awayRes.json()]);
 
-  const homeStrength = calcStr(Array.isArray(homeRows) ? homeRows : []);
-  const awayStrength = calcStr(Array.isArray(awayRows) ? awayRows : []);
+  const homeStrength = calcStr(homeRes.rows);
+  const awayStrength = calcStr(awayRes.rows);
   const hasPlayerData = homeStrength !== null || awayStrength !== null;
 
   if (!hasPlayerData) {
@@ -278,13 +230,9 @@ function t6() {
 }
 
 // ── TEST 7: cron_logs există ─────────────────────────────────────────────────
-async function t7(sbUrl, sbKey) {
-  const r = await fetch(
-    `${sbUrl}/rest/v1/cron_logs?select=*&order=ran_at.desc&limit=5`,
-    { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
-  );
-  const rows = await r.json();
-  const arr = Array.isArray(rows) ? rows : [];
+async function t7() {
+  const r = await query('SELECT * FROM cron_logs ORDER BY ran_at DESC LIMIT 5');
+  const arr = r.rows;
 
   if (!arr.length) {
     return {
@@ -331,7 +279,18 @@ async function t8(key) {
   const account  = data.response?.account;
   const requests = data.response?.requests;
 
-  if (!account) throw new Error('Răspuns invalid de la API-Football');
+  if (!account) {
+    const errors = data.errors;
+    if (errors && (JSON.stringify(errors).includes('rate') || JSON.stringify(errors).includes('limit') || JSON.stringify(errors).includes('Too many'))) {
+      return {
+        status: '⚠️ WARNING',
+        message: `API-Football rate limit temporar — retry in 1 min`,
+        data: { errors },
+      };
+    }
+    const errMsg = errors ? JSON.stringify(errors) : `HTTP ${r.status}`;
+    throw new Error(`API-Football: ${errMsg}`);
+  }
 
   const today    = requests?.current   ?? 0;
   const limitDay = requests?.limit_day ?? 100;
@@ -344,138 +303,78 @@ async function t8(key) {
 }
 
 // ── TEST 9: fixtures table ───────────────────────────────────────────────────
-async function t9(sbUrl, sbKey) {
-  const count = await sbCount(sbUrl, sbKey, 'fixtures');
+async function t9() {
+  const count = await pgCount('fixtures');
   if (count === 0) {
-    return {
-      status: '⚠️ WARNING',
-      message: 'fixtures gol — collect-daily nu a rulat încă',
-      data: { count: 0 },
-    };
+    return { status: '⚠️ WARNING', message: 'fixtures gol — collect-daily nu a rulat încă', data: { count: 0 } };
   }
-  return {
-    status: '✅ PASS',
-    message: `${count.toLocaleString()} meciuri stocate în fixtures`,
-    data: { count },
-  };
+  return { status: '✅ PASS', message: `${count.toLocaleString()} meciuri stocate în fixtures`, data: { count } };
 }
 
 // ── TEST 10: standings table ─────────────────────────────────────────────────
-async function t10(sbUrl, sbKey) {
-  const count = await sbCount(sbUrl, sbKey, 'standings');
+async function t10() {
+  const count = await pgCount('standings');
   if (count === 0) {
-    return {
-      status: '⚠️ WARNING',
-      message: 'standings gol — collect-daily nu a rulat încă',
-      data: { count: 0 },
-    };
+    return { status: '⚠️ WARNING', message: 'standings gol — collect-daily nu a rulat încă', data: { count: 0 } };
   }
-  return {
-    status: '✅ PASS',
-    message: `${count.toLocaleString()} clasamente stocate în standings`,
-    data: { count },
-  };
+  return { status: '✅ PASS', message: `${count.toLocaleString()} clasamente stocate în standings`, data: { count } };
 }
 
 // ── TEST 11: h2h table ───────────────────────────────────────────────────────
-async function t11(sbUrl, sbKey) {
-  const count = await sbCount(sbUrl, sbKey, 'h2h');
+async function t11() {
+  const count = await pgCount('h2h');
   if (count === 0) {
-    return {
-      status: '⚠️ WARNING',
-      message: 'h2h gol — scan.js nu a salvat încă date H2H',
-      data: { count: 0 },
-    };
+    return { status: '⚠️ WARNING', message: 'h2h gol — scan.js nu a salvat încă date H2H', data: { count: 0 } };
   }
-  return {
-    status: '✅ PASS',
-    message: `${count.toLocaleString()} meciuri H2H stocate`,
-    data: { count },
-  };
+  return { status: '✅ PASS', message: `${count.toLocaleString()} meciuri H2H stocate`, data: { count } };
 }
 
 // ── TEST 12: form_stats table ────────────────────────────────────────────────
-async function t12(sbUrl, sbKey) {
-  const count = await sbCount(sbUrl, sbKey, 'form_stats');
+async function t12() {
+  const count = await pgCount('form_stats');
   if (count === 0) {
-    return {
-      status: '⚠️ WARNING',
-      message: 'form_stats gol — scan.js nu a salvat încă date de formă',
-      data: { count: 0 },
-    };
+    return { status: '⚠️ WARNING', message: 'form_stats gol — scan.js nu a salvat încă date de formă', data: { count: 0 } };
   }
-  return {
-    status: '✅ PASS',
-    message: `${count.toLocaleString()} înregistrări în form_stats`,
-    data: { count },
-  };
+  return { status: '✅ PASS', message: `${count.toLocaleString()} înregistrări în form_stats`, data: { count } };
 }
 
 // ── TEST 13: match_stats table ───────────────────────────────────────────────
-async function t13(sbUrl, sbKey) {
-  const count = await sbCount(sbUrl, sbKey, 'match_stats');
+async function t13() {
+  const count = await pgCount('match_stats');
   if (count === 0) {
-    return {
-      status: '⚠️ WARNING',
-      message: 'match_stats gol — collect-finished nu a rulat încă',
-      data: { count: 0 },
-    };
+    return { status: '⚠️ WARNING', message: 'match_stats gol — collect-finished nu a rulat încă', data: { count: 0 } };
   }
-  return {
-    status: '✅ PASS',
-    message: `${count.toLocaleString()} înregistrări în match_stats`,
-    data: { count },
-  };
+  return { status: '✅ PASS', message: `${count.toLocaleString()} înregistrări în match_stats`, data: { count } };
 }
 
 // ── TEST 14: match_events table ──────────────────────────────────────────────
-async function t14(sbUrl, sbKey) {
-  const count = await sbCount(sbUrl, sbKey, 'match_events');
+async function t14() {
+  const count = await pgCount('match_events');
   if (count === 0) {
-    return {
-      status: '⚠️ WARNING',
-      message: 'match_events gol — collect-finished nu a rulat încă',
-      data: { count: 0 },
-    };
+    return { status: '⚠️ WARNING', message: 'match_events gol — collect-finished nu a rulat încă', data: { count: 0 } };
   }
-  return {
-    status: '✅ PASS',
-    message: `${count.toLocaleString()} evenimente stocate în match_events`,
-    data: { count },
-  };
+  return { status: '✅ PASS', message: `${count.toLocaleString()} evenimente stocate în match_events`, data: { count } };
 }
 
 // ── TEST 15: odds table ──────────────────────────────────────────────────────
-async function t15(sbUrl, sbKey) {
-  const count = await sbCount(sbUrl, sbKey, 'odds');
+async function t15() {
+  const count = await pgCount('odds');
   if (count === 0) {
-    return {
-      status: '⚠️ WARNING',
-      message: 'odds gol — collect-finished nu a salvat cote încă',
-      data: { count: 0 },
-    };
+    return { status: '⚠️ WARNING', message: 'odds gol — collect-finished nu a salvat cote încă', data: { count: 0 } };
   }
-  return {
-    status: '✅ PASS',
-    message: `${count.toLocaleString()} cote stocate în odds`,
-    data: { count },
-  };
+  return { status: '✅ PASS', message: `${count.toLocaleString()} cote stocate în odds`, data: { count } };
 }
 
 // ── TEST 16: alerts table (total + azi) ──────────────────────────────────────
-async function t16(sbUrl, sbKey) {
+async function t16() {
   const today = new Date().toISOString().split('T')[0];
   const [countTotal, countToday] = await Promise.all([
-    sbCount(sbUrl, sbKey, 'alerts'),
-    sbCountFiltered(sbUrl, sbKey, 'alerts', `select=*&created_at=gte.${today}`),
+    pgCount('alerts'),
+    pgCountWhere('alerts', 'sent_at >= $1', [today]),
   ]);
 
   if (countTotal === 0) {
-    return {
-      status: '⚠️ WARNING',
-      message: 'alerts gol — nicio alertă NGP generată încă',
-      data: { count_total: 0, count_today: 0 },
-    };
+    return { status: '⚠️ WARNING', message: 'alerts gol — nicio alertă NGP generată încă', data: { count_total: 0, count_today: 0 } };
   }
   return {
     status: '✅ PASS',
@@ -485,42 +384,23 @@ async function t16(sbUrl, sbKey) {
 }
 
 // ── TEST 17: live_stats (ultimele 24h) ───────────────────────────────────────
-async function t17(sbUrl, sbKey) {
+async function t17() {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const count24h = await sbCountFiltered(
-    sbUrl, sbKey, 'live_stats',
-    `select=*&recorded_at=gte.${since}`
-  );
+  const count24h = await pgCountWhere('live_stats', 'recorded_at >= $1', [since]);
 
   if (count24h === 0) {
-    return {
-      status: '⚠️ WARNING',
-      message: 'live_stats gol în ultimele 24h — niciun meci live înregistrat',
-      data: { count_last_24h: 0 },
-    };
+    return { status: '⚠️ WARNING', message: 'live_stats gol în ultimele 24h — niciun meci live înregistrat', data: { count_last_24h: 0 } };
   }
-  return {
-    status: '✅ PASS',
-    message: `${count24h.toLocaleString()} snapshot-uri live în ultimele 24h`,
-    data: { count_last_24h: count24h },
-  };
+  return { status: '✅ PASS', message: `${count24h.toLocaleString()} snapshot-uri live în ultimele 24h`, data: { count_last_24h: count24h } };
 }
 
 // ── TEST 18: collect-daily cron activ ────────────────────────────────────────
-async function t18(sbUrl, sbKey) {
-  const r = await fetch(
-    `${sbUrl}/rest/v1/cron_logs?job_name=eq.collect-daily&select=*&order=ran_at.desc&limit=1`,
-    { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
-  );
-  const rows = await r.json();
-  const arr  = Array.isArray(rows) ? rows : [];
+async function t18() {
+  const r = await query("SELECT * FROM cron_logs WHERE job_name = 'collect-daily' ORDER BY ran_at DESC LIMIT 1");
+  const arr = r.rows;
 
   if (!arr.length) {
-    return {
-      status: '⚠️ WARNING',
-      message: 'collect-daily nu a rulat niciodată — verifică cron-ul de la 06:00',
-      data: { last_run: null },
-    };
+    return { status: '⚠️ WARNING', message: 'collect-daily nu a rulat niciodată — verifică cron-ul', data: { last_run: null } };
   }
 
   const last    = arr[0];
@@ -532,7 +412,7 @@ async function t18(sbUrl, sbKey) {
     : `acum ${Math.round(minsAgo / 60)} ore`;
 
   return {
-    status: last.status === 'success' ? '✅ PASS' : '⚠️ WARNING',
+    status: last.status === 'success' || last.status === 'ok' ? '✅ PASS' : '⚠️ WARNING',
     message: `collect-daily: ${ageStr} (${last.status})`,
     data: {
       last_run:           last.ran_at,
@@ -544,17 +424,9 @@ async function t18(sbUrl, sbKey) {
 }
 
 // ── WIN RATE din pre_match_snapshots ─────────────────────────────────────────
-async function tWinRate(sbUrl, sbKey) {
-  if (!sbUrl || !sbKey) return { correct: 0, total: 0, incorrect: 0, pending: 0, percentage: 0 };
-  const [wins, losses, pushes, pending] = await Promise.all([
-    sbCountFiltered(sbUrl, sbKey, 'pre_match_snapshots', 'select=*&outcome=eq.WIN'),
-    sbCountFiltered(sbUrl, sbKey, 'pre_match_snapshots', 'select=*&outcome=eq.LOSS'),
-    sbCountFiltered(sbUrl, sbKey, 'pre_match_snapshots', 'select=*&outcome=eq.PUSH'),
-    sbCountFiltered(sbUrl, sbKey, 'pre_match_snapshots', 'select=*&outcome=eq.PENDING'),
-  ]);
-  const total = wins + losses + pushes;
-  const percentage = total > 0 ? Math.round(wins / total * 100) : 0;
-  return { correct: wins, total, incorrect: losses + pushes, pending, percentage };
+async function tWinRate() {
+  // pre_match_snapshots schema does not have outcome column
+  return { correct: 0, total: 0, incorrect: 0, pending: 0, percentage: 0 };
 }
 
 // ── HANDLER ──────────────────────────────────────────────────────────────────
@@ -562,8 +434,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const sbUrl  = process.env.SUPABASE_URL;
-  const sbKey  = process.env.SUPABASE_KEY;
   const apiKey = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
   // ── LEAGUE SEARCH action ─────────────────────────────────────────────────
@@ -591,29 +461,29 @@ export default async function handler(req, res) {
     test9, test10, test11, test12, test13, test14, test15, test16, test17, test18,
     winRateData,
   ] = await Promise.all([
-    safeRun('Supabase Connection', () => t1(sbUrl, sbKey)),
-    safeRun('Player Stats Data',   () => t2(sbUrl, sbKey)),
-    safeRun('Backfill Progress',   () => t3(sbUrl, sbKey)),
-    safeRun('Team Strength',       () => t4(sbUrl, sbKey)),
-    safeRun('Layer 7 Active',      () => t5(sbUrl, sbKey)),
-    safeRun('Cron Logs',           () => t7(sbUrl, sbKey)),
-    safeRun('API Football',        () => t8(apiKey)),
-    safeRun('Fixtures Table',      () => t9(sbUrl, sbKey)),
-    safeRun('Standings Table',     () => t10(sbUrl, sbKey)),
-    safeRun('H2H Table',           () => t11(sbUrl, sbKey)),
-    safeRun('Form Stats Table',    () => t12(sbUrl, sbKey)),
-    safeRun('Match Stats Table',   () => t13(sbUrl, sbKey)),
-    safeRun('Match Events Table',  () => t14(sbUrl, sbKey)),
-    safeRun('Odds Table',          () => t15(sbUrl, sbKey)),
-    safeRun('Alerts Table',        () => t16(sbUrl, sbKey)),
-    safeRun('Live Stats (24h)',     () => t17(sbUrl, sbKey)),
-    safeRun('Collect Daily Cron',  () => t18(sbUrl, sbKey)),
-    tWinRate(sbUrl, sbKey).catch(() => ({ correct: 0, total: 0, incorrect: 0, pending: 0, percentage: 0 })),
+    safeRun('PostgreSQL Connection', () => t1()),
+    safeRun('Player Stats Data',     () => t2()),
+    safeRun('Backfill Progress',     () => t3()),
+    safeRun('Team Strength',         () => t4()),
+    safeRun('Layer 7 Active',        () => t5()),
+    safeRun('Cron Logs',             () => t7()),
+    safeRun('API Football',          () => t8(apiKey)),
+    safeRun('Fixtures Table',        () => t9()),
+    safeRun('Standings Table',       () => t10()),
+    safeRun('H2H Table',             () => t11()),
+    safeRun('Form Stats Table',      () => t12()),
+    safeRun('Match Stats Table',     () => t13()),
+    safeRun('Match Events Table',    () => t14()),
+    safeRun('Odds Table',            () => t15()),
+    safeRun('Alerts Table',          () => t16()),
+    safeRun('Live Stats (24h)',       () => t17()),
+    safeRun('Collect Daily Cron',    () => t18()),
+    tWinRate().catch(() => ({ correct: 0, total: 0, incorrect: 0, pending: 0, percentage: 0 })),
   ]);
   const test6 = t6(); // synchronous
 
   const tests = {
-    supabase_connection: test1,
+    postgres_connection: test1,
     player_stats_data:   test2,
     backfill_progress:   test3,
     team_strength:       test4,
