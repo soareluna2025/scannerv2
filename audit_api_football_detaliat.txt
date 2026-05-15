@@ -1,0 +1,794 @@
+================================================================================
+  AUDIT ULTRA-DETALIAT — API-FOOTBALL (v3.football.api-sports.io)
+  AlohaScan — Data: 2026-05-15
+  Fișiere analizate: 10 | Endpoint-uri unice: 8 | Total apeluri în cod: 45
+================================================================================
+
+Bookmaker implicit folosit în tot proiectul: ID 8 (Bet365)
+Header autentificare: x-apisports-key
+Format răspuns: { response: [...], errors: {...}, results: N, paging: {...} }
+
+================================================================================
+SECȚIUNEA 1 — CATALOG COMPLET APELURI PE FIȘIER ȘI LINIE
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+A. api/enrich.js — 5 apeluri (condiționate de fallback Supabase)
+────────────────────────────────────────────────────────────────────────────────
+Condiție generală: apelurile se fac DOAR dacă Supabase are < 3 înregistrări
+(needHForm / needAForm / needH2H / needOdds).
+
+  [E1] Linia 353
+  URL: https://v3.football.api-sports.io/fixtures?team={h}&last=20&status=FT
+  Parametri: team=ID echipă gazdă, last=20, status=FT
+  Câmpuri FOLOSITE din răspuns:
+    → response[].teams.home.id          (identificare sens meci)
+    → response[].goals.home             (goluri marcate/primite)
+    → response[].goals.away             (goluri marcate/primite)
+    → (slice la primele 10)
+
+  [E2] Linia 354
+  URL: https://v3.football.api-sports.io/fixtures?team={a}&last=20&status=FT
+  Parametri: team=ID echipă oaspete, last=20, status=FT
+  Câmpuri FOLOSITE: identice cu E1 dar pentru echipa away.
+
+  [E3] Linia 355
+  URL: https://v3.football.api-sports.io/fixtures/headtohead?h2h={h}-{a}&last=10
+  Parametri: h2h=homeId-awayId, last=10
+  Câmpuri FOLOSITE:
+    → response[].goals.home
+    → response[].goals.away
+    → response[].length (număr meciuri H2H — pentru confidence LOW/MED/HIGH)
+
+  [E4] Linia 356
+  URL: https://v3.football.api-sports.io/odds?fixture={fid}&bookmaker=8
+  Parametri: fixture=ID meci, bookmaker=8
+  Câmpuri FOLOSITE:
+    → response[0].bookmakers[0].bets[name="Match Winner"].values[Home/Draw/Away].odd
+    → response[0].bookmakers[0].bets[name="Goals Over/Under"].values[Over 1.5].odd
+    → response[0].bookmakers[0].bets[name="Both Teams Score"].values[Yes].odd
+
+  [E5] Liniile 382–390
+  URL: https://v3.football.api-sports.io/odds?league={lgid}&season={YYYY}&bookmaker=8
+  Parametri: league=ID ligă, season=an curent, bookmaker=8
+  Condiție: fallback suplimentar când odds per fixture sunt goale ȘI lgid este prezent
+  Câmpuri FOLOSITE:
+    → response[].fixture.id             (pentru a găsi fixture-ul dorit)
+    → response[].bookmakers[...] (identic cu E4)
+
+────────────────────────────────────────────────────────────────────────────────
+B. api/football.js — 4 apeluri
+────────────────────────────────────────────────────────────────────────────────
+
+  [F1] Linia 128
+  URL: https://v3.football.api-sports.io/fixtures?live=all
+  Parametri: live=all
+  Câmpuri FOLOSITE:
+    → response[].fixture.id
+    → response[].fixture.status.short   (filtru: 1H/HT/2H/ET/BT/P/SUSP/INT/LIVE)
+    → response[].league.id              (filtru whitelist ALLOWED_LEAGUE_IDS)
+    → response[].league.name            (filtru feminin + lower div)
+    → response[].league.country
+    → response[].league.flag
+    → response[].teams.home.id
+    → response[].teams.home.name
+    → response[].teams.away.id
+    → response[].teams.away.name
+    → response[].goals.home
+    → response[].goals.away
+    → response[].statistics[].statistics[].type  (expected_goals, Shots on Goal,
+                                                   Dangerous Attacks, Corner Kicks,
+                                                   Ball Possession)
+    → response[].statistics[].statistics[].value
+
+  [F2] Linia 12 (în funcția fetchH2H, apelată din enrichOne → max 5 meciuri)
+  URL: https://v3.football.api-sports.io/fixtures?team={homeId}&last=10&status=FT
+  Câmpuri FOLOSITE:
+    → response[].teams.home.id          (filtru: doar meciuri acasă)
+    → response[].goals.home
+    → response[].goals.away
+
+  [F3] Linia 13 (în funcția fetchH2H)
+  URL: https://v3.football.api-sports.io/fixtures?team={awayId}&last=10&status=FT
+  Câmpuri FOLOSITE:
+    → response[].teams.away.id          (filtru: doar meciuri în deplasare)
+    → response[].goals.home
+    → response[].goals.away
+
+  [F4] Linia 14 (în funcția fetchH2H)
+  URL: https://v3.football.api-sports.io/fixtures/headtohead?h2h={homeId}-{awayId}&last=10
+  Câmpuri FOLOSITE:
+    → response[].goals.home
+    → response[].goals.away
+
+────────────────────────────────────────────────────────────────────────────────
+C. api/match.js — 9 apeluri (toate în paralel la accesarea unui meci)
+────────────────────────────────────────────────────────────────────────────────
+
+  [M1] Linia 78
+  URL: https://v3.football.api-sports.io/fixtures?id={id}
+  Câmpuri FOLOSITE:
+    → response[0].fixture.id, .date, .status
+    → response[0].league.id, .name
+    → response[0].teams.home.{id,name}, .away.{id,name}
+    → response[0].goals.home, .away
+
+  [M2] Linia 79
+  URL: https://v3.football.api-sports.io/fixtures/lineups?fixture={id}
+  Câmpuri FOLOSITE:
+    → response[]  (trimis INTEGRAL la frontend, fără procesare în backend)
+
+  [M3] Linia 80
+  URL: https://v3.football.api-sports.io/fixtures/players?fixture={id}
+  Câmpuri FOLOSITE:
+    → response[].team.id, .team.name
+    → response[].players[].player.id, .name, .photo
+    → response[].players[].statistics[0].games.rating
+    → response[].players[].statistics[0].games.minutes
+    → response[].players[].statistics[0].games.position
+    → response[].players[].statistics[0].goals.total
+    → response[].players[].statistics[0].goals.assists
+    → response[].players[].statistics[0].passes.accuracy
+    → response[].players[].statistics[0].dribbles.success
+    → response[].players[].statistics[0].cards.yellow
+    → response[].players[].statistics[0].cards.red
+
+  [M4] Linia 81
+  URL: https://v3.football.api-sports.io/fixtures/events?fixture={id}
+  Câmpuri FOLOSITE:
+    → response[]  (trimis INTEGRAL la frontend)
+
+  [M5] Linia 82
+  URL: https://v3.football.api-sports.io/fixtures?team={h}&last=20&status=FT
+  Câmpuri FOLOSITE:
+    → response[].teams.home.id          (filtru)
+    → response[].goals.home, .away
+    → response[].fixture.date
+
+  [M6] Linia 83
+  URL: https://v3.football.api-sports.io/fixtures?team={a}&last=20&status=FT
+  Câmpuri FOLOSITE: identice cu M5 pentru echipa away.
+
+  [M7] Linia 84
+  URL: https://v3.football.api-sports.io/fixtures/headtohead?h2h={h}-{a}&last=10
+  Câmpuri FOLOSITE:
+    → response[].teams.home.name, .away.name
+    → response[].goals.home, .away
+    → response[].fixture.date
+
+  [M8] Linia 85
+  URL: https://v3.football.api-sports.io/odds?fixture={id}&bookmaker=8
+  Câmpuri FOLOSITE: identice cu E4.
+
+  [M9] Linia 111 (fallback)
+  URL: https://v3.football.api-sports.io/odds?league={league.id}&season={YYYY}&bookmaker=8
+  Câmpuri FOLOSITE: identice cu E5.
+
+────────────────────────────────────────────────────────────────────────────────
+D. api/players.js — 2 apeluri
+────────────────────────────────────────────────────────────────────────────────
+
+  [P1] Linia 16 (funcția collectFixture, apelată din collect și backfill)
+  URL: https://v3.football.api-sports.io/fixtures/players?fixture={fixtureId}
+  Câmpuri FOLOSITE (salvate în player_stats):
+    → response[].team.id, .team.name
+    → response[].players[].player.id, .player.name
+    → response[].players[].statistics[0].games.rating
+    → response[].players[].statistics[0].games.minutes
+    → response[].players[].statistics[0].goals.total
+    → response[].players[].statistics[0].goals.assists
+    → response[].players[].statistics[0].passes.accuracy
+    → response[].players[].statistics[0].shots.on
+
+  [P2] Linia 119 (action=backfill)
+  URL: https://v3.football.api-sports.io/fixtures?league={leagueId}&last=10&status=FT
+  Câmpuri FOLOSITE:
+    → response[].fixture.id             (pentru a colecta players din fiecare fixture)
+
+────────────────────────────────────────────────────────────────────────────────
+E. api/simulate.js — 7 apeluri (2 obligatorii + 5 condiționate de Supabase)
+────────────────────────────────────────────────────────────────────────────────
+
+  [S1] Linia 194 (OBLIGATORIU — mereu apelat)
+  URL: https://v3.football.api-sports.io/fixtures?id={fid}
+  Câmpuri FOLOSITE:
+    → response[0].fixture.status.short, .elapsed
+    → response[0].teams.home.{id,name}, .away.{id,name}
+    → response[0].goals.home, .away
+    → response[0].league.name
+    → response[0].statistics[0].statistics[] (live stats: SoT, DA, xG, possession, corners)
+
+  [S2] Linia 195 (OBLIGATORIU — mereu apelat)
+  URL: https://v3.football.api-sports.io/fixtures/lineups?fixture={fid}
+  Câmpuri FOLOSITE:
+    → response[]  (trimis la frontend, dar nu influențează calculele)
+
+  [S3] Linia 219 (fallback, dacă Supabase are < 3 form_stats)
+  URL: https://v3.football.api-sports.io/fixtures?team={hid}&last=10&status=FT
+  Câmpuri FOLOSITE:
+    → response[].fixture.date, .teams.*, .goals.*, .statistics[]
+
+  [S4] Linia 220 (fallback)
+  URL: https://v3.football.api-sports.io/fixtures?team={aid}&last=10&status=FT
+  Câmpuri FOLOSITE: identice cu S3.
+
+  [S5] Linia 221 (fallback, dacă Supabase H2H < 3)
+  URL: https://v3.football.api-sports.io/fixtures/headtohead?h2h={hid}-{aid}&last=10
+  Câmpuri FOLOSITE: identice cu S3.
+
+  [S6] Linia 222 (fallback, dacă standings Supabase gol)
+  URL: https://v3.football.api-sports.io/standings?league={lid}&season={YYYY}
+  Câmpuri FOLOSITE:
+    → response[0].league.standings[0][].team.{id,name}
+    → response[0].league.standings[0][].rank, .points
+    → response[0].league.standings[0][].all.{played,win,draw,lose,goals.for,goals.against}
+
+  [S7] Linia 223 (fallback, dacă odds Supabase gol) — NOTE: FĂRĂ filtru bookmaker!
+  URL: https://v3.football.api-sports.io/odds?fixture={fid}
+  Câmpuri FOLOSITE:
+    → response[0].bookmakers (toate bookmaker-ele, selectează ID preferată: 6,2,3,8,1)
+
+────────────────────────────────────────────────────────────────────────────────
+F. api/today.js — 2 apeluri (fallback Supabase fixtures < 5)
+────────────────────────────────────────────────────────────────────────────────
+
+  [T1] Linia 139
+  URL: https://v3.football.api-sports.io/fixtures?date={d0}&status=NS&timezone=UTC
+  Parametri: date=azi, status=NS (Not Started), timezone=UTC
+  Câmpuri FOLOSITE:
+    → response[].fixture.id, .date, .status
+    → response[].league.id, .name, .country, .flag
+    → response[].teams.home.{id,name}, .away.{id,name}
+    → response[].goals.home, .away
+
+  [T2] Linia 140
+  URL: https://v3.football.api-sports.io/fixtures?date={d1}&status=NS&timezone=UTC
+  Parametri: date=mâine, status=NS
+  Câmpuri FOLOSITE: identice cu T1.
+
+────────────────────────────────────────────────────────────────────────────────
+G. api/update-results.js — 1 apel (per predicție pending)
+────────────────────────────────────────────────────────────────────────────────
+
+  [U1] Linia 30 (în loop pentru max 100 predicții)
+  URL: https://v3.football.api-sports.io/fixtures?id={pred.fixture_id}
+  Câmpuri FOLOSITE:
+    → response[0].fixture.status.short  (filtrare: doar FT/AET/PEN)
+    → response[0].goals.home
+    → response[0].goals.away
+
+────────────────────────────────────────────────────────────────────────────────
+H. cron/collect-daily.js — 1 apel × 5 ligi (PRIORITY_LEAGUES)
+────────────────────────────────────────────────────────────────────────────────
+
+  [CD1] Linia 72 (în loop pentru 5 ligi: 39,140,135,78,61)
+  URL: https://v3.football.api-sports.io/standings?league={leagueId}&season={YYYY}
+  Câmpuri FOLOSITE (salvate în standings/leagues/teams Supabase):
+    → response[0].league.id, .name, .country, .logo
+    → response[0].league.standings[0][].team.{id,name,logo}
+    → response[0].league.standings[0][].rank, .points, .form, .goalsDiff
+    → response[0].league.standings[0][].all.{played,win,draw,lose,goals.for,goals.against}
+
+────────────────────────────────────────────────────────────────────────────────
+I. cron/collect-finished.js — 5 tipuri de apeluri
+────────────────────────────────────────────────────────────────────────────────
+
+  [CF1] Linia 232
+  URL: https://v3.football.api-sports.io/fixtures?date={today}&status=FT
+  Câmpuri FOLOSITE:
+    → response[].fixture.id
+    → response[].teams.home.id          (pentru homeTeamId în collectMatchStats)
+
+  [CF2] Linia 16 (funcția collectFixture — per fixture procesat)
+  URL: https://v3.football.api-sports.io/fixtures/players?fixture={fixtureId}
+  Câmpuri FOLOSITE (salvate în player_stats — mai detaliat decât players.js):
+    → response[].players[].player.id, .name, .age
+    → response[].players[].statistics[0].games.{rating,minutes,position}
+    → response[].players[].statistics[0].goals.{total,assists}
+    → response[].players[].statistics[0].passes.accuracy
+    → response[].players[].statistics[0].shots.on
+    → response[].players[].statistics[0].cards.{yellow,red}
+    → response[].players[].statistics[0].offsides
+    → response[].players[].statistics[0].duels.{total,won}
+    → response[].players[].statistics[0].dribbles.{attempts,success}
+
+  [CF3] Linia 77 (funcția collectMatchStats — per fixture)
+  URL: https://v3.football.api-sports.io/fixtures/statistics?fixture={fixtureId}
+  Câmpuri FOLOSITE (salvate în match_stats):
+    → response[].team.{id,name}
+    → response[].statistics[name="Ball Possession"].value
+    → response[].statistics[name="Total Shots"].value
+    → response[].statistics[name="Shots on Goal"].value
+    → response[].statistics[name="Shots off Goal"].value
+    → response[].statistics[name="Blocked Shots"].value
+    → response[].statistics[name="expected_goals"].value
+    → response[].statistics[name="Corner Kicks"].value
+    → response[].statistics[name="Fouls"].value
+    → response[].statistics[name="Yellow Cards"].value
+    → response[].statistics[name="Red Cards"].value
+    → response[].statistics[name="Offsides"].value
+    → response[].statistics[name="Total passes"].value
+    → response[].statistics[name="Passes accurate"].value
+    → response[].statistics[name="Passes %"].value
+    → response[].statistics[name="Attacks"].value
+    → response[].statistics[name="Dangerous Attacks"].value
+
+  [CF4] Linia 127 (funcția collectMatchEvents — per fixture)
+  URL: https://v3.football.api-sports.io/fixtures/events?fixture={fixtureId}
+  Câmpuri FOLOSITE (salvate în match_events):
+    → response[].team.id
+    → response[].player.{id,name}
+    → response[].assist.{id,name}
+    → response[].type, .detail, .comments
+    → response[].time.{elapsed,extra}
+
+  [CF5] Linia 175 (funcția collectOdds — per fixture)
+  URL: https://v3.football.api-sports.io/odds?fixture={fixtureId}&bookmaker=8
+  Câmpuri FOLOSITE (salvate în odds):
+    → response[0].bookmakers[].{id,name}
+    → response[0].bookmakers[].bets[].{name,values[].{value,odd}}
+
+────────────────────────────────────────────────────────────────────────────────
+J. cron/scan.js — 7 tipuri de apeluri
+────────────────────────────────────────────────────────────────────────────────
+
+  [SC1] Linia 300 (la fiecare rulare a cronului)
+  URL: https://v3.football.api-sports.io/fixtures?live=all
+  Câmpuri FOLOSITE:
+    → response[].fixture.{id,status.short,status.elapsed,status.extra}
+    → response[].league.{id,name}
+    → response[].teams.home.{id,name}, .away.{id,name}
+    → response[].goals.{home,away}
+    → response[].statistics[0/1].statistics[expected_goals, Shots on Goal,
+       Shots off Goal, Ball Possession, Corner Kicks, Dangerous Attacks,
+       Goalkeeper Saves].value
+
+  [SC2] Linia 319 (la fiecare rulare)
+  URL: https://v3.football.api-sports.io/fixtures?status=FT-AET-PEN&from={date}&to={date}
+  Parametri: status=FT-AET-PEN, from/to = ziua curentă (fereastră 2h)
+  Câmpuri FOLOSITE:
+    → response[].fixture.id
+    → response[].goals.home, .away
+
+  [SC3] Linia 451 (la fiecare rulare — pre-match scan)
+  URL: https://v3.football.api-sports.io/fixtures?date={today}&status=NS
+  Câmpuri FOLOSITE:
+    → response[].fixture.{id,date}
+    → response[].teams.home.{id,name}, .away.{id,name}
+    → response[].league.{id,name}
+
+  [SC4] Linia 452 (la fiecare rulare — pre-match scan)
+  URL: https://v3.football.api-sports.io/fixtures?date={tomorrow}&status=NS
+  Câmpuri FOLOSITE: identice cu SC3.
+
+  [SC5] Linia 474 (per meci în upcoming cu ≥3 date în toate sursele)
+  URL: https://v3.football.api-sports.io/fixtures/headtohead?h2h={hid}-{aid}&last=10
+  Câmpuri FOLOSITE:
+    → response[].goals.{home,away}     (pentru gg, over15 calculations)
+    → response[] (salvat și în h2h via saveH2H)
+
+  [SC6] Linia 475 (per meci upcoming)
+  URL: https://v3.football.api-sports.io/fixtures?team={hid}&last=5&status=FT
+  Câmpuri FOLOSITE:
+    → response[].goals.{home,away}
+    → response[] (salvat în form_stats via saveFormStats)
+
+  [SC7] Linia 476 (per meci upcoming)
+  URL: https://v3.football.api-sports.io/fixtures?team={aid}&last=5&status=FT
+  Câmpuri FOLOSITE: identice cu SC6.
+
+================================================================================
+SECȚIUNEA 2 — CÂMPURI DISPONIBILE ÎN API DAR IGNORATE COMPLET
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+2.1 GET /fixtures — Câmpuri IGNORATE
+────────────────────────────────────────────────────────────────────────────────
+
+  Din obiectul fixture{}:
+    ✗ fixture.referee           — Numele arbitrului
+    ✗ fixture.venue.id          — ID stadion (util pentru meteo via coordonate!)
+    ✗ fixture.venue.name        — Nume stadion
+    ✗ fixture.venue.city        — Oraș (util pentru meteo.js)
+    ✗ fixture.timezone          — Fus orar
+    ✗ fixture.timestamp         — Unix timestamp
+    ✗ fixture.periods.first     — Timestamp start prima repriză
+    ✗ fixture.periods.second    — Timestamp start a doua repriză
+    ✗ fixture.status.extra      — Minute de prelungiri acordate
+
+  Din obiectul score{}:
+    ✗ score.halftime.home/away  — Scor la pauză ⚠️ IGNORAT — util pentru predicții!
+    ✗ score.extratime.home/away — Scor prelungiri
+    ✗ score.penalty.home/away  — Scor penaltiuri
+
+  Din obiectul league{}:
+    ✗ league.round              — Etapa curentă (ex: "Regular Season - 28")
+    ✗ league.season             — Sezon (ex: 2025)
+    ✗ league.logo               — Logo ligă
+
+  Din obiectul teams{}:
+    ✗ teams.home.logo / away.logo
+    ✗ teams.home.winner / away.winner — true/false/null (câștigător)
+
+────────────────────────────────────────────────────────────────────────────────
+2.2 GET /fixtures/lineups — Câmpuri IGNORATE (trimis brut la frontend)
+────────────────────────────────────────────────────────────────────────────────
+  Datele sunt transmise integral la frontend dar NICIODATĂ nu influențează
+  calculele de probabilitate în backend.
+
+    ✗ coach.id, coach.name, coach.photo  — Antrenor ⚠️ UTIL!
+    ✗ formation                          — Formație (ex: "4-3-3") ⚠️ UTIL!
+    ✗ startXI[].player.number           — Număr tricou
+    ✗ startXI[].player.pos              — Poziție în meci (GK/D/M/F)
+    ✗ startXI[].player.grid             — Poziție pe teren (ex: "2:1")
+    ✗ substitutes[].player.*            — Jucători de rezervă
+
+────────────────────────────────────────────────────────────────────────────────
+2.3 GET /fixtures/players — Câmpuri IGNORATE
+────────────────────────────────────────────────────────────────────────────────
+  (cele nesalvate nici în match.js nici în collect-finished.js)
+
+    ✗ games.captain             — Este căpitan? (true/false)
+    ✗ games.substitute          — A intrat ca substituent?
+    ✗ games.number              — Număr tricou
+    ✗ goals.conceded            — Goluri primite (util pentru portar!)
+    ✗ goals.saves               — Parade portare ⚠️ UTIL pentru predicții!
+    ✗ passes.total              — Total pase
+    ✗ passes.key                — Pase decisive (aproape asisturi)
+    ✗ tackles.total             — Total deposedări
+    ✗ tackles.blocks            — Șuturi blocate
+    ✗ tackles.interceptions     — Intercepții
+    ✗ fouls.drawn               — Faulturi provocate ⚠️ UTIL (penaltiuri!)
+    ✗ fouls.committed           — Faulturi comise
+    ✗ penalty.won               — Penaltiuri câștigate ⚠️ UTIL!
+    ✗ penalty.commited          — Penaltiuri comise
+    ✗ penalty.scored            — Penaltiuri marcate
+    ✗ penalty.missed            — Penaltiuri ratate
+    ✗ penalty.saved             — Penaltiuri salvate (portar)
+    ✗ dribbles.past             — De câte ori a fost dribblat
+    ✗ cards.yellowred           — Cartonașul galben-roșu (al doilea galben)
+
+────────────────────────────────────────────────────────────────────────────────
+2.4 GET /fixtures/events — Câmpuri IGNORATE
+────────────────────────────────────────────────────────────────────────────────
+  Events sunt salvate aproape complet în collect-finished.js.
+  Dar în match.js și scan.js nu sunt procesate deloc pentru calcule.
+
+    ✗ Niciun eveniment de tip VAR nu influențează calculele
+    ✗ Subtituirile nu sunt analizate (schimb strategic = semnal tactic)
+    ✗ Minutele exacte ale golurilor nu sunt folosite în modelul de predicție
+
+────────────────────────────────────────────────────────────────────────────────
+2.5 GET /fixtures/statistics — Câmpuri IGNORATE
+────────────────────────────────────────────────────────────────────────────────
+  Din răspunsul /fixtures/statistics sunt ignorate:
+
+    ✗ "Shots insidebox"         — Șuturi din interiorul careului ⚠️ UTIL!
+    ✗ "Shots outsidebox"        — Șuturi din afara careului
+    ✗ "Goalkeeper Saves"        — Parade portare (salvat în match_stats dar
+                                  NICIODATĂ folosit în calcule confidence/EV!)
+
+────────────────────────────────────────────────────────────────────────────────
+2.6 GET /standings — Câmpuri IGNORATE
+────────────────────────────────────────────────────────────────────────────────
+  ⚠️ IGNORARE CRITICĂ — Recordul acasă și în deplasare separat:
+
+    ✗ standings[].home.played   — Meciuri acasă jucate
+    ✗ standings[].home.win      — Victorii acasă
+    ✗ standings[].home.draw     — Egaluri acasă
+    ✗ standings[].home.lose     — Înfrângeri acasă
+    ✗ standings[].home.goals.for     — Goluri marcate acasă
+    ✗ standings[].home.goals.against — Goluri primite acasă
+
+    ✗ standings[].away.played
+    ✗ standings[].away.win
+    ✗ standings[].away.draw
+    ✗ standings[].away.lose
+    ✗ standings[].away.goals.for
+    ✗ standings[].away.goals.against
+
+    ✗ standings[].group         — Grup (relevant pentru fazele de cupă)
+    ✗ standings[].status        — Stare promovare/retrogradare
+    ✗ standings[].description   — "Promotion - Championship", etc.
+    ✗ standings[].update        — Timestamp actualizare
+
+────────────────────────────────────────────────────────────────────────────────
+2.7 GET /odds — Câmpuri și piețe IGNORATE
+────────────────────────────────────────────────────────────────────────────────
+  Piețe disponibile dar IGNORATE (doar Match Winner, Over/Under 1.5, BTTS sunt folosite):
+
+    ✗ "Asian Handicap"          — Handicap asiatic
+    ✗ "Double Chance"           — 1X, X2, 12
+    ✗ "Draw No Bet"             — Exclude egalul
+    ✗ "Half Time"               — Câștigător la pauză ⚠️ UTIL!
+    ✗ "Half Time/Full Time"     — Combinație pauză/final ⚠️ UTIL!
+    ✗ "Goals Over/Under 0.5"    — Câmpul over05 calculat dar cota ignorată
+    ✗ "Goals Over/Under 2.5"    — Cota over25 IGNORATĂ (deși prob calculată!)
+    ✗ "Goals Over/Under 3.5"    — Ignorată
+    ✗ "First Half - Goals Over/Under" — Goluri în prima repriză ⚠️ UTIL!
+    ✗ "Both Teams Score - First Half"
+    ✗ "Exact Score"             — Scor exact ⚠️ Monte Carlo calculează distribut.!
+    ✗ "Correct Score"           — Similar cu Exact Score
+    ✗ "Clean Sheet - Home"      — Gazde fără gol primit
+    ✗ "Clean Sheet - Away"
+    ✗ "Win to Nil"
+    ✗ "Anytime Score"           — Marchează oricând
+    ✗ "Next Goal"               — Cine marchează next ⚠️ corelat cu NGP!
+    ✗ "Odd or Even"
+    ✗ values[].handicap         — Valoarea handicapului pentru piețele AH
+    ✗ values[].stopped          — Dacă piața este suspendată
+    ✗ update                    — Când au fost actualizate cotele
+
+================================================================================
+SECȚIUNEA 3 — CÂMPURI IGNORATE CU POTENȚIAL RIDICAT PENTRU PREDICȚII
+================================================================================
+
+Prioritate CRITICĂ (ar îmbunătăți direct modelul):
+────────────────────────────────────────────────────────────────────────────────
+
+  1. standings[].home.* și standings[].away.*
+     IMPACT: Modelul calculează lambda folosind medii generale, dar o echipă
+     poate fi complet diferită acasă față de în deplasare. Exemple reale:
+     unele echipe câștigă 80% acasă dar pierd 60% în deplasare.
+     FIX: lambdaHome = homeGoalsFor/homePlayed (nu total/total)
+
+  2. score.halftime.home/away
+     IMPACT: Scorul la pauză este un predictor puternic pentru finalul meciului.
+     Modelele ELO și Poisson pot fi recalibrate cu "half-time state".
+     FIX: adaugă halftimeScore în calcPoisson dinamic.
+
+  3. fixture.venue.id + fixture.venue.city
+     IMPACT: Coordonatele stadionului sunt necesare pentru api/meteo.js care
+     există ca fișier separat. Acum nu știm coordonatele — CLAUDEMD menționează
+     că meteo.js există dar nu și cum obține locația stadionului.
+     FIX: apelează /venues?id=venue.id pentru coordonate.
+
+  4. "Goals Over/Under 2.5" cota (din /odds)
+     IMPACT: Calculăm over25Prob corect dar nu extragem cota pentru Over 2.5 →
+     nu putem calcula EV pentru această piață. Cod existent: evOver25 = null mereu.
+     FIX: parseOddsItem() trebuie să extragă și "Over 2.5".
+
+  5. goals.saves din /fixtures/players
+     IMPACT: Parade portarului sunt un predictor direct pentru number of goals.
+     Un portar în formă → lambda mai mică în Poisson.
+     FIX: adaugă saves în calcPlayerScore și teamStrength.
+
+Prioritate ÎNALTĂ:
+────────────────────────────────────────────────────────────────────────────────
+
+  6. formation din /fixtures/lineups
+     IMPACT: Formația tactică influențează stilul de joc. 4-5-1 → Under,
+     4-3-3 → Over. Corelabil cu over15Prob.
+
+  7. fixture.referee
+     IMPACT: Unii arbitri acordă mai multe penaltiuri, roșii, goluri din
+     joc direct. Statistici per arbitru → ajustare confidenceScore.
+
+  8. "Half Time/Full Time" din /odds
+     IMPACT: Cota 1/1, X/1, 2/1 reflectă probabilitățile combinate
+     pauză+final — un market complex care oferă informații suplimentare
+     despre cum piața vede evoluția meciului.
+
+  9. fouls.drawn + penalty.won din /fixtures/players
+     IMPACT: Jucătorii care câștigă frecvent penaltiuri → marker de risc
+     pentru piața "Both Teams Score" și penaltiuri.
+
+  10. "Shots insidebox" vs "outsidebox" din /fixtures/statistics
+      IMPACT: Șuturile din interior au ~5x mai mare probabilitate de gol.
+      Raportul inside/outside = calitate creare ocazii, nu doar cantitate.
+
+================================================================================
+SECȚIUNEA 4 — ENDPOINT-URI API-FOOTBALL DISPONIBILE DAR NICIODATĂ APELATE
+================================================================================
+
+Endpoint-uri valoroase prezente în planul Standard/Pro/Mega:
+────────────────────────────────────────────────────────────────────────────────
+
+  ① GET /teams/statistics?league=ID&season=YYYY&team=ID
+     Returnează: forma generală/acasă/în deplasare per sezon, gol mediu,
+     cele mai mari victorii/înfrângeri, clean sheets, formații folosite,
+     statistici penaltiuri, cartonașe.
+     UTILIZARE: ÎNLOCUIEȘTE complet /fixtures?team=ID&last=N&status=FT
+     pentru calculul lambda — o singură cerere vs. 1 cerere per apel!
+     ⚠️ IMPACT MAJOR: reducere masivă de request-uri.
+
+  ② GET /injuries?fixture=ID
+     Returnează: jucători accidentați/suspendați per fixture (pre-meci).
+     UTILIZARE: enrich.js are deja cod pentru injuries (getInjuriesFromSupabase)
+     și aplică penalizare la confidenceScore — dar tabelul injuries din Supabase
+     NU este populat niciodată! Această funcție există dar este "moartă".
+     FIX: apelează /injuries?fixture=ID și salvează în Supabase.
+
+  ③ GET /predictions?fixture=ID
+     Returnează: predicțiile AI ale API-Football (comparator intern).
+     UTILIZARE: supliment/validare față de calculul Poisson propriu.
+     Disponibil pe planul Standard+.
+
+  ④ GET /players?id=ID&season=YYYY&league=ID
+     Returnează: statisticile complete ale unui jucător per sezon
+     (toate meciurile, nu doar un singur fixture).
+     UTILIZARE: teamStrength calculat din statistici sezon întreg, nu
+     doar ultimele 110 fixture-uri din player_stats.
+
+  ⑤ GET /players/topscorers?league=ID&season=YYYY
+  ⑥ GET /players/topassists?league=ID&season=YYYY
+     UTILIZARE: identificare jucători cheie per ligă → factor risc
+     dacă topscorer este accidentat (corelat cu ②).
+
+  ⑦ GET /odds/live?fixture=ID (plan Pro/Mega)
+     Returnează: cote în timp real în timpul meciului.
+     UTILIZARE: corelare NGP calculat cu mișcarea cotelor live →
+     validare model sau alertă când modelul diferă de piață > threshold.
+
+  ⑧ GET /venues?id=ID sau ?city=&country=
+     Returnează: id, name, address, city, country, capacity, surface,
+     image. PLUS: coordonate GPS (lat/lon) pentru stadion.
+     UTILIZARE: coordonatele GPS sunt NECESARE pentru api/meteo.js
+     (Open-Meteo acceptă lat/lon, nu oraș). Fără acest endpoint,
+     meteo.js nu poate funcționa corect.
+
+  ⑨ GET /coachs?team=ID
+     Returnează: antrenor curent + istoricul de antrenori.
+     UTILIZARE: schimbarea antrenorului = schimbare de formă (semnal
+     pozitiv sau negativ). Corelabil cu ultimele rezultate.
+
+  ⑩ GET /transfers?team=ID
+     Returnează: transferuri sezon curent (în + ieșit).
+     UTILIZARE: jucători importanți transferați = ajustare teamStrength.
+
+  ⑪ GET /fixtures/rounds?league=ID&season=YYYY&current=true
+     Returnează: etapa curentă a campionatului.
+     UTILIZARE: etapa → context (finale, playoff, sezon mort etc.)
+
+  ⑫ GET /status (deja apelat în health-check.js linia 328)
+     Returnează: numărul de cereri consumate azi și limita planului.
+     ✅ DEJA FOLOSIT — dar doar în panoul de diagnostic, nu în logica aplicației.
+
+================================================================================
+SECȚIUNEA 5 — ENDPOINT-URI DUPLICATE ÎNTRE FIȘIERE
+================================================================================
+
+Aceeași cerere API este făcută din mai multe fișiere independent,
+fără coordonare sau cache comun:
+
+  ① /fixtures?live=all
+     → football.js (linia 128)   — front-end live feed
+     → cron/scan.js (linia 300)  — cron snapshots
+     IMPACT: dacă scan.js rulează frecvent, 2 cereri identice per minut.
+     FIX VULTR: un singur proces colectează live, ceilalți citesc din Supabase.
+
+  ② /fixtures/players?fixture=ID
+     → api/players.js (linia 16) — manual collect/backfill
+     → cron/collect-finished.js (linia 16) — cron automat 23:00
+     → api/match.js (linia 80)   — view detalii meci
+     IMPACT: dacă un utilizator vizualizează un meci DUPĂ ce cronul a rulat,
+     plătește o cerere duplicată. Colectează și câmpuri diferite!
+     (match.js colectează mai puține câmpuri decât collect-finished.js)
+
+  ③ /fixtures?team=ID&last=N&status=FT (forma echipei)
+     → api/enrich.js (liniile 353-354) — last=20
+     → api/football.js/fetchH2H (liniile 12-13) — last=10
+     → api/match.js (liniile 82-83) — last=20
+     → api/simulate.js (liniile 219-220) — last=10
+     → cron/scan.js (liniile 475-476) — last=5
+     IMPACT: 5 fișiere cer forma echipei independent, cu parametri last= diferiți.
+     FIX: last=20 acoperă și last=10 și last=5 → standardizare pe last=20
+     și cache în Supabase (form_stats deja există pentru asta!).
+
+  ④ /fixtures/headtohead?h2h=ID-ID&last=10
+     → api/enrich.js (linia 355)
+     → api/football.js (linia 14)
+     → api/match.js (linia 84)
+     → api/simulate.js (linia 221)
+     → cron/scan.js (linia 474)
+     IMPACT: identic cu ③ — H2H cerut din 5 fișiere.
+     FIX: h2h table din Supabase există — dacă scan.js populează regulat,
+     celelalte fișiere nu mai trebuie să apeleze API-Football.
+
+  ⑤ /odds?fixture=ID&bookmaker=8
+     → api/enrich.js (linia 356)
+     → api/match.js (linia 85)
+     → api/simulate.js (linia 223) — FĂRĂ filtru bookmaker=8!
+     → cron/collect-finished.js (linia 175)
+     IMPACT: dacă collect-finished salvează odds în Supabase la 23:00,
+     alte fișiere nu mai trebuie să ceară la API. Există deja odds table.
+     NOTĂ: simulate.js nu pune bookmaker=8 → cerere mai scumpă (toate bookmaker-ele).
+
+================================================================================
+SECȚIUNEA 6 — ESTIMARE CONSUM REQUEST-URI PER ZI
+================================================================================
+
+Presupuneri: trafic moderat (10 utilizatori activi, 4h de meciuri live/zi)
+
+────────────────────────────────────────────────────────────────────────────────
+CERERI AUTOMATE (cron-uri)
+────────────────────────────────────────────────────────────────────────────────
+
+  cron/collect-daily.js (06:00, 5 ligi):
+    5 cereri × 1 rulare = 5/zi
+
+  cron/collect-finished.js (23:00):
+    1 (fixtures?date=FT) + ~50 meciuri FT × 4 cereri = ~201/zi
+    (50 meciuri × player_stats + statistics + events + odds)
+
+  cron/scan.js (VERCEL: 1/zi la 00:00 — VULTR: 1/minut):
+    Vercel: 7 cereri × 1 + 50 pre-match × 3 = ~157/zi
+    Vultr: 7 × 1440 + 50 × 3 × 4(rulări productive) = ~10.680/zi
+           ATENȚIE: dacă activat pe Vultr fără rată limitare!
+
+  api/update-results.js (02:00, max 100 predicții pending):
+    ~30 cereri/zi (mediu)
+
+────────────────────────────────────────────────────────────────────────────────
+CERERI DIN FRONTEND (per utilizator activ)
+────────────────────────────────────────────────────────────────────────────────
+
+  api/football.js (/fixtures?live=all, polling la ~30s):
+    Per utilizator: 2 cereri/min × 60min × 4h = 480/zi
+    10 utilizatori: 4.800/zi
+    NOTE: dacă Supabase ar servi live matches, 0 cereri API!
+
+  api/today.js (2 cereri per load, ~5 refresh-uri/utilizator):
+    10 util × 5 × 2 = 100/zi (dar Supabase e primar, deci mai puțin)
+
+  api/enrich.js (0-5 cereri per click, ~20 analize/zi):
+    20 × 2.5 medie = 50/zi (Supabase reduce masiv)
+
+  api/match.js (8 cereri fixe per vizionare):
+    20 views × 8 = 160/zi
+
+  api/simulate.js (2 fixe + 0-5 fallback):
+    30 simulări × 4 medie = 120/zi
+
+────────────────────────────────────────────────────────────────────────────────
+TOTAL ESTIMAT
+────────────────────────────────────────────────────────────────────────────────
+
+  Scenariu VERCEL (cu scan.js zilnic):
+    Cron-uri automate:          ~393/zi
+    Frontend (10 utilizatori): ~5.230/zi
+    TOTAL:                     ~5.623 cereri/zi
+
+    → Necesită minim planul STANDARD (7.500/zi)
+
+  Scenariu VULTR (cu scan.js la 1 minut):
+    Cron-uri automate:         ~11.100/zi
+    Frontend (10 utilizatori): ~5.230/zi
+    TOTAL:                     ~16.330 cereri/zi
+
+    → Necesită planul PRO (40.000/zi) SAU optimizare cu /teams/statistics
+
+  Scenariu VULTR OPTIMIZAT (cu /teams/statistics + cache Supabase complet):
+    Elimina /fixtures?team=ID&last=N din toate fișierele → -60% cereri frontend
+    /teams/statistics o dată/zi per echipă activă (~200 echipe): +200 cereri/zi
+    TOTAL estimat:             ~8.000-10.000/zi
+    → Suficient cu planul STANDARD (7.500 = risc) sau PRO (40.000 = confortabil)
+
+================================================================================
+SECȚIUNEA 7 — INCONSISTENȚE ȘI PROBLEME IDENTIFICATE
+================================================================================
+
+  ① cron/scan.js: comentariul "runs every minute" (linia 1) vs vercel.json
+    "0 0 * * *" (zilnic). Intenția era 1/minut, dar Vercel Hobby nu permite.
+    Pe Vultr, activarea la 1 minut × 7 cereri = 10.080 cereri/zi DOAR din scan.
+
+  ② api/simulate.js linia 223: /odds?fixture={fid} fără &bookmaker=8
+    → returnează TOȚI bookmaker-ii → mai scump și mai lent.
+    Toate celelalte fișiere specifică bookmaker=8.
+
+  ③ calcPlayerScore duplicat în 3 fișiere:
+    players.js (linia 4), collect-finished.js (linia 1), health-check.js (linia 58 ca calcStr)
+    Inconsistențe minore între versiuni.
+
+  ④ api/injuries (getInjuriesFromSupabase în enrich.js) citește din Supabase
+    dar NICIO funcție nu populează tabelul injuries din API-Football.
+    Tabelul este mereu gol → penalizarea din enrich.js nu se aplică niciodată.
+
+  ⑤ api/players.js (backfill) colectează mai puține câmpuri din /fixtures/players
+    față de collect-finished.js: lipsesc position, age, yellow/red cards, duels,
+    dribbles. Date inconsistente în Supabase per sursă de colectare.
+
+================================================================================
+END OF AUDIT — API-Football Ultra-Detailed Report
+Generated: 2026-05-15
+================================================================================
