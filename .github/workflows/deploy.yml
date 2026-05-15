@@ -58,12 +58,31 @@ jobs:
             fi
             true
 
-            # 4. Porneste aplicatia cu PM2
-            pm2 delete alohascan 2>/dev/null; true
-            sleep 1
-            pm2 start /root/scannerv2/server.js --name alohascan --interpreter /snap/bin/node
+            # 4. Creeaza serviciu systemd pentru alohascan
+            cat > /etc/systemd/system/alohascan.service << 'SVCEOF'
+[Unit]
+Description=AlohaScan Node.js
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/scannerv2
+ExecStart=/snap/bin/node /root/scannerv2/server.js
+EnvironmentFile=/root/scannerv2/.env
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+            systemctl daemon-reload
+            systemctl enable alohascan
+            systemctl restart alohascan
             sleep 2
-            pm2 save --force
+            systemctl is-active alohascan && echo "APP: ONLINE" || echo "APP: ERROR"
             true
 
             # 5. Nginx config (python3 pentru a evita heredoc issues)
