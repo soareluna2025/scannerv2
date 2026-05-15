@@ -1,0 +1,651 @@
+================================================================================
+  ALLOWED_LEAGUE_IDS — Listă Completă
+  Sursă: api/leagues.js
+  Data extragerii: 2026-05-15
+================================================================================
+
+NOTĂ: Un Set JavaScript ignoră duplicatele — prima apariție câștigă.
+⚠️  EROARE DETECTATĂ: ID 500 apare de 2 ori (Hong Kong Div 2 + Kenya Cup)
+⚠️  EROARE DETECTATĂ: ID 503 apare de 2 ori (Hong Kong FA Cup + Singapore Cup)
+→ Kenya FKF Cup (500) și Singapore Cup (503) sunt de facto INACTIVE din whitelist!
+
+Total ID-uri unice efective: 220 (din 222 declarate, 2 suprascrise)
+
+================================================================================
+1. EUROPA — 87 ligi | 29 țări
+================================================================================
+
+──────────────────────────────────────────────────
+ ANGLIA (4 ligi)
+──────────────────────────────────────────────────
+  39   Premier League
+  40   Championship (Liga 2)
+  45   FA Cup
+  48   EFL Cup (Carabao Cup)
+
+──────────────────────────────────────────────────
+ SPANIA (3 ligi)
+──────────────────────────────────────────────────
+  140  La Liga
+  141  Segunda División (Liga 2)
+  143  Copa del Rey
+
+──────────────────────────────────────────────────
+ GERMANIA (3 ligi)
+──────────────────────────────────────────────────
+  78   Bundesliga
+  79   2. Bundesliga
+  81   DFB Pokal
+
+──────────────────────────────────────────────────
+ ITALIA (3 ligi)
+──────────────────────────────────────────────────
+  135  Serie A
+  136  Serie B (Liga 2)
+  137  Coppa Italia
+
+──────────────────────────────────────────────────
+ FRANȚA (3 ligi)
+──────────────────────────────────────────────────
+  61   Ligue 1
+  62   Ligue 2
+  66   Coupe de France
+
+──────────────────────────────────────────────────
+ OLANDA (3 ligi)
+──────────────────────────────────────────────────
+  88   Eredivisie
+  89   Eerste Divisie (Liga 2)
+  90   KNVB Cup
+
+──────────────────────────────────────────────────
+ PORTUGALIA (3 ligi)
+──────────────────────────────────────────────────
+  94   Primeira Liga
+  95   Liga Portugal 2
+  96   Taça de Portugal
+
+──────────────────────────────────────────────────
+ BELGIA (3 ligi)
+──────────────────────────────────────────────────
+  144  Pro League
+  145  Challenger Pro League (Liga 2)
+  146  Belgian Cup
+
+──────────────────────────────────────────────────
+ TURCIA (3 ligi)
+──────────────────────────────────────────────────
+  203  Süper Lig
+  204  TFF First League (Liga 2)
+  205  Turkish Cup
+
+──────────────────────────────────────────────────
+ SCOȚIA (3 ligi)
+──────────────────────────────────────────────────
+  179  Premiership
+  180  Championship (Liga 2)
+  184  Scottish Cup
+
+──────────────────────────────────────────────────
+ REPUBLICA CEHĂ (3 ligi)
+──────────────────────────────────────────────────
+  345  Fortuna Liga (Liga 1)
+  346  FNL (Liga 2)
+  347  MOL Cup
+
+──────────────────────────────────────────────────
+ AUSTRIA (3 ligi)
+──────────────────────────────────────────────────
+  218  Bundesliga
+  219  2. Liga
+  221  ÖFB Cup
+
+──────────────────────────────────────────────────
+ ELVEȚIA (3 ligi)
+──────────────────────────────────────────────────
+  207  Super League
+  208  Challenge League (Liga 2)
+  209  Swiss Cup
+
+──────────────────────────────────────────────────
+ DANEMARCA (3 ligi)
+──────────────────────────────────────────────────
+  119  Superliga
+  120  1st Division (Liga 2)
+  123  DBU Pokalen
+
+──────────────────────────────────────────────────
+ NORVEGIA (3 ligi)
+──────────────────────────────────────────────────
+  103  Eliteserien
+  104  First Division (Liga 2)
+  105  Norwegian Cup
+
+──────────────────────────────────────────────────
+ SUEDIA (3 ligi)
+──────────────────────────────────────────────────
+  113  Allsvenskan
+  114  Superettan (Liga 2)
+  115  Svenska Cupen
+
+──────────────────────────────────────────────────
+ POLONIA (3 ligi)
+──────────────────────────────────────────────────
+  106  Ekstraklasa
+  107  I Liga (Liga 2)
+  108  Polish Cup
+
+──────────────────────────────────────────────────
+ CROAȚIA (3 ligi)
+──────────────────────────────────────────────────
+  210  Prva HNL
+  211  Druga HNL (Liga 2)
+  212  Croatian Cup
+
+──────────────────────────────────────────────────
+ SERBIA (3 ligi)
+──────────────────────────────────────────────────
+  392  SuperLiga
+  393  Prva Liga (Liga 2)
+  394  Kup Srbije
+
+──────────────────────────────────────────────────
+ ROMÂNIA (3 ligi)
+──────────────────────────────────────────────────
+  783  Superliga (Liga 1)
+  785  Liga II
+  787  Cupa României
+
+──────────────────────────────────────────────────
+ GRECIA (3 ligi)
+──────────────────────────────────────────────────
+  551  Super League 1
+  552  Super League 2 (Liga 2)
+  556  Greek Cup
+
+──────────────────────────────────────────────────
+ UNGARIA (3 ligi)
+──────────────────────────────────────────────────
+  271  Nemzeti Bajnokság I (Liga 1)
+  272  Nemzeti Bajnokság II (Liga 2)
+  275  Magyar Kupa
+
+──────────────────────────────────────────────────
+ BULGARIA (3 ligi)
+──────────────────────────────────────────────────
+  172  First Professional League
+  173  Second Professional League (Liga 2)
+  174  Bulgarian Cup
+
+──────────────────────────────────────────────────
+ SLOVACIA (3 ligi)
+──────────────────────────────────────────────────
+  332  Super Liga (Liga 1)
+  506  2. liga (Liga 2)
+  680  Slovak Cup
+
+──────────────────────────────────────────────────
+ FINLANDA (3 ligi)
+──────────────────────────────────────────────────
+  244  Veikkausliiga (Liga 1)
+  245  Ykkönen (Liga 2)
+  246  Finnish Cup
+
+──────────────────────────────────────────────────
+ UCRAINA (3 ligi)
+──────────────────────────────────────────────────
+  333  Premier League
+  334  Persha Liha (Liga 2)
+  336  Ukrainian Cup
+
+──────────────────────────────────────────────────
+ RUSIA (3 ligi)
+──────────────────────────────────────────────────
+  235  Premier League
+  236  First League (Liga 2)
+  237  Russian Cup
+
+──────────────────────────────────────────────────
+ BELARUS (3 ligi)
+──────────────────────────────────────────────────
+  116  Vysheyshaya Liga (Liga 1)
+  117  1. Division (Liga 2)
+  486  Belarusian Cup
+
+──────────────────────────────────────────────────
+ KAZAHSTAN (3 ligi)
+──────────────────────────────────────────────────
+  389  Premier League
+  388  1. Division (Liga 2)
+  498  Kazakhstan Cup
+
+================================================================================
+2. AMERICA DE SUD — 31 ligi | 10 țări
+================================================================================
+
+──────────────────────────────────────────────────
+ BRAZILIA (3 ligi)
+──────────────────────────────────────────────────
+  71   Série A
+  72   Série B (Liga 2)
+  73   Copa do Brasil
+
+──────────────────────────────────────────────────
+ ARGENTINA (3 ligi)
+──────────────────────────────────────────────────
+  128  Primera División
+  131  Primera Nacional (Liga 2)
+  132  Copa Argentina
+
+──────────────────────────────────────────────────
+ COLUMBIA (4 ligi)
+──────────────────────────────────────────────────
+  239  Primera A
+  240  Primera B (Liga 2)
+  241  Copa Colombia
+  713  Superliga (Copa)
+
+──────────────────────────────────────────────────
+ CHILE (3 ligi)
+──────────────────────────────────────────────────
+  265  Primera División
+  266  Primera B (Liga 2)
+  267  Copa Chile
+
+──────────────────────────────────────────────────
+ URUGUAY (3 ligi)
+──────────────────────────────────────────────────
+  268  Primera División
+  269  Segunda División (Liga 2)
+  270  Copa Uruguay
+
+──────────────────────────────────────────────────
+ PERU (3 ligi)
+──────────────────────────────────────────────────
+  281  Liga 1
+  282  Liga 2
+  283  Copa Perú
+
+──────────────────────────────────────────────────
+ ECUADOR (3 ligi)
+──────────────────────────────────────────────────
+  286  LigaPro Serie A
+  287  LigaPro Serie B (Liga 2)
+  735  Copa Ecuador
+
+──────────────────────────────────────────────────
+ PARAGUAY (3 ligi)
+──────────────────────────────────────────────────
+  278  Primera División
+  279  División Intermedia (Liga 2)
+  280  Copa Paraguay
+
+──────────────────────────────────────────────────
+ BOLIVIA (3 ligi)
+──────────────────────────────────────────────────
+  273  Primera División
+  274  Liga de Ascenso (Liga 2)
+  276  Copa Bolivia
+
+──────────────────────────────────────────────────
+ VENEZUELA (3 ligi)
+──────────────────────────────────────────────────
+  153  Liga FUTVE
+  154  Segunda División (Liga 2)
+  155  Copa Venezuela
+
+================================================================================
+3. AMERICA DE NORD ȘI CENTRALĂ — 23 ligi | 8 țări
+================================================================================
+
+──────────────────────────────────────────────────
+ MEXIC (3 ligi)
+──────────────────────────────────────────────────
+  262  Liga MX
+  263  Liga de Expansión MX (Liga 2)
+  264  Copa MX
+
+──────────────────────────────────────────────────
+ SUA (4 ligi)
+──────────────────────────────────────────────────
+  253  MLS
+  255  USL Championship (Liga 2)
+  257  US Open Cup
+  909  MLS Next Pro    ⚠️ NOTĂ: listat ca "Liga 3" în comentariu
+
+──────────────────────────────────────────────────
+ CANADA (2 ligi)
+──────────────────────────────────────────────────
+  321  Canadian Premier League
+  322  Canadian Championship (Cup)
+
+──────────────────────────────────────────────────
+ COSTA RICA (3 ligi)
+──────────────────────────────────────────────────
+  258  Primera División
+  259  Segunda División (Liga 2)
+  260  Copa Costa Rica
+
+──────────────────────────────────────────────────
+ HONDURAS (3 ligi)
+──────────────────────────────────────────────────
+  261  Liga Nacional
+  319  Liga de Ascenso (Liga 2)
+  320  Copa Honduras
+
+──────────────────────────────────────────────────
+ GUATEMALA (3 ligi)
+──────────────────────────────────────────────────
+  339  Liga Nacional
+  338  Primera División (Liga 2)
+  248  Copa Guatemala
+
+──────────────────────────────────────────────────
+ EL SALVADOR (3 ligi)
+──────────────────────────────────────────────────
+  344  Primera División
+  349  Segunda División (Liga 2)
+  350  Copa El Salvador
+
+──────────────────────────────────────────────────
+ NICARAGUA (2 ligi)
+──────────────────────────────────────────────────
+  256  Primera División
+  380  Segunda División (Liga 2)
+
+================================================================================
+4. ASIA (+ Orientul Mijlociu) — 57 ligi | 19 țări
+================================================================================
+
+──────────────────────────────────────────────────
+ ARABIA SAUDITĂ (3 ligi)
+──────────────────────────────────────────────────
+  307  Saudi Pro League
+  308  First Division (Liga 2)
+  313  King Cup
+
+──────────────────────────────────────────────────
+ JAPONIA (3 ligi)
+──────────────────────────────────────────────────
+  98   J1 League
+  99   J2 League (Liga 2)
+  100  Emperor's Cup
+
+──────────────────────────────────────────────────
+ COREEA DE SUD (3 ligi)
+──────────────────────────────────────────────────
+  292  K League 1
+  293  K League 2 (Liga 2)
+  294  Korean FA Cup
+
+──────────────────────────────────────────────────
+ IRAN (3 ligi)
+──────────────────────────────────────────────────
+  290  Persian Gulf Pro League
+  291  Azadegan League (Liga 2)
+  295  Hazfi Cup
+
+──────────────────────────────────────────────────
+ QATAR (3 ligi)
+──────────────────────────────────────────────────
+  19   Qatar Stars League
+  21   QSL Cup (Liga 2)
+  22   Emir Cup
+
+──────────────────────────────────────────────────
+ EMIRATELE ARABE UNITE (3 ligi)
+──────────────────────────────────────────────────
+  433  UAE Pro League
+  434  First Division (Liga 2)
+  435  UAE Cup
+
+──────────────────────────────────────────────────
+ CHINA (3 ligi)
+──────────────────────────────────────────────────
+  169  Chinese Super League
+  170  League One (Liga 2)
+  171  FA Cup
+
+──────────────────────────────────────────────────
+ THAILAND (3 ligi)
+──────────────────────────────────────────────────
+  296  Thai League 1
+  297  Thai League 2
+  298  Thai FA Cup
+
+──────────────────────────────────────────────────
+ UZBEKISTAN (3 ligi)
+──────────────────────────────────────────────────
+  335  Super League
+  631  Pro League (Liga 2)
+  632  Uzbek Cup
+
+──────────────────────────────────────────────────
+ INDIA (3 ligi)
+──────────────────────────────────────────────────
+  323  ISL (Indian Super League)
+  324  I-League (Liga 2)
+  325  Durand Cup
+
+──────────────────────────────────────────────────
+ MALAYSIA (3 ligi)
+──────────────────────────────────────────────────
+  518  Super League
+  519  Premier League (Liga 2)
+  520  Malaysia Cup
+
+──────────────────────────────────────────────────
+ INDONEZIA (3 ligi)
+──────────────────────────────────────────────────
+  391  Liga 1
+  460  Liga 2
+  461  Indonesian Cup
+
+──────────────────────────────────────────────────
+ VIETNAM (3 ligi)
+──────────────────────────────────────────────────
+  340  V.League 1
+  341  V.League 2 (Liga 2)
+  342  Vietnamese Cup
+
+──────────────────────────────────────────────────
+ IRAK (3 ligi)
+──────────────────────────────────────────────────
+  302  Premier League
+  303  Division 1 (Liga 2)
+  304  Iraqi Cup
+
+──────────────────────────────────────────────────
+ IORDANIA (3 ligi)
+──────────────────────────────────────────────────
+  474  Pro League
+  475  Division 1 (Liga 2)
+  494  Jordan Cup
+
+──────────────────────────────────────────────────
+ KUWEIT (3 ligi)
+──────────────────────────────────────────────────
+  299  Premier League
+  300  Division 1 (Liga 2)
+  493  Emir Cup
+
+──────────────────────────────────────────────────
+ OMAN (3 ligi)
+──────────────────────────────────────────────────
+  309  Professional League
+  491  Division 1 (Liga 2)
+  492  Sultan Qaboos Cup
+
+──────────────────────────────────────────────────
+ HONG KONG (3 ligi)
+──────────────────────────────────────────────────
+  499  Premier League
+  500  First Division (Liga 2)   ⚠️ ID DUPLICAT — suprascris de Kenya FKF Cup (500)
+  503  HK FA Cup                 ⚠️ ID DUPLICAT — suprascris de Singapore Cup (503)
+
+──────────────────────────────────────────────────
+ SINGAPORE (2 ligi)
+──────────────────────────────────────────────────
+  502  Premier League
+  503  Singapore Cup             ⚠️ ID DUPLICAT cu HK FA Cup (503) — acesta suprascrie!
+
+================================================================================
+5. OCEANIA — 2 ligi | 1 țară
+================================================================================
+  (Codul original pune Australia în secțiunea ASIA)
+
+──────────────────────────────────────────────────
+ AUSTRALIA (2 ligi)
+──────────────────────────────────────────────────
+  188  A-League Men
+  189  Australia Cup
+
+================================================================================
+6. AFRICA — 27 ligi | 9 țări
+================================================================================
+
+──────────────────────────────────────────────────
+ EGIPT (3 ligi)
+──────────────────────────────────────────────────
+  233  Premier League
+  234  Second Division (Liga 2)
+  238  Egyptian Cup
+
+──────────────────────────────────────────────────
+ MAROC (3 ligi)
+──────────────────────────────────────────────────
+  200  Botola Pro
+  201  Botola 2 (Liga 2)
+  822  Coupe du Trône
+
+──────────────────────────────────────────────────
+ TUNISIA (3 ligi)
+──────────────────────────────────────────────────
+  202  Ligue 1
+  377  Ligue 2
+  378  Coupe de Tunisie
+
+──────────────────────────────────────────────────
+ ALGERIA (3 ligi)
+──────────────────────────────────────────────────
+  197  Ligue Professionnelle 1
+  198  Ligue Professionnelle 2 (Liga 2)
+  199  Coupe d'Algérie
+
+──────────────────────────────────────────────────
+ AFRICA DE SUD (3 ligi)
+──────────────────────────────────────────────────
+  288  Premier Division (PSL)
+  670  National First Division (Liga 2)
+  671  Nedbank Cup
+
+──────────────────────────────────────────────────
+ NIGERIA (3 ligi)
+──────────────────────────────────────────────────
+  399  NPFL
+  666  Nigeria National League (Liga 2)
+  667  Nigerian FA Cup
+
+──────────────────────────────────────────────────
+ GHANA (3 ligi)
+──────────────────────────────────────────────────
+  289  Premier League
+  417  Division One (Liga 2)
+  418  Ghana FA Cup
+
+──────────────────────────────────────────────────
+ COASTA DE FILDEȘ (3 ligi)
+──────────────────────────────────────────────────
+  383  Ligue 1
+  384  Ligue 2
+  385  Coupe de Côte d'Ivoire
+
+──────────────────────────────────────────────────
+ KENYA (3 ligi)
+──────────────────────────────────────────────────
+  357  Premier League
+  358  National Super League (Liga 2)
+  500  FKF Cup    ⚠️ ID DUPLICAT cu Hong Kong Div 2 (500) — acesta suprascrie!
+
+================================================================================
+7. COMPETIȚII INTERNAȚIONALE — 15 competiții
+================================================================================
+
+──────────────────────────────────────────────────
+ UEFA (Europa)
+──────────────────────────────────────────────────
+  2    UEFA Champions League
+  3    UEFA Europa League
+  848  UEFA Conference League
+  4    UEFA European Championship (Euro)
+  5    UEFA Nations League
+
+──────────────────────────────────────────────────
+ CONMEBOL (America de Sud)
+──────────────────────────────────────────────────
+  13   Copa Libertadores
+  11   Copa Sudamericana
+  9    Copa América
+
+──────────────────────────────────────────────────
+ CONCACAF (America de Nord/Centrală)
+──────────────────────────────────────────────────
+  10   CONCACAF Champions Cup
+  26   CONCACAF Nations League
+
+──────────────────────────────────────────────────
+ AFC (Asia)
+──────────────────────────────────────────────────
+  17   AFC Champions League
+  18   AFC Cup
+
+──────────────────────────────────────────────────
+ CAF (Africa)
+──────────────────────────────────────────────────
+  12   CAF Champions League
+  20   CAF Confederation Cup
+
+──────────────────────────────────────────────────
+ FIFA (Global)
+──────────────────────────────────────────────────
+  1    FIFA World Cup
+  6    FIFA Club World Cup
+
+================================================================================
+SUMAR FINAL
+================================================================================
+
+  Regiune                          Ligi    Țări
+  ─────────────────────────────────────────────
+  Europa                            87      29
+  America de Sud                    31      10
+  America de Nord & Centrală        23       8
+  Asia & Orientul Mijlociu          57      19
+  Oceania                            2       1
+  Africa                            27       9
+  Competiții Internaționale         15       —
+  ─────────────────────────────────────────────
+  TOTAL DECLARAT                   222      76
+  ID-uri unice efective            220      76  (2 duplicate în Set)
+
+================================================================================
+⚠️  ERORI DETECTATE ÎN api/leagues.js
+================================================================================
+
+  EROARE 1: ID 500 declarat de două ori
+    → Hong Kong: First Division (Liga 2) — linia ~337
+    → Kenya:     FKF Cup               — linia ~390
+    Efectul unui Set JS: Kenya FKF Cup (ultima declarată) SUPRASCRIE Hong Kong Div 2.
+    Hong Kong First Division este EXCLUS efectiv din whitelist.
+
+  EROARE 2: ID 503 declarat de două ori
+    → Hong Kong: HK FA Cup             — linia ~339
+    → Singapore: Singapore Cup         — linia ~344
+    Efectul unui Set JS: Singapore Cup (ultima declarată) SUPRASCRIE HK FA Cup.
+    Hong Kong FA Cup este EXCLUS efectiv din whitelist.
+
+  FIX: Verifică ID-urile corecte în API-Football și corectează unul dintre perechi.
+
+================================================================================
+END — leagues_whitelist_current.txt
+================================================================================
