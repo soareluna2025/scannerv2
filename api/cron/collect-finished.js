@@ -4,7 +4,8 @@ function calcPlayerScore(rating, goals, assists, passAcc, sot) {
   const assistScore = Math.min(100, (assists || 0) * 20);
   const passScore   = passAcc != null ? parseFloat(passAcc) : 50;
   const shotScore   = Math.min(100, (sot    || 0) * 15);
-  return Math.round(ratingNorm * 0.35 + goalsScore * 0.20 + assistScore * 0.15 + passScore * 0.20 + shotScore * 0.10);
+  const score = Math.round(ratingNorm * 0.35 + goalsScore * 0.20 + assistScore * 0.15 + passScore * 0.20 + shotScore * 0.10);
+  return isNaN(score) ? 0 : score;
 }
 
 async function collectFixture(fixtureId, key, sbUrl, sbKey) {
@@ -16,7 +17,7 @@ async function collectFixture(fixtureId, key, sbUrl, sbKey) {
   const teams = data.response || [];
   if (!teams.length) return 0;
 
-  const rows = [];
+  let rows = [];
   for (const team of teams) {
     const teamId   = team.team?.id;
     const teamName = team.team?.name || '';
@@ -55,6 +56,7 @@ async function collectFixture(fixtureId, key, sbUrl, sbKey) {
     }
   }
 
+  rows = rows.filter(r => r.player_id != null && r.player_id !== undefined && r.fixture_id != null);
   if (!rows.length) return 0;
 
   await fetch(`${sbUrl}/rest/v1/player_stats?on_conflict=player_id,fixture_id`, {
@@ -261,7 +263,7 @@ export default async function handler(req, res) {
       try {
         const count = await collectFixture(fixtureId, key, sbUrl, sbKey);
         totalPlayers += count;
-      } catch (_) {}
+      } catch (e) { console.error('collectFixture error:', fixtureId, e.message); }
 
       try {
         const count = await collectMatchStats(fixtureId, homeTeamId, key, sbUrl, sbKey);
