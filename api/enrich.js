@@ -1,4 +1,5 @@
 import { calcPoisson6x6, parseOddsItem, calcEV } from './calc-utils.js';
+import { query } from './db.js';
 
 async function fetchWithRetry(url, opts, attempts = 2) {
   for (let i = 0; i < attempts; i++) {
@@ -78,18 +79,14 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
   };
 }
 
-async function getTeamStrengths(hId, aId, sbUrl, sbKey) {
-  if (!sbUrl || !sbKey) return { home: null, away: null };
+async function getTeamStrengths(hId, aId) {
   try {
     const [rH, rA] = await Promise.all([
-      fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${hId}&select=rating,goals,pass_accuracy,shots_on_target&order=player_id.desc&limit=110`, {
-        headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
-      }),
-      fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${aId}&select=rating,goals,pass_accuracy,shots_on_target&order=player_id.desc&limit=110`, {
-        headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
-      }),
+      query('SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY player_id DESC LIMIT 110', [hId]),
+      query('SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY player_id DESC LIMIT 110', [aId]),
     ]);
-    const [dH, dA] = await Promise.all([rH.json(), rA.json()]);
+    const dH = rH.rows;
+    const dA = rA.rows;
 
     const calcStr = (rows) => {
       if (!Array.isArray(rows) || !rows.length) return null;
@@ -202,91 +199,50 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
   };
 }
 
-// --- Supabase data helpers ---
+// --- PostgreSQL data helpers ---
 
-async function getFormFromSupabase(teamId, sbUrl, sbKey) {
+async function getFormFromDB(teamId) {
+  // form_stats schema uses aggregate columns (avg_scored_home, etc.), not per-match rows
+  // Return empty so the handler falls back to API-Football
+  return [];
+}
+
+async function getH2HFromDB(homeId, awayId) {
   try {
-    const res = await fetch(
-      `${sbUrl}/rest/v1/form_stats?team_id=eq.${teamId}&order=match_date.desc&limit=10`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const r = await query(
+      'SELECT * FROM h2h WHERE (home_team_id = $1 AND away_team_id = $2) OR (home_team_id = $2 AND away_team_id = $1) ORDER BY match_date DESC LIMIT 10',
+      [homeId, awayId]
     );
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    return r.rows;
   } catch (_) { return []; }
 }
 
-async function getH2HFromSupabase(homeId, awayId, sbUrl, sbKey) {
+async function getOddsFromDB(fixtureId) {
   try {
-    const res = await fetch(
-      `${sbUrl}/rest/v1/h2h` +
-      `?or=(and(home_team_id.eq.${homeId},away_team_id.eq.${awayId}),` +
-      `and(home_team_id.eq.${awayId},away_team_id.eq.${homeId}))` +
-      `&order=match_date.desc&limit=10`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const r = await query(
+      'SELECT *, bet_name AS market, value_name AS label, value_odd AS odd_value FROM odds WHERE fixture_id = $1 AND bookmaker_id = 8',
+      [fixtureId]
     );
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    return r.rows;
   } catch (_) { return []; }
 }
 
-async function getOddsFromSupabase(fixtureId, sbUrl, sbKey) {
+async function getInjuriesFromDB(fixtureId) {
   try {
-    const res = await fetch(
-      `${sbUrl}/rest/v1/odds?fixture_id=eq.${fixtureId}&bookmaker_id=eq.8`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
-    );
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    const r = await query('SELECT * FROM injuries WHERE fixture_id = $1', [fixtureId]);
+    return r.rows;
   } catch (_) { return []; }
 }
 
-async function getInjuriesFromSupabase(fixtureId, sbUrl, sbKey) {
-  try {
-    const url = `${sbUrl}/rest/v1/injuries?fixture_id=eq.${fixtureId}&active=eq.true`;
-    const res = await fetch(url, {
-      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
-    });
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch (_) { return []; }
-}
-
-async function getMatchStatsFromSupabase(fixtureId, sbUrl, sbKey) {
+async function getMatchStatsFromDB(fixtureId) {
   if (!fixtureId) return [];
   try {
-    const url = `${sbUrl}/rest/v1/match_stats?fixture_id=eq.${fixtureId}`;
-    const res = await fetch(url, {
-      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
-    });
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    const r = await query(
+      'SELECT team_id, expected_goals AS xg, shots_on_goal AS shots_on_target FROM match_stats WHERE fixture_id = $1',
+      [fixtureId]
+    );
+    return r.rows;
   } catch (_) { return []; }
-}
-
-async function getLeaguePatternFromSupabase(leagueId, sbUrl, sbKey) {
-  if (!leagueId) return null;
-  try {
-    const url = `${sbUrl}/rest/v1/league_patterns?league_id=eq.${leagueId}&limit=1`;
-    const res = await fetch(url, {
-      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
-    });
-    const data = await res.json();
-    return data?.[0] || null;
-  } catch (_) { return null; }
-}
-
-// Transform form_stats rows → API-Football-like format expected by calcPoisson
-function formStatsToFixtures(rows, teamId) {
-  return rows.map(row => ({
-    teams: {
-      home: { id: row.is_home ? teamId : 0 },
-      away: { id: row.is_home ? 0 : teamId },
-    },
-    goals: {
-      home: row.is_home ? (row.goals_scored ?? 0) : (row.goals_conceded ?? 0),
-      away: row.is_home ? (row.goals_conceded ?? 0) : (row.goals_scored ?? 0),
-    },
-  }));
 }
 
 // Transform h2h rows → API-Football-like format expected by calcPoisson
@@ -327,23 +283,20 @@ export default async function handler(req, res) {
   const aId      = Number(a);
   const bankroll = parseFloat(br) || 10;
   const hdr      = { 'x-apisports-key': key };
-  const sbUrl    = process.env.SUPABASE_URL;
-  const sbKey    = process.env.SUPABASE_KEY;
 
   try {
-    // --- Batch 1: Supabase queries + team strengths + injuries + match_stats + league_pattern in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leaguePattern] = await Promise.all([
-      sbUrl && sbKey ? getFormFromSupabase(hId, sbUrl, sbKey)              : Promise.resolve([]),
-      sbUrl && sbKey ? getFormFromSupabase(aId, sbUrl, sbKey)              : Promise.resolve([]),
-      sbUrl && sbKey ? getH2HFromSupabase(hId, aId, sbUrl, sbKey)         : Promise.resolve([]),
-      fid && sbUrl && sbKey ? getOddsFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
-      getTeamStrengths(hId, aId, sbUrl, sbKey),
-      fid && sbUrl && sbKey ? getInjuriesFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
-      fid && sbUrl && sbKey ? getMatchStatsFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
-      lgid && sbUrl && sbKey ? getLeaguePatternFromSupabase(Number(lgid), sbUrl, sbKey) : Promise.resolve(null),
+    // --- Batch 1: DB queries + team strengths + injuries + match_stats in parallel ---
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats] = await Promise.all([
+      getFormFromDB(hId),
+      getFormFromDB(aId),
+      getH2HFromDB(hId, aId),
+      fid ? getOddsFromDB(Number(fid)) : Promise.resolve([]),
+      getTeamStrengths(hId, aId),
+      fid ? getInjuriesFromDB(Number(fid)) : Promise.resolve([]),
+      fid ? getMatchStatsFromDB(Number(fid)) : Promise.resolve([]),
     ]);
 
-    // --- Batch 2: API-Football fallbacks only where Supabase had insufficient data ---
+    // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
     const needHForm = sbHForm.length  < 3;
     const needAForm = sbAForm.length  < 3;
     const needH2H   = sbH2H.length    < 3;
@@ -357,14 +310,8 @@ export default async function handler(req, res) {
     ]);
 
     // Resolve final datasets
-    const hGames = needHForm
-      ? (apiFbHForm?.response || []).slice(0, 10)
-      : formStatsToFixtures(sbHForm, hId);
-
-    const aGames = needAForm
-      ? (apiFbAForm?.response || []).slice(0, 10)
-      : formStatsToFixtures(sbAForm, aId);
-
+    const hGames = needHForm ? (apiFbHForm?.response || []).slice(0, 10) : [];
+    const aGames = needAForm ? (apiFbAForm?.response || []).slice(0, 10) : [];
     const h2h = needH2H
       ? (apiFbH2H?.response || []).slice(0, 10)
       : h2hToFixtures(sbH2H);
@@ -395,23 +342,16 @@ export default async function handler(req, res) {
     const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota);
     const evData = calcEV(result, oddsRaw, bankroll);
 
-    // --- Resolve xG: real from match_stats if available, else estimate from shots ---
+    // --- Resolve xG ---
     let xgSource = 'estimated';
     let xgValue  = (parseFloat(soth) || 0) * 0.4 + (parseFloat(sota) || 0) * 0.4;
 
     if (Array.isArray(matchStats) && matchStats.length) {
-      // Flat schema: single row with home_xg / away_xg columns
-      if (matchStats[0].home_xg != null || matchStats[0].away_xg != null) {
-        xgValue  = (parseFloat(matchStats[0].home_xg) || 0) + (parseFloat(matchStats[0].away_xg) || 0);
-        xgSource = 'supabase';
-      } else {
-        // Per-team rows with an xg column
-        const homeRow = matchStats.find(r => r.team_id === hId && r.xg != null);
-        const awayRow = matchStats.find(r => r.team_id === aId && r.xg != null);
-        if (homeRow || awayRow) {
-          xgValue  = (parseFloat(homeRow?.xg) || 0) + (parseFloat(awayRow?.xg) || 0);
-          xgSource = 'supabase';
-        }
+      const homeRow = matchStats.find(r => r.team_id === hId && r.xg != null);
+      const awayRow = matchStats.find(r => r.team_id === aId && r.xg != null);
+      if (homeRow || awayRow) {
+        xgValue  = (parseFloat(homeRow?.xg) || 0) + (parseFloat(awayRow?.xg) || 0);
+        xgSource = 'postgres';
       }
     }
 
@@ -423,12 +363,11 @@ export default async function handler(req, res) {
 
     const confData = calcConfidence(result, oddsRaw, liveStats, teamStrengths);
 
-    // Add xg_source flag to breakdown when in live mode
     if (elapsed && parseInt(elapsed) > 0) {
       confData.breakdown.xg_source = xgSource;
     }
 
-    // --- Injuries adjustment (only when fid is present) ---
+    // --- Injuries adjustment ---
     if (fid && Array.isArray(injuries) && injuries.length >= 3) {
       let injuryPenalty = 0;
       if (injuries.length >= 8)      injuryPenalty = 15;
@@ -442,57 +381,24 @@ export default async function handler(req, res) {
       };
     }
 
-    // --- League pattern adjustment (only when lgid present and pattern found) ---
-    if (leaguePattern) {
-      const avgOver15 = parseFloat(leaguePattern.avg_over15) || 0;
-      const avgGG     = parseFloat(leaguePattern.avg_gg)     || 0;
-      let leagueAdj = 0;
-
-      if (avgOver15 > 0.65)      leagueAdj += 3;
-      else if (avgOver15 < 0.45) leagueAdj -= 3;
-
-      if (avgGG > 0.60) leagueAdj += 2;
-
-      if (leagueAdj !== 0) {
-        confData.confidenceScore = Math.max(10, confData.confidenceScore + leagueAdj);
-        confData.breakdown.league_pattern = {
-          layer: 'league_pattern',
-          value: leagueAdj,
-          note:  `avg_over15: ${Math.round(avgOver15 * 100)}%`,
-        };
-      }
-    }
-
     const payload = { ...result, ...evData, ...confData };
 
-    if (sbUrl && sbKey && fid) {
-      fetch(`${sbUrl}/rest/v1/predictions`, {
-        method: 'POST',
-        headers: {
-          'apikey':        sbKey,
-          'Authorization': `Bearer ${sbKey}`,
-          'Content-Type':  'application/json',
-          'Prefer':        'resolution=ignore-duplicates,return=minimal'
-        },
-        body: JSON.stringify({
-          fixture_id:      Number(fid),
-          home_team:       hn  || '',
-          away_team:       an  || '',
-          league_name:     lg  || '',
-          league_id:       lgid ? Number(lgid) : null,
-          match_date:      dt  || null,
-          lambda_home:     payload.lambdaHome,
-          lambda_away:     payload.lambdaAway,
-          lambda_total:    payload.lambdaTotal,
-          over15_prob:     payload.over15Prob,
-          over25_prob:     payload.over25Prob,
-          gg_prob:         payload.ggProb,
-          home_score_rate: payload.homeScoreRate,
-          away_score_rate: payload.awayScoreRate,
-          h2h_over15:      payload.h2hOver15,
-          confidence:      payload.confidence,
-        })
-      }).catch(() => {});
+    // Fire-and-forget prediction save
+    if (fid) {
+      query(
+        `INSERT INTO predictions (fixture_id, home_team, away_team, league_name, league_id, match_date,
+          lambda_home, lambda_away, lambda_total, over15_prob, over25_prob, gg_prob,
+          home_score_rate, away_score_rate, h2h_over15, confidence)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        ON CONFLICT (fixture_id) DO NOTHING`,
+        [
+          Number(fid), hn || '', an || '', lg || '', lgid ? Number(lgid) : null, dt || null,
+          payload.lambdaHome, payload.lambdaAway, payload.lambdaTotal,
+          payload.over15Prob, payload.over25Prob, payload.ggProb,
+          payload.homeScoreRate, payload.awayScoreRate, payload.h2hOver15,
+          payload.confidenceScore || null,
+        ]
+      ).catch(() => {});
     }
 
     res.status(200).json(payload);

@@ -2,7 +2,7 @@ name: Deploy AlohaScan to VPS
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/generate-ssh-key-vultr-8S9YY]
   workflow_dispatch:
 
 jobs:
@@ -15,77 +15,38 @@ jobs:
           host: ${{ secrets.VPS_IP }}
           username: root
           password: ${{ secrets.VPS_PASSWORD }}
-          envs: API_FOOTBALL_KEY,SUPABASE_URL,SUPABASE_KEY
+          envs: API_FOOTBALL_KEY,POSTGRES_URL,ANTHROPIC_API_KEY,XAI_API_KEY
           command_timeout: 8m
           script: |
             export PATH="/snap/bin:$PATH"
-            trap '' TERM
 
-            # 1. Pull cod si instaleaza dependente
+            # Pull latest code
             cd /root/scannerv2
             git pull origin main
             npm install --silent
-            true
 
-            # 2. Scrie .env cu cheile din GitHub Secrets
+            # Write .env with secrets from GitHub
             python3 -c "
             import os
             lines = []
             lines.append('API_FOOTBALL_KEY=' + os.environ.get('API_FOOTBALL_KEY',''))
-            lines.append('SUPABASE_URL=' + os.environ.get('SUPABASE_URL',''))
-            lines.append('SUPABASE_KEY=' + os.environ.get('SUPABASE_KEY',''))
+            lines.append('POSTGRES_URL=' + os.environ.get('POSTGRES_URL',''))
+            lines.append('ANTHROPIC_API_KEY=' + os.environ.get('ANTHROPIC_API_KEY',''))
+            lines.append('XAI_API_KEY=' + os.environ.get('XAI_API_KEY',''))
             open('/root/scannerv2/.env','w').write('\n'.join(lines) + '\n')
             print('ENV scris: ' + str(len(lines)) + ' chei')
             "
             chmod 600 /root/scannerv2/.env
             echo "ENV OK: $(wc -l < /root/scannerv2/.env) chei"
 
-            # 3. Serviciu systemd
-            python3 -c "
-            svc = '[Unit]\nDescription=AlohaScan Node.js\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/root/scannerv2\nExecStart=/snap/bin/node /root/scannerv2/server.js\nEnvironmentFile=-/root/scannerv2/.env\nRestart=always\nRestartSec=5\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n'
-            open('/etc/systemd/system/alohascan.service','w').write(svc)
-            print('systemd service scris OK')
-            "
-            systemctl daemon-reload
-            systemctl enable alohascan
-            systemctl restart alohascan
-            sleep 2
-            systemctl is-active alohascan && echo "APP: ONLINE" || echo "APP: ERROR"
+            # Start or restart app
+            pm2 restart alohascan 2>/dev/null || pm2 start ecosystem.config.cjs
+            pm2 save
 
-            # 4. Nginx
-            apt-get install -y nginx -qq 2>/dev/null; true
-            systemctl stop coolify 2>/dev/null; true
-            docker ps -q --filter "publish=80" 2>/dev/null | xargs -r docker stop 2>/dev/null; true
-            fuser -k 80/tcp 2>/dev/null; true
-            lsof -ti:80 2>/dev/null | xargs -r kill -9 2>/dev/null; true
-            sleep 1
-            python3 -c "
-            cfg = 'server {\n    listen 80 default_server;\n    server_name _;\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade \$http_upgrade;\n        proxy_set_header Connection \$http_connection;\n        proxy_set_header Host \$host;\n        proxy_set_header X-Real-IP \$remote_addr;\n        proxy_cache_bypass \$http_upgrade;\n    }\n}\n'
-            open('/etc/nginx/sites-available/alohascan','w').write(cfg)
-            "
-            ln -sf /etc/nginx/sites-available/alohascan /etc/nginx/sites-enabled/alohascan
-            rm -f /etc/nginx/sites-enabled/default
-            nginx -t 2>&1 && systemctl restart nginx && systemctl enable nginx; true
-
-            # 5. Cron jobs - fiecare ora (echo simplu, fara heredoc)
-            crontab -l 2>/dev/null | grep -v "localhost:3000" > /tmp/crontab_new || true
-            echo "0 * * * * curl -sf --max-time 60 http://localhost:3000/api/cron/scan >> /var/log/alohascan-cron.log 2>&1" >> /tmp/crontab_new
-            echo "15 * * * * curl -sf --max-time 60 http://localhost:3000/api/cron/collect-daily >> /var/log/alohascan-cron.log 2>&1" >> /tmp/crontab_new
-            echo "30 * * * * curl -sf --max-time 60 http://localhost:3000/api/update-results >> /var/log/alohascan-cron.log 2>&1" >> /tmp/crontab_new
-            echo "45 * * * * curl -sf --max-time 60 http://localhost:3000/api/cron/collect-finished >> /var/log/alohascan-cron.log 2>&1" >> /tmp/crontab_new
-            crontab /tmp/crontab_new
-            echo "CRON: $(crontab -l | grep -c localhost:3000) joburi active"
-
-            # 6. Rulare initiala imediata
-            curl -sf --max-time 60 http://localhost:3000/api/cron/scan >> /var/log/alohascan-cron.log 2>&1 && echo "scan: OK" || echo "scan: SKIP"
-            curl -sf --max-time 60 http://localhost:3000/api/cron/collect-daily >> /var/log/alohascan-cron.log 2>&1 && echo "collect-daily: OK" || echo "collect-daily: SKIP"
-            curl -sf --max-time 60 http://localhost:3000/api/cron/collect-finished >> /var/log/alohascan-cron.log 2>&1 && echo "collect-finished: OK" || echo "collect-finished: SKIP"
-            curl -sf --max-time 60 http://localhost:3000/api/update-results >> /var/log/alohascan-cron.log 2>&1 && echo "update-results: OK" || echo "update-results: SKIP"
-
-            echo "NGINX: $(systemctl is-active nginx)"
-            echo "ALOHASCAN: $(systemctl is-active alohascan)"
-            echo "DONE: $(date)"
+            echo "Deploy complet: $(date)"
+            pm2 list
         env:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}

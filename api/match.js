@@ -1,4 +1,5 @@
 import { calcPoisson6x6, parseOddsItem, calcEV } from './calc-utils.js';
+import { query } from './db.js';
 
 function calcPoisson(hGames, aGames, h2h, hId) {
   const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
@@ -99,7 +100,6 @@ export default async function handler(req, res) {
     const aGames = (dAForm.response || []).filter(m => m.teams?.away?.id === aId).slice(0, 10);
     const h2h    = (dH2H.response   || []).slice(0, 10);
 
-    // Odds — try fixture, fallback to league if empty
     let oddsRaw = null;
     const oddsItem = (dOdds.response || [])[0];
     if (oddsItem) {
@@ -114,43 +114,33 @@ export default async function handler(req, res) {
         const dOdds2 = await rOdds2.json();
         const item2  = (dOdds2.response || []).find(x => x.fixture?.id === Number(id));
         if (item2) oddsRaw = parseOddsItem(item2);
-      } catch (_) { /* odds unavailable */ }
+      } catch (_) {}
     }
 
     const poissonResult = calcPoisson(hGames, aGames, h2h, hId);
     const evData        = calcEV(poissonResult, oddsRaw, bankroll);
     const enrich        = { ...poissonResult, ...evData };
 
-    const sbUrl = process.env.SUPABASE_URL;
-    const sbKey = process.env.SUPABASE_KEY;
-    if (sbUrl && sbKey && fixture) {
-      fetch(`${sbUrl}/rest/v1/predictions`, {
-        method: 'POST',
-        headers: {
-          'apikey':        sbKey,
-          'Authorization': `Bearer ${sbKey}`,
-          'Content-Type':  'application/json',
-          'Prefer':        'resolution=ignore-duplicates,return=minimal'
-        },
-        body: JSON.stringify({
-          fixture_id:      fixture.fixture?.id,
-          home_team:       fixture.teams?.home?.name || '',
-          away_team:       fixture.teams?.away?.name || '',
-          league_name:     fixture.league?.name      || '',
-          league_id:       fixture.league?.id        || null,
-          match_date:      fixture.fixture?.date     || null,
-          lambda_home:     enrich.lambdaHome,
-          lambda_away:     enrich.lambdaAway,
-          lambda_total:    enrich.lambdaTotal,
-          over15_prob:     enrich.over15Prob,
-          over25_prob:     enrich.over25Prob,
-          gg_prob:         enrich.ggProb,
-          home_score_rate: enrich.homeScoreRate,
-          away_score_rate: enrich.awayScoreRate,
-          h2h_over15:      enrich.h2hOver15,
-          confidence:      enrich.confidence,
-        })
-      }).catch(() => {});
+    // Fire-and-forget prediction save
+    if (fixture) {
+      query(
+        `INSERT INTO predictions (fixture_id, home_team, away_team, league_name, league_id, match_date,
+          lambda_home, lambda_away, lambda_total, over15_prob, over25_prob, gg_prob,
+          home_score_rate, away_score_rate, h2h_over15)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        ON CONFLICT (fixture_id) DO NOTHING`,
+        [
+          fixture.fixture?.id,
+          fixture.teams?.home?.name || '',
+          fixture.teams?.away?.name || '',
+          fixture.league?.name      || '',
+          fixture.league?.id        || null,
+          fixture.fixture?.date     || null,
+          enrich.lambdaHome, enrich.lambdaAway, enrich.lambdaTotal,
+          enrich.over15Prob, enrich.over25Prob, enrich.ggProb,
+          enrich.homeScoreRate, enrich.awayScoreRate, enrich.h2hOver15,
+        ]
+      ).catch(() => {});
     }
 
     const flatPlayers = players.flatMap(team =>

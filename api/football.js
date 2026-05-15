@@ -34,7 +34,7 @@ async function fetchH2H(homeId, awayId, key) {
 
 const enrichCache = new Map();
 
-async function enrichOne(m, key, sbUrl, sbKey) {
+async function enrichOne(m, key) {
   const hId = m.teams?.home?.id;
   const aId = m.teams?.away?.id;
   if (!hId || !aId) return m;
@@ -115,8 +115,6 @@ export default async function handler(req, res) {
 
   const key    = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
   const fdKey  = process.env.FOOTBALL_DATA_KEY;
-  const sbUrl  = process.env.SUPABASE_URL;
-  const sbKey  = process.env.SUPABASE_KEY;
 
   if (!key) return res.status(500).json({ error: 'API_FOOTBALL_KEY neconfigurat' });
 
@@ -172,18 +170,15 @@ export default async function handler(req, res) {
   const combined = [...afMatches, ...fdNew];
   log(`combined before league-filter: ${combined.length}`);
 
-  // Strict whitelist: af-source uses API-Football IDs; fd-source uses football-data.org
-  // competition IDs (different numbering) — for fd we only apply the women's filter.
   const WOMEN_RE = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
   const LOWER_DIV_RE = /\b[3-9]\.\s*(liga|division|div)\b/i;
   const filtered = combined.filter(m => {
     if (WOMEN_RE.test(m.league?.name || '')) return false;
     if (LOWER_DIV_RE.test(m.league?.name || '')) return false;
-    if (m._src === 'fd') return true; // fd IDs differ — league already curated by fd.org
+    if (m._src === 'fd') return true;
     return ALLOWED_LEAGUE_IDS.has(m.league?.id);
   });
 
-  // Log which af-source leagues were blocked so we can fix the whitelist
   const blocked = combined.filter(m =>
     m._src === 'af' && !ALLOWED_LEAGUE_IDS.has(m.league?.id) && !WOMEN_RE.test(m.league?.name || '')
   );
@@ -202,7 +197,7 @@ export default async function handler(req, res) {
     .slice(0, 5);
 
   if (toEnrich.length && key) {
-    await Promise.allSettled(toEnrich.map(m => enrichOne(m, key, sbUrl, sbKey)));
+    await Promise.allSettled(toEnrich.map(m => enrichOne(m, key)));
   }
 
   return res.status(200).json(result);
