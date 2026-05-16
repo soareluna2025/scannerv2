@@ -70,9 +70,17 @@ router.use((req, res, next) => {
     recordFail(ip);
     const e = failedMap.get(ip);
     logAccess(ip, req.method, req.path, 401);
+    const envKey = process.env.ADMIN_API_KEY;
     return res.status(401).json({
       error: 'Unauthorized',
       attempts_left: Math.max(0, 5 - (e?.count || 0)),
+      _dbg: {
+        env_key_loaded: !!envKey,
+        env_key_len: envKey?.length ?? 0,
+        env_key_prefix: envKey ? envKey.slice(0, 8) : null,
+        recv_key_len: key?.length ?? 0,
+        recv_key_prefix: key ? key.slice(0, 8) : null,
+      },
     });
   }
 
