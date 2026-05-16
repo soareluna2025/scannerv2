@@ -97,7 +97,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .card-teams{padding:12px 14px}
 .team-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .team-row:last-child{margin-bottom:0}
-.team-name{font-size:15px;font-weight:700;color:var(--tx);flex:1;padding-right:8px}
+.team-name{font-size:15px;font-weight:700;color:var(--tx);flex:1;padding-right:8px;display:flex;align-items:center;gap:8px}
 .team-score{font-size:22px;font-weight:800;color:var(--tx);min-width:24px;text-align:right}
 .team-score.winning{color:var(--ac)}
 .card-footer{padding:8px 14px 12px}
@@ -174,7 +174,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .pm-card{background:var(--sur);border:1px solid var(--bor);border-radius:16px;margin-bottom:8px;overflow:hidden}
 .pm-header{padding:12px 14px;border-bottom:1px solid var(--bor)}
 .pm-kickoff{font-size:10px;color:var(--mu2);font-weight:600;margin-bottom:4px}
-.pm-teams{font-size:15px;font-weight:800;color:var(--tx)}
+.pm-teams{font-size:15px;font-weight:800;color:var(--tx);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .pm-league{font-size:10px;color:var(--mu);margin-top:2px}
 .pm-body{padding:12px 14px}
 .pm-meter-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
@@ -380,7 +380,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 /* SUMAR */
 .md-score-block{text-align:center;padding:20px 0 16px}
 .md-teams-row{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:8px}
-.md-team-name{font-size:15px;font-weight:800;color:var(--tx);flex:1;text-align:center}
+.md-team-name{font-size:15px;font-weight:800;color:var(--tx);flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
 .md-score{font-size:52px;font-weight:900;color:var(--tx);letter-spacing:-2px;min-width:80px;text-align:center}
 .md-minute{text-align:center;margin-bottom:16px}
 .md-min-badge{display:inline-flex;align-items:center;gap:5px;
@@ -485,8 +485,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .gen-live-dot{display:inline-block;width:5px;height:5px;border-radius:50%;
   background:var(--ac);animation:pulse 1.5s ease-in-out infinite;
   vertical-align:middle;margin-right:2px}
-.gen-card-teams{font-size:13px;font-weight:600;color:var(--tx);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gen-card-teams{font-size:13px;font-weight:600;color:var(--tx);display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .gen-card-sub{font-size:10px;color:var(--mu);margin-top:3px}
 .gen-card-big{text-align:center;flex-shrink:0;min-width:52px}
 .gen-card-big-val{font-size:22px;font-weight:900;line-height:1}
@@ -728,6 +727,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   </button>
 </nav>
 <script>
+function tLogo(team,sz){if(!team||!team.logo)return '';return '<img src="'+team.logo+'" width="'+sz+'" height="'+sz+'" style="border-radius:4px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">';}
 // ── CONFIG ──────────────────────────────────────────────────
 var CFG={MC:80,MD:20,RI:30000};
 var WR_KEY='alohascan_wr_v2';
@@ -1069,8 +1069,8 @@ function renderMatches(){
       out+='<div class="card-minute"><div class="min-dot"></div><div class="min-val">'+mn+"'</div></div>";
       out+='</div>';
       out+='<div class="card-teams">';
-      out+='<div class="team-row"><div class="team-name">'+(m.teams&&m.teams.home&&m.teams.home.name||'—')+(hRed?' 🟥':'')+'</div><div class="team-score'+(hWin?' winning':'')+'">'+hg+'</div></div>';
-      out+='<div class="team-row"><div class="team-name">'+(m.teams&&m.teams.away&&m.teams.away.name||'—')+(aRed?' 🟥':'')+'</div><div class="team-score'+(aWin?' winning':'')+'">'+ag+'</div></div>';
+      out+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+(m.teams&&m.teams.home&&m.teams.home.name||'—')+(hRed?' 🟥':'')+'</span></div><div class="team-score'+(hWin?' winning':'')+'">'+hg+'</div></div>';
+      out+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.away,32)+'<span>'+(m.teams&&m.teams.away&&m.teams.away.name||'—')+(aRed?' 🟥':'')+'</span></div><div class="team-score'+(aWin?' winning':'')+'">'+ag+'</div></div>';
       out+='</div>';
       out+='<div class="card-footer">';
       out+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
@@ -1345,7 +1345,7 @@ function renderPM(){
     html+='<button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>';
     html+='<div class="pm-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">';
     html+='<div><div class="pm-kickoff">'+flag+lg+' · 🕐 '+kickoff+'</div>';
-    html+='<div class="pm-teams">'+hn+' vs '+an+'</div></div>';
+    html+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu);font-size:13px;font-weight:600">vs</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div></div>';
     if(isTop)html+='<span class="badge-top">TOP PICK</span>';
     html+='</div>';
     if(enr){
@@ -1614,9 +1614,9 @@ function mdRenderSumar(d){
 
   out+='<div class="md-score-block">';
   out+='<div class="md-teams-row">';
-  out+='<div class="md-team-name">'+hn+'</div>';
+  out+='<div class="md-team-name">'+tLogo(fix&&fix.teams&&fix.teams.home,48)+'<span>'+hn+'</span></div>';
   out+='<div class="md-score">'+hg+' - '+ag+'</div>';
-  out+='<div class="md-team-name">'+an+'</div>';
+  out+='<div class="md-team-name">'+tLogo(fix&&fix.teams&&fix.teams.away,48)+'<span>'+an+'</span></div>';
   out+='</div></div>';
   if(isLive){
     out+='<div class="md-minute"><div class="md-min-badge"><div class="min-dot"></div>'+mn+"'</div></div>";
@@ -1970,8 +1970,8 @@ function genCard(m,ed,type,isLive){
   var val=genScore(ed,type);
   var lbl=type==='home'?'GAZDE':type==='away'?'OASPEȚI':type==='ev'?'EV':'O1.5';
   var clr=type==='ev'?'#22c55e':ec(val);
-  var homeStr=type==='home'?'<b>'+hn+'</b>':hn;
-  var awayStr=type==='away'?'<b>'+an+'</b>':an;
+  var homeStr=tLogo(m.teams&&m.teams.home,24)+(type==='home'?'<b>'+hn+'</b>':hn);
+  var awayStr=tLogo(m.teams&&m.teams.away,24)+(type==='away'?'<b>'+an+'</b>':an);
   var meta=type==='ev'
     ?(ed.bestBet||'')+(ed.bestCota?' @ '+ed.bestCota.toFixed(2):'')+(ed.bestKelly?' · Kelly: '+ed.bestKelly.toFixed(2)+' LTC':'')
     :type==='over15'
@@ -2225,7 +2225,7 @@ function renderFavs(){
     s+='<button class="star-btn active" onclick="event.stopPropagation();removeFav('+fid+')">⭐</button>';
     s+='<div class="pm-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">';
     s+='<div><div class="pm-kickoff">'+flag+lg+' · '+timeStr+'</div>';
-    s+='<div class="pm-teams">'+hn+' <span style="color:var(--mu)">'+hg+' - '+ag+'</span> '+an+'</div></div>';
+    s+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu)">'+hg+' - '+ag+'</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div></div>';
     s+='</div>';
     if(ed&&ed.homeWin!=null){
       s+='<div class="pm-body">';
