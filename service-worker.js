@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alohascan-v1';
+const CACHE_NAME = 'alohascan-v2';
 
 // External API hostnames — never intercept these
 const BYPASS_HOSTS = [
@@ -38,8 +38,8 @@ self.addEventListener('fetch', event => {
   // Let external API calls go through unmodified
   if (BYPASS_HOSTS.some(h => url.hostname.includes(h))) return;
 
-  // Let internal API routes go through (always need fresh data)
-  if (url.pathname.startsWith('/api/')) return;
+  // Let internal API routes and admin go through (always need fresh data)
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/admin')) return;
 
   // Cache-first for everything else (static assets, index.html)
   event.respondWith(
