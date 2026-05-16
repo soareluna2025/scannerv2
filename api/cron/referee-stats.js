@@ -53,7 +53,7 @@ export default async function handler(req, res) {
       dates.push(dt.toISOString().slice(0, 10));
     }
 
-    const refByFixture = {}; // fixture_id → referee_name
+    const fixtureData = {}; // fixture_id → {referee, status_short, home_goals, away_goals}
     let apiFetched = 0;
     for (const date of dates) {
       try {
@@ -61,24 +61,38 @@ export default async function handler(req, res) {
         const data = await r.json();
         for (const fix of data.response || []) {
           const name = cleanRefName(fix.fixture?.referee);
-          if (name && fix.fixture?.id) refByFixture[fix.fixture.id] = name;
+          if (fix.fixture?.id) {
+            fixtureData[fix.fixture.id] = {
+              referee:      name,
+              status_short: fix.fixture?.status?.short || null,
+              home_goals:   fix.goals?.home ?? null,
+              away_goals:   fix.goals?.away ?? null,
+            };
+          }
         }
         apiFetched++;
         await sleep(300);
       } catch (_) { await sleep(300); }
     }
 
-    // Batch UPDATE fixtures_history.referee (o singură interogare)
-    const fids  = Object.keys(refByFixture).map(Number);
-    const names = fids.map(id => refByFixture[id]);
+    // Batch UPDATE fixtures_history — referee + status + goals (ține DB la zi)
+    const fids       = Object.keys(fixtureData).map(Number);
+    const referees   = fids.map(id => fixtureData[id].referee);
+    const statuses   = fids.map(id => fixtureData[id].status_short);
+    const homeGoals  = fids.map(id => fixtureData[id].home_goals);
+    const awayGoals  = fids.map(id => fixtureData[id].away_goals);
+
     if (fids.length > 0) {
       await query(
         `UPDATE fixtures_history fh
-         SET referee = u.referee
-         FROM unnest($1::integer[], $2::text[]) AS u(fid, referee)
-         WHERE fh.fixture_id = u.fid
-           AND fh.referee IS DISTINCT FROM u.referee`,
-        [fids, names]
+         SET referee      = COALESCE(u.referee, fh.referee),
+             status_short = COALESCE(u.status_short, fh.status_short),
+             home_goals   = COALESCE(u.home_goals, fh.home_goals),
+             away_goals   = COALESCE(u.away_goals, fh.away_goals)
+         FROM unnest($1::integer[], $2::text[], $3::text[], $4::integer[], $5::integer[])
+           AS u(fid, referee, status_short, home_goals, away_goals)
+         WHERE fh.fixture_id = u.fid`,
+        [fids, referees, statuses, homeGoals, awayGoals]
       );
     }
 
@@ -194,7 +208,7 @@ export default async function handler(req, res) {
       ok:                  true,
       duration_ms:         Date.now() - start,
       api_dates_fetched:   apiFetched,
-      fixtures_with_ref:   fids.length,
+      fixtures_updated:    fids.length,
       referees_processed:  upserted,
     });
   } catch (e) {
