@@ -1508,6 +1508,8 @@ async function mdFetch(silent){
     var d=await r.json();
     if(d.error)throw new Error(d.error);
     if(_md.fixtureId!==fid)return;
+    // La refresh silent, dacă API returnează fixture null (rate limit), păstrăm ultimul fixture valid
+    if(silent&&!d.fixture&&_md.data&&_md.data.fixture){d.fixture=_md.data.fixture;}
     _md.data=d;
     var fix=d.fixture;
     if(fix){
