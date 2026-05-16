@@ -58,6 +58,18 @@ app.get('/admin', (req, res) => {
   res.sendFile(join(__dirname, 'admin.html'));
 });
 
+// Health / debug (public, fără auth)
+app.get('/health', (req, res) => {
+  const k = process.env.ADMIN_API_KEY || '';
+  res.json({
+    ok: true,
+    cwd: process.cwd(),
+    admin_key_loaded: k.length > 0,
+    admin_key_len: k.length,
+    admin_key_prefix: k ? k.slice(0, 8) : null,
+  });
+});
+
 // Backfill routes
 app.get('/api/backfill/start', async (req, res) => {
   runDailyBackfill(); // async, fără await — rulează în background
