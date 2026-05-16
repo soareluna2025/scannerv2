@@ -96,6 +96,17 @@ export default async function handler(req, res) {
       );
     }
 
+    // Diagnostic: verifică ce există în DB după UPDATE
+    const { rows: diagRows } = await query(`
+      SELECT
+        COUNT(*) FILTER (WHERE referee IS NOT NULL)                                   AS has_referee,
+        COUNT(*) FILTER (WHERE referee IS NOT NULL AND status_short = 'FT')           AS ref_ft,
+        COUNT(*) FILTER (WHERE referee IS NOT NULL AND home_goals IS NOT NULL)        AS ref_goals,
+        COUNT(*) FILTER (WHERE referee IS NOT NULL AND status_short = 'FT' AND home_goals IS NOT NULL) AS ref_ft_goals
+      FROM fixtures_history
+    `).catch(() => ({ rows: [{}] }));
+    const diag = diagRows[0] || {};
+
     // Step 3: Calculează statistici goluri per arbitru din fixtures_history
     const { rows: goalRows } = await query(`
       SELECT
@@ -210,6 +221,12 @@ export default async function handler(req, res) {
       api_dates_fetched:   apiFetched,
       fixtures_updated:    fids.length,
       referees_processed:  upserted,
+      _diag: {
+        has_referee:   Number(diag.has_referee  || 0),
+        ref_ft:        Number(diag.ref_ft       || 0),
+        ref_goals:     Number(diag.ref_goals    || 0),
+        ref_ft_goals:  Number(diag.ref_ft_goals || 0),
+      },
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
