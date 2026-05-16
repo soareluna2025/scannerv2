@@ -25,8 +25,7 @@ export default async function handler(req, res) {
       query(`SELECT COUNT(*) AS cnt, COUNT(*) FILTER (WHERE outcome='LIVE') AS live
              FROM match_snapshots`),
       query(`SELECT COUNT(*) AS cnt FROM live_stats`),
-      query(`SELECT COUNT(*) AS cnt, COUNT(*) FILTER (WHERE telegram_sent=true) AS sent
-             FROM alerts`),
+      query(`SELECT COUNT(*) AS cnt FROM alerts`),
       query(`SELECT job_name, ran_at, status, fixtures_processed, players_upserted, error_msg
              FROM cron_logs ORDER BY ran_at DESC LIMIT 10`),
       query(`SELECT fixture_id, home_team_id, away_team_id, status_short, match_date
@@ -50,10 +49,7 @@ export default async function handler(req, res) {
         live:  Number(matchSnapshots.rows[0].live),
       },
       liveStats:  Number(liveStats.rows[0].cnt),
-      alerts: {
-        total: Number(alerts.rows[0].cnt),
-        sent:  Number(alerts.rows[0].sent),
-      },
+      alerts: Number(alerts.rows[0].cnt),
       cronLogs: cronLogs.rows,
     });
   } catch (e) {
