@@ -244,6 +244,7 @@ const ALLOWED_JOBS = {
   'collect-daily':      '/api/cron/collect-daily',
   'collect-finished':   '/api/cron/collect-finished',
   'prematch-enrichment':'/api/cron/prematch-enrichment',
+  'scan':               '/api/cron/scan',
   'backfill':           '/api/backfill/start',
 };
 
