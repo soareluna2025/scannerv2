@@ -1,0 +1,511 @@
+================================================================================
+AUDIT ALLOWED_LEAGUE_IDS — api/leagues.js
+Data: 2026-05-16
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. TOTAL LIGI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Total ID-uri unice în Set:       241
+  Total țări/regiuni acoperite:     76
+  Total competiții internaționale:  16
+
+  Defalcare pe regiuni:
+  ├── Europa         : 88 ligi  (29 țări)
+  ├── Americas       : 54 ligi  (18 țări)
+  ├── Asia           : 57 ligi  (20 țări/regiuni)
+  ├── Africa         : 26 ligi  (9 țări)
+  └── Internaționale : 16 competiții
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. LISTA COMPLETĂ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── EUROPA (88 ligi, 29 țări) ────────────────────────────────────────────────
+
+  England (4 — ⚠️ are 2 cupe):
+    39  — Premier League
+    40  — Championship (Liga 2)
+    45  — FA Cup
+    48  — EFL Cup (Carabao Cup)   ← A DOUA CUPĂ, ÎN PLUS
+
+  Spain (3):
+    140 — La Liga
+    141 — Segunda Division (Liga 2)
+    143 — Copa del Rey
+
+  Germany (3):
+    78  — Bundesliga
+    79  — 2. Bundesliga
+    81  — DFB Pokal
+
+  Italy (3):
+    135 — Serie A
+    136 — Serie B (Liga 2)
+    137 — Coppa Italia
+
+  France (3):
+    61  — Ligue 1
+    62  — Ligue 2
+    66  — Coupe de France
+
+  Netherlands (3):
+    88  — Eredivisie
+    89  — Eerste Divisie (Liga 2)
+    90  — KNVB Cup
+
+  Portugal (3):
+    94  — Primeira Liga
+    95  — Liga Portugal 2
+    96  — Taca de Portugal
+
+  Belgium (3):
+    144 — Pro League
+    145 — Challenger Pro League (Liga 2)
+    146 — Belgian Cup
+
+  Turkey (3):
+    203 — Super Lig
+    204 — TFF First League (Liga 2)
+    205 — Turkish Cup
+
+  Scotland (3):
+    179 — Premiership
+    180 — Championship (Liga 2)
+    184 — Scottish Cup
+
+  Czech Republic (3):
+    345 — Fortuna Liga (Liga 1)
+    346 — FNL (Liga 2)
+    347 — MOL Cup
+
+  Austria (3):
+    218 — Bundesliga
+    219 — 2. Liga
+    221 — ÖFB Cup
+
+  Switzerland (3):
+    207 — Super League
+    208 — Challenge League (Liga 2)
+    209 — Swiss Cup
+
+  Denmark (3):
+    119 — Superliga
+    120 — 1st Division (Liga 2)
+    123 — DBU Pokalen
+
+  Norway (3):
+    103 — Eliteserien
+    104 — First Division (Liga 2)
+    105 — Norwegian Cup
+
+  Sweden (3):
+    113 — Allsvenskan
+    114 — Superettan (Liga 2)
+    115 — Svenska Cupen
+
+  Poland (3):
+    106 — Ekstraklasa
+    107 — I Liga (Liga 2)
+    108 — Polish Cup
+
+  Croatia (3):
+    210 — Prva HNL
+    211 — Druga HNL (Liga 2)
+    212 — Croatian Cup
+
+  Serbia (3):
+    392 — SuperLiga
+    393 — Prva Liga (Liga 2)
+    394 — Kup Srbije
+
+  Romania (3):
+    783 — Superliga (Liga 1)
+    785 — Liga II
+    787 — Cupa Romaniei
+
+  Greece (3):
+    551 — Super League 1
+    552 — Super League 2 (Liga 2)
+    556 — Greek Cup
+
+  Hungary (3):
+    271 — Nemzeti Bajnokság I (Liga 1)
+    272 — Nemzeti Bajnokság II (Liga 2)
+    275 — Magyar Kupa (Cup)
+
+  Bulgaria (3):
+    172 — First Professional League
+    173 — Second Professional League (Liga 2)
+    174 — Bulgarian Cup
+
+  Slovakia (3):
+    332 — Super Liga (Liga 1)
+    506 — 2. liga (Liga 2)
+    680 — Slovak Cup
+
+  Finland (3):
+    244 — Veikkausliiga (Liga 1)
+    245 — Ykkönen (Liga 2)
+    246 — Finnish Cup
+
+  Ukraine (3):
+    333 — Premier League
+    334 — Persha Liha (Liga 2)
+    336 — Ukrainian Cup
+
+  Russia (3):
+    235 — Premier League
+    236 — First League (Liga 2)
+    237 — Russian Cup
+
+  Belarus (3):
+    116 — Vysheyshaya Liga (Liga 1)
+    117 — 1. Division (Liga 2)
+    486 — Belarusian Cup
+
+  Kazakhstan (3):
+    389 — Premier League
+    388 — 1. Division (Liga 2)
+    498 — Kazakhstan Cup
+
+── AMERICAS (54 ligi, 18 țări) ─────────────────────────────────────────────
+
+  Brazil (3):
+    71  — Serie A
+    72  — Serie B (Liga 2)
+    73  — Copa do Brasil
+
+  Argentina (3):
+    128 — Primera Division
+    131 — Primera Nacional (Liga 2)
+    132 — Copa Argentina
+
+  Mexico (3):
+    262 — Liga MX
+    263 — Liga Expansion (Liga 2)
+    264 — Copa MX
+
+  Colombia (4 — ⚠️ are 2 cupe):
+    239 — Primera A
+    240 — Primera B (Liga 2)
+    241 — Copa Colombia
+    713 — Superliga (Copa)   ← A DOUA CUPĂ, ÎN PLUS
+
+  Chile (3):
+    265 — Primera Division
+    266 — Primera B (Liga 2)
+    267 — Copa Chile
+
+  Uruguay (3):
+    268 — Primera Division
+    269 — Segunda Division (Liga 2)
+    270 — Copa Uruguay
+
+  Peru (3):
+    281 — Liga 1
+    282 — Liga 2
+    283 — Copa Peru
+
+  Ecuador (3):
+    286 — LigaPro Serie A
+    287 — LigaPro Serie B (Liga 2)
+    735 — Copa Ecuador
+
+  Paraguay (3):
+    278 — Primera Division
+    279 — Division Intermedia (Liga 2)
+    280 — Copa Paraguay
+
+  Bolivia (3):
+    273 — Primera Division
+    274 — Liga de Ascenso (Liga 2)
+    276 — Copa Bolivia
+
+  Venezuela (3):
+    153 — Liga FUTVE
+    154 — Segunda Division (Liga 2)
+    155 — Copa Venezuela
+
+  USA (4 — ⚠️ conține Liga 3):
+    253 — MLS
+    255 — USL Championship (Liga 2)
+    257 — US Open Cup
+    909 — MLS Next Pro   ← LIGĂ 3, ÎN PLUS (comentariul din cod zice explicit "(Liga 3)")
+
+  Canada (2 — fără Liga 2):
+    321 — Canadian Premier League
+    322 — Canadian Championship (Cup)
+
+  Costa Rica (3):
+    258 — Primera Division
+    259 — Segunda Division (Liga 2)
+    260 — Copa Costa Rica
+
+  Honduras (3):
+    261 — Liga Nacional
+    319 — Liga de Ascenso (Liga 2)
+    320 — Copa Honduras
+
+  Guatemala (3):
+    339 — Liga Nacional
+    338 — Primera Division (Liga 2)
+    248 — Copa Guatemala
+
+  El Salvador (3):
+    344 — Primera Division
+    349 — Segunda Division (Liga 2)
+    350 — Copa El Salvador
+
+  Nicaragua (2 — fără cupă):
+    256 — Primera Division
+    380 — Segunda Division (Liga 2)
+
+── ASIA (57 ligi, 20 țări/regiuni) ─────────────────────────────────────────
+
+  Saudi Arabia (3):
+    307 — Saudi Pro League
+    308 — First Division (Liga 2)
+    313 — King Cup
+
+  Japan (3):
+    98  — J1 League
+    99  — J2 League (Liga 2)
+    100 — Emperor's Cup
+
+  South Korea (3):
+    292 — K League 1
+    293 — K League 2 (Liga 2)
+    294 — Korean FA Cup
+
+  Iran (3):
+    290 — Persian Gulf Pro League
+    291 — Azadegan League (Liga 2)
+    295 — Hazfi Cup
+
+  Qatar (3):
+    19  — Qatar Stars League
+    21  — QSL (Liga 2)
+    22  — Emir Cup
+
+  UAE (3):
+    433 — Pro League
+    434 — First Division (Liga 2)
+    435 — UAE Cup
+
+  China (3):
+    169 — Super League
+    170 — League One (Liga 2)
+    171 — FA Cup
+
+  Thailand (3):
+    296 — Thai League 1
+    297 — Thai League 2
+    298 — Thai FA Cup
+
+  Uzbekistan (3):
+    335 — Super League
+    631 — Pro League (Liga 2)
+    632 — Uzbek Cup
+
+  Australia (2 — fără Liga 2):
+    188 — A-League Men
+    189 — Australia Cup
+
+  India (3):
+    323 — ISL (Indian Super League)
+    324 — I-League (Liga 2)
+    325 — Durand Cup
+
+  Malaysia (3):
+    518 — Super League
+    519 — Premier League (Liga 2)
+    520 — Malaysia Cup
+
+  Indonesia (3):
+    391 — Liga 1
+    460 — Liga 2
+    461 — Indonesian Cup
+
+  Vietnam (3):
+    340 — V.League 1
+    341 — V.League 2 (Liga 2)
+    342 — Vietnamese Cup
+
+  Iraq (3):
+    302 — Premier League
+    303 — Division 1 (Liga 2)
+    304 — Iraqi Cup
+
+  Jordan (3):
+    474 — Pro League
+    475 — Division 1 (Liga 2)
+    494 — Jordan Cup
+
+  Kuwait (3):
+    299 — Premier League
+    300 — Division 1 (Liga 2)
+    493 — Emir Cup
+
+  Oman (3):
+    309 — Professional League
+    491 — Division 1 (Liga 2)
+    492 — Sultan Qaboos Cup
+
+  Hong Kong (3):
+    499 — Premier League
+    500 — First Division (Liga 2)
+    503 — HK FA Cup
+
+  Singapore (1 — fără cupă, ID 503 era duplicat):
+    502 — Premier League
+
+── AFRICA (26 ligi, 9 țări) ────────────────────────────────────────────────
+
+  Egypt (3):
+    233 — Premier League
+    234 — Second Division (Liga 2)
+    238 — Egyptian Cup
+
+  Morocco (3):
+    200 — Botola Pro
+    201 — Botola 2 (Liga 2)
+    822 — Coupe du Trône
+
+  Tunisia (3):
+    202 — Ligue 1
+    377 — Ligue 2
+    378 — Coupe de Tunisie
+
+  Algeria (3):
+    197 — Ligue Professionnelle 1
+    198 — Ligue Professionnelle 2 (Liga 2)
+    199 — Coupe d'Algérie
+
+  South Africa (3):
+    288 — Premier Division (PSL)
+    670 — National First Division (Liga 2)
+    671 — Nedbank Cup
+
+  Nigeria (3):
+    399 — NPFL
+    666 — Nigeria National League (Liga 2)
+    667 — Nigerian FA Cup
+
+  Ghana (3):
+    289 — Premier League
+    417 — Division One (Liga 2)
+    418 — Ghana FA Cup
+
+  Ivory Coast (3):
+    383 — Ligue 1
+    384 — Ligue 2
+    385 — Coupe de Côte d'Ivoire
+
+  Kenya (2 — fără cupă, ID 500 era duplicat):
+    357 — Premier League
+    358 — National Super League (Liga 2)
+
+── INTERNAȚIONALE (16 competiții) ──────────────────────────────────────────
+
+    2   — UEFA Champions League
+    3   — UEFA Europa League
+    848 — UEFA Conference League
+    4   — Euro Championship
+    5   — UEFA Nations League
+    1   — World Cup
+    6   — FIFA Club World Cup
+    9   — Copa America
+    13  — Copa Libertadores (CONMEBOL)
+    11  — Copa Sudamericana (CONMEBOL)
+    10  — CONCACAF Champions Cup
+    26  — CONCACAF Nations League
+    17  — AFC Champions League
+    18  — AFC Cup
+    12  — CAF Champions League
+    20  — CAF Confederation Cup
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. DUPLICATE DETECTATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  REZOLVATE (comentate în cod, nu mai sunt active):
+    500 — apărea pentru HK First Division ȘI Kenya FKF Cup
+          → Kenya FKF Cup comentat; ID 500 rămâne pentru HK First Division
+    503 — apărea pentru HK FA Cup ȘI Singapore Cup
+          → Singapore Cup comentat; ID 503 rămâne pentru HK FA Cup
+
+  CONSECINȚE:
+    Kenya — rămâne fără cupă (FKF Cup ID real necunoscut)
+    Singapore — rămâne fără cupă (Singapore Cup ID real necunoscut)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. COMPARAȚIE CU PLANUL FINAL (178 ligi așteptate din 70 țări)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Starea actuală:  241 ligi  (76 țări + 16 internaționale)
+  Ținta:           178 ligi  (70 țări + internaționale)
+  Diferență:       +63 ligi  (+6 țări față de plan)
+
+  ── LIGI CARE ÎNCALCĂ REGULA (Liga 1 + Liga 2 + Cupă max, nicio Ligă 3) ──
+
+    ID  48  — EFL Cup (England)
+        Motiv: Anglia are deja FA Cup (45); EFL Cup este a doua cupă.
+
+    ID 713  — Superliga Colombia
+        Motiv: Colombia are deja Copa Colombia (241); Superliga este a doua cupă/competiție.
+
+    ID 909  — MLS Next Pro (USA)
+        Motiv: Ligă 3 — comentariul din cod îl marchează explicit ca "(Liga 3)".
+
+  ── ȚĂRI ÎN COD DAR POSIBIL ABSENTE DIN PLAN (6 în plus față de 70) ──
+
+    Nu am acces la documentul "plan final" pentru a identifica exact
+    care 6 țări sunt în plus. Opțiunile probabile (țări cu ligă mai puțin
+    relevantă sau cu date API slabe):
+
+    Din Asia (20 țări actuale, probabil 2-3 în plus față de plan):
+      - Singapore (1 ligă, fără cupă)
+      - Kuwait
+      - Oman
+      - Jordan
+      - Hong Kong
+
+    Din Africa (9 țări actuale, posibil 1-2 în plus față de plan):
+      - Kenya (2 ligi, fără cupă)
+      - Ivory Coast
+
+    Din Americas (18 țări actuale, posibil 1-2 în plus față de plan):
+      - Nicaragua (2 ligi, fără cupă)
+      - Guatemala
+      - El Salvador
+
+  ── CALCUL NECESAR PENTRU A AJUNGE LA 178 ──
+
+    Pas 1: Scoți cele 3 ligi care încalcă regula → 241 - 3 = 238
+    Pas 2: Scoți 6 țări complet (câte 2-3 ligi per țară) → ~238 - 60 = ~178
+
+    Identificarea exactă a celor 6 țări de eliminat necesită
+    confirmarea planului final de la utilizator.
+
+  ── LIGI ÎN PLAN DAR LIPSĂ DIN COD ──
+
+    Nu se pot identifica fără documentul plan final.
+    Posibil: cupele pentru Kenya și Singapore (ID-urile reale necunoscute).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUMAR ACȚIUNI RECOMANDATE (fără implementare, doar propuneri)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. Confirmat de eliminat (încalcă regula):
+     → ID 48  (EFL Cup England)
+     → ID 713 (Superliga Colombia)
+     → ID 909 (MLS Next Pro Liga 3)
+
+  2. De decis: care 6 țări din cele 76 sunt excluse din planul de 70
+
+  3. De verificat: ID-urile reale pentru Kenya FKF Cup și Singapore Cup
+     (pentru a înlocui duplicatele comentate)
+
+================================================================================
