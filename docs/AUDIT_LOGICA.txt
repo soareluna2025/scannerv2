@@ -1,0 +1,659 @@
+================================================================================
+  ALOHASCAN — AUDIT COMPLET LOGICĂ DE BUSINESS
+  Data: 2026-05-16
+  Versiune: Vultr VPS (Express.js + PostgreSQL direct)
+================================================================================
+
+
+════════════════════════════════════════════════════════════════════════════════
+1. FILTRE ACTIVE
+════════════════════════════════════════════════════════════════════════════════
+
+────────────────────────────────────────────────────────────────────────────────
+1A. Filtru de ligă (whitelist)
+────────────────────────────────────────────────────────────────────────────────
+Fișier: api/leagues.js
+Tip:    Set<number> cu 214 ID-uri
+Aplicat în: today.js (pre-meci, calea DB și calea API), football.js (live, doar
+            sursa API-Football; sursa football-data.org nu trece prin whitelist)
+
+Funcționare corectă:
+  - today.js DB path:  afterLeague = dbFixtures.filter(f => ALLOWED_LEAGUE_IDS.has(f.league_id))
+  - today.js API path: afterLeague = raw.filter(m => ALLOWED_LEAGUE_IDS.has(m.league?.id))
+  - football.js:       filtered = combined.filter(m => m._src === 'fd' || ALLOWED_LEAGUE_IDS.has(m.league?.id))
+
+PROBLEMĂ: football-data.org (fd) ignoră complet whitelist-ul. Dacă fdCompMap
+conține un ID de ligă, toate meciurile acelei competiții trec indiferent de
+whitelist. În practică, fdCompMap are 12 competiții hard-coded = risc mic, dar
+logica e inconsistentă.
+
+PROBLEMĂ: today.js DB path nu verifică filtrul de feminin pe liga din DB dacă
+`leagueMap` nu are intrarea (lg.name este ''). Filtrul regex se aplică pe
+lg.name || '' — dacă liga e în DB fără nume, filtrul nu funcționează.
+
+────────────────────────────────────────────────────────────────────────────────
+1B. Filtru feminin
+────────────────────────────────────────────────────────────────────────────────
+Fișier: today.js, football.js
+Regex:  /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i
+
+Funcționare: CORECT — aplicat după whitelist, pe league.name
+Limită: nu acoperă variante ca "Feminine", "Frauen", "Dames" (ligi non-engleze).
+        În practică, ligile feminine nu sunt în whitelist oricum.
+
+────────────────────────────────────────────────────────────────────────────────
+1C. Filtru ligă inferioară
+────────────────────────────────────────────────────────────────────────────────
+Fișier: today.js, football.js
+Regex:  /\b[3-9]\.\s*(liga|division|div)\b/i
+
+Funcționare: CORECT — al doilea nivel de protecție sub whitelist.
+Notă: dacă whitelist-ul e corect, acest filtru nu elimină nimic în plus.
+      Util doar dacă vreun ID eronat ajunge în whitelist.
+
+────────────────────────────────────────────────────────────────────────────────
+1D. Filtru status live
+────────────────────────────────────────────────────────────────────────────────
+Fișier: football.js
+Set:    LIVE_STATUSES = {'1H','HT','2H','ET','BT','P','SUSP','INT','LIVE'}
+        LIVE_STATUS (scan.js) = {'1H','2H','HT','ET','BT','P','LIVE','INT'}
+
+Funcționare: CORECT — elimină meciurile SUSP din scan.js (SUSP = suspendat,
+nu este mereu live).
+NECONCORDANȚĂ: football.js include SUSP în LIVE_STATUSES, scan.js nu.
+Efectul: un meci suspendat apare în tab Live dar NU se procesează în cron/scan.
+
+────────────────────────────────────────────────────────────────────────────────
+1E. Filtru deduplicare (merge AF + FD)
+────────────────────────────────────────────────────────────────────────────────
+Fișier: football.js
+Logică: AF primar, FD umple golurile.
+        fdNew = fdMatches.filter(!afFixtureIds.has(id) && !afTeamPairs.has(pair))
+
+Funcționare: CORECT — previne duplicate per pereche de echipe.
+PROBLEMĂ: football-data.org folosește ID-uri diferite față de API-Football.
+          Deduplicarea per team pair funcționează, dar dacă FD mapează greșit
+          un ID de echipă, meciul apare de două ori.
+
+────────────────────────────────────────────────────────────────────────────────
+1F. Filtru Safe Bets (frontend)
+────────────────────────────────────────────────────────────────────────────────
+Locație: index.html (frontend, nu backend)
+Condiții cumulative:
+  - confidenceScore > 75
+  - bestCota >= 1.30 și bestCota <= 1.50
+  - bestEV > 0
+
+PROBLEMĂ: filtrul e în frontend — dacă API-ul nu returnează confidenceScore sau
+bestEV, meciul nu apare ca Safe Bet chiar dacă ar fi eligibil. Nu există
+validare server-side.
+
+PROBLEMĂ: filtrul de cotă (1.30-1.50) este extrem de îngust. Exclude oportunități
+cu EV pozitiv la alte cote (ex: 1.20 cu 90% probabilitate reală = EV excelent).
+
+
+════════════════════════════════════════════════════════════════════════════════
+2. LOGICA DE SCORING — CONFIDENCE SCORE (7 STRATURI)
+════════════════════════════════════════════════════════════════════════════════
+
+Fișier principal: api/enrich.js → calcConfidence()
+
+────────────────────────────────────────────────────────────────────────────────
+GREUTĂȚI REALE (din cod) vs DOCUMENTATE
+────────────────────────────────────────────────────────────────────────────────
+
+  Strat         | Greutate cod | Greutate CLAUDE.md  | Diferență
+  --------------|--------------|---------------------|--------------------
+  1. Poisson    | 0.22  (22%) | 25%/20%             | -3pp (fără str.)
+  2. Formă      | 0.20  (20%) | 20%/18%             | ✓ (fără str.)
+  3. H2H        | 0.10  (10%) | 15%/13%             | -5pp MAJOR
+  4. Live/xG    | 0.15  (15%) | 15%/13%             | ✓ (fără str.)
+  5. EV piață   | 0.08   (8%) | 15%/13%             | -7pp MAJOR
+  6. Consistență| 0.05   (5%) | 10%/8%              | -5pp MAJOR
+  7. Putere     | 0.20  (20%) | —/15%               | +5pp
+
+Total cu toate 7: 22+20+10+15+8+5+20 = 100% ✓
+Renormalizat fără strat 7: Poisson=27.5%, Formă=25%, H2H=12.5%,
+  Live=18.75%, EV=10%, Consistență=6.25%
+
+CONCLUZIE: Documentația CLAUDE.md este DEPĂȘITĂ. H2H și EV au fost reduse
+semnificativ față de design. Strat 7 (puterea echipei) a crescut la 20%.
+
+────────────────────────────────────────────────────────────────────────────────
+STRAT 1 — Poisson (over15Prob)
+────────────────────────────────────────────────────────────────────────────────
+Date: calcPoisson6x6(lambdaHome, lambdaAway)
+Lambda: (homeAvgScored + awayAvgConceded) / 2 — ultimele 10 meciuri din DB
+        sau API-Football fallback dacă DB are < 3 meciuri.
+Fallback complet: FALLBACK = 1.2 → lambda identic, predicție neutră.
+Status: FUNCȚIONAL
+
+BUG: homeScoreRate calculat greșit (detalii la §5).
+
+────────────────────────────────────────────────────────────────────────────────
+STRAT 2 — Formă recentă
+────────────────────────────────────────────────────────────────────────────────
+Formula: min(100, (homeAvgScored + awayAvgScored) / 3.5 * 100)
+Date: homeAvgScored și awayAvgScored din calcPoisson (ultimele 10 meciuri)
+Status: FUNCȚIONAL DAR SIMPLIST
+
+PROBLEMĂ: 3.5 goluri/meci ca referință universală este prea generică.
+  Premier League: media ~2.7 g/meci → scor format mai mic decât realitatea.
+  Ligi africane: medie ~1.8 g/meci → scor format supraestimat.
+  Nu există calibrare per ligă.
+
+PROBLEMĂ: folosește TOTAL goluri, nu goluri marcate de echipa respectivă
+  în context specific (acasă/deplasare).
+
+────────────────────────────────────────────────────────────────────────────────
+STRAT 3 — H2H
+────────────────────────────────────────────────────────────────────────────────
+Date: h2h table din PostgreSQL, sau API-Football fallback, sau score1 (Poisson)
+Status: PARȚIAL
+
+PROBLEMĂ: Tabelul h2h este populat de:
+  (1) backfill.js faza 'h2h' — rulează o singură dată per backfill
+  (2) scan.js pre-match block — doar pentru meciuri cu ≥3 H2H existente
+  → Dacă backfill-ul nu a rulat complet, H2H lipsește pentru majority de meciuri.
+  → Perechi noi de echipe nu au niciodată H2H.
+
+PROBLEMĂ: scan.js condiție: `if (h2h.length < 3 || hForm.length < 3 || aForm.length < 3) continue`
+  = nu procesează meciul dacă datele sunt insuficiente. Deci H2H nu se acumulează
+  niciodată pentru echipe fără istoric.
+
+────────────────────────────────────────────────────────────────────────────────
+STRAT 4 — Live / xG
+────────────────────────────────────────────────────────────────────────────────
+Formula: max(50, min(100, xg*25 + sot*3 + da*0.5))
+Date:
+  - xG: din match_stats (dacă collect-finished a rulat) sau estimat: soth*0.4 + sota*0.4
+  - SOT: (soth + sota) din query params (frontend → backend)
+  - da: ÎNTOTDEAUNA 0
+
+BUG CRITIC: liveStats.da este HARDCODAT la 0 în enrich.js (linia ~406):
+  `const liveStats = { xg: xgValue, sot: ..., da: 0 }`
+  Dangerous attacks NU contribuie niciodată la confidence score, deși formula le include.
+
+PROBLEMĂ: xG din match_stats este disponibil DOAR după ce collect-finished.js
+  rulează (la 23:00). Meciurile live folosesc estimarea din SOT care subestimează xG.
+
+Status: PRE-MECI = score4 = score1 (Poisson) ca fallback, deci redundant
+        LIVE = parțial funcțional (xG estimat, da=0)
+
+────────────────────────────────────────────────────────────────────────────────
+STRAT 5 — EV piață (cotă 1.30-1.50)
+────────────────────────────────────────────────────────────────────────────────
+Formula: min(100, best.ev * 300) — dacă există piață cu cotă în [1.30, 1.50] și EV > 0
+Fallback: score5 = 50 (neutru)
+Date: odds table sau API-Football /odds endpoint
+Status: PARȚIAL
+
+PROBLEMĂ: filtrul de cotă [1.30, 1.50] este extrem de restrictiv.
+  Dacă nu există nicio piață în acest interval, score5 = 50 = neutru.
+  Meciuri cu EV > 0 la cotă 1.51 sau 1.29 sunt ignorate.
+
+PROBLEMĂ: odds table este populată de collect-finished.js la 23:00.
+  Pentru meciuri de dimineață/după-amiază, odds nu sunt în DB → fallback API.
+  Dacă API-Football returnează odds goale (meci prea aproape de start sau fără
+  bookmaker 8 = Bet365), score5 = 50.
+
+PROBLEMĂ: bookmaker-ul este HARDCODAT la ID 8 (Bet365). Dacă Bet365 nu are
+  odds pentru un meci, toată analiza EV devine neutră.
+
+────────────────────────────────────────────────────────────────────────────────
+STRAT 6 — Consistență
+────────────────────────────────────────────────────────────────────────────────
+Formula: (scores1-5.filter(s > 60).length / 5) * 100
+Status: FUNCȚIONAL DAR SLAB
+
+PROBLEMĂ: măsoară câte din primele 5 straturi sunt > 60 — dar dacă score4 și score5
+  sunt la fallback (50 = neutru), niciodată nu trec pragul de 60.
+  Strat 6 penalizează indirect lipsa datelor live și a odds-urilor.
+
+PROBLEMĂ: score7 nu e inclus în calculul consistenței, deși ar trebui.
+
+────────────────────────────────────────────────────────────────────────────────
+STRAT 7 — Puterea echipei
+────────────────────────────────────────────────────────────────────────────────
+Formula: (teamStrengthHome + teamStrengthAway) / 2
+Date: player_stats table, ORDER BY player_id DESC LIMIT 110 per echipă
+
+BUG: ORDER BY player_id DESC nu = ORDER BY recency. player_id este un ID din
+  API-Football, nu un contor secvențial local. Poate returna date vechi.
+  FIX RECOMANDAT: ORDER BY fixture_id DESC LIMIT 110
+
+PROBLEMĂ: teamStrength combină date din meciuri diferite (player_id returnează
+  toți jucătorii echipei din toate meciurile stocate). Un jucător poate apărea
+  de 10 ori (1 per meci). Agregarea medie diluează importanța jucătorilor cheie.
+
+Status: FUNCȚIONAL DACĂ player_stats există, LIPSĂ altfel (→ strat ignorat)
+
+────────────────────────────────────────────────────────────────────────────────
+AJUSTARE INJURY PENALTY
+────────────────────────────────────────────────────────────────────────────────
+Logică: -5 pt 3+ accidentați, -10 pt 5+, -15 pt 8+
+Date: injuries table (populată de fetchAndStoreInjuries, fire-and-forget)
+Status: PARȚIAL
+
+PROBLEMĂ: fire-and-forget = prima cerere de enrich NU are date injuries (async
+  în background). Penalizarea se aplică abia la a DOUA cerere de enrich pentru
+  același meci.
+
+PROBLEMĂ: penalizarea e identică indiferent de poziție. 8 accidentați rezerve =
+  același impact ca 8 atacanți titulari.
+
+
+════════════════════════════════════════════════════════════════════════════════
+3. LOGICA LIVE vs PRE-MECI
+════════════════════════════════════════════════════════════════════════════════
+
+────────────────────────────────────────────────────────────────────────────────
+PRE-MECI (today.js + enrich.js)
+────────────────────────────────────────────────────────────────────────────────
+Date disponibile:
+  ✅ Fixture date/kickoff
+  ✅ Odds pre-match (DB odds sau API-Football bookmaker 8)
+  ✅ H2H istoric (DB h2h table sau API-Football)
+  ✅ Formă recentă (DB fixtures sau API-Football ?last=20)
+  ✅ Team strength (player_stats dacă backfill a rulat)
+  ✅ Injuries (async, abia la a 2-a cerere)
+  ✅ Standings (simulate.js îl are, enrich.js NU îl folosește)
+
+Date lipsă față de LIVE:
+  ❌ Score real-time
+  ❌ Statistici live (SOT, xG, DA, posesie, corners)
+  ❌ Eveniment (goluri, cartonașe)
+  → score4 = score1 (fallback la Poisson)
+  → dynamic lambda = DEZACTIVAT
+
+Sursă fixture:
+  PRIMAR: tabelul `fixtures` din DB (backfill + collect-finished)
+  FALLBACK: API-Football /fixtures?date=today&status=NS
+
+PROBLEMĂ CRITICĂ: tabelul `fixtures` este populat de backfill (date istorice)
+  și collect-finished (meciuri FT din ziua curentă). NU există un job care să
+  populeze meciurile VIITOARE zilnic. Dacă backfill.js nu a acoperit sezonul 2025
+  complet, unele meciuri NU există în DB și today.js cade pe fallback API.
+
+PROBLEMĂ: today.js DB path returnează team logo = NULL (nu join-uiește tabela
+  `teams`). Logourile echipelor NU apar pentru meciuri pre-meci venite din DB.
+
+────────────────────────────────────────────────────────────────────────────────
+LIVE (football.js + enrich.js)
+────────────────────────────────────────────────────────────────────────────────
+Date disponibile:
+  ✅ Score curent (goals.home/away)
+  ✅ Minut (fixture.status.elapsed)
+  ✅ Statistici match: xG, SOT, Ball Possession, Corner Kicks, Dangerous Attacks
+  ✅ Eveniment: goluri, cartonașe, substituții (din match data)
+  ✅ Dynamic lambda (ajustat pentru minute rămase + intensitate)
+  ✅ NGP (Next Goal Probability) calculat în scan.js și frontend
+  ✅ Live momentum (simulate.js → calcMomentum)
+
+Date lipsă față de PRE-MECI:
+  ❌ Odds live (API-Football are /odds/live dar NU e integrat)
+  ❌ xG din match_stats (disponibil abia la 23:00 via collect-finished)
+
+PROBLEMĂ: football.js enrichOne() face 3 apeluri API per meci (home form,
+  away form, H2H) direct la API-Football, fără să folosească DB.
+  La 5 meciuri enriched × 3 apeluri = 15 apeluri API per cerere la /api/football.
+  La polling la 30s × 48 cereri/zi = 720 apeluri numai pentru enrich live.
+
+PROBLEMĂ: da (dangerous attacks) din enrich.js este hardcodat la 0 (menționat
+  la strat 4). Statisticile live pierd 0.5 × DA din formula xG.
+
+────────────────────────────────────────────────────────────────────────────────
+NGP (Next Goal Probability) — dublă implementare
+────────────────────────────────────────────────────────────────────────────────
+Implementare 1 (scan.js): calcNextGoal() bazat pe xG extrapolat
+  rmXg estimat din xG / minute * minute_rămase
+  Ajustare: ×1.2 din min 70, ×1.15 din min 80
+  homeFormGoals / awayFormGoals: HARDCODATE la 0.35 (nu vin din DB!)
+
+Implementare 2 (index.html frontend):
+  ngp = SOT*4.5 + ShotsOff*1.5 + DA*0.3 + Corners*2.0 + Goals*8 - elapsed/90*15
+  Normalizat 0-100%
+
+PROBLEMĂ: cele două implementări sunt INDEPENDENTE și pot da rezultate
+  diferite. scan.js scrie în match_snapshots (ng), frontend calculează la nivel
+  de display. Care valoare e "adevărată"?
+
+PROBLEMĂ: homeFormGoals = 0.35 hardcodat în calcFeatures() — forma echipei
+  NU influențează NGP în scan.js. Este o constantă, nu date reale.
+
+
+════════════════════════════════════════════════════════════════════════════════
+4. CE FUNCȚIONEAZĂ BINE PE VULTR (față de Vercel)
+════════════════════════════════════════════════════════════════════════════════
+
+1. FĂRĂ TIMEOUT 10s — collect-finished.js poate procesa 50+ meciuri cu
+   200ms delay fiecare (10s+ de procesare). Pe Vercel era imposibil.
+
+2. POSTGRESQL DIRECT — pg library cu connection pool vs Supabase REST API.
+   Fiecare query Supabase era un HTTP round-trip. Acum: <1ms local.
+   getTeamStrengths() face 2 query-uri paralele instantaneu.
+
+3. CRON JOBS GRANULARE — Vercel Hobby: doar zilnic. Vultr: la fiecare minut
+   pentru scan.js. Meciurile live se actualizează în timp real în DB.
+
+4. MEMORIE PERSISTENTĂ ÎNTRE CERERI:
+   - enrichCache din football.js supraviețuiește între request-uri (Map în memorie)
+   - _runCount din scan.js se incrementează corect (contorizare la fiecare minut)
+   - cache din simulate.js (TTL 2 min) reduce apeluri API-Football
+
+5. BACKFILL MULTI-ORĂ — backfill.js procesează 214 ligi × 10 fixture × 22
+   jucători = ~47.000 jucători. Pe Vercel: imposibil. Pe Vultr: rulează noaptea
+   la 03:00.
+
+6. COLLECT-FINISHED COMPLET — colectează player_stats + match_stats + match_events
+   + odds pentru TOATE meciurile FT din ziua curentă. Pe Vercel: timeout la 10s
+   după primele 2-3 meciuri.
+
+7. LOGGING COMPLET — console.log() persistent în /var/log/alohascan-cron.log
+   via crontab curl >> log. Pe Vercel: logs ephemere, dispar după câteva ore.
+
+8. SERVER STATEFUL — Express.js cu state în memorie. Vercel: fiecare funcție
+   pornea de la zero (cold start). Vultr: instanță continuă, warm.
+
+
+════════════════════════════════════════════════════════════════════════════════
+5. CE ESTE RĂU SAU INCOMPLET
+════════════════════════════════════════════════════════════════════════════════
+
+────────────────────────────────────────────────────────────────────────────────
+BUG CRITIC #1: homeScoreRate calculat greșit
+────────────────────────────────────────────────────────────────────────────────
+Fișier: api/enrich.js → calcPoisson() → linia cu homeScoreRate
+Formula actuală:
+  homeScoreRate = pct(hGames, m => (m.goals?.home ?? 0) > 0)
+
+hGames conține meciuri ale echipei gazdă ATÂT acasă CÂT ȘI în deplasare.
+Când echipa X joacă în deplasare, m.goals.home = golurile adversarului (nu X).
+→ homeScoreRate numără meciuri în care OPONENTUL a marcat, nu echipa X.
+
+FIX:
+  homeScoreRate = pct(hGames, m => {
+    const scored = m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away;
+    return (scored ?? 0) > 0;
+  })
+
+Același bug există pentru awayScoreRate în linia simetrică.
+
+────────────────────────────────────────────────────────────────────────────────
+BUG CRITIC #2: da=0 hardcodat în confidence score layer 4
+────────────────────────────────────────────────────────────────────────────────
+Fișier: api/enrich.js linia ~406
+  const liveStats = { xg: xgValue, sot: ..., da: 0 }
+Formula layer 4 include `da * 0.5` dar este mereu 0.
+Fix: extrage da din parametrii cererii (ca soth/sota) sau din match_stats.
+
+────────────────────────────────────────────────────────────────────────────────
+BUG #3: player_stats ordering greșit în getTeamStrengths()
+────────────────────────────────────────────────────────────────────────────────
+Fișier: api/enrich.js → getTeamStrengths()
+  ORDER BY player_id DESC LIMIT 110
+player_id = ID din API-Football (ex: 276890) — nu corelează cu recency.
+Echipa poate returna statistici din 2022 dacă player_id-urile vechi sunt mari.
+FIX: ORDER BY fixture_id DESC LIMIT 110
+
+────────────────────────────────────────────────────────────────────────────────
+BUG #4: scan.js outcome 'WIN'/'LOSS' fără sens semantic
+────────────────────────────────────────────────────────────────────────────────
+Fișier: api/cron/scan.js → resolveOutcome()
+  const outcome = (fh + fa) > 0 ? 'WIN' : 'LOSS'
+
+Interpretare actuală: WIN = s-au marcat goluri (≥1 total), LOSS = 0-0.
+Acest lucru NU reflectă dacă predicția Over 1.5 a fost corectă.
+Câmpul `over15` din match_snapshots stochează probabilitatea prezisă.
+Câmpul `outcome` ar trebui să fie: 'WIN' dacă (fh+fa)>=2, 'LOSS' altfel.
+FIX: `const outcome = (fh + fa) >= 2 ? 'WIN' : 'LOSS'`
+
+────────────────────────────────────────────────────────────────────────────────
+BUG #5: Elo reset la fiecare apel
+────────────────────────────────────────────────────────────────────────────────
+Fișier: api/elo.js → calcElo()
+La fiecare apel, ratings = new Map() → toate echipele pornesc de la 1500.
+Elo-ul calculat reflectă DOAR datele trecute funcției (max 10+10+10 meciuri).
+Nu este un Elo cumulativ real — este mai degrabă un indicator de formă relativă.
+Pentru un Elo real, ratings ar trebui stocate în DB și actualizate incremental.
+
+────────────────────────────────────────────────────────────────────────────────
+BUG #6: homeFormGoals hardcodat în scan.js
+────────────────────────────────────────────────────────────────────────────────
+Fișier: api/cron/scan.js → calcFeatures()
+  homeFormGoals: 0.35, awayFormGoals: 0.35  // hardcodat
+  homeFormGG: 0.45,    awayFormGG: 0.45     // hardcodat
+
+Aceste valori ar trebui să vină din DB (forma recentă a echipei).
+Acum NGP live ignoră complet forma echipelor — calcul pur din xG live.
+
+────────────────────────────────────────────────────────────────────────────────
+PROBLEMĂ #7: today.js nu returnează logo echipă din DB
+────────────────────────────────────────────────────────────────────────────────
+Fișier: api/today.js → getFixturesFromDB()
+Returnează: teams: { home: { id, name }, away: { id, name } }
+Logourile sunt în tabelul `teams` (populat de collect-daily.js) dar nu sunt
+incluse în query. Meciurile pre-meci din DB nu au logo → tLogo() nu afișează nimic.
+
+FIX: JOIN cu teams table sau adaugă logo în query:
+  SELECT f.*, th.logo AS home_logo, ta.logo AS away_logo
+  FROM fixtures f
+  LEFT JOIN teams th ON th.team_id = f.home_team_id
+  LEFT JOIN teams ta ON ta.team_id = f.away_team_id
+  WHERE ...
+
+────────────────────────────────────────────────────────────────────────────────
+PROBLEMĂ #8: fixtures viitoare nu se actualizează zilnic
+────────────────────────────────────────────────────────────────────────────────
+Tabelul `fixtures` este populat de:
+  - backfill.js (meciuri istorice 2022-2025 FT)
+  - collect-finished.js (meciuri FT din ziua curentă)
+
+NU există job care să insereze meciurile VIITOARE (NS) zilnic.
+today.js DB path → `fixtures WHERE status_short='NS' AND match_date >= now()`.
+Dacă backfill-ul nu a acoperit meciurile sezonului curent, tabelul e gol pentru
+meciuri viitoare → today.js cade mereu pe fallback API-Football.
+
+────────────────────────────────────────────────────────────────────────────────
+PROBLEMĂ #9: Telegram alerts salvate dar NICIODATĂ trimise
+────────────────────────────────────────────────────────────────────────────────
+scan.js salvează alerte în `alerts` table (NGP > 85 sau Over15 > 82).
+api/telegram.js LIPSEȘTE din proiect.
+Niciun cod nu citește tabelul `alerts` și nu trimite pe Telegram.
+
+────────────────────────────────────────────────────────────────────────────────
+PROBLEMĂ #10: pre_match_snapshots nu se scriu
+────────────────────────────────────────────────────────────────────────────────
+scan.js calculează composite score pentru meciuri pre-meci dar:
+  "pre_match_snapshots schema has different columns — skip write"
+Scorurile sunt returnate în JSON dar nu sunt persistate.
+Nu există baza pentru learning/validare predicții pre-meci.
+
+────────────────────────────────────────────────────────────────────────────────
+PROBLEMĂ #11: stats.js LIPSEȘTE
+────────────────────────────────────────────────────────────────────────────────
+În CLAUDE.md: api/stats.js = "Supabase — Istoricul predicțiilor + clasamente ligi"
+Fișierul NU există. Nu există endpoint pentru vizualizarea acurateței predicțiilor.
+predictions + result_over15 există în DB dar sunt inaccesibile din frontend.
+
+────────────────────────────────────────────────────────────────────────────────
+PROBLEMĂ #12: football.js enrichOne() consumă API în exces
+────────────────────────────────────────────────────────────────────────────────
+enrichOne() face 3 apeluri API-Football per meci (home form, away form, H2H)
+direct la API, fără fallback DB.
+La 5 meciuri enriched × 3 apeluri = 15 apeluri per cerere la /api/football.
+La polling la 30s = 2 req/min × 15 apeluri = 30 apeluri/min consumate inutil.
+FIX: adaptare la același pattern ca enrich.js (DB first, API fallback).
+
+────────────────────────────────────────────────────────────────────────────────
+PROBLEMĂ #13: Poisson 6×6 pierde probabilitate la lambda mare
+────────────────────────────────────────────────────────────────────────────────
+Matricea e trunchiată la scor maxim 5-5. Pentru lambda > 3 (meciuri cu multe
+goluri așteptate), probabilitatea scorurilor ≥ 6 goluri per echipă e pierdută.
+over15Prob/over25Prob pot fi ușor subestimate.
+FIX: extindeți matricea la 8×8 sau folosiți formula analitică pentru over/under.
+
+────────────────────────────────────────────────────────────────────────────────
+PROBLEMĂ #14: match.js nu calculează confidenceScore
+────────────────────────────────────────────────────────────────────────────────
+api/match.js (detalii meci) calculează Poisson + EV dar nu apelează
+calcConfidence(). Overlay-ul de detalii meci arată Poisson și EV dar nu
+arată confidence score complet cu toate 7 straturi.
+enrich.js și match.js sunt SEPARATE — dacă userul deschide direct un meci
+fără să fi trecut prin today.js, nu există confidence score.
+
+────────────────────────────────────────────────────────────────────────────────
+PROBLEMĂ #15: collect-daily.js fără rate limiting intern
+────────────────────────────────────────────────────────────────────────────────
+Rulează pentru TOATE 214 ligile dintr-o dată, fără delay între cereri.
+214 apeluri la /standings rapid consecutiv poate activa rate limit API-Football
+(tipic: 10 req/min pe planul gratuit, mai mult pe planul Pro).
+FIX: adaugă sleep(200) între iterații.
+
+
+════════════════════════════════════════════════════════════════════════════════
+6. CE AR TREBUI ADĂUGAT
+════════════════════════════════════════════════════════════════════════════════
+
+────────────────────────────────────────────────────────────────────────────────
+PRIORITATE CRITICĂ
+────────────────────────────────────────────────────────────────────────────────
+
+A. FIXTURE DAILY SYNC — job zilnic care populează tabelul `fixtures` cu meciuri
+   viitoare (NS) pentru siguiente 7 zile. Fără asta, today.js folosește mereu
+   fallback API, risipind quota zilnică.
+   Endpoint: GET /fixtures?date=YYYY-MM-DD&status=NS
+   Job recomandat: collect-daily.js — adaugă fixtures după standings.
+
+B. TEAM LOGOS în today.js DB PATH — JOIN cu teams table în getFixturesFromDB()
+   ca logourile să apară în tab PRE-MECI (implementat tLogo() în frontend,
+   dar datele lipsesc din backend).
+
+C. TELEGRAM ALERTS — creează api/telegram.js:
+   1. Citește `alerts` WHERE is_sent = false
+   2. Trimite via Telegram Bot API
+   3. Marchează is_sent = true
+   Trigger: cron sau apelat din scan.js după saveAlert().
+
+D. FIX homeScoreRate / awayScoreRate (BUG #1) — incorect acum.
+
+E. FIX outcome WIN/LOSS în match_snapshots (BUG #4) — semantica incorectă.
+
+────────────────────────────────────────────────────────────────────────────────
+PRIORITATE ÎNALTĂ
+────────────────────────────────────────────────────────────────────────────────
+
+F. api/stats.js — endpoint pentru acuratețe predicții:
+   SELECT over15_prob, COUNT(*) total,
+          SUM(CASE WHEN result_over15 THEN 1 ELSE 0 END) correct
+   FROM predictions WHERE result_over15 IS NOT NULL
+   GROUP BY CASE WHEN over15_prob >= 75 THEN '75+' WHEN over15_prob >= 60 THEN '60-74'
+            ELSE '<60' END
+   Asta permite calibrarea modelului Poisson (dacă prezice 80% → câte chiar s-au întâmplat?).
+
+G. DANGEROUS ATTACKS în enrich.js — extrage da din request params sau match_stats.
+   soth/sota sunt deja extrase. Adaugă: da = parseInt(req.query.da) || 0.
+   Frontend-ul trebuie să trimită da în cererea de enrich.
+
+H. ODDS LIVE — API-Football /odds/live endpoint (disponibil pe planul Pro).
+   Permite EV calculation în timp real pentru meciuri live.
+   Strat 5 devine dinamic în loc de static pre-meci.
+
+I. PRE-MATCH SNAPSHOTS TABLE — creează tabela și scrie scorurile composite
+   din scan.js. Permite analiza calității predicțiilor pre-meci vs outcome real.
+
+J. CALIBRARE LAMBDA PER LIGĂ — Liga 1 România ≠ Premier League ca medie goluri.
+   Citește leagueAvgGoals din standings table și ajustează FALLBACK dinamic:
+   FALLBACK = leagueAvgGoals / 2 în loc de 1.2 fix.
+
+────────────────────────────────────────────────────────────────────────────────
+PRIORITATE MEDIE
+────────────────────────────────────────────────────────────────────────────────
+
+K. ELO PERSISTENT — stochează elo ratings în DB (tabel `elo_ratings`):
+   (team_id, rating, updated_at). Actualizează incremental după fiecare meci FT
+   în collect-finished.js. Elo-ul devine real, nu recalculat din zero.
+
+L. REFEREE FACTOR — API-Football returnează `referee` în fixture data.
+   Unii arbitri dau cu 40% mai multe cartonașe/penaltiuri.
+   Adaugă tabel `referee_stats` și factor de ajustare pentru GG/HDA.
+
+M. FORMATION ANALYSIS — lineups sunt fetch-uite de match.js dar ignorate în
+   enrich.js. O formație 4-3-3 vs 5-4-1 influențează xG așteptat.
+   Poți adăuga o corecție simplă: dacă ambele echipe joacă ofensiv → lambda×1.1.
+
+N. WEATHER IMPACT REAL — api/meteo.js este menționat în CLAUDE.md dar fișierul
+   LIPSEȘTE. Dacă temperatura < 0°C sau precipitații > 5mm, over 2.5 scade.
+   Open-Meteo API este gratuit (nu necesită key).
+
+O. FIX DA ÎN scan.js homeFormGoals — citește forma din DB (fixtures table)
+   în loc de 0.35 hardcodat. Există deja funcții pentru asta în enrich.js.
+
+P. ASIAN HANDICAP ODDS — coloana `ah` există în tabelul odds (collect-finished
+   o populează) dar nu este folosită niciodată în calcule. Handicap asiatic
+   oferă informații despre forța relativă a echipelor percepută de bookmaker.
+
+────────────────────────────────────────────────────────────────────────────────
+ENDPOINT-URI API-FOOTBALL DISPONIBILE DAR NEFOLOSITE
+────────────────────────────────────────────────────────────────────────────────
+
+  /odds/live                — Odds în timp real (meciuri live) [PRO]
+  /predictions?fixture=X   — Predicțiile API-Football (pot fi comparate cu ale noastre)
+  /coaches?team=X          — Antrenor echipă (continuitate = factor stabilitate)
+  /players/squads?team=X   — Lotul echipei (număr jucători disponibili)
+  /transfers?team=X&season — Transferuri recente (schimbări majore în lot)
+  /trophies?team=X         — Istoricul de trofee (presiune în meciuri importante)
+  /venues?league=X         — Dimensiunea stadionului (capacitate → atmosferă acasă)
+
+  Cel mai util neintegrat: /odds/live + /predictions?fixture=X
+  /predictions oferă winner_percent, under_over, goals (h2h medii) — date gata
+  calculate de API-Football, pot fi un "al 8-lea strat" de validare externă.
+
+
+════════════════════════════════════════════════════════════════════════════════
+SUMAR RAPID
+════════════════════════════════════════════════════════════════════════════════
+
+  Filtre:
+    ✅ Whitelist ligă (214 IDs)
+    ✅ Filtru feminin (regex)
+    ✅ Filtru ligă inferioară (regex)
+    ⚠️  football-data.org bypass whitelist
+    ⚠️  Safe Bets filtru prea restrictiv (1.30-1.50)
+
+  Scoring:
+    ✅ Poisson 6×6 (funcțional, truncat la lambda mare)
+    ✅ Dynamic lambda live
+    ✅ Team strength (dacă player_stats există)
+    ✅ EV + Kelly criterion
+    ❌ homeScoreRate/awayScoreRate greșit calculat
+    ❌ da=0 hardcodat (layer 4 incomplet)
+    ❌ homeFormGoals=0.35 hardcodat în scan.js
+    ⚠️  Elo non-cumulativ (resetat per apel)
+    ⚠️  player_stats ORDER BY greșit (player_id vs fixture_id)
+
+  Live vs Pre-meci:
+    ✅ Dynamic lambda pentru live
+    ✅ NGP calculat în scan.js și frontend
+    ❌ DA mereu 0 în confidence layer 4
+    ❌ Logos lipsă în today.js DB path
+    ❌ Fixtures viitoare nu se actualizează zilnic
+
+  Vultr advantages:
+    ✅ No 10s timeout
+    ✅ PostgreSQL direct (sub-ms)
+    ✅ Cron la fiecare minut
+    ✅ Memorie persistentă
+    ✅ collect-finished complet
+
+  Lipsă:
+    ❌ Telegram alerts (niciodată trimise)
+    ❌ stats.js (acuratețe predicții)
+    ❌ meteo.js (fișier lipsă)
+    ❌ pre_match_snapshots (calculat dar nepersistat)
+    ❌ Daily fixtures sync (meciuri viitoare)
+    ❌ Elo persistent în DB
+
+================================================================================
+END AUDIT
+================================================================================
