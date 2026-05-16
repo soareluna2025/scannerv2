@@ -234,6 +234,37 @@ async function getInjuriesFromDB(fixtureId) {
   } catch (_) { return []; }
 }
 
+async function fetchAndStoreInjuries(fixtureId, key) {
+  try {
+    const r = await fetch(
+      `https://v3.football.api-sports.io/injuries?fixture=${fixtureId}`,
+      { headers: { 'x-apisports-key': key } }
+    );
+    const data = await r.json();
+    const list = data.response || [];
+    for (const item of list) {
+      await query(
+        `INSERT INTO injuries
+           (fixture_id, league_id, season, team_id, team_name,
+            player_id, player_name, type, reason)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (fixture_id, player_id) DO NOTHING`,
+        [
+          fixtureId,
+          item.league?.id      || null,
+          item.league?.season  || null,
+          item.team?.id        || null,
+          item.team?.name      || null,
+          item.player?.id      || null,
+          item.player?.name    || null,
+          item.player?.type    || null,
+          item.player?.reason  || null,
+        ]
+      );
+    }
+  } catch (_) {}
+}
+
 async function getMatchStatsFromDB(fixtureId) {
   if (!fixtureId) return [];
   try {
@@ -383,8 +414,9 @@ export default async function handler(req, res) {
 
     const payload = { ...result, ...evData, ...confData };
 
-    // Fire-and-forget prediction save
+    // Fire-and-forget: colectare injuries + prediction save
     if (fid) {
+      fetchAndStoreInjuries(Number(fid), key);
       query(
         `INSERT INTO predictions (fixture_id, home_team, away_team, league_name, league_id, match_date,
           lambda_home, lambda_away, lambda_total, over15_prob, over25_prob, gg_prob,
