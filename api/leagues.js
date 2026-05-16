@@ -94,8 +94,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Serbia
   392,   // SuperLiga
-  393,   // Prva Liga (Liga 2)
-  394,   // Kup Srbije
 
   // Romania
   783,   // Superliga (Liga 1)
@@ -109,43 +107,27 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Hungary
   271,   // Nemzeti Bajnokság I (Liga 1)
-  272,   // Nemzeti Bajnokság II (Liga 2)
-  275,   // Magyar Kupa (Cup)
 
   // Bulgaria
   172,   // First Professional League
-  173,   // Second Professional League (Liga 2)
-  174,   // Bulgarian Cup
 
   // Slovakia
   332,   // Super Liga (Liga 1)
-  506,   // 2. liga (Liga 2)
-  680,   // Slovak Cup
 
   // Finland
   244,   // Veikkausliiga (Liga 1)
-  245,   // Ykkönen (Liga 2)
-  246,   // Finnish Cup
 
   // Ukraine
   333,   // Premier League
-  334,   // Persha Liha (Liga 2)
-  336,   // Ukrainian Cup
 
   // Russia
   235,   // Premier League
-  236,   // First League (Liga 2)
-  237,   // Russian Cup
 
   // Belarus
   116,   // Vysheyshaya Liga (Liga 1)
-  117,   // 1. Division (Liga 2)
-  486,   // Belarusian Cup
 
   // Kazakhstan
   389,   // Premier League
-  388,   // 1. Division (Liga 2)
-  498,   // Kazakhstan Cup
 
   // ── AMERICAS ─────────────────────────────────────────────────
 
@@ -209,7 +191,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   253,   // MLS
   255,   // USL Championship (Liga 2)
   257,   // US Open Cup
-  909,   // MLS Next Pro (Liga 3)
 
   // Canada
   321,   // Canadian Premier League
@@ -283,8 +264,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Uzbekistan
   335,   // Super League
-  631,   // Pro League (Liga 2)
-  632,   // Uzbek Cup
 
   // Australia
   188,   // A-League Men
@@ -368,18 +347,12 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Nigeria
   399,   // NPFL
-  666,   // Nigeria National League (Liga 2)
-  667,   // Nigerian FA Cup
 
   // Ghana
   289,   // Premier League
-  417,   // Division One (Liga 2)
-  418,   // Ghana FA Cup
 
   // Ivory Coast
   383,   // Ligue 1
-  384,   // Ligue 2
-  385,   // Coupe de Côte d'Ivoire
 
   // Kenya
   357,   // Premier League
