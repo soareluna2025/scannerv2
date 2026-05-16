@@ -29,6 +29,9 @@ jobs:
             echo "=== 3. Executie SQL ==="
             PGPASSWORD=Firenze225854 psql -U alohascan -d elefant -h 127.0.0.1 -f /root/scannerv2/scripts/create-tables.sql
 
+            echo "=== 3b. Migrații ==="
+            PGPASSWORD=Firenze225854 psql -U alohascan -d elefant -h 127.0.0.1 -f /root/scannerv2/scripts/migrations/add-snapshots.sql
+
             echo ""
             echo "=== 4. Verificare tabele ==="
             PGPASSWORD=Firenze225854 psql -U alohascan -d elefant -h 127.0.0.1 \

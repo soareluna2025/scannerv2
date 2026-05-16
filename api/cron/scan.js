@@ -143,23 +143,66 @@ function calcMarkets(f) {
 // --- PostgreSQL helpers ---
 
 async function upsertSnapshot(row) {
-  // match_snapshots table not in schema — skip silently
-  return null;
+  await query(
+    `INSERT INTO match_snapshots
+       (fixture_id, league_id, home_team, away_team,
+        status_short, minute, home_goals, away_goals,
+        ng, over15, outcome)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     ON CONFLICT (fixture_id) DO UPDATE SET
+       status_short=EXCLUDED.status_short,
+       minute=EXCLUDED.minute,
+       home_goals=EXCLUDED.home_goals,
+       away_goals=EXCLUDED.away_goals,
+       ng=EXCLUDED.ng,
+       over15=EXCLUDED.over15,
+       outcome=EXCLUDED.outcome`,
+    [
+      row.fixture_id, row.league_id, row.home_team, row.away_team,
+      row.status_short, row.minute, row.home_goals, row.away_goals,
+      row.ng, row.over15, row.outcome || 'LIVE',
+    ]
+  );
 }
 
 async function resolveOutcome(fixtureId, outcome, finalHome, finalAway) {
-  // match_snapshots table not in schema — skip silently
-  return null;
+  await query(
+    `UPDATE match_snapshots
+     SET outcome=$1, final_home=$2, final_away=$3, resolved_at=NOW()
+     WHERE fixture_id=$4`,
+    [outcome, finalHome, finalAway, fixtureId]
+  );
 }
 
 async function leagueSnapshots(leagueId, limit = 200) {
-  // match_snapshots table not in schema — return empty
-  return [];
+  try {
+    const r = leagueId
+      ? await query(
+          `SELECT * FROM match_snapshots
+           WHERE league_id=$1 AND outcome != 'LIVE'
+           ORDER BY created_at DESC LIMIT $2`,
+          [leagueId, limit])
+      : await query(
+          `SELECT * FROM match_snapshots
+           WHERE outcome != 'LIVE'
+           ORDER BY created_at DESC LIMIT $1`,
+          [limit]);
+    return r.rows;
+  } catch (_) { return []; }
 }
 
 async function upsertLeaguePattern(row) {
-  // league_patterns table not in schema — skip silently
-  return null;
+  await query(
+    `INSERT INTO league_patterns
+       (league_id, sample_size, avg_ng, avg_over15, updated_at)
+     VALUES ($1,$2,$3,$4,NOW())
+     ON CONFLICT (league_id) DO UPDATE SET
+       sample_size=EXCLUDED.sample_size,
+       avg_ng=EXCLUDED.avg_ng,
+       avg_over15=EXCLUDED.avg_over15,
+       updated_at=NOW()`,
+    [row.league_id, row.sample_size, row.avg_ng, row.avg_over15]
+  );
 }
 
 async function saveLiveStats(m, f, status) {
@@ -340,8 +383,21 @@ export default async function handler(req, res) {
     log('recalculating league patterns...');
     try {
       const recent = await leagueSnapshots(null, 1000);
-      // league_patterns table not in schema — no-op
-      log(`league patterns skipped (table not in schema)`);
+      const byLeague = {};
+      for (const s of recent) {
+        if (!s.league_id) continue;
+        if (!byLeague[s.league_id]) byLeague[s.league_id] = [];
+        byLeague[s.league_id].push(s);
+      }
+      let patternCount = 0;
+      for (const [lid, snaps] of Object.entries(byLeague)) {
+        const n         = snaps.length;
+        const avg_ng    = Math.round(snaps.reduce((s, x) => s + (x.ng    || 0), 0) / n);
+        const avg_over15 = Math.round(snaps.reduce((s, x) => s + (x.over15 || 0), 0) / n);
+        await upsertLeaguePattern({ league_id: Number(lid), sample_size: n, avg_ng, avg_over15 });
+        patternCount++;
+      }
+      log(`league patterns: ${patternCount} ligi actualizate din ${recent.length} snapshots`);
     } catch (e) {
       log(`league patterns error: ${e.message}`);
     }

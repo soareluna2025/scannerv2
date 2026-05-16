@@ -24,9 +24,24 @@ async function apiFetch(path, key) {
 // --- PostgreSQL helpers ---
 
 async function sfFormStats(teamId) {
-  // form_stats schema uses aggregate columns (avg_scored_home, etc.), not per-match rows
-  // Return empty so the handler falls back to API-Football
-  return [];
+  try {
+    const r = await query(
+      `SELECT home_team_id, away_team_id, home_goals, away_goals, match_date
+       FROM fixtures
+       WHERE (home_team_id = $1 OR away_team_id = $1)
+         AND status_short = 'FT'
+         AND home_goals IS NOT NULL
+       ORDER BY match_date DESC
+       LIMIT 10`,
+      [teamId]
+    );
+    return r.rows.map(row => ({
+      fixture:    { date: row.match_date },
+      teams:      { home: { id: row.home_team_id }, away: { id: row.away_team_id } },
+      goals:      { home: row.home_goals ?? 0, away: row.away_goals ?? 0 },
+      statistics: [],
+    }));
+  } catch (_) { return []; }
 }
 
 async function sfH2HStats(homeId, awayId) {
