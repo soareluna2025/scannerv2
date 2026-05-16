@@ -137,16 +137,7 @@ function toast(msg, color) {
 
 async function apiFetch(path) {
   const r = await fetch(BASE + path, { headers: { 'X-Api-Key': _key } });
-  if (!r.ok) {
-    var dbg = '';
-    try {
-      var body = await r.json();
-      if (body._dbg) {
-        dbg = ' | trimis[' + (body._dbg.recv_key_len||0) + ']="' + (body._dbg.recv_key_prefix||'?') + '" server[' + (body._dbg.env_key_len||0) + ']="' + (body._dbg.env_key_prefix||'?') + '"';
-      }
-    } catch(e) {}
-    throw new Error('HTTP ' + r.status + dbg);
-  }
+  if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 }
 
@@ -241,9 +232,6 @@ async function loadAPI() {
 async function loadLive() {
   try {
     var d = await apiFetch('/api/admin/live-matches');
-    document.getElementById('liveCount').innerHTML = d.count > 0
-      ? '<span class="badge badge-green">' + d.count + ' LIVE</span>'
-      : '<span class="badge badge-gray">0</span>';
     var html = '';
     if (!d.matches || !d.matches.length) {
       html = '<div class="empty">Niciun meci live acum</div>';
@@ -303,9 +291,6 @@ async function loadCron() {
 async function loadErrors() {
   try {
     var d = await apiFetch('/api/admin/errors');
-    document.getElementById('errCount').innerHTML = d.count > 0
-      ? '<span class="badge badge-red">' + d.count + '</span>'
-      : '<span class="badge badge-green">0</span>';
     var html = '';
     if (!d.errors || !d.errors.length) {
       html = '<div class="empty" style="color:var(--green)">✓ Nicio eroare recentă</div>';

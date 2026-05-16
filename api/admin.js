@@ -74,12 +74,6 @@ router.use((req, res, next) => {
     return res.status(401).json({
       error: 'Unauthorized',
       attempts_left: Math.max(0, 5 - (e?.count || 0)),
-      _dbg: {
-        env_key_len:    envKey.length,
-        env_key_prefix: envKey.slice(0, 16),
-        recv_key_len:   key.length,
-        recv_key_prefix: key.slice(0, 16),
-      },
     });
   }
 

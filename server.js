@@ -58,14 +58,9 @@ app.get('/admin', (req, res) => {
   res.sendFile(join(__dirname, 'admin.html'));
 });
 
-// Health / debug (public, fără auth) — TEMPORAR afișează cheia pentru diagnostic
+// Health check (public)
 app.get('/health', (req, res) => {
-  const k = (process.env.ADMIN_API_KEY || '').trim();
-  res.json({
-    ok: true,
-    cwd: process.cwd(),
-    admin_key: k,
-  });
+  res.json({ ok: true, uptime_s: Math.round(process.uptime()) });
 });
 
 // Backfill routes
