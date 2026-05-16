@@ -58,15 +58,13 @@ app.get('/admin', (req, res) => {
   res.sendFile(join(__dirname, 'admin.html'));
 });
 
-// Health / debug (public, fără auth)
+// Health / debug (public, fără auth) — TEMPORAR afișează cheia pentru diagnostic
 app.get('/health', (req, res) => {
-  const k = process.env.ADMIN_API_KEY || '';
+  const k = (process.env.ADMIN_API_KEY || '').trim();
   res.json({
     ok: true,
     cwd: process.cwd(),
-    admin_key_loaded: k.length > 0,
-    admin_key_len: k.length,
-    admin_key_prefix: k ? k.slice(0, 8) : null,
+    admin_key: k,
   });
 });
 
