@@ -19,11 +19,16 @@ async function getFixturesFromDB() {
     const now  = new Date();
     const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const r = await query(
-      `SELECT fixture_id AS id, match_date AS kickoff_time, status_short, status_long,
-              league_id, home_team_id, home_team_name, away_team_id, away_team_name
-       FROM fixtures
-       WHERE match_date >= $1 AND match_date <= $2 AND status_short = 'NS'
-       ORDER BY match_date ASC`,
+      `SELECT f.fixture_id AS id, f.match_date AS kickoff_time, f.status_short, f.status_long,
+              f.league_id, f.home_team_id, f.away_team_id,
+              COALESCE(th.name, f.home_team_name) AS home_team_name, th.logo AS home_logo,
+              COALESCE(ta.name, f.away_team_name) AS away_team_name, ta.logo AS away_logo
+       FROM fixtures f
+       LEFT JOIN teams th ON th.team_id = f.home_team_id
+       LEFT JOIN teams ta ON ta.team_id = f.away_team_id
+       WHERE f.status_short = 'NS'
+         AND f.match_date >= $1 AND f.match_date <= $2
+       ORDER BY f.match_date ASC`,
       [now.toISOString(), in24h.toISOString()]
     );
     return r.rows;
@@ -78,8 +83,8 @@ export default async function handler(req, res) {
         return {
           fixture: { id: f.id, date: f.kickoff_time, status: { short: f.status_short, long: f.status_long } },
           league:  { id: f.league_id, name: lg.name || '', country: lg.country || '', flag: lg.logo || '' },
-          teams:   { home: { id: f.home_team_id, name: f.home_team_name },
-                     away: { id: f.away_team_id, name: f.away_team_name } },
+          teams:   { home: { id: f.home_team_id, name: f.home_team_name, logo: f.home_logo || null },
+                     away: { id: f.away_team_id, name: f.away_team_name, logo: f.away_logo || null } },
           goals:   { home: null, away: null },
         };
       });
