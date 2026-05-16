@@ -39,6 +39,11 @@ jobs:
             chmod 600 /root/scannerv2/.env
             echo "ENV OK: $(wc -l < /root/scannerv2/.env) chei"
 
+            # Crontab backfill (03:00 UTC zilnic) — idempotent
+            CRON_LINE="0 3 * * * curl -sf http://localhost:3000/api/backfill/start >> /var/log/alohascan-cron.log 2>&1"
+            ( crontab -l 2>/dev/null | grep -v 'backfill/start'; echo "$CRON_LINE" ) | crontab -
+            echo "CRONTAB: $(crontab -l | grep backfill || echo 'linie lipsă')"
+
             # Restart serviciu systemd
             systemctl restart alohascan
             systemctl is-active alohascan && echo "ALOHASCAN: ONLINE" || echo "ALOHASCAN: ERROR"
