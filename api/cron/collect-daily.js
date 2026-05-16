@@ -36,6 +36,9 @@ export default async function handler(req, res) {
 
   if (!key) return res.status(500).json({ error: 'Environment vars lipsa' });
 
+  // Asigură coloana goals_diff există (schema veche poate lipsi)
+  await query(`ALTER TABLE standings ADD COLUMN IF NOT EXISTS goals_diff INTEGER DEFAULT 0`).catch(() => {});
+
   const startTime = Date.now();
   const stats = { leagues: 0, teams: 0, standings: 0, errors: [] };
 
@@ -62,7 +65,7 @@ export default async function handler(req, res) {
         const rows = standings[0]?.league?.standings?.[0] || [];
 
         for (const row of rows) {
-          if (!row.team?.id) continue;
+          if (!row?.team?.id || row.team.id == null) continue;
           await query(
             `INSERT INTO standings
                (league_id, season, team_id, team_name, rank, points,
