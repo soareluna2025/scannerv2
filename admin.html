@@ -142,7 +142,7 @@ async function apiFetch(path) {
     try {
       var body = await r.json();
       if (body._dbg) {
-        dbg = ' | trimis[' + (body._dbg.recv_key_len||0) + ']="' + (body._dbg.recv_key_prefix||'?') + '..." server="' + (body._dbg.env_key_prefix||'?') + '..."';
+        dbg = ' | trimis[' + (body._dbg.recv_key_len||0) + ']="' + (body._dbg.recv_key_prefix||'?') + '" server[' + (body._dbg.env_key_len||0) + ']="' + (body._dbg.env_key_prefix||'?') + '"';
       }
     } catch(e) {}
     throw new Error('HTTP ' + r.status + dbg);
