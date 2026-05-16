@@ -76,7 +76,7 @@ export default async function handler(req, res) {
   const hdr      = { 'x-apisports-key': key };
 
   try {
-    const [rFix, rLineups, rPlayers, rEvents, rHForm, rAForm, rH2H, rOdds] = await Promise.all([
+    const [rFix, rLineups, rPlayers, rEvents, rHForm, rAForm, rH2H, rOdds, dbLogos] = await Promise.all([
       fetch(`https://v3.football.api-sports.io/fixtures?id=${id}`, { headers: hdr }),
       fetch(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${id}`, { headers: hdr }),
       fetch(`https://v3.football.api-sports.io/fixtures/players?fixture=${id}`, { headers: hdr }),
@@ -85,6 +85,7 @@ export default async function handler(req, res) {
       fetch(`https://v3.football.api-sports.io/fixtures?team=${a}&last=20&status=FT`, { headers: hdr }),
       fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${h}-${a}&last=10`, { headers: hdr }),
       fetch(`https://v3.football.api-sports.io/odds?fixture=${id}&bookmaker=8`, { headers: hdr }),
+      query('SELECT team_id, logo FROM teams WHERE team_id = ANY($1)', [[hId, aId]]).catch(() => ({ rows: [] })),
     ]);
 
     const [dFix, dLineups, dPlayers, dEvents, dHForm, dAForm, dH2H, dOdds] = await Promise.all([
@@ -92,7 +93,13 @@ export default async function handler(req, res) {
       rHForm.json(), rAForm.json(), rH2H.json(), rOdds.json(),
     ]);
 
+    const logoMap = Object.fromEntries((dbLogos.rows || []).map(r => [Number(r.team_id), r.logo]));
+
     const fixture = (dFix.response || [])[0] || null;
+
+    // Inject DB logos where API logo is missing
+    if (fixture?.teams?.home) fixture.teams.home.logo = fixture.teams.home.logo || logoMap[hId] || null;
+    if (fixture?.teams?.away) fixture.teams.away.logo = fixture.teams.away.logo || logoMap[aId] || null;
     const lineups = dLineups.response || [];
     const players = dPlayers.response || [];
     const events  = dEvents.response  || [];
