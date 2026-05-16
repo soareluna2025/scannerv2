@@ -428,54 +428,48 @@ async function scanLiveStats() {
   }
 }
 
-// ── Ciclu 3: pre-meci H2H + form — la fiecare 60 minute ──────────────────────
+// ── Ciclu 3: pre-meci — citire din prematch_data la fiecare 60 minute ─────────
+// Datele sunt populate de /api/cron/prematch-enrichment (cron */5 * * * *).
 
 async function scanPreMatch() {
-  if (!FOOTBALL_KEY) return;
   try {
-    const nowMs    = Date.now();
-    const today    = new Date(nowMs).toISOString().split('T')[0];
-    const tomorrow = new Date(nowMs + 86_400_000).toISOString().split('T')[0];
+    const nowMs = Date.now();
+    const in24h = new Date(nowMs + 86_400_000).toISOString();
 
-    const [todayFx, tomorrowFx] = await Promise.all([
-      apiFetch(`/fixtures?date=${today}&status=NS`),
-      apiFetch(`/fixtures?date=${tomorrow}&status=NS`),
-    ]);
+    const fxR = await query(
+      `SELECT fixture_id AS id FROM fixtures
+       WHERE status_short='NS' AND match_date >= $1 AND match_date <= $2
+       ORDER BY match_date ASC`,
+      [new Date(nowMs).toISOString(), in24h]
+    );
 
-    const upcoming = [...todayFx, ...tomorrowFx].filter(m => {
-      const fd = m.fixture?.date ? new Date(m.fixture.date).getTime() : 0;
-      return fd >= nowMs && fd <= nowMs + 86_400_000;
-    });
+    const rows = fxR.rows;
+    log(`preMatch: syncing cache for ${rows.length} fixtures from prematch_data`);
+    let updated = 0;
 
-    log(`preMatch: ${upcoming.length} upcoming fixtures`);
-    let processed = 0;
-
-    for (const m of upcoming) {
-      const id  = m.fixture?.id;
-      const hid = m.teams?.home?.id;
-      const aid = m.teams?.away?.id;
-      if (!id || !hid || !aid) continue;
-
-      // Sari dacă e în cache din ultimele 60 minute
-      const cached = prematchCache[id];
+    for (const fx of rows) {
+      const cached = prematchCache[fx.id];
       if (cached && (nowMs - cached.ts) < 3_600_000) continue;
 
       try {
-        const [h2h, homeForm, awayForm] = await Promise.all([
-          apiFetch(`/fixtures/headtohead?h2h=${hid}-${aid}&last=10`),
-          apiFetch(`/fixtures?team=${hid}&last=5&status=FT`),
-          apiFetch(`/fixtures?team=${aid}&last=5&status=FT`),
-        ]);
+        const dataR = await query(
+          `SELECT DISTINCT ON (data_type) data_type, payload
+           FROM prematch_data WHERE fixture_id=$1
+           ORDER BY data_type, stage DESC, collected_at DESC`,
+          [fx.id]
+        );
+        const dm    = Object.fromEntries(dataR.rows.map(r => [r.data_type, r.payload]));
+        const h2h   = Array.isArray(dm.h2h)       ? dm.h2h       : [];
+        const hForm = Array.isArray(dm.home_form)  ? dm.home_form  : [];
+        const aForm = Array.isArray(dm.away_form)  ? dm.away_form  : [];
 
         let composite = null;
-        if (h2h.length >= 3 && homeForm.length >= 3 && awayForm.length >= 3) {
-          saveH2H(h2h).catch(e => log(`saveH2H ${id}: ${e.message}`));
-
+        if (h2h.length >= 3 && hForm.length >= 3 && aForm.length >= 3) {
           const h2hN   = h2h.length;
           const ggH2H  = h2h.filter(g => g.goals?.home > 0 && g.goals?.away > 0).length / h2hN;
           const o15H2H = h2h.filter(g => (g.goals?.home || 0) + (g.goals?.away || 0) >= 2).length / h2hN;
-          const hf5    = homeForm.slice(0, 5);
-          const af5    = awayForm.slice(0, 5);
+          const hf5    = hForm.slice(0, 5);
+          const af5    = aForm.slice(0, 5);
           const ggHF   = hf5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / hf5.length;
           const ggAF   = af5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / af5.length;
           const o15HF  = hf5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / hf5.length;
@@ -485,16 +479,12 @@ async function scanPreMatch() {
           composite = Math.round((ggScore + o15Score) / 2 * 100);
         }
 
-        prematchCache[id] = { ts: nowMs, composite };
-        processed++;
-      } catch (e) {
-        log(`preMatch error ${id}: ${e.message}`);
-      }
-
-      await sleep(150); // 150ms între fixture-uri — evită burst
+        prematchCache[fx.id] = { ts: nowMs, composite };
+        updated++;
+      } catch (_) {}
     }
 
-    log(`preMatch done: ${processed} processed, ${upcoming.length - processed} skipped/cached`);
+    log(`preMatch done: ${updated} updated, cache size ${Object.keys(prematchCache).length}`);
   } catch (e) {
     log(`scanPreMatch error: ${e.message}`);
   }

@@ -403,80 +403,49 @@ export default async function handler(req, res) {
     }
   }
 
-  // Scan pre-match fixtures (starting in next 24h)
+  // Pre-match — citire din prematch_data (populat de /api/cron/prematch-enrichment)
   const pmResults = [];
   try {
     const nowMs = Date.now();
-    const in24h = nowMs + 24 * 60 * 60 * 1000;
-    const today    = new Date(nowMs).toISOString().split('T')[0];
-    const tomorrow = new Date(in24h).toISOString().split('T')[0];
+    const in24h = new Date(nowMs + 24 * 60 * 60 * 1000).toISOString();
 
-    const [todayR, tomorrowR] = await Promise.all([
-      fetch(`https://v3.football.api-sports.io/fixtures?date=${today}&status=NS`,    { headers: { 'x-apisports-key': FOOTBALL_KEY } }),
-      fetch(`https://v3.football.api-sports.io/fixtures?date=${tomorrow}&status=NS`, { headers: { 'x-apisports-key': FOOTBALL_KEY } }),
-    ]);
-    const [todayData, tomorrowData] = await Promise.all([todayR.json(), tomorrowR.json()]);
-    const allFixtures = [
-      ...(Array.isArray(todayData.response)    ? todayData.response    : []),
-      ...(Array.isArray(tomorrowData.response) ? tomorrowData.response : []),
-    ];
+    const fxR = await query(
+      `SELECT fixture_id AS id FROM fixtures
+       WHERE status_short='NS' AND match_date >= $1 AND match_date <= $2
+       ORDER BY match_date ASC`,
+      [new Date(nowMs).toISOString(), in24h]
+    );
 
-    const upcoming = allFixtures.filter(m => {
-      const fd = m.fixture?.date ? new Date(m.fixture.date).getTime() : 0;
-      return fd >= nowMs && fd <= in24h;
-    });
-
-    log(`pre-match upcoming: ${upcoming.length}`);
-
-    for (const m of upcoming) {
+    for (const fx of fxR.rows) {
       try {
-        const hid = m.teams?.home?.id;
-        const aid = m.teams?.away?.id;
-        if (!hid || !aid) continue;
-
-        const [h2hR, hfR, afR] = await Promise.all([
-          fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${hid}-${aid}&last=10`, { headers: { 'x-apisports-key': FOOTBALL_KEY } }),
-          fetch(`https://v3.football.api-sports.io/fixtures?team=${hid}&last=5&status=FT`, { headers: { 'x-apisports-key': FOOTBALL_KEY } }),
-          fetch(`https://v3.football.api-sports.io/fixtures?team=${aid}&last=5&status=FT`, { headers: { 'x-apisports-key': FOOTBALL_KEY } })
-        ]);
-        const [h2hData, hfData, afData] = await Promise.all([h2hR.json(), hfR.json(), afR.json()]);
-
-        const h2h = h2hData.response || [];
-        const hForm = hfData.response || [];
-        const aForm = afData.response || [];
-
+        const dataR = await query(
+          `SELECT DISTINCT ON (data_type) data_type, payload
+           FROM prematch_data WHERE fixture_id=$1
+           ORDER BY data_type, stage DESC, collected_at DESC`,
+          [fx.id]
+        );
+        const dm    = Object.fromEntries(dataR.rows.map(r => [r.data_type, r.payload]));
+        const h2h   = Array.isArray(dm.h2h)       ? dm.h2h       : [];
+        const hForm = Array.isArray(dm.home_form)  ? dm.home_form  : [];
+        const aForm = Array.isArray(dm.away_form)  ? dm.away_form  : [];
         if (h2h.length < 3 || hForm.length < 3 || aForm.length < 3) continue;
 
-        // Save h2h (non-blocking)
-        saveH2H(h2h).catch(e => log(`h2h save error ${m.fixture?.id}: ${e.message}`));
-        // form_stats write skipped due to schema mismatch
-
-        const h2hN = h2h.length;
-        const ggH2HN = h2h.filter(g => g.goals?.home > 0 && g.goals?.away > 0).length;
-        const o15H2HN = h2h.filter(g => (g.goals?.home || 0) + (g.goals?.away || 0) >= 2).length;
-        const ggH2H = ggH2HN / h2hN;
-        const over15H2H = o15H2HN / h2hN;
-
-        const hf5 = hForm.slice(0, 5);
-        const af5 = aForm.slice(0, 5);
-        const ggHF = hf5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / hf5.length;
-        const ggAF = af5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / af5.length;
-        const o15HF = hf5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / hf5.length;
-        const o15AF = af5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / af5.length;
-
-        const ggScore   = ggH2H * 0.30 + ggHF * 0.25 + ggAF * 0.25 + over15H2H * 0.20;
-        const o15Score  = over15H2H * 0.30 + (o15HF / 3) * 0.25 + (o15AF / 3) * 0.25 + ggH2H * 0.20;
-        const composite = (ggScore + o15Score) / 2 * 100;
-
-        // pre_match_snapshots schema has different columns — skip write
-        pmResults.push({ id: m.fixture.id, composite: Math.round(composite) });
+        const h2hN   = h2h.length;
+        const ggH2H  = h2h.filter(g => g.goals?.home > 0 && g.goals?.away > 0).length / h2hN;
+        const o15H2H = h2h.filter(g => (g.goals?.home || 0) + (g.goals?.away || 0) >= 2).length / h2hN;
+        const hf5    = hForm.slice(0, 5);
+        const af5    = aForm.slice(0, 5);
+        const ggHF   = hf5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / hf5.length;
+        const ggAF   = af5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / af5.length;
+        const o15HF  = hf5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / hf5.length;
+        const o15AF  = af5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / af5.length;
+        const ggScore  = ggH2H * 0.30 + ggHF * 0.25 + ggAF * 0.25 + o15H2H * 0.20;
+        const o15Score = o15H2H * 0.30 + (o15HF / 3) * 0.25 + (o15AF / 3) * 0.25 + ggH2H * 0.20;
+        pmResults.push({ id: fx.id, composite: Math.round((ggScore + o15Score) / 2 * 100) });
       } catch (e) {
-        log(`pm error fixture ${m.fixture?.id}: ${e.message}`);
+        log(`pm read error ${fx.id}: ${e.message}`);
       }
     }
-
-    // Resolve outcomes — pre_match_snapshots schema doesn't support outcome column, skip
-    if (finishedMatches.length) log(`pm resolved: skipped (schema mismatch)`);
   } catch (e) {
     log(`pre-match scan error: ${e.message}`);
   }
