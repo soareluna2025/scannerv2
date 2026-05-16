@@ -36,7 +36,7 @@ for (const name of apiFiles) {
 }
 
 // Cron routes
-const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment'];
+const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats'];
 for (const name of cronFiles) {
   app.all(`/api/cron/${name}`, async (req, res) => {
     try {

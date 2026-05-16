@@ -47,6 +47,7 @@ jobs:
             C3="0 3 * * * curl -sf http://localhost:3000/api/backfill/start >> $LOG 2>&1"
             C4="0 6 * * * curl -sf http://localhost:3000/api/cron/collect-daily >> $LOG 2>&1"
             C5="0 23 * * * curl -sf http://localhost:3000/api/cron/collect-finished >> $LOG 2>&1"
+            C6="0 4 * * * curl -sf http://localhost:3000/api/cron/league-stats >> $LOG 2>&1"
 
             (
               crontab -l 2>/dev/null \
@@ -55,12 +56,14 @@ jobs:
                 | grep -v 'api/update-results' \
                 | grep -v 'api/backfill/start' \
                 | grep -v 'api/cron/collect-daily' \
-                | grep -v 'api/cron/collect-finished'
+                | grep -v 'api/cron/collect-finished' \
+                | grep -v 'api/cron/league-stats'
               echo "$C0"
               echo "$C2"
               echo "$C3"
               echo "$C4"
               echo "$C5"
+              echo "$C6"
             ) | crontab -
 
             echo "CRONTAB ACTIV:"

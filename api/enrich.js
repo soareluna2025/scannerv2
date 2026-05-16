@@ -19,7 +19,7 @@ function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
   return { lambda: currentGoals + lambdaRemaining, dynamic: true };
 }
 
-function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agParam, sothParam, sotaParam) {
+function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agParam, sothParam, sotaParam, lgHome = 1.2, lgAway = 1.2) {
   const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
   const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
 
@@ -28,13 +28,12 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
   const awayAvgScored   = avg(aGames, m => (m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0);
   const awayAvgConceded = avg(aGames, m => (m.teams?.away?.id === aId ? m.goals?.home : m.goals?.away) ?? 0);
 
-  const FALLBACK = 1.2;
   let lambdaHome = hGames.length && aGames.length
     ? (homeAvgScored + awayAvgConceded) / 2
-    : FALLBACK;
+    : lgHome;
   let lambdaAway = hGames.length && aGames.length
     ? (awayAvgScored + homeAvgConceded) / 2
-    : FALLBACK;
+    : lgAway;
 
   let isDynamic = false;
   const elapsedNum = parseInt(elapsedParam) || 0;
@@ -79,6 +78,14 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
   };
 }
 
+async function getLeagueStats(lgid) {
+  if (!lgid) return null;
+  try {
+    const r = await query('SELECT * FROM league_stats WHERE league_id = $1', [Number(lgid)]);
+    return r.rows[0] || null;
+  } catch (_) { return null; }
+}
+
 async function getTeamStrengths(hId, aId) {
   try {
     const [rH, rA] = await Promise.all([
@@ -119,8 +126,8 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData) {
   const sotTotal = liveStats?.sot     ?? null;
   const ycTotal  = liveStats?.yc      ?? 0;
 
-  const homeAvg = result.homeAvgScored ?? 1.2;
-  const awayAvg = result.awayAvgScored ?? 1.0;
+  const homeAvg = result.homeAvgScored || 1.2;
+  const awayAvg = result.awayAvgScored || 1.0;
   const score2 = Math.min(100, (homeAvg + awayAvg) / 3.5 * 100);
 
   const score3 = result.h2hOver15 != null ? result.h2hOver15 : score1;
@@ -379,7 +386,7 @@ export default async function handler(req, res) {
 
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats] = await Promise.all([
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leagueStats] = await Promise.all([
       getFormFromDB(hId),
       getFormFromDB(aId),
       getH2HFromDB(hId, aId),
@@ -387,6 +394,7 @@ export default async function handler(req, res) {
       getTeamStrengths(hId, aId),
       fid ? getInjuriesFromDB(Number(fid)) : Promise.resolve([]),
       fid ? getMatchStatsFromDB(Number(fid)) : Promise.resolve([]),
+      getLeagueStats(lgid),
     ]);
 
     // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
@@ -432,7 +440,9 @@ export default async function handler(req, res) {
     }
 
     // --- Calculations ---
-    const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota);
+    const lgHome = parseFloat(leagueStats?.avg_home_goals) || 1.2;
+    const lgAway = parseFloat(leagueStats?.avg_away_goals) || 1.2;
+    const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota, lgHome, lgAway);
     const evData = calcEV(result, oddsRaw, bankroll);
 
     // --- Resolve xG ---
@@ -477,7 +487,7 @@ export default async function handler(req, res) {
       };
     }
 
-    const payload = { ...result, ...evData, ...confData };
+    const payload = { ...result, ...evData, ...confData, leagueStats: leagueStats || null };
 
     // Fire-and-forget: colectare injuries + prediction save
     if (fid) {
