@@ -1215,6 +1215,9 @@ function enrichUrl(hid,aid,m){
       var aYC=aSt.find(function(s){return s.type==='Yellow Cards';});
       u+='&yc='+((hYC&&hYC.value!=null?parseFloat(hYC.value):0)+(aYC&&aYC.value!=null?parseFloat(aYC.value):0));
     }
+    if(m.fixture.referee&&m.fixture.referee!=='null'){
+      u+='&ref='+encodeURIComponent(m.fixture.referee.split(',')[0].trim());
+    }
   }
   return u;
 }
@@ -1778,6 +1781,20 @@ function mdRenderSumar(d){
     out+='<div class="lp-row"><span class="lp-label">Medie goluri</span><span class="lp-val">'+parseFloat(ls.avg_goals_per_match).toFixed(2)+' / meci</span></div>';
     out+='<div class="lp-row"><span class="lp-label">Over 1.5 / Over 2.5</span><span class="lp-val">'+Math.round(ls.pct_over_15)+'% / '+Math.round(ls.pct_over_25)+'%</span></div>';
     out+='<div class="lp-row"><span class="lp-label">GG</span><span class="lp-val">'+Math.round(ls.pct_gg)+'%</span></div>';
+    out+='</div></div>';
+  }
+
+  if(en.refereeStats&&Number(en.refereeStats.total_matches)>=5){
+    var rs=en.refereeStats;
+    var rsMap={strict:{icon:'🔴',label:'Strict'},lenient:{icon:'🟢',label:'Permisiv'},open:{icon:'🟡',label:'Deschis'},neutral:{icon:'⚪',label:'Neutru'},closed:{icon:'🔵',label:'Închis'}};
+    var rst=rsMap[rs.referee_style]||rsMap.neutral;
+    out+='<div class="md-section"><div class="md-section-title">Arbitru</div>';
+    out+='<div class="league-profile">';
+    out+='<div class="lp-row"><span class="lp-label">Nume</span><span class="lp-val" style="font-size:11px">'+rs.referee_name+'</span></div>';
+    out+='<div class="lp-row"><span class="lp-label">Stil</span><span class="lp-val">'+rst.icon+' '+rst.label+'</span></div>';
+    out+='<div class="lp-row"><span class="lp-label">Medie galbene</span><span class="lp-val">'+parseFloat(rs.avg_yellow_cards).toFixed(1)+' / meci</span></div>';
+    out+='<div class="lp-row"><span class="lp-label">Medie goluri</span><span class="lp-val">'+parseFloat(rs.avg_goals).toFixed(2)+' / meci</span></div>';
+    out+='<div class="lp-row"><span class="lp-label">Over 2.5</span><span class="lp-val">'+Math.round(rs.pct_over_25)+'%</span></div>';
     out+='</div></div>';
   }
 
