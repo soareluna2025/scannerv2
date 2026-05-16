@@ -62,6 +62,7 @@ export default async function handler(req, res) {
         const rows = standings[0]?.league?.standings?.[0] || [];
 
         for (const row of rows) {
+          if (!row.team?.id) continue;
           await query(
             `INSERT INTO standings
                (league_id, season, team_id, team_name, rank, points,
