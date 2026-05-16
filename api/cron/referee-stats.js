@@ -1,6 +1,6 @@
 // api/cron/referee-stats.js
 // Calculează statistici per arbitru din fixtures_history + match_stats
-// Rulează zilnic la 04:00 — populează referee în fixtures_history din API, calcul SQL local
+// Rulează zilnic la 04:00 — upsert FT fixtures din API, calcul SQL local
 
 import { query } from '../db.js';
 
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     // Adaugă coloana referee la fixtures_history dacă nu există (idempotent)
     await query(`ALTER TABLE fixtures_history ADD COLUMN IF NOT EXISTS referee TEXT`);
 
-    // Step 2: Fetch ultimele 30 zile + 3 zile viitoare din API → colectează referee per fixture_id
+    // Step 2: Fetch ultimele 30 zile + 3 viitoare din API
     const today = new Date();
     const dates = [];
     for (let d = -30; d <= 3; d++) {
@@ -53,66 +53,81 @@ export default async function handler(req, res) {
       dates.push(dt.toISOString().slice(0, 10));
     }
 
-    const fixtureData = {}; // fixture_id → {referee, status_short, home_goals, away_goals}
+    const fixtureData = {}; // fixture_id → date complete
     let apiFetched = 0;
     for (const date of dates) {
       try {
         const r    = await fetch(`https://v3.football.api-sports.io/fixtures?date=${date}`, { headers: hdr });
         const data = await r.json();
         for (const fix of data.response || []) {
-          const name = cleanRefName(fix.fixture?.referee);
-          if (fix.fixture?.id) {
-            fixtureData[fix.fixture.id] = {
-              referee:      name,
-              status_short: fix.fixture?.status?.short || null,
-              home_goals:   fix.goals?.home ?? null,
-              away_goals:   fix.goals?.away ?? null,
-            };
-          }
+          const fid = fix.fixture?.id;
+          if (!fid) continue;
+          fixtureData[fid] = {
+            referee:        cleanRefName(fix.fixture?.referee),
+            status_short:   fix.fixture?.status?.short || null,
+            home_goals:     fix.goals?.home  ?? null,
+            away_goals:     fix.goals?.away  ?? null,
+            league_id:      fix.league?.id   || null,
+            season:         fix.league?.season || null,
+            home_team_id:   fix.teams?.home?.id   || null,
+            home_team_name: fix.teams?.home?.name || null,
+            away_team_id:   fix.teams?.away?.id   || null,
+            away_team_name: fix.teams?.away?.name || null,
+            match_date:     fix.fixture?.date || null,
+          };
         }
         apiFetched++;
         await sleep(300);
       } catch (_) { await sleep(300); }
     }
 
-    // Batch UPDATE fixtures_history — referee + status + goals (ține DB la zi)
-    const fids       = Object.keys(fixtureData).map(Number);
-    const referees   = fids.map(id => fixtureData[id].referee);
-    const statuses   = fids.map(id => fixtureData[id].status_short);
-    const homeGoals  = fids.map(id => fixtureData[id].home_goals);
-    const awayGoals  = fids.map(id => fixtureData[id].away_goals);
+    // UPSERT meciuri FT în fixtures_history (inserează ce lipsește, actualizează restul)
+    const ftEntries = Object.entries(fixtureData).filter(
+      ([, d]) => d.status_short === 'FT' && d.home_goals !== null && d.away_goals !== null
+    );
 
-    if (fids.length > 0) {
-      await query(
-        `UPDATE fixtures_history fh
-         SET referee      = COALESCE(u.referee, fh.referee),
-             status_short = COALESCE(u.status_short, fh.status_short),
-             home_goals   = COALESCE(u.home_goals, fh.home_goals),
-             away_goals   = COALESCE(u.away_goals, fh.away_goals)
-         FROM unnest($1::integer[], $2::text[], $3::text[], $4::integer[], $5::integer[])
-           AS u(fid, referee, status_short, home_goals, away_goals)
-         WHERE fh.fixture_id = u.fid`,
-        [fids, referees, statuses, homeGoals, awayGoals]
-      );
+    if (ftEntries.length > 0) {
+      const f_ids     = ftEntries.map(([id])  => Number(id));
+      const f_lids    = ftEntries.map(([, d]) => d.league_id);
+      const f_seasons = ftEntries.map(([, d]) => d.season);
+      const f_htids   = ftEntries.map(([, d]) => d.home_team_id);
+      const f_htnames = ftEntries.map(([, d]) => d.home_team_name);
+      const f_atids   = ftEntries.map(([, d]) => d.away_team_id);
+      const f_atnames = ftEntries.map(([, d]) => d.away_team_name);
+      const f_hg      = ftEntries.map(([, d]) => d.home_goals);
+      const f_ag      = ftEntries.map(([, d]) => d.away_goals);
+      const f_dates   = ftEntries.map(([, d]) => d.match_date);
+      const f_refs    = ftEntries.map(([, d]) => d.referee);
+
+      await query(`
+        INSERT INTO fixtures_history
+          (fixture_id, league_id, season,
+           home_team_id, home_team_name, away_team_id, away_team_name,
+           home_goals, away_goals, status_short, match_date, referee)
+        SELECT u.fid, u.lid, u.season,
+               u.htid, u.htname, u.atid, u.atname,
+               u.hg, u.ag, 'FT', u.dt::timestamptz, u.ref
+        FROM unnest(
+          $1::int[], $2::int[], $3::int[],
+          $4::int[], $5::text[], $6::int[], $7::text[],
+          $8::int[], $9::int[],
+          $10::text[], $11::text[]
+        ) AS u(fid, lid, season, htid, htname, atid, atname, hg, ag, dt, ref)
+        ON CONFLICT (fixture_id) DO UPDATE SET
+          referee      = COALESCE(EXCLUDED.referee, fixtures_history.referee),
+          status_short = 'FT',
+          home_goals   = EXCLUDED.home_goals,
+          away_goals   = EXCLUDED.away_goals
+      `, [f_ids, f_lids, f_seasons, f_htids, f_htnames, f_atids, f_atnames,
+          f_hg, f_ag, f_dates, f_refs]);
     }
-
-    // Diagnostic: verifică ce există în DB după UPDATE
-    const { rows: diagRows } = await query(`
-      SELECT
-        COUNT(*) FILTER (WHERE referee IS NOT NULL)                                   AS has_referee,
-        COUNT(*) FILTER (WHERE referee IS NOT NULL AND status_short = 'FT')           AS ref_ft,
-        COUNT(*) FILTER (WHERE referee IS NOT NULL AND home_goals IS NOT NULL)        AS ref_goals,
-        COUNT(*) FILTER (WHERE referee IS NOT NULL AND status_short = 'FT' AND home_goals IS NOT NULL) AS ref_ft_goals
-      FROM fixtures_history
-    `).catch(() => ({ rows: [{}] }));
-    const diag = diagRows[0] || {};
 
     // Step 3: Calculează statistici goluri per arbitru din fixtures_history
     const { rows: goalRows } = await query(`
       SELECT
         referee,
         COUNT(*) AS total_matches,
-        AVG(home_goals + away_goals)::NUMERIC(4,2)                                          AS avg_goals,
+        AVG(home_goals + away_goals)::NUMERIC(4,2) AS avg_goals,
         (100.0 * COUNT(*) FILTER (WHERE home_goals + away_goals >= 3) / COUNT(*))::NUMERIC(5,2) AS pct_over_25,
         (100.0 * COUNT(*) FILTER (WHERE home_goals > 0 AND away_goals > 0) / COUNT(*))::NUMERIC(5,2) AS pct_gg
       FROM fixtures_history
@@ -124,7 +139,7 @@ export default async function handler(req, res) {
       HAVING COUNT(*) >= 5
     `);
 
-    // Statistici carduri/cornere/fault-uri din match_stats JOIN fixtures_history
+    // Statistici carduri/cornere/fault-uri din match_stats
     const { rows: cardRows } = await query(`
       SELECT
         fh.referee,
@@ -146,7 +161,7 @@ export default async function handler(req, res) {
       GROUP BY fh.referee
     `).catch(() => ({ rows: [] }));
 
-    // Penaltyuri din match_events JOIN fixtures_history
+    // Penaltyuri din match_events
     const { rows: penRows } = await query(`
       SELECT
         fh.referee,
@@ -219,14 +234,8 @@ export default async function handler(req, res) {
       ok:                  true,
       duration_ms:         Date.now() - start,
       api_dates_fetched:   apiFetched,
-      fixtures_updated:    fids.length,
+      ft_upserted_to_db:   ftEntries.length,
       referees_processed:  upserted,
-      _diag: {
-        has_referee:   Number(diag.has_referee  || 0),
-        ref_ft:        Number(diag.ref_ft       || 0),
-        ref_goals:     Number(diag.ref_goals    || 0),
-        ref_ft_goals:  Number(diag.ref_ft_goals || 0),
-      },
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
