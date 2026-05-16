@@ -1,12 +1,11 @@
 // api/cron/collect-daily.js
 // Rulează zilnic la 06:00
-// Colectează: standings, leagues, teams pentru top 5 ligi europene
+// Colectează: standings, leagues, teams pentru toate ligile din whitelist
 
 import { query } from '../db.js';
+import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 
-const PRIORITY_LEAGUES = [
-  39, 140, 135, 78, 61,   // PL, LaLiga, SerieA, Bundesliga, Ligue1
-];
+const PRIORITY_LEAGUES = [...ALLOWED_LEAGUE_IDS];
 
 const SEASON = new Date().getFullYear();
 
@@ -38,8 +37,6 @@ export default async function handler(req, res) {
 
   try {
     for (const leagueId of PRIORITY_LEAGUES) {
-      // Time budget: stop if we're past 8 seconds to avoid Vercel's 10s timeout
-      if (Date.now() - startTime > 8000) break;
 
       try {
         const standings = await fetchAPI(`/standings?league=${leagueId}&season=${SEASON}`, key);
