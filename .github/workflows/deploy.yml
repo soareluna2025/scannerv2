@@ -27,15 +27,25 @@ jobs:
 
             # Write .env with secrets from GitHub
             python3 -c "
-            import os
-            lines = []
-            lines.append('API_FOOTBALL_KEY=' + os.environ.get('API_FOOTBALL_KEY',''))
-            lines.append('POSTGRES_URL=' + os.environ.get('POSTGRES_URL',''))
-            lines.append('ANTHROPIC_API_KEY=' + os.environ.get('ANTHROPIC_API_KEY',''))
-            lines.append('XAI_API_KEY=' + os.environ.get('XAI_API_KEY',''))
-            open('/root/scannerv2/.env','w').write('\n'.join(lines) + '\n')
-            print('ENV scris: ' + str(len(lines)) + ' chei')
-            "
+import os, uuid
+lines = []
+lines.append('API_FOOTBALL_KEY=' + os.environ.get('API_FOOTBALL_KEY',''))
+lines.append('POSTGRES_URL=' + os.environ.get('POSTGRES_URL',''))
+lines.append('ANTHROPIC_API_KEY=' + os.environ.get('ANTHROPIC_API_KEY',''))
+lines.append('XAI_API_KEY=' + os.environ.get('XAI_API_KEY',''))
+# Preservă ADMIN_API_KEY existent sau generează unul nou
+existing_key = ''
+try:
+    for line in open('/root/scannerv2/.env'):
+        if line.startswith('ADMIN_API_KEY='):
+            existing_key = line.strip().split('=',1)[1]
+except:
+    pass
+admin_key = existing_key if existing_key else str(uuid.uuid4())
+lines.append('ADMIN_API_KEY=' + admin_key)
+open('/root/scannerv2/.env','w').write('\n'.join(lines) + '\n')
+print('ENV scris: ' + str(len(lines)) + ' chei, ADMIN_API_KEY: ' + ('existent' if existing_key else 'generat nou'))
+"
             chmod 600 /root/scannerv2/.env
             echo "ENV OK: $(wc -l < /root/scannerv2/.env) chei"
 

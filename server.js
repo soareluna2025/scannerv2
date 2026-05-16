@@ -5,6 +5,7 @@ import { dirname, join } from 'path';
 import { query } from './api/db.js';
 import { runDailyBackfill, initBackfillProgress } from './api/backfill.js';
 import { startScanner } from './api/cron/scanner.js';
+import adminRouter from './api/admin.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -48,6 +49,14 @@ for (const name of cronFiles) {
     }
   });
 }
+
+// Admin routes (protejate cu X-Api-Key)
+app.use('/api/admin', adminRouter);
+
+// Admin dashboard HTML
+app.get('/admin', (req, res) => {
+  res.sendFile(join(__dirname, 'admin.html'));
+});
 
 // Backfill routes
 app.get('/api/backfill/start', async (req, res) => {
