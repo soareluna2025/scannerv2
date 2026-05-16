@@ -39,10 +39,31 @@ jobs:
             chmod 600 /root/scannerv2/.env
             echo "ENV OK: $(wc -l < /root/scannerv2/.env) chei"
 
-            # Crontab backfill (03:00 UTC zilnic) — idempotent
-            CRON_LINE="0 3 * * * curl -sf http://localhost:3000/api/backfill/start >> /var/log/alohascan-cron.log 2>&1"
-            ( crontab -l 2>/dev/null | grep -v 'backfill/start'; echo "$CRON_LINE" ) | crontab -
-            echo "CRONTAB: $(crontab -l | grep backfill || echo 'linie lipsă')"
+            # Crontab-uri — idempotent (fiecare linie înlocuiește versiunea veche)
+            LOG="/var/log/alohascan-cron.log"
+
+            C1="* * * * * curl -sf http://localhost:3000/api/cron/scan >> $LOG 2>&1"
+            C2="0 2 * * * curl -sf http://localhost:3000/api/update-results >> $LOG 2>&1"
+            C3="0 3 * * * curl -sf http://localhost:3000/api/backfill/start >> $LOG 2>&1"
+            C4="0 6 * * * curl -sf http://localhost:3000/api/cron/collect-daily >> $LOG 2>&1"
+            C5="0 23 * * * curl -sf http://localhost:3000/api/cron/collect-finished >> $LOG 2>&1"
+
+            (
+              crontab -l 2>/dev/null \
+                | grep -v 'api/cron/scan' \
+                | grep -v 'api/update-results' \
+                | grep -v 'api/backfill/start' \
+                | grep -v 'api/cron/collect-daily' \
+                | grep -v 'api/cron/collect-finished'
+              echo "$C1"
+              echo "$C2"
+              echo "$C3"
+              echo "$C4"
+              echo "$C5"
+            ) | crontab -
+
+            echo "CRONTAB ACTIV:"
+            crontab -l | grep 'localhost:3000'
 
             # Restart serviciu systemd
             systemctl restart alohascan
