@@ -337,7 +337,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Singapore
   502,   // Premier League
-  503,   // Singapore Cup
+  // 503 — Singapore Cup (ID duplicat cu HK FA Cup — omis)
 
   // ── AFRICA ───────────────────────────────────────────────────
 
@@ -384,7 +384,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Kenya
   357,   // Premier League
   358,   // National Super League (Liga 2)
-  500,   // FKF Cup
+  // 500 — FKF Cup Kenya (ID duplicat cu HK First Division — omis)
 
   // ── INTERNAȚIONALE ───────────────────────────────────────────
 
