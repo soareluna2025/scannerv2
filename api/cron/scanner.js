@@ -33,6 +33,7 @@ async function getFormGoals(teamId, isHome) {
   const hit = formCache[cKey];
   if (hit && (Date.now() - hit.ts) < FORM_CACHE_TTL) return hit.val;
   try {
+    // Încearcă tabelul fixtures (dacă e populat)
     const col   = isHome ? 'home_goals' : 'away_goals';
     const idCol = isHome ? 'home_team_id' : 'away_team_id';
     const r = await query(
@@ -44,7 +45,25 @@ async function getFormGoals(teamId, isHome) {
       [teamId]
     );
     const row = r.rows[0];
-    const val = (row && parseInt(row.cnt) >= 3) ? (parseFloat(row.avg_g) || 0.35) : 0.35;
+    if (row && parseInt(row.cnt) >= 3) {
+      const val = parseFloat(row.avg_g) || 0.35;
+      formCache[cKey] = { ts: Date.now(), val };
+      return val;
+    }
+    // Fallback: player_stats — suma goluri per meci pentru această echipă
+    const r2 = await query(
+      `SELECT AVG(team_goals::numeric) AS avg_g, COUNT(*) AS cnt FROM (
+         SELECT fixture_id, SUM(goals) AS team_goals
+         FROM player_stats
+         WHERE team_id = $1
+         GROUP BY fixture_id
+         ORDER BY fixture_id DESC
+         LIMIT 10
+       ) sub`,
+      [teamId]
+    );
+    const row2 = r2.rows[0];
+    const val = (row2 && parseInt(row2.cnt) >= 3) ? (parseFloat(row2.avg_g) || 0.35) : 0.35;
     formCache[cKey] = { ts: Date.now(), val };
     return val;
   } catch (_) {
