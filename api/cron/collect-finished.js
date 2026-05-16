@@ -1,14 +1,5 @@
 import { query } from '../db.js';
-
-function calcPlayerScore(rating, goals, assists, passAcc, sot) {
-  const ratingNorm = rating ? (rating / 10 * 100) : 50;
-  const goalsScore  = Math.min(100, (goals  || 0) * 25);
-  const assistScore = Math.min(100, (assists || 0) * 20);
-  const passScore   = passAcc != null ? parseFloat(passAcc) : 50;
-  const shotScore   = Math.min(100, (sot    || 0) * 15);
-  const score = Math.round(ratingNorm * 0.35 + goalsScore * 0.20 + assistScore * 0.15 + passScore * 0.20 + shotScore * 0.10);
-  return isNaN(score) ? 0 : score;
-}
+import { calcPlayerScore } from '../calc-utils.js';
 
 async function collectFixture(fixtureId, key) {
   const r = await fetch(
