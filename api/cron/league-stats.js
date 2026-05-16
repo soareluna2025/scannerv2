@@ -49,7 +49,7 @@ export default async function handler(req, res) {
         (100.0 * COUNT(*) FILTER (WHERE home_goals + away_goals >= 4) / COUNT(*))::NUMERIC(5,2) AS pct_over_35,
         (100.0 * COUNT(*) FILTER (WHERE home_goals > 0 AND away_goals > 0) / COUNT(*))::NUMERIC(5,2) AS pct_gg
       FROM fixtures_history
-      WHERE season >= 2024
+      WHERE season >= 2022
         AND status_short = 'FT'
         AND home_goals IS NOT NULL
         AND away_goals IS NOT NULL
@@ -73,7 +73,7 @@ export default async function handler(req, res) {
         GROUP BY fixture_id
       ) pm
       JOIN fixtures_history fh ON fh.fixture_id = pm.fixture_id
-      WHERE fh.season >= 2024
+      WHERE fh.season >= 2022
       GROUP BY fh.league_id
     `).catch(() => ({ rows: [] }));
 
