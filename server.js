@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { query } from './api/db.js';
+import { runDailyBackfill, initBackfillProgress } from './api/backfill.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -46,11 +48,29 @@ for (const name of cronFiles) {
   });
 }
 
+// Backfill routes
+app.get('/api/backfill/start', async (req, res) => {
+  runDailyBackfill(); // async, fără await — rulează în background
+  res.json({ status: 'started' });
+});
+
+app.get('/api/backfill/status', async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT status, COUNT(*) AS count FROM backfill_progress GROUP BY status ORDER BY status'
+    );
+    res.json(result.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // SPA fallback — toate rutele necunoscute servesc index.html
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`AlohaScan pornit pe http://0.0.0.0:${PORT}`);
+  await initBackfillProgress();
 });
