@@ -27,7 +27,7 @@ async function sfFormStats(teamId) {
   try {
     const r = await query(
       `SELECT home_team_id, away_team_id, home_goals, away_goals, match_date
-       FROM fixtures
+       FROM fixtures_history
        WHERE (home_team_id = $1 OR away_team_id = $1)
          AND status_short = 'FT'
          AND home_goals IS NOT NULL

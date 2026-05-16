@@ -18,8 +18,8 @@ export default async function handler(req, res) {
       recentFixtures,
     ] = await Promise.all([
       query(`SELECT status_short, COUNT(*) AS cnt
-             FROM fixtures GROUP BY status_short ORDER BY cnt DESC`),
-      query(`SELECT COUNT(*) AS cnt FROM fixtures`),
+             FROM fixtures_history GROUP BY status_short ORDER BY cnt DESC`),
+      query(`SELECT COUNT(*) AS cnt FROM fixtures_history`),
       query(`SELECT COUNT(*) AS cnt FROM predictions`),
       query(`SELECT COUNT(*) AS cnt FROM player_stats`),
       query(`SELECT COUNT(*) AS cnt, COUNT(*) FILTER (WHERE outcome='LIVE') AS live
@@ -29,13 +29,13 @@ export default async function handler(req, res) {
       query(`SELECT job_name, ran_at, status, fixtures_processed, players_upserted, error_msg
              FROM cron_logs ORDER BY ran_at DESC LIMIT 10`),
       query(`SELECT fixture_id, home_team_id, away_team_id, status_short, match_date
-             FROM fixtures ORDER BY match_date DESC LIMIT 5`),
+             FROM fixtures_history ORDER BY match_date DESC LIMIT 5`),
     ]);
 
     res.status(200).json({
       ok: true,
       ts: new Date().toISOString(),
-      fixtures: {
+      fixtures_history: {
         total:    Number(fixturesTotal.rows[0].cnt),
         byStatus: Object.fromEntries(
           fixturesByStatus.rows.map(r => [r.status_short, Number(r.cnt)])

@@ -38,7 +38,7 @@ async function getFormGoals(teamId, isHome) {
     const idCol = isHome ? 'home_team_id' : 'away_team_id';
     const r = await query(
       `SELECT AVG(sub.g::numeric) AS avg_g, COUNT(*) AS cnt FROM (
-         SELECT ${col} AS g FROM fixtures
+         SELECT ${col} AS g FROM fixtures_history
          WHERE ${idCol} = $1 AND status_short = 'FT' AND ${col} IS NOT NULL
          ORDER BY match_date DESC LIMIT 10
        ) sub`,
