@@ -1205,6 +1205,12 @@ function enrichUrl(hid,aid,m){
       var sota=aSt.find(function(s){return s.type==='Shots on Goal';});
       u+='&soth='+(soth&&soth.value!=null?soth.value:0);
       u+='&sota='+(sota&&sota.value!=null?sota.value:0);
+      var hDA=hSt.find(function(s){return s.type==='Dangerous Attacks';});
+      var aDA=aSt.find(function(s){return s.type==='Dangerous Attacks';});
+      u+='&da='+((hDA&&hDA.value!=null?parseFloat(hDA.value):0)+(aDA&&aDA.value!=null?parseFloat(aDA.value):0));
+      var hYC=hSt.find(function(s){return s.type==='Yellow Cards';});
+      var aYC=aSt.find(function(s){return s.type==='Yellow Cards';});
+      u+='&yc='+((hYC&&hYC.value!=null?parseFloat(hYC.value):0)+(aYC&&aYC.value!=null?parseFloat(aYC.value):0));
     }
   }
   return u;
@@ -1532,7 +1538,7 @@ async function mdFetch(silent){
           clearInterval(_mdRefreshTimer);_mdRefreshTimer=null;return;
         }
         mdFetch(true);
-      },35000);
+      },10000);
     }
     if(!isLive&&_mdRefreshTimer){
       clearInterval(_mdRefreshTimer);_mdRefreshTimer=null;
@@ -1629,15 +1635,22 @@ function mdRenderSumar(d){
   var subEvts=evts.filter(function(e){return e.type==='subst';});
   if(evts.length){
     out+='<div class="md-section"><div class="md-section-title">Evenimente</div>';
-    evts.slice(0,20).forEach(function(e){
-      var icon=e.type==='Goal'?(e.detail==='Own Goal'?'⚽🔴':e.detail==='Penalty'?'⚽⚪':'⚽')
-              :e.type==='Card'?(e.detail==='Yellow Card'?'🟨':'🟥')
-              :e.type==='subst'?'🔄':'•';
+    evts.slice(0,25).forEach(function(e){
+      var etype=(e.type||'').toLowerCase();
+      var icon=etype==='goal'?(e.detail==='Own Goal'?'⚽🔴':e.detail==='Penalty'?'⚽⚪':'⚽')
+              :etype==='card'?(e.detail==='Yellow Card'?'🟨':'🟥')
+              :(etype==='subst'||etype==='substitution')?'↔':'•';
       out+='<div class="md-event">';
       out+='<div class="md-event-min">'+(e.time&&e.time.elapsed||'?')+"'</div>";
       out+='<div class="md-event-icon">'+icon+'</div>';
       out+='<div style="flex:1">';
-      out+='<div class="md-event-detail">'+(e.player&&e.player.name||'')+(e.assist&&e.assist.name?' <span style="color:var(--mu);font-size:10px">('+e.assist.name+')</span>':'')+'</div>';
+      if(etype==='subst'||etype==='substitution'){
+        var playerIn=e.player&&e.player.name||'';
+        var playerOut=e.assist&&e.assist.name||'';
+        out+='<div class="md-event-detail">'+playerIn+(playerOut?' <span style="color:var(--red);font-size:10px">↓'+playerOut+'</span>':'')+'</div>';
+      }else{
+        out+='<div class="md-event-detail">'+(e.player&&e.player.name||'')+(e.assist&&e.assist.name?' <span style="color:var(--mu);font-size:10px">('+e.assist.name+')</span>':'')+'</div>';
+      }
       out+='<div class="md-event-team">'+(e.team&&e.team.name||'')+'</div>';
       out+='</div></div>';
     });
@@ -1672,14 +1685,35 @@ function mdRenderSumar(d){
   var statDefs=[
     ['Ball Possession','Posesie'],['Shots on Goal','Suturi pe poartă'],
     ['Shots off Goal','Suturi pe lângă'],['Total Shots','Total suturi'],
+    ['Dangerous Attacks','Atacuri periculoase'],
     ['Corner Kicks','Cornere'],['Fouls','Fault-uri'],['Yellow Cards','Galbene'],
     ['expected_goals','xG']
   ];
   statDefs.forEach(function(sd){
     statsHTML+=statRow(sd[1],getSt(0,sd[0]),getSt(1,sd[0]));
   });
+  // Estimated xG when real xG not available
+  var realXgH=getSt(0,'expected_goals'),realXgA=getSt(1,'expected_goals');
+  if((!realXgH&&!realXgA)){
+    var estH=(parseFloat(getSt(0,'Shots on Goal'))||0)*0.35;
+    var estA=(parseFloat(getSt(1,'Shots on Goal'))||0)*0.35;
+    if(estH||estA){
+      statsHTML+='<div style="font-size:11px;color:var(--mu);padding:3px 0">xG estimat: ~'+(estH+estA).toFixed(2)+' ('+estH.toFixed(2)+' — '+estA.toFixed(2)+')</div>';
+    }
+  }
   if(statsHTML){
     out+='<div class="md-section"><div class="md-section-title">Statistici meci</div>'+statsHTML+'</div>';
+  }
+  // NGP for live matches (FIX 9)
+  if(isLive){
+    var ngpData=calcScore(fix);
+    var ngpClr=ngpData.ng>=80?'#00d4a8':ngpData.ng>=60?'#ffd166':'#ff6b6b';
+    out+='<div class="md-section"><div class="md-section-title">Probabilitate gol următor (NGP)</div>';
+    out+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
+    if(ngpData.forte)out+='<div class="badge-forte">⚡ FORTE</div>';
+    out+='<div class="ngp-pct" style="color:'+ngpClr+'">'+ngpData.ng+'%</div></div>';
+    out+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+ngpData.ng+'%;background:'+ngpClr+'"></div></div>';
+    out+='</div>';
   }
 
   // Poisson probs
@@ -1747,7 +1781,7 @@ function mdRenderSumar(d){
 function mdRenderFormatii(d){
   var lineups=d.lineups||[];
   if(!lineups.length){
-    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-t">Fără formații</div><div class="empty-s">Datele nu sunt disponibile</div></div>';
+    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-t">Formații indisponibile</div><div class="empty-s">Formațiile nu sunt disponibile pentru această ligă sau meciul nu a început</div></div>';
     return;
   }
   var out='';
@@ -1792,7 +1826,7 @@ function mdPlayerRow(pl,allPlayers){
 function mdRenderJucatori(d){
   var players=d.players||[];
   if(!players.length){
-    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">👤</div><div class="empty-t">Fără date</div><div class="empty-s">Statisticile nu sunt disponibile</div></div>';
+    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">👤</div><div class="empty-t">Statistici indisponibile</div><div class="empty-s">Statistici jucători indisponibile pentru această ligă</div></div>';
     return;
   }
   var out='<div class="md-section"><div class="md-section-title">Top jucători după rating</div>';

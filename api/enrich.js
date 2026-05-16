@@ -89,7 +89,7 @@ async function getTeamStrengths(hId, aId) {
     const dA = rA.rows;
 
     const calcStr = (rows) => {
-      if (!Array.isArray(rows) || !rows.length) return null;
+      if (!Array.isArray(rows) || rows.length < 10) return null;
       const rated     = rows.filter(r => r.rating);
       const avgRating = rated.length ? rated.reduce((s, r) => s + Number(r.rating), 0) / rated.length : 5;
       const goalsPerGame = rows.reduce((s, r) => s + (r.goals || 0), 0) / rows.length;
@@ -115,6 +115,9 @@ async function getTeamStrengths(hId, aId) {
 
 function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
   const score1 = result.over15Prob ?? 50;
+  const elapsed = liveStats?.elapsed ?? 0;
+  const sotTotal = liveStats?.sot ?? null;
+  const ycTotal  = liveStats?.yc  ?? 0;
 
   const homeAvg = result.homeAvgScored ?? 1.2;
   const awayAvg = result.awayAvgScored ?? 1.0;
@@ -180,8 +183,16 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
   const confidenceScore = Math.round(layers.reduce((s, l) => s + l.score * (l.w / totalW), 0));
   const hasStr = score7 != null;
 
+  let adjustedScore = confidenceScore;
+  if (elapsed >= 45 && sotTotal !== null && sotTotal === 0) {
+    adjustedScore = Math.max(10, adjustedScore - 20);
+  }
+  if (ycTotal >= 2) {
+    adjustedScore = Math.max(10, adjustedScore - 10);
+  }
+
   return {
-    confidenceScore,
+    confidenceScore: adjustedScore,
     breakdown: {
       poisson:      Math.round(score1),
       forma:        Math.round(score2),
@@ -350,7 +361,7 @@ export default async function handler(req, res) {
       needHForm ? fetchWithRetry(`https://v3.football.api-sports.io/fixtures?team=${h}&last=20&status=FT`, { headers: hdr }).then(r => r.json()) : null,
       needAForm ? fetchWithRetry(`https://v3.football.api-sports.io/fixtures?team=${a}&last=20&status=FT`, { headers: hdr }).then(r => r.json()) : null,
       needH2H   ? fetchWithRetry(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${h}-${a}&last=10`, { headers: hdr }).then(r => r.json()) : null,
-      needOdds  ? fetchWithRetry(`https://v3.football.api-sports.io/odds?fixture=${fid}&bookmaker=8`, { headers: hdr }).then(r => r.json()) : null,
+      needOdds  ? fetchWithRetry(`https://v3.football.api-sports.io/odds?fixture=${fid}`, { headers: hdr }).then(r => r.json()) : null,
     ]);
 
     // Resolve final datasets
@@ -372,7 +383,7 @@ export default async function handler(req, res) {
       if (!oddsRaw && lgid) {
         try {
           const r5 = await fetch(
-            `https://v3.football.api-sports.io/odds?league=${lgid}&season=${new Date().getFullYear()}&bookmaker=8`,
+            `https://v3.football.api-sports.io/odds?league=${lgid}&season=${new Date().getFullYear()}`,
             { headers: hdr }
           );
           const d5 = await r5.json();
@@ -399,11 +410,13 @@ export default async function handler(req, res) {
       }
     }
 
-    const da = parseInt(req.query.da) || 0;
-    const liveStats = (elapsed && parseInt(elapsed) > 0) ? {
+    const da  = parseInt(req.query.da)  || 0;
+    const yc  = parseInt(req.query.yc)  || 0;
+    const elapsedNum = parseInt(elapsed) || 0;
+    const liveStats = elapsedNum > 0 ? {
       xg:  xgValue,
       sot: (parseInt(soth) || 0) + (parseInt(sota) || 0),
-      da,
+      da, yc, elapsed: elapsedNum,
     } : null;
 
     const confData = calcConfidence(result, oddsRaw, liveStats, teamStrengths);
