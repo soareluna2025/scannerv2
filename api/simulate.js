@@ -193,7 +193,7 @@ export default async function handler(req, res) {
     needAwayFx ? af(`/fixtures?team=${aid}&last=10&status=FT`,        'awayFormFb')  : Promise.resolve(null),
     needH2H    ? af(`/fixtures/headtohead?h2h=${hid}-${aid}&last=10`, 'h2hFb')      : Promise.resolve(null),
     needStd    ? af(`/standings?league=${lid}&season=${season}`,      'standingsFb') : Promise.resolve(null),
-    needOdds   ? af(`/odds?fixture=${fid}`,                           'oddsFb')     : Promise.resolve(null),
+    needOdds   ? af(`/odds?fixture=${fid}&bookmaker=8`,               'oddsFb')     : Promise.resolve(null),
   ]);
 
   // Resolve final datasets
@@ -354,9 +354,7 @@ export default async function handler(req, res) {
 
   // ── Odds & recommendation ─────────────────────────────────────
   const allBookmakers = oddsRes[0]?.bookmakers || [];
-  const preferredIds  = [6, 2, 3, 8, 1];
-  const bookmaker = preferredIds.map(id => allBookmakers.find(b => b.id === id)).find(Boolean)
-    || allBookmakers[0];
+  const bookmaker = allBookmakers[0];
   const bets = bookmaker?.bets || [];
   function odd(betName, val) {
     const bet = bets.find(b => b.name === betName);
