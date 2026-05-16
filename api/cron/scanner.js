@@ -21,9 +21,36 @@ const prematchCache = {}; // { [fixtureId]: { ts, composite } }
 
 let _patternRunCount = 0;
 
+const formCache = {}; // { [key]: { ts, val } }
+const FORM_CACHE_TTL = 3_600_000; // 1 hour
+
 function log(msg) { console.log(`[scanner] ${new Date().toISOString()} ${msg}`); }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function getFormGoals(teamId, isHome) {
+  const cKey = `${teamId}:${isHome ? 'h' : 'a'}`;
+  const hit = formCache[cKey];
+  if (hit && (Date.now() - hit.ts) < FORM_CACHE_TTL) return hit.val;
+  try {
+    const col   = isHome ? 'home_goals' : 'away_goals';
+    const idCol = isHome ? 'home_team_id' : 'away_team_id';
+    const r = await query(
+      `SELECT AVG(sub.g::numeric) AS avg_g, COUNT(*) AS cnt FROM (
+         SELECT ${col} AS g FROM fixtures
+         WHERE ${idCol} = $1 AND status_short = 'FT' AND ${col} IS NOT NULL
+         ORDER BY match_date DESC LIMIT 10
+       ) sub`,
+      [teamId]
+    );
+    const row = r.rows[0];
+    const val = (row && parseInt(row.cnt) >= 3) ? (parseFloat(row.avg_g) || 0.35) : 0.35;
+    formCache[cKey] = { ts: Date.now(), val };
+    return val;
+  } catch (_) {
+    return 0.35;
+  }
+}
 
 async function apiFetch(path) {
   const r = await fetch(`https://v3.football.api-sports.io${path}`, {
@@ -58,7 +85,7 @@ function getStat(stats, teamIdx, type) {
   return parseFloat(v) || 0;
 }
 
-function calcFeatures(m) {
+function calcFeatures(m, fd = {}) {
   const st  = m.statistics || [];
   const mn  = m.fixture?.status?.elapsed || 0;
   const hg  = m.goals?.home ?? 0;
@@ -95,9 +122,12 @@ function calcFeatures(m) {
     dangerousAttacks: tDA > 0 ? Math.min(tDA / 120, 1) : 0,
     timeProgress: Math.min(mn / 90, 1),
     isGoless: (hg + ag === 0) ? 1 : 0,
-    homeFormGoals: 0.35, awayFormGoals: 0.35,
-    homeFormGG: 0.45,    awayFormGG: 0.45,
-    h2hGoalRate: 0.35,   h2hGGRate: 0.45,
+    homeFormGoals: fd.homeFormGoals ?? 0.35,
+    awayFormGoals: fd.awayFormGoals ?? 0.35,
+    homeFormGG:    fd.homeFormGG    ?? 0.45,
+    awayFormGG:    fd.awayFormGG    ?? 0.45,
+    h2hGoalRate:   fd.h2hGoalRate   ?? 0.35,
+    h2hGGRate:     fd.h2hGGRate     ?? 0.45,
     xgSpike: 0, prsAcc: 0,
   };
 }
@@ -302,6 +332,23 @@ async function scanLive10s() {
     const raw = await apiFetch('/fixtures?live=all');
     log(`live10s: ${raw.length} matches from API`);
 
+    // Prefetch real form goals per team (cached 1h in formCache)
+    const matchFd = {};
+    await Promise.allSettled(raw.map(async m => {
+      const hId = m.teams?.home?.id;
+      const aId = m.teams?.away?.id;
+      if (!hId || !aId) return;
+      const [hG, aG] = await Promise.all([getFormGoals(hId, true), getFormGoals(aId, false)]);
+      matchFd[m.fixture?.id] = {
+        homeFormGoals: hG,
+        awayFormGoals: aG,
+        homeFormGG:    Math.min(0.95, hG / 1.2),
+        awayFormGG:    Math.min(0.95, aG / 1.2),
+        h2hGoalRate:   Math.min(0.90, (hG + aG) / 4),
+        h2hGGRate:     Math.min(0.90, (hG + aG) / 3.5),
+      };
+    }));
+
     for (const m of raw) {
       const sh = m.fixture?.status?.short || '';
       const id = m.fixture?.id;
@@ -331,6 +378,7 @@ async function scanLive10s() {
         liveCache[id] = {
           home_goals: currHome, away_goals: currAway,
           status: sh, minute: currMin, lineupsFetched: true,
+          formData: matchFd[id] || {},
         };
         apiFetch(`/fixtures/lineups?fixture=${id}`)
           .then(lineups => { if (liveCache[id]) liveCache[id].lineups = lineups; })
@@ -347,10 +395,11 @@ async function scanLive10s() {
         liveCache[id].away_goals = currAway;
         liveCache[id].status     = sh;
         liveCache[id].minute     = currMin;
+        liveCache[id].formData   = matchFd[id] || liveCache[id].formData || {};
       }
 
       // Calcul scoring + upsert snapshot
-      const f  = calcFeatures(m);
+      const f  = calcFeatures(m, matchFd[id] || {});
       const ng = calcNextGoal(f);
       const mk = calcMarkets(f);
 
@@ -418,7 +467,7 @@ async function scanLiveStats() {
         goals:      { home: cached.home_goals, away: cached.away_goals },
         statistics: stats,
       };
-      const f = calcFeatures(fakeMatch);
+      const f = calcFeatures(fakeMatch, cached.formData || {});
 
       saveLiveStats(fakeMatch, f, cached.status)
         .catch(e => log(`saveLiveStats ${id}: ${e.message}`));

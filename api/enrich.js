@@ -113,11 +113,11 @@ async function getTeamStrengths(hId, aId) {
   }
 }
 
-function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
+function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData) {
   const score1 = result.over15Prob ?? 50;
-  const elapsed = liveStats?.elapsed ?? 0;
-  const sotTotal = liveStats?.sot ?? null;
-  const ycTotal  = liveStats?.yc  ?? 0;
+  const elapsed  = liveStats?.elapsed ?? 0;
+  const sotTotal = liveStats?.sot     ?? null;
+  const ycTotal  = liveStats?.yc      ?? 0;
 
   const homeAvg = result.homeAvgScored ?? 1.2;
   const awayAvg = result.awayAvgScored ?? 1.0;
@@ -125,33 +125,64 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
 
   const score3 = result.h2hOver15 != null ? result.h2hOver15 : score1;
 
-  let score4 = score1;
-  if (liveStats && liveStats.xg != null) {
-    score4 = Math.max(50, Math.min(100, liveStats.xg * 25 + (liveStats.sot || 0) * 3 + (liveStats.da || 0) * 0.5));
+  // Layer 4 — Live: xG + SOT + DA (fără podea 50)
+  let score4 = score1; // fallback pentru pre-meci
+  if (liveStats) {
+    const sot = liveStats.sot || 0;
+    const xg  = liveStats.xg  || 0;
+    const da  = liveStats.da  || 0;
+    if (sot === 0 && elapsed > 10) {
+      score4 = 20; // niciun șut pe poartă după min 10 — semnal slab
+    } else {
+      score4 = Math.min(100, xg * 25 + sot * 3 + da * 0.5);
+    }
   }
 
+  // Layer 5 — EV: folosim evData calculat deja (elimină hardcodarea la 50%)
   let score5 = 50;
   let bestMarket = null, bestCota = null, bestEV = null;
-  if (oddsRaw) {
+  if (evData?.hasOdds) {
+    const candidates = [
+      { name: 'Over 1.5', ev: evData.evOver15, cota: evData.cotaOver15 },
+      { name: 'GG',       ev: evData.evGG,     cota: evData.cotaGG },
+      { name: '1 Gazde',  ev: evData.evHome,   cota: evData.cotaHome },
+      { name: 'X Egal',   ev: evData.evDraw,   cota: evData.cotaDraw },
+      { name: '2 Oasp.',  ev: evData.evAway,   cota: evData.cotaAway },
+    ].filter(c => c.ev != null && c.cota != null && c.cota >= 1.20)
+     .sort((a, b) => b.ev - a.ev);
+
+    if (candidates.length) {
+      const best = candidates[0];
+      bestMarket = best.name;
+      bestCota   = best.cota;
+      if (best.ev > 0) {
+        score5 = Math.min(100, best.ev * 300);
+        bestEV = '+' + Math.round(best.ev * 100) + '%';
+      } else {
+        score5 = Math.max(10, 50 + Math.round(best.ev * 100));
+      }
+    }
+  } else if (oddsRaw) {
+    // fallback: calcul direct când evData nu e disponibil
     const markets = [
       { name: 'Over 1.5', cota: oddsRaw.cotaOver15, prob: result.over15Prob / 100 },
       { name: 'GG',       cota: oddsRaw.cotaGG,     prob: result.ggProb     / 100 },
       { name: '1 Gazde',  cota: oddsRaw.cotaHome,   prob: result.homeWin    / 100 },
       { name: 'X Egal',   cota: oddsRaw.cotaDraw,   prob: result.draw       / 100 },
       { name: '2 Oasp.',  cota: oddsRaw.cotaAway,   prob: result.awayWin    / 100 },
-    ].filter(m => m.cota >= 1.30 && m.cota <= 1.50 && m.prob != null);
+    ].filter(m => m.cota >= 1.20 && m.prob != null);
 
     if (markets.length) {
       const evMarkets = markets.map(m => ({ ...m, ev: m.prob * m.cota - 1 }))
         .sort((a, b) => b.ev - a.ev);
       const best = evMarkets[0];
+      bestMarket = best.name;
+      bestCota   = best.cota;
       if (best.ev > 0) {
         score5 = Math.min(100, best.ev * 300);
-        bestMarket = best.name;
-        bestCota   = best.cota;
-        bestEV     = '+' + Math.round(best.ev * 100) + '%';
+        bestEV = '+' + Math.round(best.ev * 100) + '%';
       } else {
-        score5 = 50;
+        score5 = Math.max(10, 50 + Math.round(best.ev * 100));
       }
     }
   }
@@ -184,12 +215,19 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
   const hasStr = score7 != null;
 
   let adjustedScore = confidenceScore;
+  // Penalizare date insuficiente la minute mici
+  if (elapsed > 0 && elapsed < 15) {
+    adjustedScore = Math.round(adjustedScore * 0.85);
+  } else if (elapsed >= 15 && elapsed < 30 && sotTotal !== null && sotTotal === 0) {
+    adjustedScore = Math.round(adjustedScore * 0.80);
+  }
   if (elapsed >= 45 && sotTotal !== null && sotTotal === 0) {
     adjustedScore = Math.max(10, adjustedScore - 20);
   }
   if (ycTotal >= 2) {
     adjustedScore = Math.max(10, adjustedScore - 10);
   }
+  adjustedScore = Math.max(5, Math.min(100, adjustedScore));
 
   return {
     confidenceScore: adjustedScore,
@@ -419,7 +457,7 @@ export default async function handler(req, res) {
       da, yc, elapsed: elapsedNum,
     } : null;
 
-    const confData = calcConfidence(result, oddsRaw, liveStats, teamStrengths);
+    const confData = calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData);
 
     if (elapsed && parseInt(elapsed) > 0) {
       confData.breakdown.xg_source = xgSource;
