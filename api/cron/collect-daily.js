@@ -7,7 +7,11 @@ import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 
 const PRIORITY_LEAGUES = [...ALLOWED_LEAGUE_IDS];
 
-const SEASON = new Date().getFullYear();
+// Ligile europene (aug-mai) folosesc sezonul anului precedent în mai-aug
+// Dacă suntem în ian-jul → season = anul precedent; aug-dec → anul curent
+const _y = new Date().getFullYear();
+const _m = new Date().getMonth(); // 0=ian
+const SEASON = _m < 7 ? _y - 1 : _y; // înainte de august → sezon precedent
 
 async function fetchAPI(endpoint, key) {
   const res = await fetch(`https://v3.football.api-sports.io${endpoint}`, {
