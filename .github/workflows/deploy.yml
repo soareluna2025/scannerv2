@@ -42,7 +42,6 @@ jobs:
             # Crontab-uri — idempotent (fiecare linie înlocuiește versiunea veche)
             LOG="/var/log/alohascan-cron.log"
 
-            C1="* * * * * curl -sf http://localhost:3000/api/cron/scan >> $LOG 2>&1"
             C2="0 2 * * * curl -sf http://localhost:3000/api/update-results >> $LOG 2>&1"
             C3="0 3 * * * curl -sf http://localhost:3000/api/backfill/start >> $LOG 2>&1"
             C4="0 6 * * * curl -sf http://localhost:3000/api/cron/collect-daily >> $LOG 2>&1"
@@ -55,7 +54,6 @@ jobs:
                 | grep -v 'api/backfill/start' \
                 | grep -v 'api/cron/collect-daily' \
                 | grep -v 'api/cron/collect-finished'
-              echo "$C1"
               echo "$C2"
               echo "$C3"
               echo "$C4"

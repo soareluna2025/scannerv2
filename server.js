@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { query } from './api/db.js';
 import { runDailyBackfill, initBackfillProgress } from './api/backfill.js';
+import { startScanner } from './api/cron/scanner.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -73,4 +74,5 @@ app.get('*', (req, res) => {
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`AlohaScan pornit pe http://0.0.0.0:${PORT}`);
   await initBackfillProgress();
+  startScanner();
 });

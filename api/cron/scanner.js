@@ -1,0 +1,520 @@
+// api/cron/scanner.js
+// Modul continuu — pornit din server.js la startup via startScanner().
+// Înlocuiește crontab-ul "* * * * *" al cron/scan.js cu 3 timere setInterval.
+//
+// Ciclu 1 — scanLive10s   — la fiecare  10 secunde
+// Ciclu 2 — scanLiveStats — la fiecare  60 secunde
+// Ciclu 3 — scanPreMatch  — la fiecare  60 minute
+//
+// scan.js rămâne neschimbat (disponibil manual la /api/cron/scan).
+
+import { query } from '../db.js';
+
+const FOOTBALL_KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
+
+const LIVE_STATUS = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'INT']);
+const DONE_STATUS = new Set(['FT', 'AET', 'PEN']);
+
+// Stare în memorie
+const liveCache     = {}; // { [fixtureId]: { home_goals, away_goals, status, minute, lineupsFetched } }
+const prematchCache = {}; // { [fixtureId]: { ts, composite } }
+
+let _patternRunCount = 0;
+
+function log(msg) { console.log(`[scanner] ${new Date().toISOString()} ${msg}`); }
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function apiFetch(path) {
+  const r = await fetch(`https://v3.football.api-sports.io${path}`, {
+    headers: { 'x-apisports-key': FOOTBALL_KEY },
+  });
+  const d = await r.json();
+  return d.response || [];
+}
+
+// ── Scoring — copiate verbatim din cron/scan.js ───────────────────────────────
+
+function poissonProb(lambda, k) {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+  let p = Math.exp(-lambda);
+  for (let i = 0; i < k; i++) p = p * lambda / (i + 1);
+  return p;
+}
+
+function mkt(need, lambda) {
+  if (need <= 0) return 100;
+  let pFail = 0;
+  for (let k = 0; k < need; k++) pFail += poissonProb(lambda, k);
+  return Math.round(Math.max(5, Math.min(98, (1 - pFail) * 100)));
+}
+
+function getStat(stats, teamIdx, type) {
+  const team = stats?.[teamIdx]?.statistics;
+  if (!Array.isArray(team)) return 0;
+  const entry = team.find(s => s.type === type);
+  const v = entry?.value;
+  if (v === null || v === undefined || v === 'N/A' || v === '') return 0;
+  return parseFloat(v) || 0;
+}
+
+function calcFeatures(m) {
+  const st  = m.statistics || [];
+  const mn  = m.fixture?.status?.elapsed || 0;
+  const hg  = m.goals?.home ?? 0;
+  const ag  = m.goals?.away ?? 0;
+
+  const hxg  = getStat(st, 0, 'expected_goals');
+  const axg  = getStat(st, 1, 'expected_goals');
+  const hSOT = getStat(st, 0, 'Shots on Goal');
+  const aSOT = getStat(st, 1, 'Shots on Goal');
+  const hSh  = getStat(st, 0, 'Shots off Goal') + hSOT;
+  const aSh  = getStat(st, 1, 'Shots off Goal') + aSOT;
+  const hp   = getStat(st, 0, 'Ball Possession') || 50;
+  const hC   = getStat(st, 0, 'Corner Kicks');
+  const aC   = getStat(st, 1, 'Corner Kicks');
+  const hDA  = getStat(st, 0, 'Dangerous Attacks');
+  const aDA  = getStat(st, 1, 'Dangerous Attacks');
+  const hSv  = getStat(st, 0, 'Goalkeeper Saves');
+  const aSv  = getStat(st, 1, 'Goalkeeper Saves');
+
+  const txg  = hxg + axg;
+  const tSh  = hSh + aSh;
+  const tSOT = hSOT + aSOT;
+  const tC   = hC + aC;
+  const tDA  = hDA + aDA;
+
+  return {
+    hxg, axg, hSOT, aSOT, hSh, aSh, hp, hC, aC, hDA, aDA, hSv, aSv,
+    txg, tSh, tSOT, tC, tDA, mn, hg, ag,
+    xgTotal: Math.min(txg / 3, 1),
+    hxgN: Math.min(hxg / 1.5, 1),
+    axgN: Math.min(axg / 1.5, 1),
+    shots: Math.min(tSh / 25, 1),
+    corners: Math.min(tC / 15, 1),
+    dangerousAttacks: tDA > 0 ? Math.min(tDA / 120, 1) : 0,
+    timeProgress: Math.min(mn / 90, 1),
+    isGoless: (hg + ag === 0) ? 1 : 0,
+    homeFormGoals: 0.35, awayFormGoals: 0.35,
+    homeFormGG: 0.45,    awayFormGG: 0.45,
+    h2hGoalRate: 0.35,   h2hGGRate: 0.45,
+    xgSpike: 0, prsAcc: 0,
+  };
+}
+
+function calcNextGoal(f) {
+  const mn = f.mn || 0;
+  const remFrac = Math.max(0, Math.min(1, (90 - mn) / 90));
+  let remXg = mn > 0 ? (f.txg / mn) * (90 - mn) : 0.025 * (90 - mn);
+  if (f.txg === 0) {
+    remXg = ((f.homeFormGoals + f.awayFormGoals) / 2 * 2.5) * remFrac;
+  }
+  remXg += f.xgSpike * 0.3 + f.prsAcc * 0.2;
+  if (mn >= 70) remXg *= 1.2;
+  if (mn >= 80) remXg *= 1.15;
+  const prob = 1 - Math.exp(-Math.max(remXg, 0.05));
+  return Math.round(Math.max(3, Math.min(97, prob * 100)));
+}
+
+function calcGG(f) {
+  const mn = f.mn || 0;
+  const remFrac = Math.max(0, Math.min(1, (90 - mn) / 90));
+  const histGG = (f.homeFormGG + f.awayFormGG) / 2 * 0.7 + f.h2hGGRate * 0.3;
+  const hxgRate = mn > 0 ? (f.hxg / (mn / 90)) : f.hxg;
+  const axgRate = mn > 0 ? (f.axg / (mn / 90)) : f.axg;
+  const pScore = (lam, scored) => {
+    if (scored > 0) return 1;
+    return 1 - Math.exp(-Math.max(lam * remFrac, 0.05));
+  };
+  const hLam = Math.max(hxgRate > 0 ? hxgRate : f.homeFormGoals * 1.5, 0.3);
+  const aLam = Math.max(axgRate > 0 ? axgRate : f.awayFormGoals * 1.5, 0.3);
+  let ggPred = pScore(hLam, f.hg) * pScore(aLam, f.ag) * 0.6 + histGG * 0.4;
+  if (f.hg === 0 && f.ag === 0 && mn >= 70) ggPred *= 0.75;
+  if (f.hg === 0 && f.ag === 0 && mn >= 80) ggPred *= 0.65;
+  return Math.round(Math.max(5, Math.min(95, ggPred * 100)));
+}
+
+function calcMarkets(f) {
+  const mn     = f.mn || 0;
+  const totalG = f.hg + f.ag;
+  const remFrac = Math.max(0, Math.min(1, (95 - mn) / 90));
+  const lxg   = f.xgTotal > 0 ? f.txg * 3 : 0;
+  const lform  = ((f.homeFormGoals + f.awayFormGoals) / 2) * 3;
+  const lh2h   = f.h2hGoalRate * 3;
+  let lb = lxg > 0 ? lxg * 0.55 + lform * 0.25 + lh2h * 0.2
+                   : lform * 0.55 + lh2h * 0.45;
+  if (lb < 0.8) lb = 1.6;
+  const lr = lb * remFrac + f.xgSpike * 0.3 + f.prsAcc * 0.2;
+
+  const lhf = f.homeFormGoals * 1.5;
+  const laf = f.awayFormGoals * 1.5;
+  const lhb = Math.max(f.hxgN > 0 ? f.hxgN * 1.5 * 0.6 + lhf * 0.4 : lhf, 0.3);
+  const lab = Math.max(f.axgN > 0 ? f.axgN * 1.5 * 0.6 + laf * 0.4 : laf, 0.3);
+  const lhr = lhb * remFrac + f.xgSpike * 0.1;
+  const lar = lab * remFrac + f.prsAcc * 0.1;
+
+  return {
+    over05: mkt(Math.max(0, 1 - totalG), lr),
+    over15: mkt(Math.max(0, 2 - totalG), lr),
+    over25: mkt(Math.max(0, 3 - totalG), lr),
+    gg:     calcGG(f),
+    home05: mkt(Math.max(0, 1 - f.hg), lhr),
+    home15: mkt(Math.max(0, 2 - f.hg), lhr),
+    away05: mkt(Math.max(0, 1 - f.ag), lar),
+    away15: mkt(Math.max(0, 2 - f.ag), lar),
+  };
+}
+
+// ── DB helpers — copiate verbatim din cron/scan.js ────────────────────────────
+
+async function upsertSnapshot(row) {
+  await query(
+    `INSERT INTO match_snapshots
+       (fixture_id, league_id, home_team, away_team,
+        status_short, minute, home_goals, away_goals,
+        ng, over15, outcome)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     ON CONFLICT (fixture_id) DO UPDATE SET
+       status_short=EXCLUDED.status_short,
+       minute=EXCLUDED.minute,
+       home_goals=EXCLUDED.home_goals,
+       away_goals=EXCLUDED.away_goals,
+       ng=EXCLUDED.ng,
+       over15=EXCLUDED.over15,
+       outcome=EXCLUDED.outcome`,
+    [
+      row.fixture_id, row.league_id, row.home_team, row.away_team,
+      row.status_short, row.minute, row.home_goals, row.away_goals,
+      row.ng, row.over15, row.outcome || 'LIVE',
+    ]
+  );
+}
+
+async function resolveOutcome(fixtureId, outcome, finalHome, finalAway) {
+  await query(
+    `UPDATE match_snapshots
+     SET outcome=$1, final_home=$2, final_away=$3, resolved_at=NOW()
+     WHERE fixture_id=$4`,
+    [outcome, finalHome, finalAway, fixtureId]
+  );
+}
+
+async function leagueSnapshots(leagueId, limit = 200) {
+  try {
+    const r = leagueId
+      ? await query(
+          `SELECT * FROM match_snapshots
+           WHERE league_id=$1 AND outcome != 'LIVE'
+           ORDER BY created_at DESC LIMIT $2`,
+          [leagueId, limit])
+      : await query(
+          `SELECT * FROM match_snapshots
+           WHERE outcome != 'LIVE'
+           ORDER BY created_at DESC LIMIT $1`,
+          [limit]);
+    return r.rows;
+  } catch (_) { return []; }
+}
+
+async function upsertLeaguePattern(row) {
+  await query(
+    `INSERT INTO league_patterns
+       (league_id, sample_size, avg_ng, avg_over15, updated_at)
+     VALUES ($1,$2,$3,$4,NOW())
+     ON CONFLICT (league_id) DO UPDATE SET
+       sample_size=EXCLUDED.sample_size,
+       avg_ng=EXCLUDED.avg_ng,
+       avg_over15=EXCLUDED.avg_over15,
+       updated_at=NOW()`,
+    [row.league_id, row.sample_size, row.avg_ng, row.avg_over15]
+  );
+}
+
+async function saveLiveStats(m, f, status) {
+  const st = m.statistics || [];
+  const yc = getStat(st, 0, 'Yellow Cards') + getStat(st, 1, 'Yellow Cards');
+  const rc = getStat(st, 0, 'Red Cards')    + getStat(st, 1, 'Red Cards');
+  await query(
+    `INSERT INTO live_stats
+       (fixture_id, minute, status, home_goals, away_goals,
+        xg, possession, shots_on_goal, shots_total,
+        corners, yellow_cards, red_cards,
+        odd_home, odd_draw, odd_away)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+    [
+      m.fixture.id,
+      f.mn,
+      status || null,
+      f.hg,
+      f.ag,
+      f.txg  || null,
+      f.hp   || null,
+      f.tSOT,
+      f.tSh,
+      f.tC,
+      yc,
+      rc,
+      null, null, null,
+    ]
+  );
+}
+
+async function saveH2H(matches) {
+  for (const match of matches) {
+    const hg  = match.goals?.home ?? 0;
+    const ag  = match.goals?.away ?? 0;
+    const hid = match.teams?.home?.id;
+    const aid = match.teams?.away?.id;
+    if (!hid || !aid) continue;
+    await query(
+      `INSERT INTO h2h
+         (team1_id, team2_id, fixture_id, home_team_id, away_team_id,
+          match_date, home_goals, away_goals, league_id, season)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       ON CONFLICT (team1_id, team2_id, fixture_id) DO UPDATE SET
+         home_goals=EXCLUDED.home_goals, away_goals=EXCLUDED.away_goals`,
+      [
+        Math.min(hid, aid), Math.max(hid, aid),
+        match.fixture.id, hid, aid,
+        match.fixture?.date || null,
+        hg, ag,
+        match.league?.id || null,
+        new Date().getFullYear(),
+      ]
+    );
+  }
+}
+
+async function saveAlert(fixtureId, alertType, market, message, confidence) {
+  await query(
+    `INSERT INTO alerts
+       (fixture_id, type, message, confidence, is_sent, telegram_sent)
+     VALUES ($1,$2,$3,$4,$5,$6)`,
+    [fixtureId, alertType, message, confidence || null, false, false]
+  );
+}
+
+// ── Ciclu 1: /fixtures?live=all — la fiecare 10 secunde ──────────────────────
+
+async function scanLive10s() {
+  if (!FOOTBALL_KEY) return;
+  try {
+    const raw = await apiFetch('/fixtures?live=all');
+    log(`live10s: ${raw.length} matches from API`);
+
+    for (const m of raw) {
+      const sh = m.fixture?.status?.short || '';
+      const id = m.fixture?.id;
+      if (!id) continue;
+
+      // Meci terminat — rezolvă outcome dacă îl urmăream
+      if (DONE_STATUS.has(sh)) {
+        if (liveCache[id]) {
+          const fh = m.goals?.home ?? 0;
+          const fa = m.goals?.away ?? 0;
+          resolveOutcome(id, (fh + fa) >= 2 ? 'WIN' : 'LOSS', fh, fa)
+            .catch(e => log(`resolveOutcome ${id}: ${e.message}`));
+          delete liveCache[id];
+        }
+        continue;
+      }
+
+      if (!LIVE_STATUS.has(sh)) continue;
+
+      const currHome = m.goals?.home ?? 0;
+      const currAway = m.goals?.away ?? 0;
+      const currMin  = m.fixture?.status?.elapsed ?? 0;
+      const prev     = liveCache[id];
+
+      if (!prev) {
+        // Prima apariție — fetch lineups o singură dată
+        liveCache[id] = {
+          home_goals: currHome, away_goals: currAway,
+          status: sh, minute: currMin, lineupsFetched: true,
+        };
+        apiFetch(`/fixtures/lineups?fixture=${id}`)
+          .then(lineups => { if (liveCache[id]) liveCache[id].lineups = lineups; })
+          .catch(() => {});
+      } else {
+        // Scorul s-a schimbat — fetch events imediat
+        if (prev.home_goals !== currHome || prev.away_goals !== currAway) {
+          log(`score change ${id}: ${currHome}-${currAway}`);
+          apiFetch(`/fixtures/events?fixture=${id}`)
+            .then(events => { if (liveCache[id]) liveCache[id].events = events; })
+            .catch(() => {});
+        }
+        liveCache[id].home_goals = currHome;
+        liveCache[id].away_goals = currAway;
+        liveCache[id].status     = sh;
+        liveCache[id].minute     = currMin;
+      }
+
+      // Calcul scoring + upsert snapshot
+      const f  = calcFeatures(m);
+      const ng = calcNextGoal(f);
+      const mk = calcMarkets(f);
+
+      upsertSnapshot({
+        fixture_id:   id,            league_id:  m.league?.id,
+        home_team:    m.teams?.home?.name,       away_team: m.teams?.away?.name,
+        status_short: sh,            minute:     currMin,
+        home_goals:   currHome,      away_goals: currAway,
+        ng,           over15: mk.over15,         outcome: 'LIVE',
+      }).catch(e => log(`upsertSnapshot ${id}: ${e.message}`));
+
+      // Alerte
+      if (ng > 85 || mk.over15 > 82) {
+        const alertType = ng > 85 ? 'HIGH_NGP' : 'HIGH_OVER15';
+        const conf      = ng > 85 ? ng / 100 : mk.over15 / 100;
+        const msg       = `${m.teams?.home?.name} vs ${m.teams?.away?.name} — ${alertType} ${Math.round(conf * 100)}% min ${currMin}`;
+        saveAlert(id, alertType, ng > 85 ? 'ng' : 'over15', msg, conf).catch(() => {});
+      }
+    }
+
+    // League patterns la fiecare 10 rulări
+    _patternRunCount++;
+    if (_patternRunCount % 10 === 0) {
+      leagueSnapshots(null, 1000).then(recent => {
+        const byLeague = {};
+        for (const s of recent) {
+          if (!s.league_id) continue;
+          if (!byLeague[s.league_id]) byLeague[s.league_id] = [];
+          byLeague[s.league_id].push(s);
+        }
+        let count = 0;
+        for (const [lid, snaps] of Object.entries(byLeague)) {
+          const n          = snaps.length;
+          const avg_ng     = Math.round(snaps.reduce((s, x) => s + (x.ng    || 0), 0) / n);
+          const avg_over15 = Math.round(snaps.reduce((s, x) => s + (x.over15 || 0), 0) / n);
+          upsertLeaguePattern({ league_id: Number(lid), sample_size: n, avg_ng, avg_over15 })
+            .catch(() => {});
+          count++;
+        }
+        log(`league patterns: ${count} updated`);
+      }).catch(() => {});
+    }
+  } catch (e) {
+    log(`scanLive10s error: ${e.message}`);
+  }
+}
+
+// ── Ciclu 2: /fixtures/{id}/statistics — la fiecare 60 secunde ───────────────
+
+async function scanLiveStats() {
+  if (!FOOTBALL_KEY) return;
+  const activeIds = Object.keys(liveCache);
+  if (!activeIds.length) return;
+  log(`liveStats: ${activeIds.length} active matches`);
+
+  for (const id of activeIds) {
+    try {
+      const stats = await apiFetch(`/fixtures/statistics?fixture=${id}`);
+      if (!stats.length || !liveCache[id]) continue;
+
+      const cached = liveCache[id];
+      // Construiește obiect compatibil cu calcFeatures/saveLiveStats
+      const fakeMatch = {
+        fixture:    { id: Number(id), status: { elapsed: cached.minute } },
+        goals:      { home: cached.home_goals, away: cached.away_goals },
+        statistics: stats,
+      };
+      const f = calcFeatures(fakeMatch);
+
+      saveLiveStats(fakeMatch, f, cached.status)
+        .catch(e => log(`saveLiveStats ${id}: ${e.message}`));
+    } catch (e) {
+      log(`liveStats error ${id}: ${e.message}`);
+    }
+  }
+}
+
+// ── Ciclu 3: pre-meci H2H + form — la fiecare 60 minute ──────────────────────
+
+async function scanPreMatch() {
+  if (!FOOTBALL_KEY) return;
+  try {
+    const nowMs    = Date.now();
+    const today    = new Date(nowMs).toISOString().split('T')[0];
+    const tomorrow = new Date(nowMs + 86_400_000).toISOString().split('T')[0];
+
+    const [todayFx, tomorrowFx] = await Promise.all([
+      apiFetch(`/fixtures?date=${today}&status=NS`),
+      apiFetch(`/fixtures?date=${tomorrow}&status=NS`),
+    ]);
+
+    const upcoming = [...todayFx, ...tomorrowFx].filter(m => {
+      const fd = m.fixture?.date ? new Date(m.fixture.date).getTime() : 0;
+      return fd >= nowMs && fd <= nowMs + 86_400_000;
+    });
+
+    log(`preMatch: ${upcoming.length} upcoming fixtures`);
+    let processed = 0;
+
+    for (const m of upcoming) {
+      const id  = m.fixture?.id;
+      const hid = m.teams?.home?.id;
+      const aid = m.teams?.away?.id;
+      if (!id || !hid || !aid) continue;
+
+      // Sari dacă e în cache din ultimele 60 minute
+      const cached = prematchCache[id];
+      if (cached && (nowMs - cached.ts) < 3_600_000) continue;
+
+      try {
+        const [h2h, homeForm, awayForm] = await Promise.all([
+          apiFetch(`/fixtures/headtohead?h2h=${hid}-${aid}&last=10`),
+          apiFetch(`/fixtures?team=${hid}&last=5&status=FT`),
+          apiFetch(`/fixtures?team=${aid}&last=5&status=FT`),
+        ]);
+
+        let composite = null;
+        if (h2h.length >= 3 && homeForm.length >= 3 && awayForm.length >= 3) {
+          saveH2H(h2h).catch(e => log(`saveH2H ${id}: ${e.message}`));
+
+          const h2hN   = h2h.length;
+          const ggH2H  = h2h.filter(g => g.goals?.home > 0 && g.goals?.away > 0).length / h2hN;
+          const o15H2H = h2h.filter(g => (g.goals?.home || 0) + (g.goals?.away || 0) >= 2).length / h2hN;
+          const hf5    = homeForm.slice(0, 5);
+          const af5    = awayForm.slice(0, 5);
+          const ggHF   = hf5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / hf5.length;
+          const ggAF   = af5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / af5.length;
+          const o15HF  = hf5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / hf5.length;
+          const o15AF  = af5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / af5.length;
+          const ggScore  = ggH2H * 0.30 + ggHF * 0.25 + ggAF * 0.25 + o15H2H * 0.20;
+          const o15Score = o15H2H * 0.30 + (o15HF / 3) * 0.25 + (o15AF / 3) * 0.25 + ggH2H * 0.20;
+          composite = Math.round((ggScore + o15Score) / 2 * 100);
+        }
+
+        prematchCache[id] = { ts: nowMs, composite };
+        processed++;
+      } catch (e) {
+        log(`preMatch error ${id}: ${e.message}`);
+      }
+
+      await sleep(150); // 150ms între fixture-uri — evită burst
+    }
+
+    log(`preMatch done: ${processed} processed, ${upcoming.length - processed} skipped/cached`);
+  } catch (e) {
+    log(`scanPreMatch error: ${e.message}`);
+  }
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+
+export function startScanner() {
+  if (!FOOTBALL_KEY) {
+    console.log('[scanner] No FOOTBALL_API_KEY — scanner disabled');
+    return;
+  }
+
+  // Rulare imediată la startup
+  scanLive10s();
+  scanPreMatch();
+
+  setInterval(scanLive10s,    10_000);      // la fiecare 10s
+  setInterval(scanLiveStats,  60_000);      // la fiecare 60s
+  setInterval(scanPreMatch,  3_600_000);    // la fiecare 60min
+
+  console.log('[scanner] Started — live/10s, stats/60s, prematch/1h');
+}
