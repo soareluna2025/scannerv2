@@ -20,7 +20,7 @@ app.use(express.static(__dirname, { index: 'index.html' }));
 const apiFiles = [
   'football', 'today', 'enrich', 'match', 'players',
   'agent', 'update-results', 'health-check', 'simulate',
-  'elo', 'monte-carlo', 'match-momentum'
+  'elo', 'monte-carlo', 'match-momentum', 'db-stats'
 ];
 
 for (const name of apiFiles) {
