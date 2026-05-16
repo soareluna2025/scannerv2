@@ -371,7 +371,7 @@ export default async function handler(req, res) {
     try {
       const fh = m.goals?.home ?? 0;
       const fa = m.goals?.away ?? 0;
-      const outcome = (fh + fa) > 0 ? 'WIN' : 'LOSS';
+      const outcome = (fh + fa) >= 2 ? 'WIN' : 'LOSS';
       await resolveOutcome(m.fixture.id, outcome, fh, fa);
       resolved.push({ id: m.fixture.id, outcome, score: `${fh}-${fa}` });
     } catch (e) {

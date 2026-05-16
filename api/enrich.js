@@ -58,10 +58,10 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
   return {
     homeAvgScored:   r2(homeAvgScored),
     homeAvgConceded: r2(homeAvgConceded),
-    homeScoreRate:   pct(hGames, m => (m.goals?.home ?? 0) > 0) ?? Math.round((1 - Math.exp(-lambdaHome)) * 100),
+    homeScoreRate:   pct(hGames, m => ((m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away) ?? 0) > 0) ?? Math.round((1 - Math.exp(-lambdaHome)) * 100),
     awayAvgScored:   r2(awayAvgScored),
     awayAvgConceded: r2(awayAvgConceded),
-    awayScoreRate:   pct(aGames, m => (m.goals?.away ?? 0) > 0) ?? Math.round((1 - Math.exp(-lambdaAway)) * 100),
+    awayScoreRate:   pct(aGames, m => ((m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0) > 0) ?? Math.round((1 - Math.exp(-lambdaAway)) * 100),
     lambdaHome:      r2(lambdaHome),
     lambdaAway:      r2(lambdaAway),
     lambdaTotal:     r2(lambdaTotal),
@@ -82,8 +82,8 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
 async function getTeamStrengths(hId, aId) {
   try {
     const [rH, rA] = await Promise.all([
-      query('SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY player_id DESC LIMIT 110', [hId]),
-      query('SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY player_id DESC LIMIT 110', [aId]),
+      query('SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY fixture_id DESC LIMIT 110', [hId]),
+      query('SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY fixture_id DESC LIMIT 110', [aId]),
     ]);
     const dH = rH.rows;
     const dA = rA.rows;
@@ -399,10 +399,11 @@ export default async function handler(req, res) {
       }
     }
 
+    const da = parseInt(req.query.da) || 0;
     const liveStats = (elapsed && parseInt(elapsed) > 0) ? {
       xg:  xgValue,
       sot: (parseInt(soth) || 0) + (parseInt(sota) || 0),
-      da:  0,
+      da,
     } : null;
 
     const confData = calcConfidence(result, oddsRaw, liveStats, teamStrengths);
