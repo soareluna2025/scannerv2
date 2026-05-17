@@ -84,9 +84,10 @@ jobs:
             echo "CRONTAB ACTIV:"
             crontab -l | grep 'localhost:3000'
 
-            # Restart aplicatie PM2 — fortat (stop+delete+start garanteaza cod nou)
-            pm2 stop alohascan 2>/dev/null || true
-            pm2 delete alohascan 2>/dev/null || true
+            # Restart fortat — omoara orice proces vechi pe portul 3000
+            fuser -k 3000/tcp 2>/dev/null || true
+            pm2 kill 2>/dev/null || true
+            sleep 2
             cd /root/scannerv2 && pm2 start server.js --name alohascan
             pm2 save
             sleep 3

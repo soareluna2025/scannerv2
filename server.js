@@ -55,7 +55,7 @@ app.use('/api/admin', adminRouter);
 
 // Admin dashboard HTML
 app.get('/admin', (req, res) => {
-  res.sendFile(join(__dirname, 'public', 'admin.html'));
+  res.sendFile(join(__dirname, 'admin.html'));
 });
 
 // Backfill routes
