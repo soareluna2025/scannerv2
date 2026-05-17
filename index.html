@@ -1800,6 +1800,35 @@ function mdRenderSumar(d){
     out+='</div>';
   }
 
+  // Profil Ligă
+  if(en.leagueStats){
+    var lt=en.leagueStats.league_type||'balanced';
+    var ltMap={open:{icon:'🟢',label:'Deschisă'},closed:{icon:'🔴',label:'Închisă'},aggressive:{icon:'🟡',label:'Agresivă'},balanced:{icon:'⚪',label:'Echilibrată'}};
+    var ltI=ltMap[lt]||ltMap.balanced;
+    out+='<div class="md-section"><div class="md-section-title">Profil Ligă</div>';
+    out+='<div class="league-profile">';
+    out+='<div class="lp-row"><span class="lp-label">Tip</span><span class="lp-val">'+ltI.icon+' '+ltI.label+'</span></div>';
+    if(en.leagueStats.avg_goals_per_match!=null)out+='<div class="lp-row"><span class="lp-label">Goluri/meci</span><span class="lp-val">'+Number(en.leagueStats.avg_goals_per_match).toFixed(2)+'</span></div>';
+    if(en.leagueStats.pct_over_15!=null)out+='<div class="lp-row"><span class="lp-label">Over 1.5</span><span class="lp-val">'+Math.round(en.leagueStats.pct_over_15)+'%</span></div>';
+    if(en.leagueStats.pct_over_25!=null)out+='<div class="lp-row"><span class="lp-label">Over 2.5</span><span class="lp-val">'+Math.round(en.leagueStats.pct_over_25)+'%</span></div>';
+    if(en.leagueStats.pct_gg!=null)out+='<div class="lp-row"><span class="lp-label">GG</span><span class="lp-val">'+Math.round(en.leagueStats.pct_gg)+'%</span></div>';
+    out+='</div></div>';
+  }
+
+  // Arbitru
+  if(en.refereeStats&&en.refereeStats.refereeName){
+    var rs2=en.refereeStats;
+    var rsMap={strict:{icon:'🔴',label:'Strict'},open:{icon:'🟢',label:'Permisiv'},closed:{icon:'🟡',label:'Precaut'},neutral:{icon:'⚪',label:'Neutru'}};
+    var rsI=(rs2.referee_style&&rsMap[rs2.referee_style])||rsMap.neutral;
+    out+='<div class="md-section"><div class="md-section-title">Arbitru</div>';
+    out+='<div class="league-profile">';
+    out+='<div class="lp-row"><span class="lp-label" style="font-weight:700">Nume</span><span class="lp-val" style="font-size:11px">'+rs2.refereeName+'</span></div>';
+    if(rs2.referee_style)out+='<div class="lp-row"><span class="lp-label">Stil</span><span class="lp-val">'+rsI.icon+' '+rsI.label+'</span></div>';
+    if(rs2.avg_yellow_cards!=null)out+='<div class="lp-row"><span class="lp-label">Galbene/meci</span><span class="lp-val">'+Number(rs2.avg_yellow_cards).toFixed(1)+'</span></div>';
+    if(rs2.pct_over_25!=null)out+='<div class="lp-row"><span class="lp-label">Over 2.5</span><span class="lp-val">'+Math.round(rs2.pct_over_25)+'%</span></div>';
+    out+='</div></div>';
+  }
+
   // Antrenori
   if(en.coachStats&&(en.coachStats.home||en.coachStats.away)){
     var csMap={offensive:{icon:'⚔️',label:'Ofensiv'},defensive:{icon:'🛡️',label:'Defensiv'},aggressive:{icon:'🟨',label:'Agresiv'},solid:{icon:'🔒',label:'Solid'},balanced:{icon:'⚖️',label:'Echilibrat'}};

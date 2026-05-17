@@ -300,6 +300,42 @@ async function getMatchStatsFromDB(fixtureId) {
   } catch (_) { return []; }
 }
 
+async function getLeagueStats(leagueId) {
+  if (!leagueId) return null;
+  try {
+    const r = await query('SELECT * FROM league_stats WHERE league_id = $1', [leagueId]);
+    return r.rows[0] || null;
+  } catch (_) { return null; }
+}
+
+async function getRefereeStats(fixtureId) {
+  // Caută numele arbitrului în prematch_data sau fixtures_history, apoi returnează stats
+  if (!fixtureId) return null;
+  try {
+    let refName = null;
+    const pd = await query(
+      `SELECT payload FROM prematch_data WHERE fixture_id = $1 AND data_type = 'fixture' LIMIT 1`,
+      [fixtureId]
+    ).catch(() => ({ rows: [] }));
+    if (pd.rows[0]?.payload) {
+      const raw = pd.rows[0].payload?.response?.[0]?.fixture?.referee;
+      if (raw && raw !== 'null') refName = raw.split(',')[0].trim();
+    }
+    if (!refName) {
+      const fh = await query(
+        'SELECT referee FROM fixtures_history WHERE fixture_id = $1 LIMIT 1',
+        [fixtureId]
+      ).catch(() => ({ rows: [] }));
+      refName = fh.rows[0]?.referee || null;
+    }
+    if (!refName) return null;
+    const rs = await query('SELECT * FROM referee_stats WHERE referee_name = $1', [refName])
+      .catch(() => ({ rows: [] }));
+    const row = rs.rows[0];
+    return row ? { ...row, refereeName: refName } : { refereeName: refName };
+  } catch (_) { return null; }
+}
+
 async function getWeatherImpact(fixtureId) {
   if (!fixtureId) return null;
   try {
@@ -372,7 +408,7 @@ export default async function handler(req, res) {
 
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, homeCoachStats, awayCoachStats, weatherImpact] = await Promise.all([
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, homeCoachStats, awayCoachStats, weatherImpact, leagueStats, refereeStats] = await Promise.all([
       getFormFromDB(hId),
       getFormFromDB(aId),
       getH2HFromDB(hId, aId),
@@ -383,6 +419,8 @@ export default async function handler(req, res) {
       getCoachStatsByTeam(hId),
       getCoachStatsByTeam(aId),
       fid ? getWeatherImpact(Number(fid)) : Promise.resolve(null),
+      lgid ? getLeagueStats(Number(lgid)) : Promise.resolve(null),
+      fid ? getRefereeStats(Number(fid)) : Promise.resolve(null),
     ]);
 
     // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
@@ -437,6 +475,20 @@ export default async function handler(req, res) {
         result.over25Prob = Math.min(100, Math.max(0, result.over25Prob + o25d));
         result.over15Prob = Math.min(100, Math.max(0, result.over15Prob + Math.round(o25d * 0.4)));
       }
+    }
+
+    // Ajustare ligă (din league_stats)
+    if (leagueStats?.league_type === 'open') {
+      result.over25Prob = Math.min(100, result.over25Prob + 5);
+    } else if (leagueStats?.league_type === 'closed') {
+      result.over25Prob = Math.max(0, result.over25Prob - 5);
+    }
+
+    // Ajustare arbitru (din referee_stats)
+    if (refereeStats?.referee_style === 'open') {
+      result.over25Prob = Math.min(100, result.over25Prob + 5);
+    } else if (refereeStats?.referee_style === 'closed') {
+      result.over25Prob = Math.max(0, result.over25Prob - 5);
     }
 
     // Ajustare bazată pe combinația stilurilor antrenorilor
@@ -526,6 +578,22 @@ export default async function handler(req, res) {
         away:   awayCoachStats || null,
         impact: coachImpact,
       },
+      leagueStats: leagueStats ? {
+        league_type:         leagueStats.league_type,
+        avg_goals_per_match: parseFloat(leagueStats.avg_goals_per_match) || null,
+        pct_over_15:         parseFloat(leagueStats.pct_over_15)         || null,
+        pct_over_25:         parseFloat(leagueStats.pct_over_25)         || null,
+        pct_gg:              parseFloat(leagueStats.pct_gg)              || null,
+        total_matches:       leagueStats.total_matches || null,
+      } : null,
+      refereeStats: refereeStats ? {
+        refereeName:      refereeStats.refereeName,
+        referee_style:    refereeStats.referee_style    || null,
+        avg_yellow_cards: parseFloat(refereeStats.avg_yellow_cards) || null,
+        avg_red_cards:    parseFloat(refereeStats.avg_red_cards)    || null,
+        pct_over_25:      parseFloat(refereeStats.pct_over_25)      || null,
+        total_matches:    refereeStats.total_matches || null,
+      } : null,
       weatherData: weatherImpact ? {
         condition:   weatherImpact.weather_condition,
         impact:      weatherImpact.weather_impact,

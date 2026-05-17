@@ -142,8 +142,13 @@ export default async function handler(req, res) {
       const teamIdCol    = side === 'home' ? 'home_team_id'     : 'away_team_id';
       const scoredCol    = side === 'home' ? 'home_goals'       : 'away_goals';
       const concededCol  = side === 'home' ? 'away_goals'       : 'home_goals';
-      const winCond      = side === 'home' ? 'fh.home_goals > fh.away_goals' : 'fh.away_goals > fh.home_goals';
-      const csCond       = side === 'home' ? 'fh.away_goals = 0' : 'fh.home_goals = 0';
+      const winCond  = side === 'home' ? 'fh.home_goals > fh.away_goals' : 'fh.away_goals > fh.home_goals';
+      const csCond   = side === 'home' ? 'fh.away_goals = 0' : 'fh.home_goals = 0';
+      // BUG3 FIX: când side='home' toate rândurile sunt meciuri acasă; side='away' → deplasare.
+      // Nu mai folosim FILTER pe coloana care e mereu NOT NULL; separăm explicit per fază.
+      const homeGSql = side === 'home'
+        ? `SUM(COALESCE(fh.home_goals,0))::NUMERIC(10,2) AS home_g, COUNT(*) AS home_m, 0::NUMERIC AS away_g, 0 AS away_m`
+        : `0::NUMERIC AS home_g, 0 AS home_m, SUM(COALESCE(fh.away_goals,0))::NUMERIC(10,2) AS away_g, COUNT(*) AS away_m`;
 
       const { rows } = await query(`
         SELECT
@@ -165,12 +170,7 @@ export default async function handler(req, res) {
           COALESCE(SUM(ms.rc),0)::NUMERIC(10,2)                                              AS sum_rc,
           COALESCE(SUM(ms.corners),0)::NUMERIC(10,2)                                         AS sum_corners,
           COALESCE(SUM(ms.fouls),0)::NUMERIC(10,2)                                           AS sum_fouls,
-          SUM(CASE WHEN fh.${scoredCol} IS NOT NULL THEN fh.${scoredCol} ELSE 0 END)
-            FILTER (WHERE fh.${side}_team_id IS NOT NULL)::NUMERIC(10,2)                     AS home_g,
-          COUNT(*) FILTER (WHERE fh.${side}_team_id IS NOT NULL)                             AS home_m,
-          SUM(CASE WHEN fh.${scoredCol} IS NOT NULL THEN fh.${scoredCol} ELSE 0 END)
-            FILTER (WHERE fh.${side}_team_id IS NULL)::NUMERIC(10,2)                         AS away_g,
-          COUNT(*) FILTER (WHERE fh.${side}_team_id IS NULL)                                 AS away_m
+          ${homeGSql}
         FROM fixtures_history fh
         LEFT JOIN (${msSubQ}) ms ON ms.fixture_id = fh.fixture_id
         WHERE fh.${coachIdCol} IS NOT NULL
@@ -179,7 +179,7 @@ export default async function handler(req, res) {
           AND fh.home_goals IS NOT NULL
           AND fh.away_goals IS NOT NULL
         GROUP BY fh.${coachIdCol}, fh.${coachNameCol}, fh.${teamIdCol}
-        HAVING COUNT(*) >= 5
+        HAVING COUNT(*) >= 10
       `).catch(() => ({ rows: [] }));
 
       for (const row of rows) {
