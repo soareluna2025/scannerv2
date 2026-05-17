@@ -296,6 +296,16 @@ export default async function handler(req, res) {
     return res.status(200).json({ error: 'No API key' });
   }
 
+  // Ensure league_patterns table exists (referenced by upsertLeaguePattern)
+  await query(`CREATE TABLE IF NOT EXISTS league_patterns (
+    league_id    INTEGER PRIMARY KEY,
+    avg_ng       DECIMAL(5,2) DEFAULT 0,
+    avg_over15   DECIMAL(5,2) DEFAULT 0,
+    avg_gg       DECIMAL(5,2) DEFAULT 0,
+    sample_size  INTEGER DEFAULT 0,
+    updated_at   TIMESTAMP DEFAULT NOW()
+  )`).catch(() => {});
+
   _runCount++;
   log(`run #${_runCount}`);
 

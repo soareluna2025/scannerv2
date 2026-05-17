@@ -1,6 +1,6 @@
 ================================================================================
   SESSION_CONTEXT.txt — AlohaScan Scanner V2
-  Actualizat: 2026-05-17
+  Audit complet: 2026-05-17
   CITEȘTE ACEST FIȘIER LA ÎNCEPUTUL ORICĂREI SESIUNI NOI
 ================================================================================
 
@@ -9,268 +9,773 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Aplicație: AlohaScan Scanner V2
-Scop:      Scanner pariuri sportive — LIVE + PRE-MECI, ~165 ligi globale
-           Calcul Poisson, EV, Confidence Score 7 straturi, Safe Bets
+Scop:      Scanner pariuri sportive LIVE + PRE-MECI
+           ~165 ligi globale, calcul Poisson, EV, Confidence Score 7 straturi
 
-Stack ACTUAL (după migrarea din mai 2026):
-  - Runtime:    Node.js (ESM modules) via /snap/bin/node
-  - Server:     Express.js (server.js)
-  - Baza date:  PostgreSQL LOCAL pe VPS (DB: elefant, user: alohascan)
-                NU mai folosim Supabase — migrare completă în mai 2026
-  - Process:    PM2 (ecosystem.config.cjs) SAU systemctl (alohascan.service)
-  - Deploy:     GitHub Actions → deploy.yml → SSH pe VPS → git pull + restart
-  - API date:   API-Football v3 (api-sports.io)
-  - AI:         Claude API (Anthropic) — api/agent.js
-  - Notificări: Telegram Bot API — api/telegram.js
+Stack ACTUAL:
+  Runtime:    Node.js ESM via /snap/bin/node
+  Server:     Express.js (server.js) — port 3000
+  DB:         PostgreSQL LOCAL pe VPS  (db: elefant, user: alohascan)
+              NU SUPABASE — tot LocalDB, ignoră orice referință Supabase
+  Process:    systemctl (alohascan.service) — NU PM2 activ în producție
+  Deploy:     GitHub Actions → deploy.yml → SSH pe VPS → git reset --hard + npm install + restart
+  API date:   API-Football v3 (api-sports.io) — 100.000 req/zi
+  AI:         Claude API (Anthropic) → model: claude-sonnet-4-6  |  Fallback: xAI/Grok
+  Notificări: Telegram Bot API — telegram.js (structură prezentă, integrare parțial)
 
 VPS:
   IP:           192.248.183.230
-  OS:           Ubuntu (Vultr)
+  User:         root
   Folder app:   /root/scannerv2
-  PM2 app name: alohascan
-  DB:           PostgreSQL local — postgresql://alohascan:Firenze225854@localhost:5432/elefant
-  Schema SQL:   /root/scannerv2/scripts/create-tables.sql (32 tabele)
-  Migration:    /root/scannerv2/scripts/migrations/add-snapshots.sql
+  DB connstr:   postgresql://alohascan:Firenze225854@localhost:5432/elefant
+  Schema SQL:   /root/scannerv2/scripts/create-tables.sql (36 tabele definite)
 
 Repo GitHub:    soareluna2025/scannerv2
 Branch main:    producție — auto-deploy la push via deploy.yml
-
-ATENȚIE: "Supabase project: kdyafjlwbximefwdhbnc" — VECHI, NU MAI E FOLOSIT.
-         Toate referințele Supabase au fost eliminate în sesiunea din 17.05.2026.
+Branch lucru:   claude/greeting-setup-WzHy1 (merge în main la finalizare)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-2. ACCES
+2. ACCES & CHEI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-GitHub Token: în GitHub Secrets (nu se stochează în repo)
-  → Generează din: GitHub → Settings → Developer settings → Personal access tokens
-  → Configurare git cu token: folosește GitHub Secret GH_TOKEN din Actions
+GitHub Token:   [setat în mediul de execuție — nu se commitează]
+Git config:     git config --global url."https://<TOKEN>@github.com/".insteadOf "https://github.com/"
 
-Git config (sesiune nouă — token din GitHub Secrets sau de la owner):
+GitHub Secrets (setate în repo, injectate la deploy):
+  VPS_IP              → 192.248.183.230
+  VPS_PASSWORD        → parola SSH root VPS
+  API_FOOTBALL_KEY    → cheia API-Football v3
+  POSTGRES_URL        → postgresql://alohascan:Firenze225854@localhost:5432/elefant
+  ANTHROPIC_API_KEY   → cheia Claude API (adăugat după ce app e stabilă)
+  XAI_API_KEY         → cheia xAI/Grok (fallback AI)
+
+ADMIN_API_KEY: generat automat UUID la fiecare deploy dacă nu există în .env
+  → acces: /admin cu header X-Api-Key: <ADMIN_API_KEY>
+
+VPS DB direct:
+  PGPASSWORD=Firenze225854 psql -U alohascan -d elefant -h 127.0.0.1
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. TOATE ENDPOINT-URILE API
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── ENDPOINT-URI PRINCIPALE (/api/*) ─────────────────────────────────────────
+
+GET /api/football
+  Sursă:    API-Football (live=all) + football-data.org (backup)
+  Ieșire:   { response: [matches...] } — format API-Football
+  Filtre:   ALLOWED_LEAGUE_IDS, WOMEN_RE, LOWER_DIV_RE, YOUTH_RE
+  Frecvență: la cerere din frontend (loadLive interval ~30s)
+  Note:     Enrichment cache în memorie per pereche home-away (max 5 concurrent)
+
+GET /api/today
+  Sursă:    PostgreSQL (fixtures table) → fallback API-Football dacă <5 meciuri în DB
+  Ieșire:   { response: [matches...] }
+  Filtre:   ALLOWED_LEAGUE_IDS + all 3 regex filters
+  Frecvență: la cerere din frontend (loadPM interval)
+  Side effect: upsertează meciuri NS în fixtures table (din fallback API)
+
+GET /api/enrich?h=&a=&fid=&lgid=&elapsed=&hg=&ag=&soth=&sota=&ref=&br=
+  Sursă:    DB primary (form din fixtures_history, h2h, odds) → fallback API-Football
+  Ieșire:   calcul complet Poisson + EV + Confidence Score 7 straturi + Kelly
+  Frecvență: la click pe meci (o dată per deschidere modal)
+  Side effect: INSERT în predictions (ON CONFLICT DO NOTHING)
+              fetchAndStoreInjuries (fire-and-forget)
+
+GET /api/match?id=&h=&a=&br=
+  Sursă:    API-Football DIRECT (7 endpoint-uri paralele: fixture, lineups, players, events, hForm, aForm, h2h, odds)
+  Ieșire:   { fixture, lineups, players[], events[], enrich{} }
+  Frecvență: la click detalii meci / modal
+  Side effect: INSERT în predictions (ON CONFLICT DO NOTHING)
+
+GET /api/players?action=collect&fixture_id=
+GET /api/players?action=backfill&league_index=
+GET /api/players?action=progress
+  Sursă:    API-Football (/fixtures/players)
+  Ieșire:   statistici jucători per meci
+  Side effect: upsert în player_stats
+
+GET /api/agent  (POST)
+  Body:   { messages: [], max_tokens: 1000 }
+  Sursă:  Anthropic API (claude-sonnet-4-6) → fallback xAI/Grok (grok-3-mini)
+  Ieșire: { choices: [{ message: { content: "..." } }] }
+  Frecvență: la cerere utilizator (buton AI în UI)
+
+GET /api/health-check
+  Sursă:  PostgreSQL + API-Football /status
+  Ieșire: 18 teste cu status ✅/⚠️/❌
+  Acces:  public (fără auth)
+
+GET /api/simulate?fixture_id=&home_id=&away_id=&league_id=
+  Sursă:  DB (form, h2h, standings, odds, player_stats) → fallback API-Football
+  Ieșire: { fixture, realData, simulation (Monte Carlo 10k), momentum, recommendation }
+  Cache:  în memorie 2 minute per fixture_id
+
+GET /api/db-stats
+  Sursă:  PostgreSQL direct
+  Ieșire: { fixtures_history, predictions, playerStats, matchSnapshots, liveStats, alerts, cronLogs }
+
+GET /api/elo → NECONECTAT LA UI
+  Sursă:  necesită date form din exterior (nu are handler HTTP propriu)
+  Note:   exportă calcElo() folosit intern de simulate.js
+
+GET /api/monte-carlo → NECONECTAT LA UI
+  Note:   exportă runSimulation() folosit intern de simulate.js
+
+GET /api/match-momentum → NECONECTAT LA UI
+  Note:   exportă calcMomentum() folosit intern de simulate.js
+
+GET /api/generator?mode=live|prematch
+  Sursă:  DB (fixtures, teams, leagues, prematch_data, form_stats, referee_stats,
+               h2h, league_stats) pentru prematch
+          API-Football (fixtures?live=all) pentru live
+  Ieșire: { ok, mode, count, matches[] }
+          Per meci: fixture_id, home/away_team + logo, league, is_live, minute,
+                    home/away_goals, status_short, match_date, referee,
+                    league{}, ref_stats{}, h2h{}, form{}, live{}
+  Frecvență: la deschidere Generator (o dată pe mod selectat)
+
+GET /api/update-results  (Cron)
+  Sursă:  predictions WHERE result_over15 IS NULL AND match_date < NOW()
+          → API-Football per fixture (FT check)
+  Ieșire: { updated, total }
+  Frecvență: CRON zilnic 02:00
+
+GET /health (public)
+  Ieșire: { ok, uptime_s }
+
+── CRON ENDPOINT-URI (/api/cron/*) ──────────────────────────────────────────
+
+POST /api/cron/prematch-enrichment
+  Frecvență: */5 minute (crontab)
+  Ce face: 7 etape de colectare date pre-meci per fixture (24h window)
+  Etape bazate pe ore rămase până la kickoff:
+    Stage 1: 23-25h → fixture, venues, coaches, h2h, injuries, squads, standings,
+                       predictions, odds, team-stats
+    Stage 2: 11-13h → similar + actualizare odds
+    Stage 3: 5-7h   → actualizare injuries, odds fresh
+    Stage 4: 2.5-3.5h → odds finali, weather
+    Stage 5: 1.5-2.5h → lineup predictions
+    Stage 6: 45-90min → lineup confirmat, odds finali
+    Stage 7: 0-45min  → date complete finale
+  Salvează în: prematch_data (JSONB per fixture/stage/data_type)
+              prematch_enrichment_log (tracking per fixture/stage)
+
+POST /api/cron/collect-daily
+  Frecvență: zilnic 06:00 (crontab)
+  Ce face:
+    1. Fetch standings per ligă (SEASON = year-1 dacă mai < august)
+    2. Upsert leagues table
+    3. Upsert teams table (ÎNAINTE de standings — FK constraint)
+    4. Upsert standings table
+    5. Calcul form_stats via SQL batch din fixtures_history (last5, avg_scored/conceded)
+  Ligi procesate: ~165 (toate din ALLOWED_LEAGUE_IDS)
+  API req: ~165 req (1 per ligă)
+
+POST /api/cron/collect-finished
+  Frecvență: zilnic 23:00 (crontab)
+  Ce face:
+    1. Fetch meciuri FT din ziua curentă (multiple ligi)
+    2. Upsert în fixtures_history
+    3. Per meci FT: collect player_stats, match_stats, match_events, odds
+  API req: ~100-300 per rulare (depinde de meciuri terminate azi)
+
+POST /api/cron/league-stats
+  Frecvență: zilnic 04:00 (crontab) — ZERO apeluri API
+  Ce face: calculează statistici per ligă din fixtures_history + match_stats
+           → upsert în league_stats
+  Crează tabel dacă nu există (CREATE TABLE IF NOT EXISTS)
+
+POST /api/cron/referee-stats
+  Frecvență: zilnic 04:00 (crontab)
+  Ce face:
+    1. Fetch 33 zile de fixtures din API-Football (30 zile înapoi + 3 zile viitor)
+    2. Upsert FT meciuri în fixtures_history (cu referee)
+    3. Calcul statistici per arbitru din fixtures_history + match_stats + match_events
+    4. Upsert în referee_stats
+  Crează tabel dacă nu există + ALTER TABLE fixtures_history ADD COLUMN IF NOT EXISTS referee
+
+POST /api/cron/scan
+  Frecvență: via scanner.js intern (background loop — NU crontab)
+  Ce face: fetch meciuri LIVE, calcul NGP/markets/GG/Over, upsert match_snapshots
+           salvare live_stats, h2h, form_stats, alerts
+
+── SCANNER INTERN (scanner.js — background process) ─────────────────────────
+
+startScanner() — pornit din server.js la startup
+
+  scanLive10s()    → la fiecare 10s: live matches + NGP calc + snapshot
+  scanLiveStats()  → la fiecare 60s: statistici live (SOT, xG, cornere, posesie)
+  scanPreMatch()   → la fiecare 60min: date pre-meci pentru echipele din fixture
+
+── ADMIN ENDPOINT-URI (/api/admin/* — protejate cu X-Api-Key) ───────────────
+
+GET /api/admin/status          → stare generală server + DB
+GET /api/admin/db-stats        → contoare tabele principale
+GET /api/admin/api-usage       → utilizare API-Football + erori recente
+GET /api/admin/live-matches    → match_snapshots ultimele 6h
+GET /api/admin/cron-status     → ultimele rulări per job din cron_logs
+GET /api/admin/errors          → cron_logs cu erori
+GET /api/admin/access-log      → ultimele 50 accesuri admin
+POST /api/admin/trigger-cron   → body: { job: "league-stats"|... } → fire-and-forget
+
+── BACKFILL ENDPOINT-URI ─────────────────────────────────────────────────────
+
+GET /api/backfill/start  → pornește runDailyBackfill() async
+GET /api/backfill/status → GROUP BY status din backfill_progress
+
+── ALTE ENDPOINT-URI ─────────────────────────────────────────────────────────
+
+GET /api/health-check?action=leagues&country=&name=  → search ligi API-Football
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. APELURI API EXTERNE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+API-Football v3 (api-sports.io) — header: x-apisports-key
+  /fixtures?live=all                  → football.js (live)
+  /fixtures?date=YYYY-MM-DD&status=NS → today.js (fallback)
+  /fixtures?team=X&last=10&status=FT  → enrich.js, match.js, simulate.js
+  /fixtures?id=X                      → match.js, simulate.js, update-results.js
+  /fixtures/headtohead?h2h=X-Y        → enrich.js, match.js, simulate.js
+  /fixtures/lineups?fixture=X         → match.js
+  /fixtures/players?fixture=X         → match.js, players.js, collect-finished.js
+  /fixtures/statistics?fixture=X      → collect-finished.js
+  /fixtures/events?fixture=X          → match.js, collect-finished.js
+  /odds?fixture=X&bookmaker=8         → enrich.js, match.js, simulate.js
+  /standings?league=X&season=Y        → collect-daily.js, simulate.js
+  /injuries?fixture=X                 → enrich.js (fire-and-forget)
+  /players/squads?team=X              → prematch-enrichment.js
+  /coaches?team=X                     → prematch-enrichment.js
+  /venues?league=X&season=Y           → prematch-enrichment.js
+  /teams/statistics?team=X&league=Y   → backfill.js (phase: teams_stats)
+  /players?league=X&season=Y&page=Z   → backfill.js (phase: players)
+  /status                             → admin.js (api-usage), health-check.js
+
+football-data.org (backup live) — header: X-Auth-Token
+  /v4/matches?status=IN_PLAY,PAUSED,HALFTIME → football.js
+
+Anthropic API — header: x-api-key
+  POST https://api.anthropic.com/v1/messages → agent.js
+  Model: claude-sonnet-4-6, max_tokens: 1000
+
+xAI/Grok API (fallback) — header: Authorization: Bearer
+  POST https://api.x.ai/v1/chat/completions → agent.js
+  Model: grok-3-mini
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. TOATE TABELELE PostgreSQL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TABELE ACTIVE (scrise regulat):
+
+fixtures
+  Coloane: fixture_id, league_id, season, home_team_id, home_team_name,
+           away_team_id, away_team_name, status_short, status_long,
+           match_date, home_goals, away_goals, updated_at
+  Scrie:   today.js (fallback API), collect-daily.js (indirect)
+  Citește: today.js (primar), generator.js, admin/live-matches
+
+fixtures_history
+  Coloane: fixture_id, league_id, season, home_team_id, home_team_name,
+           away_team_id, away_team_name, home_goals, away_goals,
+           home_ht, away_ht, status_short, match_date, referee (adăugat dinamic)
+  Scrie:   backfill.js, referee-stats.js, collect-finished.js
+  Citește: enrich.js (form), simulate.js (form/h2h), league-stats.js,
+           referee-stats.js, collect-daily.js (form_stats calc), scanner.js
+
+teams
+  Coloane: team_id, name, logo, updated_at
+  Scrie:   collect-daily.js, backfill.js
+  Citește: today.js, generator.js, match.js (logos)
+
+leagues
+  Coloane: league_id, name, country, logo, active, tier, timezone,
+           active_hours_start, active_hours_end, updated_at
+  Scrie:   collect-daily.js; inițial 165 ligi din create-tables.sql
+  Citește: today.js, generator.js, league-stats.js
+
+standings
+  Coloane: league_id, season, team_id, team_name, team_logo, rank, points,
+           goals_for, goals_against, goals_diff, played, win, draw, lose, form,
+           status, description, updated_at
+  Scrie:   collect-daily.js, backfill.js (phase: standings)
+  Citește: simulate.js (league avg goals, home/away standing)
+
+form_stats
+  Coloane: team_id, league_id, season, last5_home, last5_away,
+           avg_scored_home, avg_conceded_home, avg_scored_away, avg_conceded_away,
+           updated_at
+  Scrie:   collect-daily.js (batch SQL din fixtures_history)
+  Citește: generator.js (scoring algorithm)
+  Dependență: necesită fixtures_history să aibă date → backfill trebuie să fi rulat
+
+h2h
+  Coloane: team1_id (min), team2_id (max), fixture_id (UNIQUE key),
+           home_team_id, away_team_id, home_goals, away_goals,
+           match_date, league_id, season
+  Scrie:   backfill.js (phase: h2h), scan.js, scanner.js
+  Citește: enrich.js, simulate.js, generator.js (batch unnest)
+
+player_stats
+  Coloane: player_id, fixture_id (UNIQUE key), team_id, team_name, player_name,
+           position, rating, goals, assists, pass_accuracy, shots_on_target,
+           minutes_played, yellow_cards, red_cards, dribbles_success, player_score
+  Scrie:   players.js (backfill/collect), collect-finished.js
+  Citește: enrich.js (team strength layer 7), simulate.js (squad strength),
+           db-stats.js, health-check.js
+
+players_season
+  Coloane: player_id, team_id, league_id, season (UNIQUE), player_name,
+           nationality, position, age, appearances, lineups, minutes,
+           goals, assists, yellow_cards, red_cards, rating
+  Scrie:   backfill.js (phase: players)
+  Citește: nefolosit în runtime curent (date istorice)
+
+match_stats
+  Coloane: fixture_id, team_id (UNIQUE), team_name, shots_on_goal, shots_total,
+           blocked_shots, shots_insidebox, shots_outsidebox, expected_goals,
+           ball_possession, total_passes, passes_accurate, pass_percentage,
+           fouls, yellow_cards, red_cards, corner_kicks, offsides, goalkeeper_saves
+  Scrie:   collect-finished.js
+  Citește: enrich.js (xG), league-stats.js (avg yellow/corners), referee-stats.js
+
+match_events
+  Coloane: fixture_id, team_id, player_id, player_name, assist_id, assist_name,
+           elapsed, elapsed_plus, event_type, detail, comments
+  Scrie:   collect-finished.js
+  Citește: referee-stats.js (penalties count)
+
+live_stats
+  Coloane: fixture_id, team_id (sau home/away separate), elapsed,
+           home_sot, away_sot, home_xg, away_xg, home_corners, away_corners,
+           home_dangerous_attacks, away_dangerous_attacks,
+           home_possession, away_possession, home_yellow, away_yellow,
+           home_red, away_red, recorded_at
+  Scrie:   scan.js, scanner.js
+  Citește: health-check.js (test 17)
+
+match_snapshots
+  Coloane: fixture_id (UNIQUE), league_id, home_team, away_team,
+           status_short, minute, home_goals, away_goals,
+           ng, over15, outcome (LIVE/WIN/LOSS/STALE), created_at
+  Scrie:   scan.js (upsertSnapshot), scanner.js
+  Citește: admin/live-matches, db-stats.js
+
+predictions
+  Coloane: id, fixture_id (UNIQUE), home_team, away_team, league_name, league_id,
+           match_date, lambda_home, lambda_away, lambda_total,
+           over15_prob, over25_prob, gg_prob,
+           home_score_rate, away_score_rate, h2h_over15,
+           result_over15, result_gg, confidence, updated_at
+  Scrie:   enrich.js, match.js (fire-and-forget)
+  Citește: update-results.js (completare result_over15/result_gg)
+
+alerts
+  Coloane: id, fixture_id, alert_type (HIGH_NGP/HIGH_OVER15), message,
+           ngp_value, telegram_ok, sent_at
+  Scrie:   scan.js, scanner.js
+  Citește: admin/db-stats, health-check.js
+
+odds
+  Coloane: fixture_id, bookmaker_id, bookmaker_name, bet_id, bet_name,
+           value_name, value_odd, collected_at
+  Scrie:   collect-finished.js (per meci FT)
+  Citește: enrich.js, simulate.js (DB-first fallback la API)
+
+cron_logs
+  Coloane: id, job_name, ran_at, status, fixtures_processed, players_upserted,
+           error_msg, duration_ms
+  Scrie:   toate cronurile (league-stats, referee-stats, collect-daily,
+           collect-finished, scan, prematch-enrichment, backfill)
+  Citește: admin/cron-status, admin/errors, health-check.js
+
+backfill_progress
+  Coloane: league_id (UNIQUE), status (pending/running/done/error),
+           fixtures_processed, players_upserted, last_run, error_msg
+  Scrie:   backfill.js, server.js (initBackfillProgress la startup)
+  Citește: /api/backfill/status, health-check.js
+
+prematch_data
+  Coloane: fixture_id, stage (1-7), data_type, payload (JSONB), collected_at (PK: 3 coloane)
+  Scrie:   prematch-enrichment.js
+  Citește: generator.js (extrage referee din payload)
+  Creat:   dinamic de prematch-enrichment.js (CREATE TABLE IF NOT EXISTS)
+
+prematch_enrichment_log
+  Coloane: fixture_id, stage, executed_at (PK: fixture_id+stage)
+  Scrie:   prematch-enrichment.js (tracking per etapă)
+  Citește: prematch-enrichment.js (verificare dacă etapa e completă)
+
+league_stats
+  Coloane: league_id (PK), league_name, season, total_matches,
+           avg_goals_per_match, avg_home_goals, avg_away_goals,
+           pct_over_05, pct_over_15, pct_over_25, pct_over_35,
+           pct_gg, pct_btts, avg_yellow_cards, avg_red_cards, avg_corners,
+           league_type (open/closed/balanced/aggressive), updated_at
+  Scrie:   league-stats.js cron
+  Citește: generator.js, enrich.js
+  Creat:   dinamic de league-stats.js (CREATE TABLE IF NOT EXISTS)
+
+referee_stats
+  Coloane: referee_name (PK), total_matches, avg_yellow_cards, avg_red_cards,
+           avg_penalties, avg_fouls, avg_corners, avg_goals,
+           pct_over_25, pct_gg, pct_btts,
+           referee_style (strict/lenient/open/closed/neutral), updated_at
+  Scrie:   referee-stats.js cron
+  Citește: generator.js, enrich.js
+  Creat:   dinamic de referee-stats.js (CREATE TABLE IF NOT EXISTS)
+
+TABELE DEFINITE ÎN SCHEMA DAR PUȚIN/DELOC FOLOSITE:
+
+teams_stats        → backfill.js (phase: teams_stats); necitit în runtime
+squads             → prematch-enrichment.js (stage1); necitit în calc
+injuries           → enrich.js (fetchAndStoreInjuries); citit în enrich penalty
+sidelined          → necunoscut scriitor; necitit
+coaches            → prematch-enrichment.js; necitit în calc
+transfers          → nefolosit
+venues             → prematch-enrichment.js; necitit în calc
+live_odds          → nefolosit (definit, nescris)
+pre_match_snapshots → outcome/composite_score coloane lipsesc; tWinRate returnează {}
+top_scorers        → nefolosit (definit, nescris)
+top_assists        → nefolosit (definit, nescris)
+bookmakers         → nefolosit (definit, nescris)
+bets               → nefolosit (definit, nescris)
+trophies           → nefolosit (definit, nescris)
+fixture_status_log → nefolosit (definit, nescris)
+
+TABELE LIPSĂ DIN create-tables.sql (create dinamic):
+  league_patterns   → referit în scan.js (upsertLeaguePattern) DAR LIPSĂ din schema
+                      → ❌ EROARE POSIBILĂ dacă scan.js ajunge la acel cod path
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. ALGORITME PRINCIPALE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A. POISSON 6×6 (calc-utils.js → calcPoisson6x6)
+   Matrix 6×6 scoruri (0-0 până la 5-5):
+     P(i,j) = Poisson(λH, i) × Poisson(λA, j)
+   Derivate:
+     homeWin = ΣP(i>j), draw = ΣP(i=j), awayWin = ΣP(i<j) → normalizate la 100%
+     over15 = ΣP(i+j≥2), over25 = ΣP(i+j≥3), ggProb = ΣP(i>0 AND j>0)
+
+   Lambda calcul (enrich.js):
+     λH = (homeAvgScored + awayAvgConceded) / 2   ← cross-product model corect
+     λA = (awayAvgScored + homeAvgConceded) / 2
+   Dacă date insuficiente: lgHome (avg_home_goals din league_stats) sau 1.2
+
+   Dynamic lambda (mecuri live):
+     minutesLeft = 90 - elapsed
+     intensityFactor = 1 + min(SOT/25*elapsed*90⁻¹, 0.4)
+     λ_remaining = λBase × (minutesLeft/90) × intensityFactor
+     λ_dynamic = currentGoals + λ_remaining
+
+B. EXPECTED VALUE (calc-utils.js → calcEV)
+   impliedH = 1/cotaH, impliedD = 1/cotaD, impliedA = 1/cotaA
+   totalImplied = impliedH + impliedD + impliedA
+   evHome = (homeWin/100) - (impliedH / totalImplied)
+   evOver15 = (over15Prob/100) - (1/cotaOver15)
+   evGG     = (ggProb/100) - (1/cotaGG)
+
+   Kelly:
+     kelly = min(bankroll × edge × 0.5, bankroll × 0.04)   dacă edge > 4%
+     altfel: kelly = 0
+
+C. CONFIDENCE SCORE 7 STRATURI (enrich.js → calcConfidence)
+
+   Layer 1 — Poisson over15Prob (22%)
+   Layer 2 — Formă recentă: min(100, (homeAvg+awayAvg)/3.5*100) (20%)
+   Layer 3 — H2H over15% (10%)
+   Layer 4 — Live xG/SOT/DA: xg×25 + sot×3 + da×0.5 (15%)
+              → dacă SOT=0 după min10: score4 = 20 (penalizare)
+   Layer 5 — EV: best market EV×300 (8%)
+   Layer 6 — Consistență: (layere>60 / 5) × 100 (5%)
+   Layer 7 — Puterea echipei din player_stats (20%) — activ dacă ≥10 jucători/echipă
+
+   Penalizări runtime:
+     elapsed < 15min: score × 0.85
+     elapsed 15-30min + SOT=0: score × 0.80
+     elapsed ≥ 45min + SOT=0: score - 20
+     yellow_cards ≥ 2: score - 10
+     injuries ≥ 3/5/8: score - 5/10/15
+
+D. TEAM STRENGTH / LAYER 7 (enrich.js → getTeamStrengths)
+   Din ultimele 110 rânduri player_stats per echipă:
+     teamStrength = avgRating/10×100×0.35
+                  + min(100, goalsPerGame×35)×0.25
+                  + avgPassAcc×0.20
+                  + min(100, avgSOT×12)×0.10
+                  + min(100, topScorer×20)×0.10
+   Activ doar dacă ≥10 rows per echipă.
+
+E. PLAYER SCORE (calc-utils.js → calcPlayerScore)
+   playerScore = ratingNorm×0.35 + goalsScore×0.20 + assistScore×0.15
+               + passScore×0.20 + shotScore×0.10
+   Scala 0-100 per jucător.
+
+F. NGP — Next Goal Probability (scan.js / scanner.js)
+   ngp = SOT×4.5 + ShotsOff×1.5 + DangerousAttacks×0.3
+        + Corners×2.0 + Goals×8 - (elapsed/90)×15
+   Normalizat 0-100%. Alertă dacă NGP > 85 sau over15 > 82.
+
+G. MONTE CARLO (monte-carlo.js → runSimulation)
+   10.000 simulări:
+     - Goluri adiționale = poissonRandom(λH) + poissonRandom(λA)
+     - Scor final = currentGoals + adiționale
+   Output: homeWin%, draw%, awayWin%, over05/15/25/35%, GG%, scoreDistribution
+
+H. ELO (elo.js → calcElo)
+   K=32, rating inițial=1500
+   expH = 1/(1 + 10^((eloA-eloH)/400))
+   update = eloH + K × (actual - expected)
+   homeWinProb = 1/(1 + 10^(-eloDiff/400))
+   Folosit în: simulate.js (lambda ajustare via eloFactor)
+
+I. MATCH MOMENTUM (match-momentum.js → calcMomentum)
+   homeScore = SOT×15 + DA×3 + possession×0.5 + corners×5 + xG×20
+   score = (homeScore-awayScore)/(homeScore+awayScore) × 100  → [-100, 100]
+
+J. GENERATOR SCORING (index.html → g2Score)
+   Lambda cross-product: lamH = (home_avg_scored + away_avg_conceded) / 2
+   Categorii:
+     home/away → g2Over(lam, 0.5) cu h2h si live context
+     goals     → g2Over(lamH+lamA, threshold) cu h2h si ref_stats
+     gg        → compH=(pHs×pAc)/100, compA=(pAs×pHc)/100 + h2h_GG
+     cards     → defIntensity factor + ref.avg_yellow + lg.avg_yellow
+     corners   → attFactor + ref.avg_corners + lg.avg_corners
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. CRON JOBS — ORAR COMPLET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  */5 * * * *  → /api/cron/prematch-enrichment   (7 etape pre-meci)
+  0 2 * * *    → /api/update-results              (actualizare rezultate predicții)
+  0 3 * * *    → /api/backfill/start              (backfill date istorice)
+  0 4 * * *    → /api/cron/league-stats           (statistici per ligă)
+  0 4 * * *    → /api/cron/referee-stats          (statistici per arbitru)
+  0 6 * * *    → /api/cron/collect-daily          (standings, teams, form_stats)
+  0 23 * * *   → /api/cron/collect-finished       (player_stats, match_stats meciuri FT)
+
+  NU ESTE ÎN CRONTAB — scanner.js rulează în background in-process:
+    scanLive10s()    la fiecare 10 secunde
+    scanLiveStats()  la fiecare 60 secunde
+    scanPreMatch()   la fiecare 60 minute
+
+  Logs crontab: /var/log/alohascan-cron.log
+  Logs app:     journalctl -u alohascan -f
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. FEATURES — STARE CURENTĂ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ FUNCȚIONEAZĂ COMPLET:
+  - Server Express pe port 3000
+  - API routes: /api/football, /api/today, /api/enrich, /api/match
+  - Admin dashboard /admin (auth X-Api-Key)
+  - Scanner live in-process (scanner.js: 10s/60s/60min)
+  - Cron jobs via VPS crontab
+  - Deploy automat: push main → GitHub Actions → VPS
+  - Backfill date istorice 2022-2025 (multi-phase)
+  - form_stats calculat via SQL batch (collect-daily)
+  - league_stats, referee_stats (cron 04:00)
+  - Generator 5 ecrane (6 categorii: home, away, goals, GG, cards, corners)
+  - Logo-uri echipe în Generator TOP 10 + detaliu
+  - Scoring algoritm diferențiat per meci (cross-product lambda)
+  - Monte Carlo 10k simulări (simulate.js)
+  - ELO rating (elo.js) — folosit în simulate.js
+  - Match Momentum (match-momentum.js) — folosit în simulate.js
+  - Health check 18 teste (/api/health-check)
+  - Filtre: ALLOWED_LEAGUE_IDS (~165 ligi), WOMEN_RE, LOWER_DIV_RE, YOUTH_RE
+  - Admin: live-matches filtrat 6h (nu mai apar meciuri stale)
+  - Stale cleanup: scan.js marchează outcome='STALE' la matches >6h
+
+⚠️ PARȚIAL IMPLEMENTAT / NECESITĂ DATE:
+  - Layer 7 (Team Strength) — funcționează DOAR dacă backfill a rulat și player_stats e populat
+  - form_stats — funcționează DOAR dacă fixtures_history e populat (backfill sau referee-stats)
+  - h2h în generator — funcționează DOAR dacă backfill phase:h2h a rulat
+  - odds în enrich/simulate — funcționează dacă collect-finished a rulat sau API-Football returnează
+  - Telegram bot (telegram.js) — definit dar integrare în alerts incomplet
+  - saveFormStats în scanner.js — funcție definită dar STUB (nu salvează date)
+  - AI agent (/api/agent) — funcționează DACĂ ANTHROPIC_API_KEY e setat în .env
+
+❌ PROBLEME CUNOSCUTE:
+  - league_patterns tabel LIPSEȘTE din schema.sql
+    scan.js apelează upsertLeaguePattern() → va da eroare "relation does not exist"
+    FIX: adaugă CREATE TABLE IF NOT EXISTS league_patterns în schema sau în scan.js
+  - pre_match_snapshots tabel — coloanele outcome/composite_score lipsesc din schema
+    tWinRate() în health-check.js returnează {} (golit explicit)
+  - Supabase project id "kdyafjlwbximefwdhbnc" în task description — IGNORĂ, e vechi
+  - scanner.js saveFormStats e stub gol — nu salvează date de formă în DB
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9. HARTA FLUXULUI DE DATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+API-Football → [referee-stats.js]  → fixtures_history (FT + referee)
+                                   → referee_stats (avg yellow/corners/goals)
+
+API-Football → [backfill.js]       → fixtures_history (2022-2025)
+                                   → teams
+                                   → players_season
+                                   → h2h
+                                   → standings
+                                   → teams_stats
+
+fixtures_history → [collect-daily.js] → form_stats (avg_scored/conceded, last5)
+fixtures_history → [league-stats.js]  → league_stats (avg_goals, pct_over*, pct_gg)
+fixtures_history → [referee-stats.js] → referee_stats
+
+API-Football → [collect-finished.js] → fixtures_history (meciuri FT azi)
+                                      → player_stats (statistici jucători)
+                                      → match_stats (statistici echipă per meci)
+                                      → match_events (gol, card, corner)
+                                      → odds (cote bookmaker 8)
+
+API-Football → [today.js]          → fixtures (meciuri NS 24h)
+
+fixtures + teams + leagues          → [generator.js] ──┐
+form_stats + league_stats           →                   ├─ TOP 10 scoring în browser
+referee_stats + h2h                 →                   │
+                                                        │  Scoring: g2Score()
+                                                        │  Formule: cross-product Poisson
+
+API-Football live → [football.js]  → frontend (meciuri live filtrate)
+
+API-Football → [enrich.js]         → Poisson 6×6 + EV + Confidence 7 straturi
+fixtures_history (form) ──────────→ lambda calcul per meci
+h2h (din DB sau API) ─────────────→ h2hOver15%, h2hGG%
+player_stats ─────────────────────→ Layer 7 team strength
+league_stats, referee_stats ──────→ context liga/arbitru
+                                   → predictions (INSERT)
+
+scanner.js (background) ──────────→ match_snapshots (NGP, over15, outcome)
+                                  → live_stats (statistici live per minut)
+                                  → h2h (din meciuri FT detectate)
+                                  → alerts (NGP > 85 sau over15 > 82)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+10. TASK-URI DE REZOLVAT (PRIORITĂȚI)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔴 CRITIC (erorile împiedică funcționalitatea):
+
+  1. league_patterns tabel LIPSĂ → scan.js va crasha când ajunge la upsertLeaguePattern()
+     FIX: adaugă în scan.js la top:
+       await query(`CREATE TABLE IF NOT EXISTS league_patterns (
+         league_id INT PRIMARY KEY, avg_ng DECIMAL(5,2), avg_over15 DECIMAL(5,2),
+         avg_gg DECIMAL(5,2), sample_size INT, updated_at TIMESTAMP DEFAULT NOW()
+       )`).catch(() => {});
+
+🟡 MEDIU (funcționalitate degradată):
+
+  2. saveFormStats în scanner.js este STUB GOL
+     → form_stats nu se populează din meciuri live
+     → singura sursă e collect-daily.js (zilnic 06:00)
+     → dacă collect-daily nu a rulat: form_stats gol → scoring identic per ligă în Generator
+     FIX: implementează saveFormStats în scanner.js sau lasă collect-daily ca sursă principală
+
+  3. ANTHROPIC_API_KEY nesetat → /api/agent returnează "Niciun API key AI configurat"
+     → adaugă în GitHub Secrets când app e stabilă
+
+  4. Backfill nu a rulat complet → player_stats gol → Layer 7 inactiv → Confidence Score mai mic
+     → rulează /api/backfill/start și lasă să ruleze zilnic la 03:00
+
+  5. form_stats gol dacă fixtures_history gol → scoring identic per ligă în Generator
+     → depinde de backfill + collect-finished să fi rulat
+
+🟢 MINOR (îmbunătățiri):
+
+  6. Telegram bot neintegrat complet — telegram.js există dar alertele salvate cu telegram_ok=false
+  7. pre_match_snapshots fără coloanele outcome/composite_score — tWinRate returnează 0
+  8. live_odds tabel complet nefolosit
+  9. squads/coaches/venues colectate în prematch_data dar niciodată citite
+  10. players_season tabel populat de backfill dar niciodată citit în runtime
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+11. WORKFLOW STANDARD DE LUCRU
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PAS 1 — Configurează git:
   git config --global url."https://<TOKEN>@github.com/".insteadOf "https://github.com/"
+  # Token-ul GitHub se setează în mediul de execuție, nu se commitează niciodată
 
-VPS:
-  IP:    192.248.183.230
-  User:  root
-  Credențiale DB și VPS: stocate în GitHub Secrets (VPS_PASSWORD, POSTGRES_URL)
+PAS 2 — Lucru pe branch-ul de feature:
+  git checkout claude/greeting-setup-WzHy1
+  # fă modificări
+  git add <fișiere>
+  git commit -m "descriere"
 
-GitHub Secrets folosite de deploy.yml:
-  VPS_IP, VPS_PASSWORD, API_FOOTBALL_KEY, POSTGRES_URL,
-  ANTHROPIC_API_KEY, XAI_API_KEY
+PAS 3 — Merge pe main pentru deploy:
+  git checkout main
+  git merge claude/greeting-setup-WzHy1 --no-edit
+  git push -u origin main
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-3. STAREA CURENTĂ A PROIECTULUI (la 17.05.2026)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAS 4 — GitHub Actions se declanșează automat:
+  SSH → git reset --hard origin/main → npm install → systemctl restart alohascan → health check
 
-✅ FUNCȚIONEAZĂ:
-  - Server Express pornit pe portul 3000
-  - API routes: /api/football, /api/today, /api/enrich, /api/match, /api/players
-  - Admin dashboard: /admin (protejat cu X-Api-Key)
-  - Scanner live continuu (scanner.js) — 10s live, 60s stats, 60min prematch
-  - Cron jobs via crontab pe VPS (nu PM2 cron)
-  - PostgreSQL local — toate tabelele create (32 + 2 din migration)
-  - Deploy automat: push pe main → GitHub Actions → VPS
-  - Backfill date istorice via /api/backfill/start
+PAS 5 — Verificare:
+  curl http://192.248.183.230:3000/health
+  curl http://192.248.183.230:3000/api/health-check
 
-✅ FIXAT ÎN ACEASTĂ SESIUNE (17.05.2026):
-  - PM2 crash loop (270+ restarts) — db.js pool.on('error') lipsea
-  - alerts INSERT — coloane greșite (type→alert_type, confidence→ngp_value etc.)
-  - live_stats INSERT — structură agregată → home/away separate
-  - odds INSERT — 17 coloane plate → structură normalizată (bet_id, value_name)
-  - collect-daily.js — teams INSERT acum înainte de standings (FK order)
-  - Toate fișierele Supabase legacy eliminate din repo
+Logs VPS:
+  journalctl -u alohascan -n 50 -f
+  tail -f /var/log/alohascan-cron.log
+  PGPASSWORD=Firenze225854 psql -U alohascan -d elefant -h 127.0.0.1
 
-⚠️  NECONFIRMAT (necesită verificare pe VPS):
-  - PM2 vs systemctl — deploy.yml folosește systemctl, ecosystem.config.cjs e pentru PM2
-    Nu e clar care rulează efectiv. Verifică: systemctl status alohascan && pm2 list
-  - Contele de rânduri din baza de date (nu am putut accesa direct)
-  - Starea tabelelor prematch_data, referee_stats, league_stats
-    (create dinamic de cron jobs — există doar dacă cronul a rulat)
+ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-4. PROBLEME ACTIVE CUNOSCUTE
+12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🔴 CRITIC (necesită atenție imediată):
-  - Niciuna după fix-urile din 17.05.2026
+[17.05 ~13:00] - Fix PM2 crash loop + process.on('uncaughtException')
+  Commit: 0261acc
 
-🟡 MEDIU:
-  - prematch_data nu e în scripts/create-tables.sql
-    → creat dinamic de prematch-enrichment.js la prima rulare
-    → dacă DB e recreat, tabelul lipsește până cronul rulează
-  - referee_stats, league_stats — idem (create dinamic)
-  - fixtures_history.referee — coloană adăugată dinamic (ALTER TABLE la runtime)
-  - form_stats — definit în schema dar nefolosit (saveFormStats e stub gol)
+[17.05 ~13:10] - Fix collect-daily.js (FK order: teams înainte standings)
+  Commit: 0261acc
 
-🟢 MINOR:
-  - CLAUDE.md menționează Supabase în mai multe locuri (documentație istorică)
-    → nu afectează funcționalitatea, doar documentație outdated
-  - service-worker.js cache name 'alohascan-v2' poate fi vechi pe browsere existente
+[17.05 ~13:30] - Eliminat toate fișierele Supabase legacy
+  Commit: e2fc5d5
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-5. TASK-URI RĂMASE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[17.05 ~14:00] - Fix 3 INSERT critice (alerts, live_stats, odds)
+  Commit: 923a9ab
 
-PRIORITATE ÎNALTĂ:
-  [ ] Verifică VPS: systemctl status alohascan && pm2 list
-      → Clarifică dacă rulează PM2 sau systemctl
-  [ ] Rulează pe VPS: tail -100 /root/.pm2/logs/alohascan-error.log
-      → Confirmă că PM2 crash loop s-a rezolvat
-  [ ] Adaugă prematch_data, referee_stats, league_stats în create-tables.sql
-      → Prevenție: tabelele să existe chiar dacă cronul nu a rulat niciodată
-  [ ] Actualizează CLAUDE.md — elimină referințele la Supabase din documentație
+[17.05 ~14:30] - Merge + push main (deploy automat)
 
-PRIORITATE MEDIE:
-  [ ] Adaugă coloana referee în fixtures_history direct în create-tables.sql
-      (acum se adaugă dinamic via ALTER TABLE în referee-stats.js)
-  [ ] Elimină sau implementează form_stats (acum e definit dar complet nefolosit)
-  [ ] Verifică collect-daily SEASON logic — mai 2026 = sezon 2025, corect?
-      (SEASON = month < 7 ? year-1 : year → mai(4) < 7 → 2025 ✓)
+[17.05 ~14:35] - Creat SESSION_CONTEXT.txt inițial
+  Commit: 25d7687
 
-PRIORITATE MICĂ:
-  [ ] Testare integrală: pornește un meci live și verifică că live_stats/alerts
-      se salvează corect în PostgreSQL după fix-urile din 17.05
-  [ ] Actualizare CLAUDE.md cu stack-ul actual (PostgreSQL, nu Supabase)
+[17.05 ~15:00] - Fix: filtre USL League Two + youth teams în today.js
+  Commit: 3ed6a61
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-6. INSTRUCȚIUNI SESIUNE NOUĂ
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[17.05 ~15:30] - Fix: tabele lipsă în schema + form_stats implementat
+  Commit: ebf7b92
 
-PAS 1 — Citește acest fișier complet.
+[17.05 ~16:00] - Fix: fixtures table populat din today.js API response
+  Commit: 1bbf901
 
-PAS 2 — Configurează git cu tokenul (token din GitHub Secrets sau de la owner):
-  git config --global url."https://<GH_TOKEN>@github.com/".insteadOf "https://github.com/"
+[17.05 ~16:15] - Fix: cron_logs în scan.js + prematch-enrichment
+  Commit: ab962cc
 
-PAS 3 — Verifică starea VPS (dacă ai nevoie):
-  Trimite o comandă via GitHub Actions → check-vps.yml → Run workflow
-  SAU solicită acces SSH direct
+[17.05 ~16:25] - Fix: YOUTH_RE filter în football.js (live matches)
+  Commit: 58cce8c
 
-WORKFLOW DEPLOY (cum funcționează):
-  1. Faci modificări în cod pe branch de lucru
-  2. git commit + git push origin <branch>
-  3. Merge pe main: git checkout main && git merge --ff-only <branch> && git push origin main
-  4. deploy.yml se declanșează automat:
-     - SSH pe VPS → git pull origin main → npm install → restart systemctl
-  5. Verifici: curl http://192.248.183.230:3000/health
+[17.05 ~16:30] - Fix: admin live-matches filtrat 6h + STALE cleanup în scan.js
+  Commit: 56eedd1
 
-LOGS PE VPS:
-  App output:   tail -100 /root/.pm2/logs/alohascan-out.log
-  App errors:   tail -100 /root/.pm2/logs/alohascan-error.log
-  Cron logs:    tail -100 /var/log/alohascan-cron.log
-  PM2 status:   pm2 list && pm2 show alohascan
-  Systemctl:    systemctl status alohascan
+[17.05 ~19:30] - GENERATOR REDESIGN COMPLET (5 ecrane, /api/generator nou)
+  Commit: 3c00248
 
-DB pe VPS (direct — parola din GitHub Secret POSTGRES_URL):
-  PGPASSWORD=<DB_PASS> psql -U alohascan -d elefant -h 127.0.0.1
+[17.05 ~19:50] - Fix logos echipe + fix scoring algoritm (cross-product lambda)
+  Commit: 24650df
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-7. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[17.05 ~20:10] - Categorie nouă GG (Ambele marchează) în Generator
+  Commit: 3062a12
 
-[17.05.2026 ~13:00] - DIAGNOSTICAT eroarea "column goal_diff does not exist"
-  REZULTAT: Identificat mismatch între schema (goal_diff) și cod (goals_diff)
-            + ALTER TABLE silențios prins cu .catch(()=>{})
-
-[17.05.2026 ~13:10] - FIXAT PM2 crash loop
-  Fișier:    api/db.js
-  Modificare: Adăugat pool.on('error', ...) — lipsea handler pentru idle client errors
-  REZULTAT:  Succes — unhandled 'error' event nu mai ucide procesul Node.js
-  Commit:    0261acc
-
-[17.05.2026 ~13:10] - FIXAT server.js process error handlers
-  Modificare: Adăugat process.on('uncaughtException') și ('unhandledRejection')
-  REZULTAT:  Succes — crashuri neprinse acum sunt loggat, nu ucid procesul
-  Commit:    0261acc
-
-[17.05.2026 ~13:10] - FIXAT collect-daily.js
-  Modificări:
-    - Teams INSERT mutat ÎNAINTEA standings INSERT (FK constraint fix)
-    - ALTER TABLE error acum loggat (nu prins silențios)
-    - Guard null team_id îmbunătățit
-  REZULTAT:  Succes
-  Commit:    0261acc
-
-[17.05.2026 ~13:30] - ELIMINAT toate fișierele Supabase legacy
-  Fișiere șterse:
-    - supabase/ (migrations 001, 002, 003)
-    - supabase-schema.sql
-    - setup.sh, setup-env.sh
-  Modificat: service-worker.js (eliminat 'supabase.co' din BYPASS_HOSTS)
-  REZULTAT:  Succes — zero referințe Supabase în cod activ
-  Commit:    e2fc5d5
-
-[17.05.2026 ~14:00] - AUDIT COMPLET cod vs schema DB
-  REZULTAT: Găsite 3 probleme critice + 2 medii + 2 minore
-  Critice:
-    1. alerts — 4 coloane greșite
-    2. live_stats — structură completă incompatibilă
-    3. odds — 17 coloane plate vs 8 coloane normalizate în schema
-
-[17.05.2026 ~14:20] - FIXAT alerts INSERT (scan.js + scanner.js)
-  Modificare: type→alert_type, confidence→ngp_value, is_sent eliminat,
-              telegram_sent→telegram_ok, 6 params→5 params
-  REZULTAT:  Succes — alertele se vor salva corect în DB
-  Commit:    923a9ab
-
-[17.05.2026 ~14:20] - FIXAT live_stats INSERT (scan.js + scanner.js)
-  Modificare: 15 coloane agregate → 16 coloane home/away separate
-              (elapsed, home_sot/away_sot, home_xg/away_xg, etc.)
-  REZULTAT:  Succes — live stats se vor salva corect în DB
-  Commit:    923a9ab
-
-[17.05.2026 ~14:20] - FIXAT odds INSERT (collect-finished.js)
-  Modificare: 1 INSERT cu 17 coloane plate → bucle INSERT normalizate
-              per bet/value → compatibil cu schema (bet_id, value_name, value_odd)
-  REZULTAT:  Succes — odds se vor salva corect în DB
-  Commit:    923a9ab
-
-[17.05.2026 ~14:30] - MERGE pe main + PUSH la remote
-  Procedură: git reset --hard origin/main && git merge --ff-only origin/claude/greeting-setup-WzHy1
-  REZULTAT:  Succes — 3 commits merged, deploy.yml declanșat automat
-  Branch:    claude/greeting-setup-WzHy1 → main
-  Hash final: 923a9ab
-
-[17.05.2026 ~14:35] - CREAT SESSION_CONTEXT.txt (acest fișier)
-  URMEAZĂ: Verificare pe VPS că deploy-ul a rulat corect
-
-[17.05.2026 ~19:30] - GENERATOR REDESIGN COMPLET (5 ecrane)
-  Fișiere:   api/generator.js (nou), index.html (redesign major), server.js
-  Funcții:   gen2Open/gen2Close, g2Show/g2Go, gen2Mode/gen2Cat/gen2Sub
-             gen2Load, g2Poi, g2Over, g2Score, g2RenderTop10, g2Detail, g2Conclusion
-  API:       /api/generator — agregează league_stats, referee_stats, h2h, form_stats
-             Batch h2h query via PostgreSQL unnest() pentru perechi de echipe
-  Filtre:    YOUTH_RE adăugat în football.js (live), Admin live-matches filtrat 6h
-  Commit:    3c00248 + merge 5cd6d040
-
-[17.05.2026 ~19:50] - FIX LOGOS + FIX SCORING ALGORITHM
-  Fișiere:   api/generator.js, index.html
-  Logo-uri:
-    - generator.js returnează home_logo/away_logo (DB logo sau CDN fallback)
-    - TOP 10 cards: logo 20px inline lângă numele echipelor
-    - Screen 5 detail hero: logo 28px cu nume echipă
-  Algoritm scoring:
-    - Cross-product lambda: lamH = (home_avg_scored + away_avg_conceded) / 2
-      → Fiecare pereche (gazde, oaspeți) produce lambda unic even în aceeași ligă
-    - Cards: defIntensity = (home_avg_conceded + away_avg_conceded) / lg.avg_goals
-      → Meciuri mai agresive → prob cartonașe mai mare
-    - Corners: attFactor = (home_avg_scored + away_avg_scored) / lg.avg_goals
-      → Echipe atacante → mai multe cornere
-  Commit:    24650df + merge f89fc16
-
-[17.05.2026 ~20:10] - CATEGORIE NOUĂ GG (Ambele marchează)
-  Fișier:    index.html
-  Poziție:   Ecranul 2: 1.Gazde 2.Oaspeți 3.Goluri 4.🤝GG 5.Cartonașe 6.Cornere
-  Flux:      Cat → direct Screen 4 TOP 10 (fără sub-categorie, fără slider)
-  Algoritm:
-    PRE-MECI: compH(35%) + compA(35%) + h2h_GG(30%)
-    LIVE:     compH(25%) + compA(25%) + h2h_GG(20%) + context_live(30%)
-    compH = P(home scores) × P(away concedes)  — cross-product Poisson
-    compA = P(away scores) × P(home concedes) — cross-product Poisson
-    context_live: 0-0@60+=pressureMult, o echipă marcată=boost, ambele=confirmed
-  FIX BONUS: g2PrepSlider setează titlul S4 înainte de early return
-  Commit:    3062a12 + merge 7a508ff
+[17.05 ~21:00] - AUDIT COMPLET SISTEM → rescris SESSION_CONTEXT.txt
+  Commit: prezent
 
 ================================================================================
-  NOTĂ: Actualizează secțiunea 7 după FIECARE acțiune nouă.
-  FORMAT: [ZZ.LL.AAAA HH:MM] - CE S-A FĂCUT / REZULTAT / URMEAZĂ
+  NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
+  FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
 ================================================================================
