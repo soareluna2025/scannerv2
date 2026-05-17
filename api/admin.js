@@ -181,9 +181,10 @@ router.get('/live-matches', async (req, res) => {
              status_short, minute, home_goals, away_goals,
              ng, over15, outcome
       FROM match_snapshots
-      WHERE outcome = 'LIVE'
-         OR status_short IN ('1H','2H','HT','ET','BT','P','INT')
+      WHERE (outcome = 'LIVE' OR status_short IN ('1H','2H','HT','ET','BT','P','INT'))
+        AND created_at > NOW() - INTERVAL '6 hours'
       ORDER BY minute DESC NULLS LAST
+      LIMIT 50
     `).catch(() => ({ rows: [] }));
     res.json({ ok: true, count: rows.length, matches: rows });
   } catch (e) {
