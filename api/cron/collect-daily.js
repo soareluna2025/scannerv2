@@ -112,6 +112,71 @@ export default async function handler(req, res) {
       }
     }
 
+    // Calculează form_stats pentru toate echipele din sezonul curent (batch SQL)
+    try {
+      await query(`
+        INSERT INTO form_stats
+          (team_id, league_id, season, last5_home, last5_away,
+           avg_scored_home, avg_conceded_home, avg_scored_away, avg_conceded_away, updated_at)
+        WITH home_ranked AS (
+          SELECT home_team_id AS team_id, league_id, season,
+            home_goals, away_goals, match_date,
+            row_number() OVER (PARTITION BY home_team_id, league_id, season ORDER BY match_date DESC) AS rn
+          FROM fixtures_history WHERE status_short = 'FT' AND season = $1
+        ),
+        away_ranked AS (
+          SELECT away_team_id AS team_id, league_id, season,
+            home_goals, away_goals, match_date,
+            row_number() OVER (PARTITION BY away_team_id, league_id, season ORDER BY match_date DESC) AS rn
+          FROM fixtures_history WHERE status_short = 'FT' AND season = $1
+        ),
+        home_agg AS (
+          SELECT team_id, league_id, season,
+            string_agg(CASE WHEN home_goals > away_goals THEN 'W'
+                            WHEN home_goals = away_goals THEN 'D' ELSE 'L' END,
+                       '' ORDER BY match_date DESC) AS last5_home,
+            AVG(home_goals)::NUMERIC(5,2) AS avg_scored_home,
+            AVG(away_goals)::NUMERIC(5,2) AS avg_conceded_home
+          FROM home_ranked WHERE rn <= 5
+          GROUP BY team_id, league_id, season
+        ),
+        away_agg AS (
+          SELECT team_id, league_id, season,
+            string_agg(CASE WHEN away_goals > home_goals THEN 'W'
+                            WHEN away_goals = home_goals THEN 'D' ELSE 'L' END,
+                       '' ORDER BY match_date DESC) AS last5_away,
+            AVG(away_goals)::NUMERIC(5,2) AS avg_scored_away,
+            AVG(home_goals)::NUMERIC(5,2) AS avg_conceded_away
+          FROM away_ranked WHERE rn <= 5
+          GROUP BY team_id, league_id, season
+        )
+        SELECT
+          COALESCE(h.team_id, a.team_id),
+          COALESCE(h.league_id, a.league_id),
+          COALESCE(h.season, a.season),
+          h.last5_home, a.last5_away,
+          COALESCE(h.avg_scored_home, 0),
+          COALESCE(h.avg_conceded_home, 0),
+          COALESCE(a.avg_scored_away, 0),
+          COALESCE(a.avg_conceded_away, 0),
+          NOW()
+        FROM home_agg h
+        FULL OUTER JOIN away_agg a
+          ON h.team_id = a.team_id AND h.league_id = a.league_id AND h.season = a.season
+        ON CONFLICT (team_id, league_id, season) DO UPDATE SET
+          last5_home        = EXCLUDED.last5_home,
+          last5_away        = EXCLUDED.last5_away,
+          avg_scored_home   = EXCLUDED.avg_scored_home,
+          avg_conceded_home = EXCLUDED.avg_conceded_home,
+          avg_scored_away   = EXCLUDED.avg_scored_away,
+          avg_conceded_away = EXCLUDED.avg_conceded_away,
+          updated_at        = NOW()
+      `, [SEASON]);
+      stats.formStats = 'ok';
+    } catch (e) {
+      console.warn('[collect-daily] form_stats update:', e.message);
+    }
+
     await logCron(stats, 'success', stats.errors.length ? stats.errors.join('; ') : null);
 
     return res.status(200).json({

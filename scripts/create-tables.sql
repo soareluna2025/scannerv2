@@ -833,6 +833,67 @@ ON CONFLICT (league_id) DO UPDATE SET
     active_hours_end = EXCLUDED.active_hours_end,
     updated_at = NOW();
 
+-- ── 33. prematch_enrichment_log ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS prematch_enrichment_log (
+    fixture_id  INTEGER NOT NULL,
+    stage       INTEGER NOT NULL,
+    executed_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (fixture_id, stage)
+);
+
+-- ── 34. prematch_data ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS prematch_data (
+    fixture_id   INTEGER NOT NULL,
+    stage        INTEGER NOT NULL,
+    data_type    VARCHAR(50) NOT NULL,
+    payload      JSONB,
+    collected_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (fixture_id, stage, data_type)
+);
+CREATE INDEX IF NOT EXISTS idx_prematch_data_fixture ON prematch_data(fixture_id);
+
+-- ── 35. referee_stats ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS referee_stats (
+    referee_name      VARCHAR(200) PRIMARY KEY,
+    total_matches     INTEGER DEFAULT 0,
+    avg_yellow_cards  DECIMAL(4,2) DEFAULT 0,
+    avg_red_cards     DECIMAL(4,2) DEFAULT 0,
+    avg_penalties     DECIMAL(4,2) DEFAULT 0,
+    avg_fouls         DECIMAL(4,2) DEFAULT 0,
+    avg_corners       DECIMAL(4,2) DEFAULT 0,
+    avg_goals         DECIMAL(4,2) DEFAULT 0,
+    pct_over_25       DECIMAL(5,2) DEFAULT 0,
+    pct_gg            DECIMAL(5,2) DEFAULT 0,
+    pct_btts          DECIMAL(5,2) DEFAULT 0,
+    referee_style     VARCHAR(20) DEFAULT 'neutral',
+    updated_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── 36. league_stats ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS league_stats (
+    league_id            INTEGER PRIMARY KEY,
+    league_name          VARCHAR(200),
+    season               INTEGER,
+    total_matches        INTEGER DEFAULT 0,
+    avg_goals_per_match  DECIMAL(4,2) DEFAULT 0,
+    avg_home_goals       DECIMAL(4,2) DEFAULT 0,
+    avg_away_goals       DECIMAL(4,2) DEFAULT 0,
+    pct_over_05          DECIMAL(5,2) DEFAULT 0,
+    pct_over_15          DECIMAL(5,2) DEFAULT 0,
+    pct_over_25          DECIMAL(5,2) DEFAULT 0,
+    pct_over_35          DECIMAL(5,2) DEFAULT 0,
+    pct_gg               DECIMAL(5,2) DEFAULT 0,
+    pct_btts             DECIMAL(5,2) DEFAULT 0,
+    avg_yellow_cards     DECIMAL(4,2) DEFAULT 0,
+    avg_red_cards        DECIMAL(4,2) DEFAULT 0,
+    avg_corners          DECIMAL(4,2) DEFAULT 0,
+    league_type          VARCHAR(20) DEFAULT 'balanced',
+    updated_at           TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- referee coloană în fixtures_history (adăugată idempotent)
+ALTER TABLE fixtures_history ADD COLUMN IF NOT EXISTS referee TEXT;
+
 -- ================================================================
 --  VERIFICARE
 -- ================================================================
