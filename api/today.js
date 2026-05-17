@@ -5,8 +5,9 @@ function log(msg) {
   console.log(`[today] ${new Date().toISOString()} ${msg}`);
 }
 
-const WOMEN_RE    = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
-const LOWER_DIV_RE = /\b[3-9]\.\s*(liga|division|div)\b/i;
+const WOMEN_RE     = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
+const LOWER_DIV_RE = /\b[3-9]\.\s*(liga|division|div)\b|\bUSL League Two\b|\bLeague Two\b/i;
+const YOUTH_RE     = /\bU-?1[6-9]\b|\bU-?2[0-3]\b|\bUnder.?1[6-9]\b|\bUnder.?2[0-3]\b/i;
 
 function dateStr(offsetDays) {
   const d = new Date();
@@ -91,18 +92,24 @@ export default async function handler(req, res) {
 
       const afterWomen = raw.filter(m => !WOMEN_RE.test(m.league?.name || ''));
       const afterDiv   = afterWomen.filter(m => !LOWER_DIV_RE.test(m.league?.name || ''));
+      const afterYouth = afterDiv.filter(m =>
+        !YOUTH_RE.test(m.league?.name || '') &&
+        !YOUTH_RE.test(m.teams?.home?.name || '') &&
+        !YOUTH_RE.test(m.teams?.away?.name || '')
+      );
 
-      log(`final (db): ${afterDiv.length}`);
+      log(`final (db): ${afterYouth.length}`);
 
       return res.status(200).json({
-        response: afterDiv.sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date)),
+        response: afterYouth.sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date)),
         _debug: {
           source:        'postgres',
           rawTotal:      dbFixtures.length,
           afterLeague:   afterLeague.length,
           afterWomen:    afterWomen.length,
           afterLowerDiv: afterDiv.length,
-          final:         afterDiv.length,
+          afterYouth:    afterYouth.length,
+          final:         afterYouth.length,
         },
       });
     }
@@ -157,7 +164,14 @@ export default async function handler(req, res) {
     const afterDiv = afterWomen.filter(m => !LOWER_DIV_RE.test(m.league?.name || ''));
     log(`after lower-div filter: ${afterDiv.length} (removed ${afterWomen.length - afterDiv.length})`);
 
-    const result = afterDiv
+    const afterYouth = afterDiv.filter(m =>
+      !YOUTH_RE.test(m.league?.name || '') &&
+      !YOUTH_RE.test(m.teams?.home?.name || '') &&
+      !YOUTH_RE.test(m.teams?.away?.name || '')
+    );
+    log(`after youth filter: ${afterYouth.length} (removed ${afterDiv.length - afterYouth.length})`);
+
+    const result = afterYouth
       .map(m => ({
         fixture: { id: m.fixture.id, date: m.fixture.date, status: m.fixture.status },
         league:  { id: m.league.id, name: m.league.name, country: m.league.country, flag: m.league.flag },
