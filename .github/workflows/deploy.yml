@@ -22,7 +22,8 @@ jobs:
 
             # Pull latest code
             cd /root/scannerv2
-            git pull origin main
+            git fetch origin
+            git reset --hard origin/claude/generate-ssh-key-vultr-8S9YY
             npm install --silent
 
             # Write .env with secrets from GitHub (păstrează ADMIN_API_KEY existent)
@@ -83,9 +84,10 @@ jobs:
             echo "CRONTAB ACTIV:"
             crontab -l | grep 'localhost:3000'
 
-            # Restart serviciu systemd
-            systemctl restart alohascan
-            systemctl is-active alohascan && echo "ALOHASCAN: ONLINE" || echo "ALOHASCAN: ERROR"
+            # Restart aplicatie PM2
+            pm2 reload alohascan 2>/dev/null || (cd /root/scannerv2 && pm2 start server.js --name alohascan)
+            pm2 save
+            pm2 show alohascan | grep -q online && echo "ALOHASCAN: ONLINE" || echo "ALOHASCAN: ERROR"
 
             echo "Deploy complet: $(date)"
         env:
