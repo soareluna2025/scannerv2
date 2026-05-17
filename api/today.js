@@ -183,6 +183,35 @@ export default async function handler(req, res) {
 
     log(`final: ${result.length} matches`);
 
+    // Salvează meciurile NS în fixtures table (pentru prematch-enrichment + scanner)
+    if (result.length > 0) {
+      for (const m of result) {
+        query(
+          `INSERT INTO fixtures
+             (fixture_id, league_id, season, home_team_id, home_team_name,
+              away_team_id, away_team_name, status_short, status_long, match_date, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+           ON CONFLICT (fixture_id) DO UPDATE SET
+             status_short=EXCLUDED.status_short,
+             status_long=EXCLUDED.status_long,
+             updated_at=NOW()`,
+          [
+            m.fixture.id,
+            m.league.id,
+            new Date(m.fixture.date).getFullYear(),
+            m.teams.home.id,
+            m.teams.home.name,
+            m.teams.away.id,
+            m.teams.away.name,
+            m.fixture.status?.short || 'NS',
+            m.fixture.status?.long  || 'Not Started',
+            m.fixture.date,
+          ]
+        ).catch(e => log(`fixtures upsert err ${m.fixture.id}: ${e.message}`));
+      }
+      log(`fixtures upserted: ${result.length}`);
+    }
+
     return res.status(200).json({
       response: result,
       _debug: {
