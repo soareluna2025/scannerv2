@@ -233,6 +233,30 @@ DB pe VPS (direct — parola din GitHub Secret POSTGRES_URL):
 [17.05.2026 ~14:35] - CREAT SESSION_CONTEXT.txt (acest fișier)
   URMEAZĂ: Verificare pe VPS că deploy-ul a rulat corect
 
+[17.05.2026 ~19:30] - GENERATOR REDESIGN COMPLET (5 ecrane)
+  Fișiere:   api/generator.js (nou), index.html (redesign major), server.js
+  Funcții:   gen2Open/gen2Close, g2Show/g2Go, gen2Mode/gen2Cat/gen2Sub
+             gen2Load, g2Poi, g2Over, g2Score, g2RenderTop10, g2Detail, g2Conclusion
+  API:       /api/generator — agregează league_stats, referee_stats, h2h, form_stats
+             Batch h2h query via PostgreSQL unnest() pentru perechi de echipe
+  Filtre:    YOUTH_RE adăugat în football.js (live), Admin live-matches filtrat 6h
+  Commit:    3c00248 + merge 5cd6d040
+
+[17.05.2026 ~19:50] - FIX LOGOS + FIX SCORING ALGORITHM
+  Fișiere:   api/generator.js, index.html
+  Logo-uri:
+    - generator.js returnează home_logo/away_logo (DB logo sau CDN fallback)
+    - TOP 10 cards: logo 20px inline lângă numele echipelor
+    - Screen 5 detail hero: logo 28px cu nume echipă
+  Algoritm scoring:
+    - Cross-product lambda: lamH = (home_avg_scored + away_avg_conceded) / 2
+      → Fiecare pereche (gazde, oaspeți) produce lambda unic even în aceeași ligă
+    - Cards: defIntensity = (home_avg_conceded + away_avg_conceded) / lg.avg_goals
+      → Meciuri mai agresive → prob cartonașe mai mare
+    - Corners: attFactor = (home_avg_scored + away_avg_scored) / lg.avg_goals
+      → Echipe atacante → mai multe cornere
+  Commit:    24650df + merge f89fc16
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 7 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL.AAAA HH:MM] - CE S-A FĂCUT / REZULTAT / URMEAZĂ
