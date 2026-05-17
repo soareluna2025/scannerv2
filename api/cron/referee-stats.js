@@ -230,6 +230,12 @@ export default async function handler(req, res) {
       upserted++;
     }
 
+    await query(
+      `INSERT INTO cron_logs (job_name, fixtures_processed, status)
+       VALUES ($1,$2,$3)`,
+      ['referee-stats', upserted, 'success']
+    ).catch(() => {});
+
     return res.status(200).json({
       ok:                  true,
       duration_ms:         Date.now() - start,
@@ -238,6 +244,11 @@ export default async function handler(req, res) {
       referees_processed:  upserted,
     });
   } catch (e) {
+    await query(
+      `INSERT INTO cron_logs (job_name, fixtures_processed, status, error_msg)
+       VALUES ($1,0,'error',$2)`,
+      ['referee-stats', e.message]
+    ).catch(() => {});
     return res.status(500).json({ ok: false, error: e.message });
   }
 }

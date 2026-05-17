@@ -138,12 +138,23 @@ export default async function handler(req, res) {
       upserted++;
     }
 
+    await query(
+      `INSERT INTO cron_logs (job_name, fixtures_processed, status)
+       VALUES ($1,$2,$3)`,
+      ['league-stats', upserted, 'success']
+    ).catch(() => {});
+
     return res.status(200).json({
       ok:                true,
       duration_ms:       Date.now() - start,
       leagues_processed: upserted,
     });
   } catch (e) {
+    await query(
+      `INSERT INTO cron_logs (job_name, fixtures_processed, status, error_msg)
+       VALUES ($1,0,'error',$2)`,
+      ['league-stats', e.message]
+    ).catch(() => {});
     return res.status(500).json({ ok: false, error: e.message });
   }
 }

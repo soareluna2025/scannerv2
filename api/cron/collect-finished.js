@@ -91,27 +91,27 @@ async function collectMatchStats(fixtureId, homeTeamId, key) {
 
     await query(
       `INSERT INTO match_stats
-         (fixture_id, team_id, team_name, is_home,
-          shots_on_goal, shots_off_goal, shots_total, shots_blocked,
-          shots_inside_box, shots_outside_box,
-          xg, possession, passes_total, passes_accurate, passes_pct,
-          fouls, yellow_cards, red_cards, corners, offsides, goalkeeper_saves)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+         (fixture_id, team_id, team_name,
+          shots_on_goal, shots_total, blocked_shots,
+          shots_insidebox, shots_outsidebox,
+          expected_goals, ball_possession,
+          total_passes, passes_accurate, pass_percentage,
+          fouls, yellow_cards, red_cards, corner_kicks, offsides, goalkeeper_saves)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (fixture_id, team_id) DO UPDATE SET
-         team_name=EXCLUDED.team_name, is_home=EXCLUDED.is_home,
-         shots_on_goal=EXCLUDED.shots_on_goal, shots_off_goal=EXCLUDED.shots_off_goal,
-         shots_total=EXCLUDED.shots_total, shots_blocked=EXCLUDED.shots_blocked,
-         shots_inside_box=EXCLUDED.shots_inside_box, shots_outside_box=EXCLUDED.shots_outside_box,
-         xg=EXCLUDED.xg, possession=EXCLUDED.possession,
-         passes_total=EXCLUDED.passes_total, passes_accurate=EXCLUDED.passes_accurate,
-         passes_pct=EXCLUDED.passes_pct, fouls=EXCLUDED.fouls,
+         team_name=EXCLUDED.team_name,
+         shots_on_goal=EXCLUDED.shots_on_goal,
+         shots_total=EXCLUDED.shots_total, blocked_shots=EXCLUDED.blocked_shots,
+         shots_insidebox=EXCLUDED.shots_insidebox, shots_outsidebox=EXCLUDED.shots_outsidebox,
+         expected_goals=EXCLUDED.expected_goals, ball_possession=EXCLUDED.ball_possession,
+         total_passes=EXCLUDED.total_passes, passes_accurate=EXCLUDED.passes_accurate,
+         pass_percentage=EXCLUDED.pass_percentage, fouls=EXCLUDED.fouls,
          yellow_cards=EXCLUDED.yellow_cards, red_cards=EXCLUDED.red_cards,
-         corners=EXCLUDED.corners, offsides=EXCLUDED.offsides,
+         corner_kicks=EXCLUDED.corner_kicks, offsides=EXCLUDED.offsides,
          goalkeeper_saves=EXCLUDED.goalkeeper_saves`,
       [
-        fixtureId, teamStat.team.id, teamStat.team.name, isHome,
+        fixtureId, teamStat.team.id, teamStat.team.name,
         parseInt(s['Shots on Goal'])      || 0,
-        parseInt(s['Shots off Goal'])     || 0,
         parseInt(s['Total Shots'])        || 0,
         parseInt(s['Blocked Shots'])      || 0,
         parseInt(s['Shots insidebox'])    || 0,
