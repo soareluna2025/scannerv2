@@ -786,6 +786,11 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
           <div class="g2cat-info"><div class="g2cat-title">Goluri</div><div class="g2cat-sub">Over X.5 goluri totale</div></div>
           <div class="g2cat-arrow">›</div>
         </div>
+        <div class="g2cat" onclick="gen2Cat('gg')">
+          <div class="g2cat-icon">🤝</div>
+          <div class="g2cat-info"><div class="g2cat-title">GG (Ambele marchează)</div><div class="g2cat-sub">Probabilitate ambele echipe să marcheze</div></div>
+          <div class="g2cat-arrow">›</div>
+        </div>
         <div class="g2cat" onclick="gen2Cat('cards')">
           <div class="g2cat-icon">🟡</div>
           <div class="g2cat-info"><div class="g2cat-title">Cartonașe</div><div class="g2cat-sub">Over X.5 cartonașe per meci</div></div>
@@ -2093,11 +2098,12 @@ var G2={
 };
 
 var G2_CATS={
-  home:   {label:'Gazde marchează',    unit:'',         ranges:null,            icon:'🏠'},
-  away:   {label:'Oaspeți marchează',  unit:'',         ranges:null,            icon:'✈️'},
-  goals:  {label:'Goluri',             unit:'goluri',   ranges:[0.5,1.5,2.5],   icon:'⚽'},
-  cards:  {label:'Cartonașe',          unit:'cartonașe',ranges:[0.5,1.5,2.5,3.5,4.5],icon:'🟡'},
-  corners:{label:'Cornere',            unit:'cornere',  ranges:[2.5,4.5,6.5,8.5,10.5],icon:'📐'},
+  home:   {label:'Gazde marchează',       unit:'',         ranges:null,            icon:'🏠'},
+  away:   {label:'Oaspeți marchează',     unit:'',         ranges:null,            icon:'✈️'},
+  goals:  {label:'Goluri',               unit:'goluri',   ranges:[0.5,1.5,2.5],   icon:'⚽'},
+  gg:     {label:'GG (Ambele marchează)', unit:'',         ranges:null,            icon:'🤝'},
+  cards:  {label:'Cartonașe',            unit:'cartonașe',ranges:[0.5,1.5,2.5,3.5,4.5],icon:'🟡'},
+  corners:{label:'Cornere',              unit:'cornere',  ranges:[2.5,4.5,6.5,8.5,10.5],icon:'📐'},
 };
 
 function gen2Open(){
@@ -2139,8 +2145,8 @@ function gen2Mode(m){
 function gen2Cat(c){
   G2.cat=c;G2.sub=null;
   var meta=G2_CATS[c];
-  if(c==='home'||c==='away'){
-    G2.thr=0.5;
+  if(c==='home'||c==='away'||c==='gg'){
+    G2.thr=0;
     g2PrepSlider();g2Go(4);gen2Load();
   }else{
     document.getElementById('g2s3-title').textContent=meta.label;
@@ -2156,8 +2162,10 @@ function g2PrepSlider(){
   var wrap=document.getElementById('g2slider-wrap');
   var slider=document.getElementById('g2slider');
   var ticks=document.getElementById('g2ticks');
-  // period tabs only for live
   document.getElementById('g2ptabs').style.display=G2.mode==='live'?'':'none';
+  // title always set (before early return)
+  var subLbl=G2.sub==='home'?'Gazde ':G2.sub==='away'?'Oaspeți ':G2.sub==='total'?'Total ':'';
+  document.getElementById('g2s4-title').textContent=meta.icon+' '+subLbl+meta.label;
   if(!meta.ranges){wrap.style.display='none';return;}
   wrap.style.display='';
   slider.min=0;slider.max=meta.ranges.length-1;
@@ -2165,9 +2173,6 @@ function g2PrepSlider(){
   slider.value=defIdx;
   G2.thr=meta.ranges[defIdx];
   ticks.innerHTML=meta.ranges.map(function(r){return '<span>'+r+'</span>';}).join('');
-  // title
-  var subLbl=G2.sub==='home'?'Gazde ':G2.sub==='away'?'Oaspeți ':G2.sub==='total'?'Total ':'';
-  document.getElementById('g2s4-title').textContent=meta.icon+' '+subLbl+meta.label;
   g2UpdateLbl();
 }
 function g2UpdateLbl(){
@@ -2324,6 +2329,48 @@ function g2Score(m){
       }
     }
     s=isLive?(refKS*.25+lgKS*.15+poisK*.25+livK*.35):(refKS*.30+lgKS*.30+poisK*.40);
+
+  }else if(cat==='gg'){
+    // P(home scores ≥1) and P(away scores ≥1) — cross-product lambdas already computed above
+    var pHs=g2Over(lamH,0.5);                                   // home attack (0-100)
+    var pAs=g2Over(lamA,0.5);                                   // away attack (0-100)
+    var pHc=fHc!=null?g2Over(fHc,0.5):pAs;                     // home concedes (proxy: away can score)
+    var pAc=fAc!=null?g2Over(fAc,0.5):pHs;                     // away concedes (proxy: home can score)
+    // Gazde_atac × Oaspeti_aparare → home attacks AND away defense is porous
+    var compH=(pHs/100)*(pAc/100)*100;
+    // Oaspeti_atac × Gazde_aparare → away attacks AND home defense is porous
+    var compA=(pAs/100)*(pHc/100)*100;
+    var h2hGG=h2h?+(h2h.pct_gg):lg.pct_gg;
+    var livGG=50;
+    if(isLive){
+      var hg=m.home_goals,ag=m.away_goals;
+      if(hg>=1&&ag>=1){
+        confirmed=true;livGG=100;
+      }else if(hg>=1){
+        // Home already scored — only need away to score
+        var rem5=Math.max(0,90-m.minute);
+        var xgA5=lv.away_xg||0;
+        var xgAR5=m.minute>0?(xgA5/m.minute)*rem5:lamA*rem5/90;
+        livGG=g2Over(Math.max(xgAR5,lamA*rem5/90),0.5);
+      }else if(ag>=1){
+        // Away already scored — only need home to score
+        var rem5=Math.max(0,90-m.minute);
+        var xgH5=lv.home_xg||0;
+        var xgHR5=m.minute>0?(xgH5/m.minute)*rem5:lamH*rem5/90;
+        livGG=g2Over(Math.max(xgHR5,lamH*rem5/90),0.5);
+      }else{
+        // 0-0: both still need to score
+        var rem5=Math.max(0,90-m.minute);
+        var xgH5=lv.home_xg||0,xgA5=lv.away_xg||0;
+        var xgHR5=m.minute>0?(xgH5/m.minute)*rem5:lamH*rem5/90;
+        var xgAR5=m.minute>0?(xgA5/m.minute)*rem5:lamA*rem5/90;
+        // 0-0 at 60+ min: boost — desperation increases scoring rates
+        var pressureMult=m.minute>=60?1+(m.minute-60)/60:1;
+        livGG=(g2Over(Math.max(xgHR5,lamH*rem5/90)*pressureMult,0.5)/100)*
+              (g2Over(Math.max(xgAR5,lamA*rem5/90)*pressureMult,0.5)/100)*100;
+      }
+    }
+    s=isLive?(compH*.25+compA*.25+h2hGG*.20+livGG*.30):(compH*.35+compA*.35+h2hGG*.30);
   }
 
   return{score:Math.round(Math.max(0,Math.min(100,s))),confirmed:confirmed};
@@ -2434,6 +2481,12 @@ function g2Conclusion(m,pct,mktLbl){
   var cat=G2.cat;
   parts.push(pct>=75?'Probabilitate ridicată ('+Math.round(pct)+'%) pentru '+mktLbl+'.':pct>=55?'Probabilitate medie ('+Math.round(pct)+'%) pentru '+mktLbl+'.':'Probabilitate relativ scăzută ('+Math.round(pct)+'%) pentru '+mktLbl+'.');
   if(m.h2h&&m.h2h.total>=3&&(cat==='goals'||cat==='home'||cat==='away'))parts.push('H2H arată o medie de '+Number(m.h2h.avg_goals).toFixed(1)+' goluri/meci pe '+(m.h2h.total)+' meciuri directe.');
+  if(cat==='gg'){
+    if(m.h2h&&m.h2h.total>=3)parts.push('În '+Math.round(m.h2h.pct_gg)+'% din cele '+m.h2h.total+' meciuri directe au marcat ambele echipe.');
+    if(m.form.home_avg_scored!=null&&m.form.away_avg_scored!=null)parts.push('Gazda marchează în medie '+Number(m.form.home_avg_scored).toFixed(2)+' goluri/meci acasă, oaspetele '+Number(m.form.away_avg_scored).toFixed(2)+' goluri/meci în deplasare.');
+    if(m.is_live&&m.home_goals===0&&m.away_goals===0&&m.minute>=60)parts.push('Scor 0-0 după '+m.minute+' minute — presiunea pentru gol crește semnificativ.');
+    if(m.is_live&&(m.home_goals>=1||m.away_goals>=1)&&!(m.home_goals>=1&&m.away_goals>=1))parts.push((m.home_goals>=1?'Gazda':'Oaspetele')+' a marcat deja — acum e nevoie ca și '+(m.home_goals>=1?'oaspetele':'gazda')+' să marcheze.');
+  }
   if(m.ref_stats&&m.referee&&cat==='cards')parts.push('Arbitrul '+m.referee+' acordă în medie '+Number(m.ref_stats.avg_yellow).toFixed(1)+' cartonașe galbene per meci.');
   if(m.ref_stats&&m.referee&&cat==='corners')parts.push('Sub arbitrul '+m.referee+' se bat în medie '+Number(m.ref_stats.avg_corners).toFixed(1)+' cornere per meci.');
   if(m.is_live&&m.minute>=60&&(m.home_goals+m.away_goals)===0)parts.push('Scor 0-0 după '+m.minute+' minute — riscul de gol final rămâne ridicat.');
