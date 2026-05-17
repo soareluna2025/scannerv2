@@ -5,7 +5,6 @@ const BYPASS_HOSTS = [
   'v3.football.api-sports.io',
   'api.football-data.org',
   'api-sports.io',
-  'supabase.co',
   'api.anthropic.com',
   'api.telegram.org',
   'api.open-meteo.com',
