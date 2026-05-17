@@ -507,6 +507,17 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .fav-header-t{font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.5px;text-transform:uppercase}
 .fav-clear-btn{font-size:11px;color:#ef4444;background:none;border:none;cursor:pointer;padding:2px 6px}
 .nav-fav-badge{position:absolute;top:-2px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;min-width:14px;height:14px;border-radius:7px;display:none;align-items:center;justify-content:center;line-height:1;padding:0 2px}
+
+/* ── GOAL ANIMATION ─────────────────────────────────── */
+@keyframes logoVibrate{0%,100%{transform:translate(0,0) rotate(0deg)}10%{transform:translate(-2px,-1px) rotate(-1deg)}20%{transform:translate(2px,1px) rotate(1deg)}30%{transform:translate(-2px,2px) rotate(0deg)}40%{transform:translate(2px,-1px) rotate(1deg)}50%{transform:translate(-1px,2px) rotate(-1deg)}60%{transform:translate(1px,-2px) rotate(0deg)}70%{transform:translate(-2px,1px) rotate(-1deg)}80%{transform:translate(2px,-2px) rotate(1deg)}90%{transform:translate(-1px,1px) rotate(0deg)}}
+.logo-vibrating{animation:logoVibrate .3s infinite;filter:drop-shadow(0 0 8px rgba(255,200,0,.8))}
+.logo-vibrating-intense{animation:logoVibrate .15s infinite;filter:drop-shadow(0 0 12px rgba(255,100,0,1))}
+@keyframes ballFlyHome{0%{opacity:1;transform:translate(0,0) scale(1) rotate(0deg)}30%{transform:translate(40px,-60px) scale(.9) rotate(180deg)}60%{transform:translate(100px,-30px) scale(.8) rotate(360deg)}85%{transform:translate(160px,5px) scale(.7) rotate(540deg)}95%{transform:translate(170px,8px) scale(.6) rotate(580deg);opacity:1}100%{transform:translate(170px,8px) scale(0) rotate(600deg);opacity:0}}
+@keyframes ballFlyAway{0%{opacity:1;transform:translate(0,0) scale(1) rotate(0deg)}30%{transform:translate(-40px,-60px) scale(.9) rotate(-180deg)}60%{transform:translate(-100px,-30px) scale(.8) rotate(-360deg)}85%{transform:translate(-160px,5px) scale(.7) rotate(-540deg)}95%{transform:translate(-170px,8px) scale(.6) rotate(-580deg);opacity:1}100%{transform:translate(-170px,8px) scale(0) rotate(-600deg);opacity:0}}
+@keyframes scoreImpact{0%{transform:scale(1)}30%{transform:scale(1.4);color:#FFD700}60%{transform:scale(.9)}80%{transform:scale(1.15)}100%{transform:scale(1)}}
+.score-impact{animation:scoreImpact .6s ease-out forwards}
+@keyframes goalFlash{0%{background:transparent}20%{background:rgba(255,215,0,.15)}40%{background:transparent}60%{background:rgba(255,215,0,.08)}100%{background:transparent}}
+.goal-flash{animation:goalFlash 1s ease-out forwards}
 </style>
 </head>
 <body>
@@ -727,7 +738,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   </button>
 </nav>
 <script>
-function tLogo(team,sz){if(!team||!team.logo)return '';return '<img src="'+team.logo+'" width="'+sz+'" height="'+sz+'" style="border-radius:4px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">';}
+function tLogo(team,sz,cls){if(!team||!team.logo)return '';return '<img src="'+team.logo+'" width="'+sz+'" height="'+sz+'"'+(cls?' class="'+cls+'"':'')+' style="border-radius:4px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">';}
 // ── CONFIG ──────────────────────────────────────────────────
 var CFG={MC:80,MD:20,RI:30000};
 var WR_KEY='alohascan_wr_v2';
@@ -974,6 +985,7 @@ async function loadLive(cb){
     var raw=Array.isArray(d.response)?d.response:(Array.isArray(d)?d:[]);
     ST.ms=raw.map(function(m){m._s=calcScore(m);return m;});
     renderMatches();
+    processLiveMatchAnimations(ST.ms);
     updateStats();
     trackWR();
     genUpdateBadge();
@@ -994,6 +1006,92 @@ function updateStats(){
   document.getElementById('s-rec').textContent=rec+'/'+CFG.MD;
   document.getElementById('s-ngp').textContent=topNg+'%';
   document.getElementById('s-upd').textContent=now.toTimeString().slice(0,5);
+}
+
+// ── GOAL ANIMATION ───────────────────────────────────────────
+var previousScores={};
+var pressureCache={};
+
+function calcPressure(m){
+  var st=m.statistics||[];
+  return Math.min(100,
+    (getStat(st,0,'Shots on Goal')+getStat(st,1,'Shots on Goal'))*8+
+    (getStat(st,0,'Dangerous Attacks')+getStat(st,1,'Dangerous Attacks'))*3+
+    (getStat(st,0,'expected_goals')+getStat(st,1,'expected_goals'))*25);
+}
+
+function getPressingSide(m){
+  var st=m.statistics||[];
+  var hp=getStat(st,0,'Shots on Goal')*8+getStat(st,0,'Dangerous Attacks')*3;
+  var ap=getStat(st,1,'Shots on Goal')*8+getStat(st,1,'Dangerous Attacks')*3;
+  if(hp>ap*1.5)return 'home';
+  if(ap>hp*1.5)return 'away';
+  return null;
+}
+
+function applyLogoVibration(fixtureId,pressingSide,pressure){
+  var card=document.querySelector('[data-fixture-id="'+fixtureId+'"]');
+  if(!card)return;
+  var hl=card.querySelector('.home-logo');
+  var al=card.querySelector('.away-logo');
+  if(hl)hl.classList.remove('logo-vibrating','logo-vibrating-intense');
+  if(al)al.classList.remove('logo-vibrating','logo-vibrating-intense');
+  if(!pressingSide||pressure<40)return;
+  var target=pressingSide==='home'?hl:al;
+  if(!target)return;
+  target.classList.add(pressure>=70?'logo-vibrating-intense':'logo-vibrating');
+}
+
+function animateGoal(fixtureId,scoringSide){
+  var card=document.querySelector('[data-fixture-id="'+fixtureId+'"]');
+  if(!card)return;
+  var logo=card.querySelector('.'+scoringSide+'-logo');
+  var scoreEl=card.querySelector('.'+scoringSide+'-score');
+  if(!logo||!scoreEl)return;
+  var rect=logo.getBoundingClientRect();
+  if(!rect.width)return;
+  var ball=document.createElement('div');
+  ball.textContent='⚽';
+  ball.style.cssText='position:fixed;font-size:20px;z-index:9999;pointer-events:none;'
+    +'left:'+rect.left+'px;top:'+rect.top+'px;'
+    +'animation:'+(scoringSide==='home'?'ballFlyHome':'ballFlyAway')+' .8s ease-in forwards';
+  document.body.appendChild(ball);
+  card.classList.add('goal-flash');
+  setTimeout(function(){
+    scoreEl.classList.add('score-impact');
+    ball.remove();
+    card.classList.remove('goal-flash');
+    setTimeout(function(){scoreEl.classList.remove('score-impact');},600);
+  },750);
+}
+
+function checkForGoal(m){
+  var id=m.fixture&&m.fixture.id;
+  if(!id)return;
+  var curH=m.goals?m.goals.home||0:0;
+  var curA=m.goals?m.goals.away||0:0;
+  var prev=previousScores[id];
+  if(!prev){previousScores[id]={home:curH,away:curA};return;}
+  if(curH>prev.home){applyLogoVibration(id,null,0);animateGoal(id,'home');}
+  if(curA>prev.away){applyLogoVibration(id,null,0);animateGoal(id,'away');}
+  previousScores[id]={home:curH,away:curA};
+}
+
+function processLiveMatchAnimations(matches){
+  var FT=['FT','AET','PEN','WO','AWD'];
+  matches.forEach(function(m){
+    var id=m.fixture&&m.fixture.id;
+    if(!id)return;
+    var sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
+    if(FT.indexOf(sh)>=0){
+      delete previousScores[id];delete pressureCache[id];
+      applyLogoVibration(id,null,0);return;
+    }
+    checkForGoal(m);
+    var pressure=calcPressure(m);
+    pressureCache[id]=pressure;
+    applyLogoVibration(id,getPressingSide(m),pressure);
+  });
 }
 
 // ── RENDER MATCHES ────────────────────────────────────────────
@@ -1062,15 +1160,15 @@ function renderMatches(){
       var aid2=m.teams&&m.teams.away&&m.teams.away.id||0;
       var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===m.teams.home.id;});
       var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===m.teams.away.id;});
-      out+='<div class="card" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer;position:relative">';
+      out+='<div class="card" data-fixture-id="'+fid2+'" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer;position:relative">';
       out+='<button class="star-btn'+(isFav(fid2)?' active':'')+'" onclick="event.stopPropagation();toggleFav('+fid2+',this)">'+(isFav(fid2)?'⭐':'☆')+'</button>';
       out+='<div class="card-league">';
       out+='<div class="league-name">'+flag+(lg.name||'')+'</div>';
       out+='<div class="card-minute"><div class="min-dot"></div><div class="min-val">'+mn+"'</div></div>";
       out+='</div>';
       out+='<div class="card-teams">';
-      out+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+(m.teams&&m.teams.home&&m.teams.home.name||'—')+(hRed?' 🟥':'')+'</span></div><div class="team-score'+(hWin?' winning':'')+'">'+hg+'</div></div>';
-      out+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.away,32)+'<span>'+(m.teams&&m.teams.away&&m.teams.away.name||'—')+(aRed?' 🟥':'')+'</span></div><div class="team-score'+(aWin?' winning':'')+'">'+ag+'</div></div>';
+      out+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.home,32,'home-logo')+'<span>'+(m.teams&&m.teams.home&&m.teams.home.name||'—')+(hRed?' 🟥':'')+'</span></div><div class="team-score home-score'+(hWin?' winning':'')+'">'+hg+'</div></div>';
+      out+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.away,32,'away-logo')+'<span>'+(m.teams&&m.teams.away&&m.teams.away.name||'—')+(aRed?' 🟥':'')+'</span></div><div class="team-score away-score'+(aWin?' winning':'')+'">'+ag+'</div></div>';
       out+='</div>';
       out+='<div class="card-footer">';
       out+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
