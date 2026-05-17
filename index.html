@@ -2373,6 +2373,30 @@ function g2Score(m){
     s=isLive?(compH*.25+compA*.25+h2hGG*.20+livGG*.30):(compH*.35+compA*.35+h2hGG*.30);
   }
 
+  // Injury penalty: -8% per injured team (≥3 players), extra -12% for GG if both teams hit
+  var injData=m.injuries||{};
+  var hInj=injData.home||0, aInj=injData.away||0;
+  var injPenalty=0;
+  if(hInj>=3) injPenalty+=8;
+  if(aInj>=3) injPenalty+=8;
+  if(cat==='gg'&&hInj>=2&&aInj>=2) injPenalty=Math.max(injPenalty,12);
+  s=Math.max(0,s-injPenalty);
+
+  // Venue surface bonus: artificial turf → more goals/corners, fewer cards
+  var surf=m.venue_surface||'';
+  if(surf==='artificial'){
+    if(cat==='goals'||cat==='home'||cat==='away'||cat==='gg') s=Math.min(100,s*1.05);
+    else if(cat==='corners') s=Math.min(100,s*1.08);
+    else if(cat==='cards')   s=Math.max(0,s*0.97);
+  }
+
+  // Clean sheets penalty for GG (from teams_stats fallback data)
+  if(cat==='gg'){
+    var csH=fm.home_cs_rate||0, csA=fm.away_cs_rate||0;
+    if(csH>0.35) s=Math.max(0,s*(1-(csH-0.35)));
+    if(csA>0.35) s=Math.max(0,s*(1-(csA-0.35)));
+  }
+
   return{score:Math.round(Math.max(0,Math.min(100,s))),confirmed:confirmed};
 }
 
@@ -2423,8 +2447,10 @@ function g2Detail(idx){
   // hero
   var dHLogo=m.home_logo?'<img src="'+m.home_logo+'" width="28" height="28" style="border-radius:4px;object-fit:contain;vertical-align:middle;margin-right:6px" onerror="this.style.display=\'none\'">':'';
   var dALogo=m.away_logo?'<img src="'+m.away_logo+'" width="28" height="28" style="border-radius:4px;object-fit:contain;vertical-align:middle;margin-right:6px" onerror="this.style.display=\'none\'">':'';
+  var hInjTxt=(m.injuries&&m.injuries.home>=2)?' <span style="color:#f59e0b;font-size:11px;vertical-align:middle">⚠️ '+m.injuries.home+'</span>':'';
+  var aInjTxt=(m.injuries&&m.injuries.away>=2)?' <span style="color:#f59e0b;font-size:11px;vertical-align:middle">⚠️ '+m.injuries.away+'</span>':'';
   h+='<div class="g2hero">';
-  h+='<div class="g2hero-match">'+dHLogo+(m.home_team||'?')+' <span style="opacity:.5">vs</span> '+dALogo+(m.away_team||'?')+'</div>';
+  h+='<div class="g2hero-match">'+dHLogo+(m.home_team||'?')+hInjTxt+' <span style="opacity:.5">vs</span> '+dALogo+(m.away_team||'?')+aInjTxt+'</div>';
   h+='<div class="g2hero-mkt">'+meta.icon+' '+mktLbl+'</div>';
   h+='<div class="g2hero-pct" style="color:'+clr+'">'+Math.round(pct)+'%</div>';
   h+='</div>';
@@ -2434,7 +2460,16 @@ function g2Detail(idx){
   if(m.form.away_avg_scored!==null)h+='<div class="g2srow"><span class="g2srow-l">Media goluri marcate deplasare</span><span class="g2srow-v">'+Number(m.form.away_avg_scored).toFixed(2)+'/meci</span></div>';
   if(m.form.home_last5)h+='<div class="g2srow"><span class="g2srow-l">Formă gazde (ult. 5 acasă)</span><span class="g2srow-v" style="font-family:monospace;letter-spacing:2px">'+m.form.home_last5+'</span></div>';
   if(m.form.away_last5)h+='<div class="g2srow"><span class="g2srow-l">Formă oaspeți (ult. 5 deplas.)</span><span class="g2srow-v" style="font-family:monospace;letter-spacing:2px">'+m.form.away_last5+'</span></div>';
-  if(!m.form.home_avg_scored&&!m.form.home_last5)h+='<div class="g2srow"><span class="g2srow-l" style="color:var(--mu)">Date insuficiente în DB</span></div>';
+  if(m.form._ts_fallback)h+='<div class="g2srow"><span class="g2srow-l" style="color:var(--mu)">Sursa: statistici sezon complet</span></div>';
+  else if(!m.form.home_avg_scored&&!m.form.home_last5)h+='<div class="g2srow"><span class="g2srow-l" style="color:var(--mu)">Date insuficiente în DB</span></div>';
+  if(m.venue_surface==='artificial')h+='<div class="g2srow"><span class="g2srow-l">⚽ Teren artificial</span><span class="g2srow-v" style="color:var(--ac)">+5% goluri · +8% cornere</span></div>';
+  if(m.injuries&&(m.injuries.home>=2||m.injuries.away>=2)){
+    h+='<div class="g2srow"><span class="g2srow-l">🚑 Accidentați</span><span class="g2srow-v" style="color:#f59e0b">';
+    if(m.injuries.home>=2)h+=(m.home_team||'?')+': '+m.injuries.home;
+    if(m.injuries.home>=2&&m.injuries.away>=2)h+=' · ';
+    if(m.injuries.away>=2)h+=(m.away_team||'?')+': '+m.injuries.away;
+    h+='</span></div>';
+  }
   h+='</div>';
   // h2h
   if(m.h2h&&m.h2h.total>=3){

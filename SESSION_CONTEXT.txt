@@ -426,23 +426,54 @@ referee_stats
   Citește: generator.js, enrich.js
   Creat:   dinamic de referee-stats.js (CREATE TABLE IF NOT EXISTS)
 
-TABELE DEFINITE ÎN SCHEMA DAR PUȚIN/DELOC FOLOSITE:
+TABELE ACTIVATE (17.05.2026 — sprint activare):
 
-teams_stats        → backfill.js (phase: teams_stats); necitit în runtime
-squads             → prematch-enrichment.js (stage1); necitit în calc
-injuries           → enrich.js (fetchAndStoreInjuries); citit în enrich penalty
-sidelined          → necunoscut scriitor; necitit
-coaches            → prematch-enrichment.js; necitit în calc
-transfers          → nefolosit
-venues             → prematch-enrichment.js; necitit în calc
-live_odds          → nefolosit (definit, nescris)
-pre_match_snapshots → outcome/composite_score coloane lipsesc; tWinRate returnează {}
-top_scorers        → nefolosit (definit, nescris)
-top_assists        → nefolosit (definit, nescris)
-bookmakers         → nefolosit (definit, nescris)
-bets               → nefolosit (definit, nescris)
-trophies           → nefolosit (definit, nescris)
-fixture_status_log → nefolosit (definit, nescris)
+teams_stats
+  STATUS: ✅ ACTIV
+  Citit: generator.js (batch DISTINCT ON team_id), enrich.js (fallback lambda)
+  Utilizare: Fallback prioritate 2 pentru lambda Poisson când form_stats lipsește.
+    avg_goals_for → lambdaHome scored, avg_goals_against → lambdaHome conceded
+    clean_sheets_home/away → penalizare ggProb dacă CS rate > 35%
+  Scris: backfill.js (phase: teams_stats)
+
+injuries
+  STATUS: ✅ ACTIV (extins)
+  Citit: enrich.js (penalty Confidence Score) + generator.js (batch per fixture)
+         simulate.js (penalty factorH/A pe lambdas)
+  Utilizare generator: -8% scor per echipă cu ≥3 accidentați, -12% GG dacă ambele echipe
+  Utilizare simulate: injFactorH/A = 0.95 la ≥3, 0.90 la ≥5 accidentați
+  UI: ⚠️ X lângă numele echipei în Ecran 5 detaliu
+
+venues
+  STATUS: ✅ ACTIV
+  Citit: generator.js (batch query venue_id din prematch_data JSONB + live API response)
+  Utilizare: surface = 'artificial' → +5% goluri/gg/home/away, +8% cornere, -3% carduri
+  UI: "⚽ Teren artificial · +5% goluri · +8% cornere" în Ecran 5 detaliu
+
+pre_match_snapshots
+  STATUS: ✅ ACTIV
+  Coloane adăugate: outcome TEXT, composite_score NUMERIC(5,2) (ALTER TABLE IF NOT EXISTS)
+  Scrie: enrich.js (INSERT la fiecare calcul pre-meci, elapsed=0, ON CONFLICT UPDATE)
+         update-results.js (UPDATE outcome='WIN'|'LOSS' după FT)
+  Citit: admin.js (/api/admin/db-stats, /api/admin/prediction-accuracy)
+  Logic WIN/LOSS: WIN dacă over15_prob≥55 AND actual over15, sau over15_prob<45 AND actual under15
+  composite_score = over15Prob*0.40 + ggProb*0.30 + homeWin*0.30
+  Nou endpoint: GET /api/admin/prediction-accuracy → accuracy_pct, wins, losses, sample (100)
+
+TABELE DE ȘTERS ÎN VIITOR (când Vlad decide să facă curățenie):
+  sidelined      → zero scriitor, zero utilizator; funcție acoperită de injuries
+  coaches        → colectat în prematch_data dar date necalculabile în algoritmi
+  transfers      → nicio sursă de date activă, logică prea complexă
+  bookmakers     → redundant cu odds.bookmaker_name (text direct)
+  bets           → redundant cu odds.bet_name (text direct)
+  trophies       → trofeele vechi nu prezic meciul de mâine; Layer 7 e mai precis
+
+TABELE AMÂNATE (sprint viitor):
+  squads         → util pentru "squad completeness check" cu injuries, nu e urgent
+  live_odds      → concept puternic (odds drift semnal live) dar sprint întreg de implementat
+  top_scorers    → util pentru player bets UI, nu afectează calculele actuale
+  top_assists    → implementat împreună cu top_scorers
+  fixture_status_log → util pentru debugging retroactiv, implementabil simplu în scanner.js
 
 TABELE LIPSĂ DIN create-tables.sql (create dinamic):
   league_patterns   → referit în scan.js (upsertLeaguePattern) DAR LIPSĂ din schema
@@ -591,19 +622,19 @@ J. GENERATOR SCORING (index.html → g2Score)
 
 ⚠️ PARȚIAL IMPLEMENTAT / NECESITĂ DATE:
   - Layer 7 (Team Strength) — funcționează DOAR dacă backfill a rulat și player_stats e populat
-  - form_stats — funcționează DOAR dacă fixtures_history e populat (backfill sau referee-stats)
-  - h2h în generator — funcționează DOAR dacă backfill phase:h2h a rulat
+  - form_stats — funcționează DACĂ fixtures_history e populat; FALLBACK: teams_stats (sezon complet)
+  - h2h în generator — funcționează DACĂ backfill phase:h2h a rulat
   - odds în enrich/simulate — funcționează dacă collect-finished a rulat sau API-Football returnează
   - Telegram bot (telegram.js) — definit dar integrare în alerts incomplet
   - saveFormStats în scanner.js — funcție definită dar STUB (nu salvează date)
   - AI agent (/api/agent) — funcționează DACĂ ANTHROPIC_API_KEY e setat în .env
+  - teams_stats — citit dacă backfill phase:teams_stats a rulat (fallback form)
+  - venues — citit dacă prematch-enrichment a colectat datele (surface + coordonate)
+  - pre_match_snapshots — populat la fiecare click /api/enrich (pre-meci); outcome la update-results
 
 ❌ PROBLEME CUNOSCUTE:
-  - league_patterns tabel LIPSEȘTE din schema.sql
-    scan.js apelează upsertLeaguePattern() → va da eroare "relation does not exist"
-    FIX: adaugă CREATE TABLE IF NOT EXISTS league_patterns în schema sau în scan.js
-  - pre_match_snapshots tabel — coloanele outcome/composite_score lipsesc din schema
-    tWinRate() în health-check.js returnează {} (golit explicit)
+  - league_patterns tabel — FIX APLICAT (CREATE TABLE IF NOT EXISTS în scan.js handler)
+  - pre_match_snapshots — FIX APLICAT (ALTER TABLE + coloane outcome/composite_score)
   - Supabase project id "kdyafjlwbximefwdhbnc" în task description — IGNORĂ, e vechi
   - scanner.js saveFormStats e stub gol — nu salvează date de formă în DB
 
@@ -658,17 +689,11 @@ scanner.js (background) ──────────→ match_snapshots (NGP, 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🔴 CRITIC (erorile împiedică funcționalitatea):
-
-  1. league_patterns tabel LIPSĂ → scan.js va crasha când ajunge la upsertLeaguePattern()
-     FIX: adaugă în scan.js la top:
-       await query(`CREATE TABLE IF NOT EXISTS league_patterns (
-         league_id INT PRIMARY KEY, avg_ng DECIMAL(5,2), avg_over15 DECIMAL(5,2),
-         avg_gg DECIMAL(5,2), sample_size INT, updated_at TIMESTAMP DEFAULT NOW()
-       )`).catch(() => {});
+  ✅ REZOLVAT — league_patterns: CREATE TABLE IF NOT EXISTS adăugat în scan.js
 
 🟡 MEDIU (funcționalitate degradată):
 
-  2. saveFormStats în scanner.js este STUB GOL
+  1. saveFormStats în scanner.js este STUB GOL
      → form_stats nu se populează din meciuri live
      → singura sursă e collect-daily.js (zilnic 06:00)
      → dacă collect-daily nu a rulat: form_stats gol → scoring identic per ligă în Generator
@@ -773,6 +798,14 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
   Commit: 3062a12
 
 [17.05 ~21:00] - AUDIT COMPLET SISTEM → rescris SESSION_CONTEXT.txt
+  Commit: bad6174
+
+[17.05 ~22:00] - ACTIVARE 4 TABELE: teams_stats + injuries + venues + pre_match_snapshots
+  - teams_stats: fallback lambda în enrich.js + generator.js (prioritate 2 după form_stats)
+  - injuries: extins la generator.js (batch) + simulate.js (injFactor) + UI Ecran 5 (⚠️ X)
+  - venues: surface type integrat în generator.js (batch) + g2Score (+5%/+8%/-3%)
+  - pre_match_snapshots: ALTER TABLE outcome/composite_score + INSERT în enrich.js + UPDATE în update-results.js
+  - admin.js: endpoint /api/admin/prediction-accuracy + accuracy în db-stats
   Commit: prezent
 
 ================================================================================

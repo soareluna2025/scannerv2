@@ -1,6 +1,11 @@
 import { calcPoisson6x6, parseOddsItem, calcEV } from './calc-utils.js';
 import { query } from './db.js';
 
+// One-time migration: ensure pre_match_snapshots has outcome + composite_score columns
+query(`ALTER TABLE pre_match_snapshots
+  ADD COLUMN IF NOT EXISTS outcome TEXT,
+  ADD COLUMN IF NOT EXISTS composite_score NUMERIC(5,2)`).catch(() => {});
+
 async function fetchWithRetry(url, opts, attempts = 2) {
   for (let i = 0; i < attempts; i++) {
     try { return await fetch(url, opts); } catch (e) {
@@ -342,6 +347,49 @@ async function fetchAndStoreInjuries(fixtureId, key) {
   } catch (_) {}
 }
 
+async function getTeamStatsFromDB(teamId, leagueId) {
+  try {
+    const r = leagueId
+      ? await query(
+          `SELECT avg_goals_for, avg_goals_against,
+                  clean_sheets_home, clean_sheets_away,
+                  played_home, played_away
+           FROM teams_stats WHERE team_id = $1 AND league_id = $2
+           ORDER BY season DESC LIMIT 1`,
+          [teamId, Number(leagueId)]
+        )
+      : await query(
+          `SELECT avg_goals_for, avg_goals_against,
+                  clean_sheets_home, clean_sheets_away,
+                  played_home, played_away
+           FROM teams_stats WHERE team_id = $1
+           ORDER BY season DESC LIMIT 1`,
+          [teamId]
+        );
+    return r.rows[0] || null;
+  } catch (_) { return null; }
+}
+
+async function getVenueForFixture(fixtureId) {
+  try {
+    const r = await query(
+      `SELECT payload FROM prematch_data
+       WHERE fixture_id = $1 AND data_type = 'fixture'
+       ORDER BY collected_at DESC LIMIT 1`,
+      [fixtureId]
+    );
+    if (!r.rows.length) return null;
+    const payload = r.rows[0].payload;
+    const venueId = Array.isArray(payload) ? payload[0]?.fixture?.venue?.id : null;
+    if (!venueId) return null;
+    const v = await query(
+      'SELECT surface, latitude, longitude FROM venues WHERE venue_id = $1',
+      [venueId]
+    );
+    return v.rows[0] || null;
+  } catch (_) { return null; }
+}
+
 async function getMatchStatsFromDB(fixtureId) {
   if (!fixtureId) return [];
   try {
@@ -393,8 +441,8 @@ export default async function handler(req, res) {
   const hdr      = { 'x-apisports-key': key };
 
   try {
-    // --- Batch 1: DB queries + team strengths + injuries + match_stats in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leagueStats, refereeStats] = await Promise.all([
+    // --- Batch 1: DB queries + team strengths + injuries + match_stats + venue in parallel ---
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo] = await Promise.all([
       getFormFromDB(hId),
       getFormFromDB(aId),
       getH2HFromDB(hId, aId),
@@ -404,6 +452,7 @@ export default async function handler(req, res) {
       fid ? getMatchStatsFromDB(Number(fid)) : Promise.resolve([]),
       getLeagueStats(lgid),
       getRefereeStats(ref || null),
+      fid ? getVenueForFixture(Number(fid)) : Promise.resolve(null),
     ]);
 
     // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
@@ -420,11 +469,20 @@ export default async function handler(req, res) {
     ]);
 
     // Resolve final datasets
-    const hGames = needHForm ? (apiFbHForm?.response || []).slice(0, 10) : [];
-    const aGames = needAForm ? (apiFbAForm?.response || []).slice(0, 10) : [];
+    const hGames = needHForm ? (apiFbHForm?.response || []).slice(0, 10) : sbHForm;
+    const aGames = needAForm ? (apiFbAForm?.response || []).slice(0, 10) : sbAForm;
     const h2h = needH2H
       ? (apiFbH2H?.response || []).slice(0, 10)
       : h2hToFixtures(sbH2H);
+
+    // teams_stats fallback when form still insufficient after API
+    const formInsufficient = hGames.length < 3 || aGames.length < 3;
+    const [tsH, tsA] = formInsufficient
+      ? await Promise.all([
+          getTeamStatsFromDB(hId, lgid),
+          getTeamStatsFromDB(aId, lgid),
+        ])
+      : [null, null];
 
     // Resolve odds
     let oddsRaw = null;
@@ -452,6 +510,39 @@ export default async function handler(req, res) {
     const lgHome = parseFloat(leagueStats?.avg_home_goals) || 1.2;
     const lgAway = parseFloat(leagueStats?.avg_away_goals) || 1.2;
     const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota, lgHome, lgAway);
+
+    // teams_stats lambda override — priority 2 (between form_stats and league_stats)
+    if (formInsufficient && (tsH || tsA)) {
+      const tsHScored   = tsH ? +(tsH.avg_goals_for)     : null;
+      const tsHConceded = tsH ? +(tsH.avg_goals_against) : null;
+      const tsAScored   = tsA ? +(tsA.avg_goals_for)     : null;
+      const tsAConceded = tsA ? +(tsA.avg_goals_against) : null;
+      if (tsHScored != null && tsAConceded != null)
+        result.lambdaHome = +((tsHScored + tsAConceded) / 2).toFixed(2);
+      if (tsAScored != null && tsHConceded != null)
+        result.lambdaAway = +((tsAScored + tsHConceded) / 2).toFixed(2);
+      result.lambdaTotal = +(result.lambdaHome + result.lambdaAway).toFixed(2);
+      // Recalculate matrix with improved lambdas
+      const mx2 = calcPoisson6x6(result.lambdaHome, result.lambdaAway);
+      Object.assign(result, {
+        over15Prob: mx2.over15Prob, over25Prob: mx2.over25Prob,
+        ggProb: mx2.ggProb, homeWin: mx2.homeWin,
+        draw: mx2.draw, awayWin: mx2.awayWin,
+      });
+      // Clean sheets penalty on GG — high CS rate at home/away → harder for opponent to score
+      const csRateH = tsH && tsH.played_home > 0 ? tsH.clean_sheets_home / tsH.played_home : 0;
+      const csRateA = tsA && tsA.played_away > 0 ? tsA.clean_sheets_away / tsA.played_away : 0;
+      if (csRateH > 0.35) result.ggProb = Math.max(0, result.ggProb * (1 - (csRateH - 0.35)));
+      if (csRateA > 0.35) result.ggProb = Math.max(0, result.ggProb * (1 - (csRateA - 0.35)));
+      result._teamsStatsUsed = true;
+    }
+
+    // Venue surface adjustment — artificial turf increases goals/corners
+    if (venueInfo?.surface === 'artificial') {
+      result.over15Prob = Math.min(100, result.over15Prob + 5);
+      result.over25Prob = Math.min(100, result.over25Prob + 3);
+      result._venueSurface = 'artificial';
+    }
 
     // Ajustare Over 2.5 bazată pe stilul arbitrului
     if (refereeStats && Number(refereeStats.total_matches) >= 5) {
@@ -507,9 +598,36 @@ export default async function handler(req, res) {
 
     const payload = { ...result, ...evData, ...confData, leagueStats: leagueStats || null, refereeStats: refereeStats || null };
 
-    // Fire-and-forget: colectare injuries + prediction save
+    // Fire-and-forget: colectare injuries + prediction save + pre_match snapshot
     if (fid) {
       fetchAndStoreInjuries(Number(fid), key);
+
+      // Pre-match snapshot for back-testing (only when not live)
+      if (!parseInt(elapsed)) {
+        const compositeScore = +(
+          (payload.over15Prob * 0.40 + payload.ggProb * 0.30 + payload.homeWin * 0.30) / 100
+        ).toFixed(2);
+        query(
+          `INSERT INTO pre_match_snapshots
+             (fixture_id, home_team_id, away_team_id, lambda_home, lambda_away,
+              over15_prob, over25_prob, gg_prob, confidence, odds_snapshot, composite_score)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+           ON CONFLICT (fixture_id) DO UPDATE SET
+             lambda_home=EXCLUDED.lambda_home, lambda_away=EXCLUDED.lambda_away,
+             over15_prob=EXCLUDED.over15_prob, over25_prob=EXCLUDED.over25_prob,
+             gg_prob=EXCLUDED.gg_prob, confidence=EXCLUDED.confidence,
+             composite_score=EXCLUDED.composite_score`,
+          [
+            Number(fid), hId, aId,
+            payload.lambdaHome, payload.lambdaAway,
+            payload.over15Prob, payload.over25Prob, payload.ggProb,
+            payload.confidenceScore || null,
+            oddsRaw ? JSON.stringify(oddsRaw) : null,
+            compositeScore,
+          ]
+        ).catch(() => {});
+      }
+
       query(
         `INSERT INTO predictions (fixture_id, home_team, away_team, league_name, league_id, match_date,
           lambda_home, lambda_away, lambda_total, over15_prob, over25_prob, gg_prob,

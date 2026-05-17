@@ -75,6 +75,18 @@ async function sfOddsData(fixtureId) {
   } catch (_) { return []; }
 }
 
+async function sfInjuries(fixtureId) {
+  try {
+    const r = await query(
+      `SELECT team_id, COUNT(*) AS cnt FROM injuries WHERE fixture_id = $1 GROUP BY team_id`,
+      [fixtureId]
+    );
+    const m = {};
+    for (const row of r.rows) m[Number(row.team_id)] = Number(row.cnt);
+    return m;
+  } catch (_) { return {}; }
+}
+
 async function sfPlayerStats(teamId, label, dq) {
   try {
     const r = await query(
@@ -177,7 +189,7 @@ export default async function handler(req, res) {
   const [
     fixRes, lineupsRes,
     sbHomeFx, sbAwayFx, sbH2HData, sbStdData, sbOddsData,
-    homePlayers, awayPlayers,
+    homePlayers, awayPlayers, injData,
   ] = await Promise.all([
     af(`/fixtures?id=${fid}`,              'fixture'),
     af(`/fixtures/lineups?fixture=${fid}`, 'lineups'),
@@ -188,6 +200,7 @@ export default async function handler(req, res) {
     sfOddsData(fid),
     sfPlayerStats(hid, 'homePlayers', dq),
     sfPlayerStats(aid, 'awayPlayers', dq),
+    sfInjuries(fid),
   ]);
 
   dq['homeForm']  = sbHomeFx.length   ? '✅' : '⚠️';
@@ -348,8 +361,14 @@ export default async function handler(req, res) {
   const pfHome = homeSquad ? homeSquad.avgRating / 7.0 : 1.0;
   const pfAway = awaySquad ? awaySquad.avgRating / 7.0 : 1.0;
 
-  let lH = Math.max(0.3, Math.min(4.0, hAtt * aDef * lgH * eloFactor  * pfHome * 1.15));
-  let lA = Math.max(0.3, Math.min(4.0, aAtt * hDef * lgH / eloFactor  * pfAway));
+  // Injury penalty: 5% per threshold crossed (3+ = 0.95, 5+ = 0.90)
+  const homeInjuries = injData[hid] || 0;
+  const awayInjuries = injData[aid] || 0;
+  const injFactorH = homeInjuries >= 5 ? 0.90 : homeInjuries >= 3 ? 0.95 : 1.0;
+  const injFactorA = awayInjuries >= 5 ? 0.90 : awayInjuries >= 3 ? 0.95 : 1.0;
+
+  let lH = Math.max(0.3, Math.min(4.0, hAtt * aDef * lgH * eloFactor * pfHome * 1.15 * injFactorH));
+  let lA = Math.max(0.3, Math.min(4.0, aAtt * hDef * lgH / eloFactor * pfAway * injFactorA));
 
   if (isLive && elapsed > 0) {
     const mRem = Math.max(1, 90 - elapsed);
@@ -405,6 +424,8 @@ export default async function handler(req, res) {
       homeElo: elo.homeElo, awayElo: elo.awayElo, eloDiff: elo.eloDiff,
       homeSquadStrength: homeSquad?.strength ?? null,
       awaySquadStrength: awaySquad?.strength ?? null,
+      homeInjuries,
+      awayInjuries,
       homeTopScorer:  homeSquad?.topScorer || null,
       awayTopScorer:  awaySquad?.topScorer || null,
       homeStanding: homeStd ? { position: homeStd.rank, points: homeStd.points } : null,

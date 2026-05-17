@@ -46,7 +46,20 @@ export default async function handler(req, res) {
            WHERE fixture_id = $3`,
           [(hg + ag) >= 2, hg > 0 && ag > 0, pred.fixture_id]
         );
-        if (pr.rowCount > 0) updated++;
+        if (pr.rowCount > 0) {
+          updated++;
+          // Update pre_match_snapshots outcome for back-testing accuracy tracking
+          query(
+            `UPDATE pre_match_snapshots
+             SET outcome = CASE
+               WHEN over15_prob >= 55 AND $1 THEN 'WIN'
+               WHEN over15_prob < 45  AND NOT $1 THEN 'WIN'
+               ELSE 'LOSS'
+             END
+             WHERE fixture_id = $2 AND outcome IS NULL`,
+            [(hg + ag) >= 2, pred.fixture_id]
+          ).catch(() => {});
+        }
       } catch (_) { /* skip fixture, try next */ }
     }
 

@@ -31,7 +31,8 @@ export default async function handler(req, res) {
         headers: { 'x-apisports-key': KEY },
       });
       const d = await r.json();
-      rawMatches = (d.response || []).filter(m => LIVE_S.has(m.fixture?.status?.short));
+      rawMatches = (d.response || []).filter(m => LIVE_S.has(m.fixture?.status?.short))
+        .map(m => ({ ...m, _venue_id: m.fixture?.venue?.id || null }));
     } else {
       const now = new Date();
       const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -57,11 +58,13 @@ export default async function handler(req, res) {
         [now.toISOString(), in24h.toISOString()]
       );
       rawMatches = rows.map(row => {
-        let refStr = null;
+        let refStr = null, venueId = null;
         const pd = row.pd_fixture;
         if (Array.isArray(pd) && pd[0]?.fixture?.referee) refStr = pd[0].fixture.referee;
+        if (Array.isArray(pd) && pd[0]?.fixture?.venue?.id) venueId = pd[0].fixture.venue.id;
         return {
           _db: true,
+          _venue_id: venueId,
           fixture: { id: row.fixture_id, date: row.match_date, referee: refStr, status: { short: 'NS', elapsed: 0 } },
           league: { id: row.league_id, name: row.league_name },
           teams: {
@@ -74,7 +77,7 @@ export default async function handler(req, res) {
       });
     }
 
-    if (!rawMatches.length) return res.json({ ok: true, mode, matches: [] });
+    if (!rawMatches.length) return res.json({ ok: true, mode, count: 0, matches: [] });
 
     // Load league_stats
     const leagueIds = [...new Set(rawMatches.map(m => m.league?.id).filter(Boolean))];
@@ -135,6 +138,41 @@ export default async function handler(req, res) {
       if (!formMap[k] || formMap[k].season < r.season) formMap[k] = r;
     }
 
+    // Load teams_stats as fallback when form_stats missing (season-level averages)
+    const { rows: tsRows } = await query(
+      `SELECT DISTINCT ON (team_id) team_id, avg_goals_for, avg_goals_against,
+              clean_sheets_home, clean_sheets_away, played_home, played_away
+       FROM teams_stats WHERE team_id = ANY($1) ORDER BY team_id, season DESC`,
+      [allTeamIds]
+    ).catch(() => ({ rows: [] }));
+    const tsMap = Object.fromEntries(tsRows.map(r => [Number(r.team_id), r]));
+
+    // Load venues for surface type (artificial turf bonus)
+    const venueIds = [...new Set(rawMatches.map(m => m._venue_id).filter(Boolean))];
+    let venueMap = {};
+    if (venueIds.length) {
+      const { rows: vRows } = await query(
+        'SELECT venue_id, surface FROM venues WHERE venue_id = ANY($1)',
+        [venueIds]
+      ).catch(() => ({ rows: [] }));
+      venueMap = Object.fromEntries(vRows.map(r => [r.venue_id, r]));
+    }
+
+    // Load injuries per fixture (batch grouped by fixture_id + team_id)
+    const fixtureIds = rawMatches.map(m => m.fixture?.id).filter(Boolean);
+    let injMap = {};
+    if (fixtureIds.length) {
+      const { rows: injRows } = await query(
+        `SELECT fixture_id, team_id, COUNT(*) AS cnt
+         FROM injuries WHERE fixture_id = ANY($1) GROUP BY fixture_id, team_id`,
+        [fixtureIds]
+      ).catch(() => ({ rows: [] }));
+      for (const r of injRows) {
+        if (!injMap[r.fixture_id]) injMap[r.fixture_id] = {};
+        injMap[r.fixture_id][r.team_id] = Number(r.cnt);
+      }
+    }
+
     // Build result
     const result = rawMatches.map(m => {
       const hid = m.teams?.home?.id;
@@ -148,6 +186,9 @@ export default async function handler(req, res) {
       const h2h = h2hMap[`${Math.min(hid, aid)}-${Math.max(hid, aid)}`] || null;
       const hForm = formMap[`${hid}-${lid}`] || null;
       const aForm = formMap[`${aid}-${lid}`] || null;
+      const hTS   = tsMap[hid] || null;
+      const aTS   = tsMap[aid] || null;
+      const venue = m._venue_id ? venueMap[m._venue_id] || null : null;
       const isLive = mode === 'live';
 
       const liveCards = teamId => (m.events || []).filter(e =>
@@ -194,12 +235,24 @@ export default async function handler(req, res) {
           pct_away_scores:  +(h2h.pct_away_scores),
         } : null,
         form: {
-          home_avg_scored:   hForm ? +(hForm.avg_scored_home)   : null,
-          home_avg_conceded: hForm ? +(hForm.avg_conceded_home) : null,
-          away_avg_scored:   aForm ? +(aForm.avg_scored_away)   : null,
-          away_avg_conceded: aForm ? +(aForm.avg_conceded_away) : null,
+          // Priority: form_stats (recent 5) → teams_stats (season) → null
+          home_avg_scored:   hForm ? +(hForm.avg_scored_home)   : (hTS ? +(hTS.avg_goals_for)     : null),
+          home_avg_conceded: hForm ? +(hForm.avg_conceded_home) : (hTS ? +(hTS.avg_goals_against) : null),
+          away_avg_scored:   aForm ? +(aForm.avg_scored_away)   : (aTS ? +(aTS.avg_goals_for)     : null),
+          away_avg_conceded: aForm ? +(aForm.avg_conceded_away) : (aTS ? +(aTS.avg_goals_against) : null),
           home_last5:        hForm?.last5_home || null,
           away_last5:        aForm?.last5_away || null,
+          // Clean sheet rates from teams_stats (for GG penalty in frontend scoring)
+          home_cs_rate: hTS && hTS.played_home > 0
+            ? +(hTS.clean_sheets_home / hTS.played_home).toFixed(2) : null,
+          away_cs_rate: aTS && aTS.played_away > 0
+            ? +(aTS.clean_sheets_away / aTS.played_away).toFixed(2) : null,
+          _ts_fallback: !hForm || !aForm,
+        },
+        venue_surface: venue?.surface || null,
+        injuries: {
+          home: injMap[fid]?.[hid] || 0,
+          away: injMap[fid]?.[aid] || 0,
         },
         live: isLive ? {
           home_xg:      getStat(m.statistics, hid, 'expected_goals'),

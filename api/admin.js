@@ -118,18 +118,31 @@ router.get('/db-stats', async (req, res) => {
       safe('SELECT COUNT(*) AS cnt FROM player_stats'),
       safe("SELECT COUNT(*) AS cnt FROM match_snapshots WHERE outcome='LIVE'"),
     ]);
+    // pre_match_snapshots accuracy
+    const pmsTotal = await safe('SELECT COUNT(*) AS cnt FROM pre_match_snapshots');
+    const pmsWins  = await safe("SELECT COUNT(*) AS cnt FROM pre_match_snapshots WHERE outcome='WIN'");
+    const pmsResolved = await safe("SELECT COUNT(*) AS cnt FROM pre_match_snapshots WHERE outcome IS NOT NULL");
+
     res.json({
       ok: true,
       tables: {
-        fixtures_history: Number(fh.rows[0].cnt),
-        league_stats:     Number(ls.rows[0].cnt),
-        referee_stats:    Number(rs.rows[0].cnt),
-        match_stats:      Number(ms.rows[0].cnt),
-        h2h:              Number(h2h.rows[0].cnt),
-        standings:        Number(st.rows[0].cnt),
-        predictions:      Number(pred.rows[0].cnt),
-        player_stats:     Number(ps.rows[0].cnt),
-        live_snapshots:   Number(snaps.rows[0].cnt),
+        fixtures_history:     Number(fh.rows[0].cnt),
+        league_stats:         Number(ls.rows[0].cnt),
+        referee_stats:        Number(rs.rows[0].cnt),
+        match_stats:          Number(ms.rows[0].cnt),
+        h2h:                  Number(h2h.rows[0].cnt),
+        standings:            Number(st.rows[0].cnt),
+        predictions:          Number(pred.rows[0].cnt),
+        player_stats:         Number(ps.rows[0].cnt),
+        live_snapshots:       Number(snaps.rows[0].cnt),
+        pre_match_snapshots:  Number(pmsTotal.rows[0].cnt),
+      },
+      prediction_accuracy: {
+        resolved: Number(pmsResolved.rows[0].cnt),
+        wins:     Number(pmsWins.rows[0].cnt),
+        accuracy_pct: Number(pmsResolved.rows[0].cnt) > 0
+          ? Math.round(Number(pmsWins.rows[0].cnt) / Number(pmsResolved.rows[0].cnt) * 100)
+          : null,
       },
     });
   } catch (e) {
@@ -263,6 +276,41 @@ router.post('/trigger-cron', async (req, res) => {
     // Fire-and-forget — răspuns imediat
     fetch(url).catch(() => {});
     res.json({ ok: true, job, url, triggered_at: new Date().toISOString() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── GET /api/admin/prediction-accuracy ──────────────────────────────────────
+router.get('/prediction-accuracy', async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT
+        COUNT(*) FILTER (WHERE outcome = 'WIN')           AS wins,
+        COUNT(*) FILTER (WHERE outcome = 'LOSS')          AS losses,
+        COUNT(*) FILTER (WHERE outcome IS NOT NULL)       AS resolved,
+        COUNT(*)                                          AS total,
+        ROUND(
+          100.0 * COUNT(*) FILTER (WHERE outcome = 'WIN')
+          / NULLIF(COUNT(*) FILTER (WHERE outcome IS NOT NULL), 0), 1
+        ) AS accuracy_pct
+      FROM (
+        SELECT outcome FROM pre_match_snapshots
+        WHERE outcome IS NOT NULL
+        ORDER BY created_at DESC LIMIT 100
+      ) recent
+    `).catch(() => ({ rows: [] }));
+
+    const row = rows[0] || {};
+    res.json({
+      ok:           true,
+      accuracy_pct: row.accuracy_pct ? Number(row.accuracy_pct) : null,
+      wins:         Number(row.wins   || 0),
+      losses:       Number(row.losses || 0),
+      sample:       Number(row.resolved || 0),
+      total_snapshots: Number(row.total || 0),
+      note: 'WIN = over15_prob ≥55% AND actual over15, OR over15_prob <45% AND actual under15. Last 100 resolved.',
+    });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
