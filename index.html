@@ -1628,6 +1628,44 @@ function mdRenderSumar(d){
     out+='<div class="md-minute"><div class="md-min-badge"><div class="min-dot"></div>'+mn+"'</div></div>";
   }
 
+  // Banner meteo
+  if(en.weatherData&&en.weatherData.condition){
+    var wd=en.weatherData;
+    var wIcons={clear:'☀️',cloudy:'⛅',rain:'🌧️',showers:'🌦️',snow:'❄️',storm:'⛈️'};
+    var wIcon=wIcons[wd.condition]||'🌡️';
+    var wImp=wd.impact||'neutral';
+    var wBorder=(['severe','high'].indexOf(wImp)>=0)?'#dc2626':
+                (['moderate','cold','hot'].indexOf(wImp)>=0)?'#ca8a04':'rgba(255,255,255,0.12)';
+    var wBg=(['severe','high'].indexOf(wImp)>=0)?'rgba(26,0,0,0.85)':
+            (['moderate','cold','hot'].indexOf(wImp)>=0)?'rgba(26,26,0,0.85)':'rgba(255,255,255,0.03)';
+    out+='<div class="md-section">';
+    out+='<div class="md-section-title">Condiții Meteo'+(wd.city?' — '+wd.city:'')+'</div>';
+    out+='<div style="background:'+wBg+';border:1px solid '+wBorder+';border-radius:10px;padding:12px 14px">';
+    out+='<div style="font-size:13px;font-weight:600;margin-bottom:6px">';
+    out+=wIcon+' ';
+    out+=(wd.condition||'').charAt(0).toUpperCase()+(wd.condition||'').slice(1);
+    if(wd.temperature!=null)out+=' &nbsp;•&nbsp; '+wd.temperature+'°C';
+    if(wd.feels_like!=null&&wd.feels_like!==wd.temperature)out+=' (resimțit '+wd.feels_like+'°C)';
+    out+='</div>';
+    out+='<div style="font-size:11px;color:var(--mu2)">';
+    if(wd.wind_speed!=null)out+='Vânt '+wd.wind_speed+' km/h &nbsp;';
+    if(wd.humidity!=null)out+='Umiditate '+wd.humidity+'% &nbsp;';
+    if(wd.precipitation!=null&&wd.precipitation>0)out+='Precipitații '+wd.precipitation+' mm';
+    out+='</div>';
+    var d25=wd.deltas&&wd.deltas.over25||0;
+    var dc=wd.deltas&&wd.deltas.corners||0;
+    var dcard=wd.deltas&&wd.deltas.cards||0;
+    if(d25||dc||dcard){
+      out+='<div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-top:8px;margin-bottom:3px">Impact predicții</div>';
+      out+='<div style="font-size:11px;color:var(--mu2)">';
+      if(d25)out+='Over 2.5: <span style="color:'+(d25>0?'#22c55e':'#ef4444')+'">'+(d25>0?'+':'')+d25+'%</span>&nbsp;&nbsp;';
+      if(dc)out+='Cornere: <span style="color:'+(dc>0?'#22c55e':'#ef4444')+'">'+(dc>0?'+':'')+dc+'%</span>&nbsp;&nbsp;';
+      if(dcard)out+='Cartonașe: <span style="color:'+(dcard>0?'#22c55e':'#ef4444')+'">'+(dcard>0?'+':'')+dcard+'%</span>';
+      out+='</div>';
+    }
+    out+='</div></div>';
+  }
+
   // Events (goals/cards) summary
   var evts=d.events||[];
   var goalEvts=evts.filter(function(e){return e.type==='Goal';});

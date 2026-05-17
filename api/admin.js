@@ -242,6 +242,7 @@ const ALLOWED_JOBS = {
   'league-stats':       '/api/cron/league-stats',
   'referee-stats':      '/api/cron/referee-stats',
   'coach-stats':        '/api/cron/coach-stats',
+  'weather':            '/api/cron/weather',
   'collect-daily':      '/api/cron/collect-daily',
   'collect-finished':   '/api/cron/collect-finished',
   'prematch-enrichment':'/api/cron/prematch-enrichment',

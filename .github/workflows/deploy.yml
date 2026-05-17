@@ -52,6 +52,7 @@ jobs:
             C6="0 4 * * * curl -sf http://localhost:3000/api/cron/league-stats >> $LOG 2>&1"
             C7="0 4 * * * curl -sf http://localhost:3000/api/cron/referee-stats >> $LOG 2>&1"
             C8="0 4 * * * curl -sf http://localhost:3000/api/cron/coach-stats >> $LOG 2>&1"
+            C9="0 */3 * * * curl -sf http://localhost:3000/api/cron/weather >> $LOG 2>&1"
 
             (
               crontab -l 2>/dev/null \
@@ -63,7 +64,8 @@ jobs:
                 | grep -v 'api/cron/collect-finished' \
                 | grep -v 'api/cron/league-stats' \
                 | grep -v 'api/cron/referee-stats' \
-                | grep -v 'api/cron/coach-stats'
+                | grep -v 'api/cron/coach-stats' \
+                | grep -v 'api/cron/weather'
               echo "$C0"
               echo "$C2"
               echo "$C3"
@@ -72,6 +74,7 @@ jobs:
               echo "$C6"
               echo "$C7"
               echo "$C8"
+              echo "$C9"
             ) | crontab -
 
             echo "CRONTAB ACTIV:"

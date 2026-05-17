@@ -300,6 +300,17 @@ async function getMatchStatsFromDB(fixtureId) {
   } catch (_) { return []; }
 }
 
+async function getWeatherImpact(fixtureId) {
+  if (!fixtureId) return null;
+  try {
+    const r = await query(
+      'SELECT * FROM venue_weather WHERE fixture_id = $1',
+      [fixtureId]
+    );
+    return r.rows[0] || null;
+  } catch (_) { return null; }
+}
+
 async function getCoachStatsByTeam(teamId) {
   if (!teamId) return null;
   try {
@@ -361,7 +372,7 @@ export default async function handler(req, res) {
 
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, homeCoachStats, awayCoachStats] = await Promise.all([
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, homeCoachStats, awayCoachStats, weatherImpact] = await Promise.all([
       getFormFromDB(hId),
       getFormFromDB(aId),
       getH2HFromDB(hId, aId),
@@ -371,6 +382,7 @@ export default async function handler(req, res) {
       fid ? getMatchStatsFromDB(Number(fid)) : Promise.resolve([]),
       getCoachStatsByTeam(hId),
       getCoachStatsByTeam(aId),
+      fid ? getWeatherImpact(Number(fid)) : Promise.resolve(null),
     ]);
 
     // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
@@ -417,6 +429,15 @@ export default async function handler(req, res) {
 
     // --- Calculations ---
     const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota);
+
+    // Ajustare meteo (din venue_weather, colectat de weather.js cron)
+    if (weatherImpact) {
+      const o25d = parseFloat(weatherImpact.impact_over25_delta) || 0;
+      if (o25d !== 0) {
+        result.over25Prob = Math.min(100, Math.max(0, result.over25Prob + o25d));
+        result.over15Prob = Math.min(100, Math.max(0, result.over15Prob + Math.round(o25d * 0.4)));
+      }
+    }
 
     // Ajustare bazată pe combinația stilurilor antrenorilor
     const hs = homeCoachStats?.coach_style;
@@ -505,6 +526,22 @@ export default async function handler(req, res) {
         away:   awayCoachStats || null,
         impact: coachImpact,
       },
+      weatherData: weatherImpact ? {
+        condition:   weatherImpact.weather_condition,
+        impact:      weatherImpact.weather_impact,
+        temperature: weatherImpact.temperature != null ? parseFloat(weatherImpact.temperature) : null,
+        feels_like:  weatherImpact.feels_like   != null ? parseFloat(weatherImpact.feels_like)  : null,
+        wind_speed:  weatherImpact.wind_speed   != null ? parseFloat(weatherImpact.wind_speed)  : null,
+        wind_dir:    weatherImpact.wind_direction,
+        humidity:    weatherImpact.humidity,
+        precipitation: weatherImpact.precipitation != null ? parseFloat(weatherImpact.precipitation) : null,
+        city:        weatherImpact.venue_city,
+        deltas: {
+          over25:  parseFloat(weatherImpact.impact_over25_delta)  || 0,
+          corners: parseFloat(weatherImpact.impact_corners_delta) || 0,
+          cards:   parseFloat(weatherImpact.impact_cards_delta)   || 0,
+        },
+      } : null,
     };
 
     // Fire-and-forget: colectare injuries + prediction save
