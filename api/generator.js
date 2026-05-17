@@ -39,6 +39,7 @@ export default async function handler(req, res) {
         `SELECT f.fixture_id, f.league_id, f.home_team_id, f.away_team_id,
                 COALESCE(th.name, f.home_team_name) AS home_name,
                 COALESCE(ta.name, f.away_team_name) AS away_name,
+                th.logo AS home_logo, ta.logo AS away_logo,
                 f.match_date, l.name AS league_name,
                 pd.payload AS pd_fixture
          FROM fixtures f
@@ -63,7 +64,10 @@ export default async function handler(req, res) {
           _db: true,
           fixture: { id: row.fixture_id, date: row.match_date, referee: refStr, status: { short: 'NS', elapsed: 0 } },
           league: { id: row.league_id, name: row.league_name },
-          teams: { home: { id: row.home_team_id, name: row.home_name }, away: { id: row.away_team_id, name: row.away_name } },
+          teams: {
+            home: { id: row.home_team_id, name: row.home_name, logo: row.home_logo || `https://media.api-sports.io/football/teams/${row.home_team_id}.png` },
+            away: { id: row.away_team_id, name: row.away_name, logo: row.away_logo || `https://media.api-sports.io/football/teams/${row.away_team_id}.png` },
+          },
           goals: { home: null, away: null },
           statistics: [], events: [],
         };
@@ -150,10 +154,13 @@ export default async function handler(req, res) {
         e.team?.id === teamId && ['Yellow Card', 'Red Card', 'Yellow+Red Card'].includes(e.detail)
       ).length;
 
+      const logoBase = 'https://media.api-sports.io/football/teams/';
       return {
         fixture_id: fid,
         home_team:  m.teams?.home?.name || '?',
         away_team:  m.teams?.away?.name || '?',
+        home_logo:  m.teams?.home?.logo || (hid ? `${logoBase}${hid}.png` : null),
+        away_logo:  m.teams?.away?.logo || (aid ? `${logoBase}${aid}.png` : null),
         league_name: m.league?.name || '',
         league_id:  lid,
         is_live:    isLive,
