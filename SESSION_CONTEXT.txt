@@ -1,0 +1,239 @@
+================================================================================
+  SESSION_CONTEXT.txt — AlohaScan Scanner V2
+  Actualizat: 2026-05-17
+  CITEȘTE ACEST FIȘIER LA ÎNCEPUTUL ORICĂREI SESIUNI NOI
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. CONTEXT PROIECT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Aplicație: AlohaScan Scanner V2
+Scop:      Scanner pariuri sportive — LIVE + PRE-MECI, ~165 ligi globale
+           Calcul Poisson, EV, Confidence Score 7 straturi, Safe Bets
+
+Stack ACTUAL (după migrarea din mai 2026):
+  - Runtime:    Node.js (ESM modules) via /snap/bin/node
+  - Server:     Express.js (server.js)
+  - Baza date:  PostgreSQL LOCAL pe VPS (DB: elefant, user: alohascan)
+                NU mai folosim Supabase — migrare completă în mai 2026
+  - Process:    PM2 (ecosystem.config.cjs) SAU systemctl (alohascan.service)
+  - Deploy:     GitHub Actions → deploy.yml → SSH pe VPS → git pull + restart
+  - API date:   API-Football v3 (api-sports.io)
+  - AI:         Claude API (Anthropic) — api/agent.js
+  - Notificări: Telegram Bot API — api/telegram.js
+
+VPS:
+  IP:           192.248.183.230
+  OS:           Ubuntu (Vultr)
+  Folder app:   /root/scannerv2
+  PM2 app name: alohascan
+  DB:           PostgreSQL local — postgresql://alohascan:Firenze225854@localhost:5432/elefant
+  Schema SQL:   /root/scannerv2/scripts/create-tables.sql (32 tabele)
+  Migration:    /root/scannerv2/scripts/migrations/add-snapshots.sql
+
+Repo GitHub:    soareluna2025/scannerv2
+Branch main:    producție — auto-deploy la push via deploy.yml
+
+ATENȚIE: "Supabase project: kdyafjlwbximefwdhbnc" — VECHI, NU MAI E FOLOSIT.
+         Toate referințele Supabase au fost eliminate în sesiunea din 17.05.2026.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. ACCES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GitHub Token: în GitHub Secrets (nu se stochează în repo)
+  → Generează din: GitHub → Settings → Developer settings → Personal access tokens
+  → Configurare git cu token: folosește GitHub Secret GH_TOKEN din Actions
+
+Git config (sesiune nouă — token din GitHub Secrets sau de la owner):
+  git config --global url."https://<TOKEN>@github.com/".insteadOf "https://github.com/"
+
+VPS:
+  IP:    192.248.183.230
+  User:  root
+  Credențiale DB și VPS: stocate în GitHub Secrets (VPS_PASSWORD, POSTGRES_URL)
+
+GitHub Secrets folosite de deploy.yml:
+  VPS_IP, VPS_PASSWORD, API_FOOTBALL_KEY, POSTGRES_URL,
+  ANTHROPIC_API_KEY, XAI_API_KEY
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. STAREA CURENTĂ A PROIECTULUI (la 17.05.2026)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ FUNCȚIONEAZĂ:
+  - Server Express pornit pe portul 3000
+  - API routes: /api/football, /api/today, /api/enrich, /api/match, /api/players
+  - Admin dashboard: /admin (protejat cu X-Api-Key)
+  - Scanner live continuu (scanner.js) — 10s live, 60s stats, 60min prematch
+  - Cron jobs via crontab pe VPS (nu PM2 cron)
+  - PostgreSQL local — toate tabelele create (32 + 2 din migration)
+  - Deploy automat: push pe main → GitHub Actions → VPS
+  - Backfill date istorice via /api/backfill/start
+
+✅ FIXAT ÎN ACEASTĂ SESIUNE (17.05.2026):
+  - PM2 crash loop (270+ restarts) — db.js pool.on('error') lipsea
+  - alerts INSERT — coloane greșite (type→alert_type, confidence→ngp_value etc.)
+  - live_stats INSERT — structură agregată → home/away separate
+  - odds INSERT — 17 coloane plate → structură normalizată (bet_id, value_name)
+  - collect-daily.js — teams INSERT acum înainte de standings (FK order)
+  - Toate fișierele Supabase legacy eliminate din repo
+
+⚠️  NECONFIRMAT (necesită verificare pe VPS):
+  - PM2 vs systemctl — deploy.yml folosește systemctl, ecosystem.config.cjs e pentru PM2
+    Nu e clar care rulează efectiv. Verifică: systemctl status alohascan && pm2 list
+  - Contele de rânduri din baza de date (nu am putut accesa direct)
+  - Starea tabelelor prematch_data, referee_stats, league_stats
+    (create dinamic de cron jobs — există doar dacă cronul a rulat)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. PROBLEME ACTIVE CUNOSCUTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔴 CRITIC (necesită atenție imediată):
+  - Niciuna după fix-urile din 17.05.2026
+
+🟡 MEDIU:
+  - prematch_data nu e în scripts/create-tables.sql
+    → creat dinamic de prematch-enrichment.js la prima rulare
+    → dacă DB e recreat, tabelul lipsește până cronul rulează
+  - referee_stats, league_stats — idem (create dinamic)
+  - fixtures_history.referee — coloană adăugată dinamic (ALTER TABLE la runtime)
+  - form_stats — definit în schema dar nefolosit (saveFormStats e stub gol)
+
+🟢 MINOR:
+  - CLAUDE.md menționează Supabase în mai multe locuri (documentație istorică)
+    → nu afectează funcționalitatea, doar documentație outdated
+  - service-worker.js cache name 'alohascan-v2' poate fi vechi pe browsere existente
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. TASK-URI RĂMASE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRIORITATE ÎNALTĂ:
+  [ ] Verifică VPS: systemctl status alohascan && pm2 list
+      → Clarifică dacă rulează PM2 sau systemctl
+  [ ] Rulează pe VPS: tail -100 /root/.pm2/logs/alohascan-error.log
+      → Confirmă că PM2 crash loop s-a rezolvat
+  [ ] Adaugă prematch_data, referee_stats, league_stats în create-tables.sql
+      → Prevenție: tabelele să existe chiar dacă cronul nu a rulat niciodată
+  [ ] Actualizează CLAUDE.md — elimină referințele la Supabase din documentație
+
+PRIORITATE MEDIE:
+  [ ] Adaugă coloana referee în fixtures_history direct în create-tables.sql
+      (acum se adaugă dinamic via ALTER TABLE în referee-stats.js)
+  [ ] Elimină sau implementează form_stats (acum e definit dar complet nefolosit)
+  [ ] Verifică collect-daily SEASON logic — mai 2026 = sezon 2025, corect?
+      (SEASON = month < 7 ? year-1 : year → mai(4) < 7 → 2025 ✓)
+
+PRIORITATE MICĂ:
+  [ ] Testare integrală: pornește un meci live și verifică că live_stats/alerts
+      se salvează corect în PostgreSQL după fix-urile din 17.05
+  [ ] Actualizare CLAUDE.md cu stack-ul actual (PostgreSQL, nu Supabase)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. INSTRUCȚIUNI SESIUNE NOUĂ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PAS 1 — Citește acest fișier complet.
+
+PAS 2 — Configurează git cu tokenul (token din GitHub Secrets sau de la owner):
+  git config --global url."https://<GH_TOKEN>@github.com/".insteadOf "https://github.com/"
+
+PAS 3 — Verifică starea VPS (dacă ai nevoie):
+  Trimite o comandă via GitHub Actions → check-vps.yml → Run workflow
+  SAU solicită acces SSH direct
+
+WORKFLOW DEPLOY (cum funcționează):
+  1. Faci modificări în cod pe branch de lucru
+  2. git commit + git push origin <branch>
+  3. Merge pe main: git checkout main && git merge --ff-only <branch> && git push origin main
+  4. deploy.yml se declanșează automat:
+     - SSH pe VPS → git pull origin main → npm install → restart systemctl
+  5. Verifici: curl http://192.248.183.230:3000/health
+
+LOGS PE VPS:
+  App output:   tail -100 /root/.pm2/logs/alohascan-out.log
+  App errors:   tail -100 /root/.pm2/logs/alohascan-error.log
+  Cron logs:    tail -100 /var/log/alohascan-cron.log
+  PM2 status:   pm2 list && pm2 show alohascan
+  Systemctl:    systemctl status alohascan
+
+DB pe VPS (direct — parola din GitHub Secret POSTGRES_URL):
+  PGPASSWORD=<DB_PASS> psql -U alohascan -d elefant -h 127.0.0.1
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[17.05.2026 ~13:00] - DIAGNOSTICAT eroarea "column goal_diff does not exist"
+  REZULTAT: Identificat mismatch între schema (goal_diff) și cod (goals_diff)
+            + ALTER TABLE silențios prins cu .catch(()=>{})
+
+[17.05.2026 ~13:10] - FIXAT PM2 crash loop
+  Fișier:    api/db.js
+  Modificare: Adăugat pool.on('error', ...) — lipsea handler pentru idle client errors
+  REZULTAT:  Succes — unhandled 'error' event nu mai ucide procesul Node.js
+  Commit:    0261acc
+
+[17.05.2026 ~13:10] - FIXAT server.js process error handlers
+  Modificare: Adăugat process.on('uncaughtException') și ('unhandledRejection')
+  REZULTAT:  Succes — crashuri neprinse acum sunt loggat, nu ucid procesul
+  Commit:    0261acc
+
+[17.05.2026 ~13:10] - FIXAT collect-daily.js
+  Modificări:
+    - Teams INSERT mutat ÎNAINTEA standings INSERT (FK constraint fix)
+    - ALTER TABLE error acum loggat (nu prins silențios)
+    - Guard null team_id îmbunătățit
+  REZULTAT:  Succes
+  Commit:    0261acc
+
+[17.05.2026 ~13:30] - ELIMINAT toate fișierele Supabase legacy
+  Fișiere șterse:
+    - supabase/ (migrations 001, 002, 003)
+    - supabase-schema.sql
+    - setup.sh, setup-env.sh
+  Modificat: service-worker.js (eliminat 'supabase.co' din BYPASS_HOSTS)
+  REZULTAT:  Succes — zero referințe Supabase în cod activ
+  Commit:    e2fc5d5
+
+[17.05.2026 ~14:00] - AUDIT COMPLET cod vs schema DB
+  REZULTAT: Găsite 3 probleme critice + 2 medii + 2 minore
+  Critice:
+    1. alerts — 4 coloane greșite
+    2. live_stats — structură completă incompatibilă
+    3. odds — 17 coloane plate vs 8 coloane normalizate în schema
+
+[17.05.2026 ~14:20] - FIXAT alerts INSERT (scan.js + scanner.js)
+  Modificare: type→alert_type, confidence→ngp_value, is_sent eliminat,
+              telegram_sent→telegram_ok, 6 params→5 params
+  REZULTAT:  Succes — alertele se vor salva corect în DB
+  Commit:    923a9ab
+
+[17.05.2026 ~14:20] - FIXAT live_stats INSERT (scan.js + scanner.js)
+  Modificare: 15 coloane agregate → 16 coloane home/away separate
+              (elapsed, home_sot/away_sot, home_xg/away_xg, etc.)
+  REZULTAT:  Succes — live stats se vor salva corect în DB
+  Commit:    923a9ab
+
+[17.05.2026 ~14:20] - FIXAT odds INSERT (collect-finished.js)
+  Modificare: 1 INSERT cu 17 coloane plate → bucle INSERT normalizate
+              per bet/value → compatibil cu schema (bet_id, value_name, value_odd)
+  REZULTAT:  Succes — odds se vor salva corect în DB
+  Commit:    923a9ab
+
+[17.05.2026 ~14:30] - MERGE pe main + PUSH la remote
+  Procedură: git reset --hard origin/main && git merge --ff-only origin/claude/greeting-setup-WzHy1
+  REZULTAT:  Succes — 3 commits merged, deploy.yml declanșat automat
+  Branch:    claude/greeting-setup-WzHy1 → main
+  Hash final: 923a9ab
+
+[17.05.2026 ~14:35] - CREAT SESSION_CONTEXT.txt (acest fișier)
+  URMEAZĂ: Verificare pe VPS că deploy-ul a rulat corect
+
+================================================================================
+  NOTĂ: Actualizează secțiunea 7 după FIECARE acțiune nouă.
+  FORMAT: [ZZ.LL.AAAA HH:MM] - CE S-A FĂCUT / REZULTAT / URMEAZĂ
+================================================================================
