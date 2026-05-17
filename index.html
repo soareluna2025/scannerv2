@@ -2225,9 +2225,19 @@ function g2Score(m){
   var fm=m.form||{};
   var lv=m.live||{};
 
+  // Cross-product lambdas: attack strength vs opposing defense (Poisson football model).
+  // Each pair (hid, aid) produces unique lambdas even within the same league.
+  var fHs=fm.home_avg_scored, fHc=fm.home_avg_conceded;
+  var fAs=fm.away_avg_scored, fAc=fm.away_avg_conceded;
+  var defLgH=lg.avg_goals*0.55, defLgA=lg.avg_goals*0.45;
+  // Expected home goals = (home attack + away defense) / 2
+  var lamH=(fHs!=null&&fAc!=null)?((fHs+fAc)/2):(fHs!=null?fHs:(fAc!=null?fAc:defLgH));
+  // Expected away goals = (away attack + home defense) / 2
+  var lamA=(fAs!=null&&fHc!=null)?((fAs+fHc)/2):(fAs!=null?fAs:(fHc!=null?fHc:defLgA));
+
   if(cat==='home'||cat==='away'){
     var isH=(cat==='home');
-    var lam=isH?(fm.home_avg_scored||lg.avg_goals*0.55):(fm.away_avg_scored||lg.avg_goals*0.45);
+    var lam=isH?lamH:lamA;
     var poisS=g2Over(lam,0.5);
     var h2hS=isH?(h2h?h2h.pct_home_scores:lg.pct_gg):(h2h?h2h.pct_away_scores:lg.pct_gg);
     var lgS=lg.pct_gg;
@@ -2242,16 +2252,14 @@ function g2Score(m){
         livS=g2Over(Math.max(xgR,lam*rem/90),0.5);
       }
     }
-    s=isLive?(poisS*.30+h2hS*.20+lgS*.15+livS*.35):(poisS*.40+h2hS*.25+lgS*.25+poisS*.10);
+    s=isLive?(poisS*.30+h2hS*.20+lgS*.15+livS*.35):(poisS*.40+h2hS*.25+lgS*.20+poisS*.15);
 
   }else if(cat==='goals'){
     var isT=(!sub||sub==='total'),isHG=(sub==='home');
-    var lamH=fm.home_avg_scored||lg.avg_goals*0.55;
-    var lamA=fm.away_avg_scored||lg.avg_goals*0.45;
     var lamG=isT?(lamH+lamA):(isHG?lamH:lamA);
     var poisG=g2Over(lamG,thr);
     var lgPct=thr<=1?lg.pct_over_15:lg.pct_over_25;
-    var h2hPct=thr<=1?(h2h?h2h.pct_over_15:lgPct):(h2h?h2h.pct_over_25:lgPct);
+    var h2hPct=thr<=1?(h2h?+(h2h.pct_over_15):lgPct):(h2h?+(h2h.pct_over_25):lgPct);
     var refG=ref?g2Over(ref.avg_goals*(isT?1:0.5),thr):poisG;
     var livG=50;
     if(isLive){
@@ -2265,17 +2273,20 @@ function g2Score(m){
         livG=need2<=0?100:g2Over(Math.max(xgR2,lamG*rem2/90),need2-1);
       }
     }
-    s=isLive?(poisG*.25+lgPct*.20+h2hPct*.15+refG*.10+livG*.30):(poisG*.30+lgPct*.25+h2hPct*.20+refG*.10+poisG*.15);
+    s=isLive?(poisG*.25+lgPct*.15+h2hPct*.15+refG*.10+livG*.35):(poisG*.35+lgPct*.20+h2hPct*.25+refG*.20);
 
   }else if(cat==='cards'){
     var isTC=(!sub||sub==='total'),isHC=(sub==='home');
     var refYC=ref?ref.avg_yellow:null;
     var lgYC=lg.avg_yellow;
-    var avgC=refYC||lgYC;
+    // Use team form to modulate card expectation: high-conceding defenses → more cards
+    var defIntensity=1.0;
+    if(fHc!=null&&fAc!=null) defIntensity=Math.min(1.4,Math.max(0.7,(fHc+fAc)/lg.avg_goals));
+    var avgC=(refYC||lgYC)*defIntensity;
     var lamC=isTC?avgC:(isHC?avgC*.55:avgC*.45);
     var poisC=g2Over(lamC,thr);
-    var refC=refYC?g2Over(refYC*(isTC?1:(isHC?.55:.45)),thr):poisC;
-    var lgC=g2Over(lgYC*(isTC?1:(isHC?.55:.45)),thr);
+    var refC=refYC?g2Over(refYC*defIntensity*(isTC?1:(isHC?.55:.45)),thr):poisC;
+    var lgC=g2Over(lgYC*defIntensity*(isTC?1:(isHC?.55:.45)),thr);
     var livC=50;
     if(isLive){
       var curC=isTC?((lv.home_cards||0)+(lv.away_cards||0)):(isHC?(lv.home_cards||0):(lv.away_cards||0));
@@ -2287,17 +2298,20 @@ function g2Score(m){
         livC=needC<=0?100:g2Over(Math.max(cRate,lamC*rem3/90),needC-1);
       }
     }
-    s=isLive?(refC*.30+lgC*.20+poisC*.15+livC*.35):(refC*.40+lgC*.30+poisC*.30);
+    s=isLive?(refC*.30+lgC*.15+poisC*.20+livC*.35):(refC*.40+lgC*.25+poisC*.35);
 
   }else if(cat==='corners'){
     var isTK=(!sub||sub==='total'),isHK=(sub==='home');
     var refK=ref?ref.avg_corners:null;
     var lgK=lg.avg_corners;
-    var avgK=refK||lgK;
+    // Attacking teams → more corners; use avg goals as proxy
+    var attFactor=1.0;
+    if(fHs!=null&&fAs!=null) attFactor=Math.min(1.4,Math.max(0.7,(fHs+fAs)/lg.avg_goals));
+    var avgK=(refK||lgK)*attFactor;
     var lamK=isTK?avgK:(isHK?avgK*.55:avgK*.45);
     var poisK=g2Over(lamK,thr);
-    var refKS=refK?g2Over(refK*(isTK?1:(isHK?.55:.45)),thr):poisK;
-    var lgKS=g2Over(lgK*(isTK?1:(isHK?.55:.45)),thr);
+    var refKS=refK?g2Over(refK*attFactor*(isTK?1:(isHK?.55:.45)),thr):poisK;
+    var lgKS=g2Over(lgK*attFactor*(isTK?1:(isHK?.55:.45)),thr);
     var livK=50;
     if(isLive){
       var curK=isTK?((lv.home_corners||0)+(lv.away_corners||0)):(isHK?(lv.home_corners||0):(lv.away_corners||0));
@@ -2309,7 +2323,7 @@ function g2Score(m){
         livK=needK<=0?100:g2Over(Math.max(kRate,lamK*rem4/90),needK-1);
       }
     }
-    s=isLive?(refKS*.25+lgKS*.20+poisK*.20+livK*.35):(refKS*.30+lgKS*.35+poisK*.35);
+    s=isLive?(refKS*.25+lgKS*.15+poisK*.25+livK*.35):(refKS*.30+lgKS*.30+poisK*.40);
   }
 
   return{score:Math.round(Math.max(0,Math.min(100,s))),confirmed:confirmed};
@@ -2337,9 +2351,11 @@ function g2RenderTop10(){
     if(m.is_live)sub='<span class="gen-live-dot"></span>'+m.minute+'\' · '+m.home_goals+'-'+m.away_goals;
     else if(m.match_date)sub=new Date(m.match_date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' · '+(m.league_name||'');
     html+='<div class="g2row'+(done?' g2done':'')+'" onclick="g2Detail('+idx+')">';
+    var hLogo=m.home_logo?'<img src="'+m.home_logo+'" width="20" height="20" style="border-radius:3px;object-fit:contain;vertical-align:middle;margin-right:4px" onerror="this.style.display=\'none\'">':'';
+    var aLogo=m.away_logo?'<img src="'+m.away_logo+'" width="20" height="20" style="border-radius:3px;object-fit:contain;vertical-align:middle;margin-right:4px" onerror="this.style.display=\'none\'">':'';
     html+='<div class="g2rank">#'+(idx+1)+'</div>';
     html+='<div class="g2row-info">';
-    html+='<div class="g2row-teams">'+(m.home_team||'?')+' <span style="color:var(--mu)">vs</span> '+(m.away_team||'?')+(done?'<span class="g2conf-badge">✓</span>':'')+'</div>';
+    html+='<div class="g2row-teams">'+hLogo+(m.home_team||'?')+' <span style="color:var(--mu)">vs</span> '+aLogo+(m.away_team||'?')+(done?'<span class="g2conf-badge">✓</span>':'')+'</div>';
     html+='<div class="g2row-sub">'+sub+'</div>';
     html+='</div>';
     html+='<div class="g2row-pct" style="color:'+clr+'">'+Math.round(pct)+'%</div>';
@@ -2358,8 +2374,10 @@ function g2Detail(idx){
   document.getElementById('g2s5-title').textContent=(m.home_team||'?')+' vs '+(m.away_team||'?');
   var h='';
   // hero
+  var dHLogo=m.home_logo?'<img src="'+m.home_logo+'" width="28" height="28" style="border-radius:4px;object-fit:contain;vertical-align:middle;margin-right:6px" onerror="this.style.display=\'none\'">':'';
+  var dALogo=m.away_logo?'<img src="'+m.away_logo+'" width="28" height="28" style="border-radius:4px;object-fit:contain;vertical-align:middle;margin-right:6px" onerror="this.style.display=\'none\'">':'';
   h+='<div class="g2hero">';
-  h+='<div class="g2hero-match">'+(m.home_team||'?')+' vs '+(m.away_team||'?')+'</div>';
+  h+='<div class="g2hero-match">'+dHLogo+(m.home_team||'?')+' <span style="opacity:.5">vs</span> '+dALogo+(m.away_team||'?')+'</div>';
   h+='<div class="g2hero-mkt">'+meta.icon+' '+mktLbl+'</div>';
   h+='<div class="g2hero-pct" style="color:'+clr+'">'+Math.round(pct)+'%</div>';
   h+='</div>';
