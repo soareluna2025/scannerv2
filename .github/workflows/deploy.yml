@@ -20,9 +20,10 @@ jobs:
           script: |
             export PATH="/snap/bin:$PATH"
 
-            # Pull latest code
+            # Pull latest code (reset hard to avoid divergent branches issues)
             cd /root/scannerv2
-            git pull origin main
+            git fetch origin
+            git reset --hard origin/main
             npm install --silent
 
             # Write .env with secrets from GitHub
