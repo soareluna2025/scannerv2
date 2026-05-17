@@ -182,50 +182,21 @@ async function collectOdds(fixtureId, key) {
 
   let count = 0;
   for (const bookmaker of oddsResponse.bookmakers || []) {
-    // Build flat lookup: "BetName:Label" → odd value
-    const vals = {};
     for (const bet of bookmaker.bets || []) {
       for (const v of bet.values || []) {
-        vals[`${bet.name}:${v.value}`] = parseFloat(v.odd) || null;
+        const oddVal = parseFloat(v.odd) || null;
+        if (!oddVal) continue;
+        await query(
+          `INSERT INTO odds
+             (fixture_id, bookmaker_id, bookmaker_name, bet_id, bet_name, value_name, value_odd)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (fixture_id, bookmaker_id, bet_id, value_name) DO UPDATE SET
+             value_odd=EXCLUDED.value_odd, collected_at=NOW()`,
+          [fixtureId, bookmaker.id, bookmaker.name, bet.id, bet.name, v.value, oddVal]
+        );
+        count++;
       }
     }
-    const g = (betName, label) => vals[`${betName}:${label}`] ?? null;
-
-    await query(
-      `INSERT INTO odds
-         (fixture_id, bookmaker_id, bookmaker_name,
-          odd_home, odd_draw, odd_away,
-          over_05, under_05, over_15, under_15,
-          over_25, under_25, over_35, under_35,
-          btts_yes, btts_no, ah)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-       ON CONFLICT (fixture_id, bookmaker_id) DO UPDATE SET
-         odd_home=EXCLUDED.odd_home, odd_draw=EXCLUDED.odd_draw, odd_away=EXCLUDED.odd_away,
-         over_05=EXCLUDED.over_05, under_05=EXCLUDED.under_05,
-         over_15=EXCLUDED.over_15, under_15=EXCLUDED.under_15,
-         over_25=EXCLUDED.over_25, under_25=EXCLUDED.under_25,
-         over_35=EXCLUDED.over_35, under_35=EXCLUDED.under_35,
-         btts_yes=EXCLUDED.btts_yes, btts_no=EXCLUDED.btts_no,
-         ah=EXCLUDED.ah`,
-      [
-        fixtureId, bookmaker.id, bookmaker.name,
-        g('Match Winner',     'Home'),
-        g('Match Winner',     'Draw'),
-        g('Match Winner',     'Away'),
-        g('Goals Over/Under', 'Over 0.5'),
-        g('Goals Over/Under', 'Under 0.5'),
-        g('Goals Over/Under', 'Over 1.5'),
-        g('Goals Over/Under', 'Under 1.5'),
-        g('Goals Over/Under', 'Over 2.5'),
-        g('Goals Over/Under', 'Under 2.5'),
-        g('Goals Over/Under', 'Over 3.5'),
-        g('Goals Over/Under', 'Under 3.5'),
-        g('Both Teams Score', 'Yes'),
-        g('Both Teams Score', 'No'),
-        g('Asian Handicap',   'Home'),
-      ]
-    );
-    count++;
   }
 
   return count;

@@ -280,30 +280,32 @@ async function upsertLeaguePattern(row) {
 }
 
 async function saveLiveStats(m, f, status) {
-  const st = m.statistics || [];
-  const yc = getStat(st, 0, 'Yellow Cards') + getStat(st, 1, 'Yellow Cards');
-  const rc = getStat(st, 0, 'Red Cards')    + getStat(st, 1, 'Red Cards');
   await query(
     `INSERT INTO live_stats
-       (fixture_id, minute, status, home_goals, away_goals,
-        xg, possession, shots_on_goal, shots_total,
-        corners, yellow_cards, red_cards,
-        odd_home, odd_draw, odd_away)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+       (fixture_id, elapsed, home_goals, away_goals,
+        home_sot, away_sot, home_shots, away_shots,
+        home_possession, away_possession,
+        home_corners, away_corners,
+        home_da, away_da,
+        home_xg, away_xg)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
     [
       m.fixture.id,
       f.mn,
-      status || null,
       f.hg,
       f.ag,
-      f.txg  || null,
-      f.hp   || null,
-      f.tSOT,
-      f.tSh,
-      f.tC,
-      yc,
-      rc,
-      null, null, null,
+      f.hSOT,
+      f.aSOT,
+      f.hSh,
+      f.aSh,
+      f.hp,
+      100 - (f.hp || 50),
+      f.hC,
+      f.aC,
+      f.hDA,
+      f.aDA,
+      f.hxg || null,
+      f.axg || null,
     ]
   );
 }
@@ -337,9 +339,9 @@ async function saveH2H(matches) {
 async function saveAlert(fixtureId, alertType, market, message, confidence) {
   await query(
     `INSERT INTO alerts
-       (fixture_id, type, message, confidence, is_sent, telegram_sent)
-     VALUES ($1,$2,$3,$4,$5,$6)`,
-    [fixtureId, alertType, message, confidence || null, false, false]
+       (fixture_id, alert_type, message, ngp_value, telegram_ok)
+     VALUES ($1,$2,$3,$4,$5)`,
+    [fixtureId, alertType, message, confidence || null, false]
   );
 }
 
