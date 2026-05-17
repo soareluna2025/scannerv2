@@ -205,9 +205,21 @@ export default async function handler(req, res) {
     }
 
     log(`done: ${executed} stages executed`);
+
+    await query(
+      `INSERT INTO cron_logs (job_name, fixtures_processed, status)
+       VALUES ($1,$2,'success')`,
+      ['prematch-enrichment', executed]
+    ).catch(() => {});
+
     return res.status(200).json({ fixtures: fixtures.length, executed, results });
   } catch (e) {
     log(`ERROR: ${e.message}`);
+    await query(
+      `INSERT INTO cron_logs (job_name, fixtures_processed, status, error_msg)
+       VALUES ($1,0,'error',$2)`,
+      ['prematch-enrichment', e.message]
+    ).catch(() => {});
     return res.status(200).json({ error: e.message });
   }
 }

@@ -451,6 +451,13 @@ export default async function handler(req, res) {
   }
 
   log(`done: ${snapshotResults.length} snapshots, ${resolved.length} resolved, ${pmResults.length} pre-match`);
+
+  query(
+    `INSERT INTO cron_logs (job_name, fixtures_processed, status)
+     VALUES ($1,$2,'success')`,
+    ['scan', snapshotResults.length + resolved.length]
+  ).catch(() => {});
+
   return res.status(200).json({
     run: _runCount,
     snapshots: snapshotResults.length,
