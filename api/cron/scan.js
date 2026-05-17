@@ -450,6 +450,12 @@ export default async function handler(req, res) {
     log(`pre-match scan error: ${e.message}`);
   }
 
+  // Curăță snapshot-uri LIVE mai vechi de 6 ore (meciuri terminate fără resolveOutcome)
+  query(
+    `UPDATE match_snapshots SET outcome='STALE'
+     WHERE outcome='LIVE' AND created_at < NOW() - INTERVAL '6 hours'`
+  ).catch(() => {});
+
   log(`done: ${snapshotResults.length} snapshots, ${resolved.length} resolved, ${pmResults.length} pre-match`);
 
   query(

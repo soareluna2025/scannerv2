@@ -457,43 +457,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   font-size:8px;font-weight:800;border-radius:10px;padding:1px 4px;min-width:15px;
   text-align:center;line-height:13px;pointer-events:none}
 
-/* GENERATOR OVERLAY */
-.gen-overlay{position:fixed;inset:0;z-index:490;background:var(--bg);
-  transform:translateY(100%);transition:transform .35s cubic-bezier(.32,.72,0,1);
-  display:flex;flex-direction:column;overflow:hidden}
-.gen-overlay.open{transform:translateY(0)}
-.gen-hdr{display:flex;align-items:center;justify-content:space-between;
-  padding:0 16px;height:56px;flex-shrink:0;
-  background:rgba(8,13,24,.95);border-bottom:1px solid var(--bor);
-  backdrop-filter:blur(20px)}
-.gen-hdr-title{font-size:15px;font-weight:800;color:var(--tx);text-align:center;flex:1}
-.gen-tabs{display:flex;border-bottom:2px solid var(--bor);flex-shrink:0;background:rgba(8,13,24,.8)}
-.gen-tab{flex:1;padding:12px 4px;font-size:12px;font-weight:800;text-align:center;
-  color:var(--mu);border:none;background:none;cursor:pointer;letter-spacing:.5px;
-  border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s}
-.gen-tab.active{color:var(--ac);border-bottom-color:var(--ac)}
-.gen-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 12px 20px}
-.gen-body::-webkit-scrollbar{display:none}
-.gen-section-hdr{display:flex;align-items:center;gap:8px;padding:14px 0 8px;
-  font-size:10px;font-weight:800;color:var(--ac);text-transform:uppercase;
-  letter-spacing:.7px;border-bottom:1px solid var(--bor);margin-bottom:8px}
-.gen-card{background:var(--sur);border:1px solid var(--bor);border-radius:12px;
-  padding:10px 12px;margin-bottom:6px;cursor:pointer;
-  display:flex;align-items:center;gap:12px;transition:border-color .15s}
-.gen-card:active{border-color:var(--ac3)}
-.gen-card-main{flex:1;min-width:0}
-.gen-card-meta{font-size:10px;color:var(--mu);margin-bottom:3px;
-  display:flex;align-items:center;gap:3px;flex-wrap:wrap}
-.gen-card-time{color:var(--mu2);font-weight:600}
-.gen-live-dot{display:inline-block;width:5px;height:5px;border-radius:50%;
-  background:var(--ac);animation:pulse 1.5s ease-in-out infinite;
-  vertical-align:middle;margin-right:2px}
-.gen-card-teams{font-size:13px;font-weight:600;color:var(--tx);display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-.gen-card-sub{font-size:10px;color:var(--mu);margin-top:3px}
-.gen-card-big{text-align:center;flex-shrink:0;min-width:52px}
-.gen-card-big-val{font-size:22px;font-weight:900;line-height:1}
-.gen-card-big-lbl{font-size:9px;font-weight:700;letter-spacing:.5px;
-  text-transform:uppercase;color:var(--mu);margin-top:2px}
+/* shared helpers kept from old gen */
 .search-wrap{position:relative;margin:8px 12px 6px;display:flex;align-items:center}
 .search-inp{width:100%;padding:8px 32px 8px 10px;background:rgba(255,255,255,0.06);border:1px solid var(--bor);border-radius:10px;color:var(--tx);font-size:13px;outline:none}
 .search-inp::placeholder{color:var(--mu)}
@@ -503,6 +467,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .refresh-btn:hover{color:var(--tx)}
 .refresh-btn.spinning .rf-icon{display:inline-block;animation:spin 0.6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+.gen-live-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--ac);animation:pulse 1.5s ease-in-out infinite;vertical-align:middle;margin-right:2px}
 .star-btn{position:absolute;top:8px;right:8px;background:none;border:none;font-size:16px;cursor:pointer;opacity:0.5;transition:opacity .2s;z-index:2;line-height:1;padding:2px}
 .star-btn.active{opacity:1}
 .star-btn:hover{opacity:1}
@@ -510,6 +475,89 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .fav-header-t{font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.5px;text-transform:uppercase}
 .fav-clear-btn{font-size:11px;color:#ef4444;background:none;border:none;cursor:pointer;padding:2px 6px}
 .nav-fav-badge{position:absolute;top:-2px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;min-width:14px;height:14px;border-radius:7px;display:none;align-items:center;justify-content:center;line-height:1;padding:0 2px}
+
+/* ── GENERATOR v2 ── */
+.gen2-ov{position:fixed;inset:0;z-index:490;background:var(--bg);transform:translateY(100%);transition:transform .35s cubic-bezier(.32,.72,0,1);display:flex;flex-direction:column;overflow:hidden}
+.gen2-ov.open{transform:translateY(0)}
+.gen2-screens{position:relative;flex:1;overflow:hidden}
+.gen2-scr{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);transition:transform .3s cubic-bezier(.32,.72,0,1)}
+.gen2-scr.out-r{transform:translateX(100%)}
+.gen2-scr.out-l{transform:translateX(-100%)}
+.gen2-scr.act{transform:translateX(0)}
+/* header */
+.g2h{display:flex;align-items:center;padding:0 16px;height:56px;flex-shrink:0;background:rgba(8,13,24,.95);border-bottom:1px solid var(--bor);backdrop-filter:blur(20px)}
+.g2back{background:none;border:none;color:var(--mu2);font-size:22px;cursor:pointer;padding:6px;margin-left:-6px;line-height:1;font-weight:300}
+.g2title{flex:1;text-align:center;font-size:15px;font-weight:800;color:var(--tx)}
+.g2close{background:none;border:none;color:var(--mu);font-size:13px;cursor:pointer;padding:6px;margin-right:-6px;font-weight:700}
+/* screen 1 — split */
+.g2split{display:flex;flex-direction:column;flex:1}
+.g2half{flex:1;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s;position:relative;overflow:hidden}
+.g2half:first-child{border-bottom:2px solid var(--bor)}
+.g2half:active{filter:brightness(1.15)}
+.g2half.live{background:rgba(0,212,168,.04)}
+.g2half.pre{background:rgba(99,102,241,.04)}
+.g2half-inner{text-align:center}
+.g2half-icon{font-size:52px;display:block;margin-bottom:10px}
+.g2half-title{font-size:26px;font-weight:900;letter-spacing:-.5px;margin-bottom:6px}
+.g2half-sub{font-size:13px;color:var(--mu2)}
+/* screen 2 — categories */
+.g2cats{display:flex;flex-direction:column;flex:1;overflow-y:auto}
+.g2cat{display:flex;align-items:center;gap:16px;padding:18px 20px;border-bottom:1px solid var(--bor);cursor:pointer;transition:background .12s}
+.g2cat:active{background:var(--sur2)}
+.g2cat-icon{font-size:26px;width:44px;text-align:center;flex-shrink:0}
+.g2cat-info{flex:1}
+.g2cat-title{font-size:17px;font-weight:800;color:var(--tx)}
+.g2cat-sub{font-size:11px;color:var(--mu);margin-top:2px}
+.g2cat-arrow{color:var(--mu);font-size:18px}
+/* screen 3 — sub */
+.g2subs{display:flex;flex-direction:column;flex:1}
+.g2sub{display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid var(--bor);cursor:pointer;transition:background .12s;flex:1}
+.g2sub:active{background:var(--sur2)}
+.g2sub-icon{font-size:38px;width:56px;text-align:center;flex-shrink:0}
+.g2sub-title{flex:1;font-size:22px;font-weight:900;color:var(--tx)}
+.g2sub-arrow{color:var(--mu);font-size:18px}
+/* screen 4 — slider + top10 */
+.g2slider-wrap{padding:18px 20px 14px;border-bottom:1px solid var(--bor);background:var(--sur);flex-shrink:0}
+.g2slider-lbl{display:flex;align-items:baseline;gap:6px;margin-bottom:10px;font-size:13px;color:var(--mu2)}
+.g2slider-val{font-size:22px;font-weight:900;color:var(--ac)}
+.g2range{width:100%;-webkit-appearance:none;height:4px;background:var(--sur3);border-radius:2px;outline:none;cursor:pointer;accent-color:var(--ac)}
+.g2range::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:var(--ac);cursor:pointer;box-shadow:0 2px 8px rgba(0,212,168,.4)}
+.g2range-ticks{display:flex;justify-content:space-between;margin-top:4px}
+.g2range-ticks span{font-size:10px;color:var(--mu)}
+.g2period-tabs{display:flex;gap:0;margin-top:12px;border:1px solid var(--bor);border-radius:10px;overflow:hidden}
+.g2ptab{flex:1;padding:7px 4px;font-size:11px;font-weight:700;text-align:center;background:none;border:none;color:var(--mu);cursor:pointer;transition:all .15s}
+.g2ptab.act{background:var(--ac2);color:var(--ac)}
+.g2top10{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px 80px}
+.g2top10::-webkit-scrollbar{display:none}
+.g2row{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--sur);border:1px solid var(--bor);border-radius:12px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.g2row:active{border-color:var(--ac3)}
+.g2rank{font-size:11px;font-weight:800;color:var(--mu);width:22px;text-align:center;flex-shrink:0}
+.g2row-info{flex:1;min-width:0}
+.g2row-teams{font-size:13px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g2row-sub{font-size:10px;color:var(--mu);margin-top:2px}
+.g2row-pct{font-size:22px;font-weight:900;flex-shrink:0;min-width:46px;text-align:right}
+.g2conf-badge{background:rgba(34,197,94,.15);border:1px solid #22c55e;color:#22c55e;font-size:9px;font-weight:800;padding:1px 5px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.g2done{opacity:.45}
+/* screen 5 — detail */
+.g2detail{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 80px}
+.g2detail::-webkit-scrollbar{display:none}
+.g2hero{background:var(--sur);border:1px solid var(--bor);border-radius:14px;padding:16px;margin-bottom:12px;text-align:center}
+.g2hero-match{font-size:16px;font-weight:800;color:var(--tx);margin-bottom:4px}
+.g2hero-mkt{font-size:11px;color:var(--mu2);margin-bottom:10px}
+.g2hero-pct{font-size:54px;font-weight:900;line-height:1}
+.g2section{background:var(--sur);border:1px solid var(--bor);border-radius:12px;padding:13px;margin-bottom:10px}
+.g2sec-title{font-size:10px;font-weight:800;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.g2srow{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.g2srow:last-child{border-bottom:none}
+.g2srow-l{font-size:12px;color:var(--mu2)}
+.g2srow-v{font-size:12px;font-weight:700;color:var(--tx)}
+.g2ai{background:linear-gradient(135deg,rgba(0,212,168,.05),rgba(99,102,241,.05));border:1px solid rgba(0,212,168,.2);border-radius:12px;padding:14px;margin-bottom:10px}
+.g2ai-title{font-size:10px;font-weight:800;color:var(--ac);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.g2ai-text{font-size:13px;color:var(--mu2);line-height:1.65}
+/* spinner */
+.g2spin-wrap{display:flex;align-items:center;justify-content:center;flex:1;flex-direction:column;gap:12px}
+.g2spin{width:30px;height:30px;border:3px solid var(--sur3);border-top-color:var(--ac);border-radius:50%;animation:spin .8s linear infinite}
+.g2spin-lbl{font-size:12px;color:var(--mu)}
 </style>
 </head>
 <body>
@@ -686,25 +734,119 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   </div>
 </div>
 
-<!-- GENERATOR OVERLAY -->
-<div class="gen-overlay" id="gen-overlay">
-  <div class="gen-hdr">
-    <button class="md-close" onclick="genClose()">✕</button>
-    <div class="gen-hdr-title">⚡ GENERATOR</div>
-    <div style="width:36px"></div>
-  </div>
-  <div class="gen-tabs">
-    <button class="gen-tab active" onclick="genTab(0)">⚽ LIVE</button>
-    <button class="gen-tab" onclick="genTab(1)">📅 UPCOMING</button>
-    <button class="gen-tab" onclick="genTab(2)">🔮 SIM</button>
-  </div>
-  <div class="gen-body" id="gen-body">
-    <div class="spinner"><div class="spin"></div></div>
+<!-- GENERATOR v2 -->
+<div class="gen2-ov" id="gen2-ov">
+  <div class="gen2-screens">
+
+    <!-- S1: alege mod -->
+    <div class="gen2-scr act" id="g2s1">
+      <div class="g2h">
+        <div style="width:36px"></div>
+        <div class="g2title">⚡ GENERATOR</div>
+        <button class="g2close" onclick="gen2Close()">✕</button>
+      </div>
+      <div class="g2split">
+        <div class="g2half live" onclick="gen2Mode('live')">
+          <div class="g2half-inner">
+            <span class="g2half-icon">⚡</span>
+            <div class="g2half-title" style="color:var(--ac)">LIVE</div>
+            <div class="g2half-sub">Meciuri în desfășurare</div>
+          </div>
+        </div>
+        <div class="g2half pre" onclick="gen2Mode('prematch')">
+          <div class="g2half-inner">
+            <span class="g2half-icon">📅</span>
+            <div class="g2half-title" style="color:#818cf8">PRE-MECI</div>
+            <div class="g2half-sub">Meciuri următoarele 24h</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S2: categorie -->
+    <div class="gen2-scr out-r" id="g2s2">
+      <div class="g2h">
+        <button class="g2back" onclick="gen2Back()">←</button>
+        <div class="g2title" id="g2s2-title">Selectează categoria</div>
+        <button class="g2close" onclick="gen2Close()">✕</button>
+      </div>
+      <div class="g2cats">
+        <div class="g2cat" onclick="gen2Cat('home')">
+          <div class="g2cat-icon">🏠</div>
+          <div class="g2cat-info"><div class="g2cat-title">Gazde marchează</div><div class="g2cat-sub">Probabilitate gol de la echipa gazdă</div></div>
+          <div class="g2cat-arrow">›</div>
+        </div>
+        <div class="g2cat" onclick="gen2Cat('away')">
+          <div class="g2cat-icon">✈️</div>
+          <div class="g2cat-info"><div class="g2cat-title">Oaspeți marchează</div><div class="g2cat-sub">Probabilitate gol de la echipa oaspete</div></div>
+          <div class="g2cat-arrow">›</div>
+        </div>
+        <div class="g2cat" onclick="gen2Cat('goals')">
+          <div class="g2cat-icon">⚽</div>
+          <div class="g2cat-info"><div class="g2cat-title">Goluri</div><div class="g2cat-sub">Over X.5 goluri totale</div></div>
+          <div class="g2cat-arrow">›</div>
+        </div>
+        <div class="g2cat" onclick="gen2Cat('cards')">
+          <div class="g2cat-icon">🟡</div>
+          <div class="g2cat-info"><div class="g2cat-title">Cartonașe</div><div class="g2cat-sub">Over X.5 cartonașe per meci</div></div>
+          <div class="g2cat-arrow">›</div>
+        </div>
+        <div class="g2cat" onclick="gen2Cat('corners')">
+          <div class="g2cat-icon">📐</div>
+          <div class="g2cat-info"><div class="g2cat-title">Cornere</div><div class="g2cat-sub">Over X.5 cornere per meci</div></div>
+          <div class="g2cat-arrow">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S3: sub-categorie (goals/cards/corners) -->
+    <div class="gen2-scr out-r" id="g2s3">
+      <div class="g2h">
+        <button class="g2back" onclick="gen2Back()">←</button>
+        <div class="g2title" id="g2s3-title">Selectează</div>
+        <button class="g2close" onclick="gen2Close()">✕</button>
+      </div>
+      <div class="g2subs">
+        <div class="g2sub" onclick="gen2Sub('home')"><div class="g2sub-icon">🏠</div><div class="g2sub-title">Gazde</div><div class="g2sub-arrow">›</div></div>
+        <div class="g2sub" onclick="gen2Sub('away')"><div class="g2sub-icon">✈️</div><div class="g2sub-title">Oaspeți</div><div class="g2sub-arrow">›</div></div>
+        <div class="g2sub" onclick="gen2Sub('total')"><div class="g2sub-icon">📊</div><div class="g2sub-title">Total</div><div class="g2sub-arrow">›</div></div>
+      </div>
+    </div>
+
+    <!-- S4: slider + top10 -->
+    <div class="gen2-scr out-r" id="g2s4">
+      <div class="g2h">
+        <button class="g2back" onclick="gen2Back()">←</button>
+        <div class="g2title" id="g2s4-title">TOP 10</div>
+        <button class="g2close" onclick="gen2Close()">✕</button>
+      </div>
+      <div class="g2slider-wrap" id="g2slider-wrap">
+        <div class="g2slider-lbl">Over <span class="g2slider-val" id="g2thr-lbl">1.5</span> <span id="g2unit-lbl" style="color:var(--mu2)">goluri</span></div>
+        <input type="range" class="g2range" id="g2slider" min="0" max="2" step="1" value="1" oninput="gen2Slide(this.value)">
+        <div class="g2range-ticks" id="g2ticks"></div>
+        <div class="g2period-tabs" id="g2ptabs" style="display:none">
+          <button class="g2ptab act" onclick="gen2Period('full',this)">90 min</button>
+          <button class="g2ptab" onclick="gen2Period('first',this)">1st Half</button>
+          <button class="g2ptab" onclick="gen2Period('second',this)">2nd Half</button>
+        </div>
+      </div>
+      <div class="g2top10" id="g2top10">
+        <div class="g2spin-wrap"><div class="g2spin"></div><div class="g2spin-lbl">Se încarcă...</div></div>
+      </div>
+    </div>
+
+    <!-- S5: detaliu meci -->
+    <div class="gen2-scr out-r" id="g2s5">
+      <div class="g2h">
+        <button class="g2back" onclick="gen2Back()">←</button>
+        <div class="g2title" id="g2s5-title">Detaliu</div>
+        <button class="g2close" onclick="gen2Close()">✕</button>
+      </div>
+      <div class="g2detail" id="g2detail"></div>
+    </div>
+
   </div>
 </div>
-
-<!-- SIMULATOR FAB -->
-<button class="sim-fab" onclick="genOpenSim()" title="Simulator">🔮</button>
 
 <!-- BOTTOM NAV -->
 <nav class="nav">
@@ -724,8 +866,8 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     <span class="nav-icon" style="position:relative">⭐<span class="nav-fav-badge" id="fav-badge"></span></span>
     <span class="nav-label">Preferate</span>
   </button>
-  <button class="nav-btn" id="nav-gen" onclick="genOpen()">
-    <span class="nav-icon" style="position:relative">⚡<span class="nav-badge" id="gen-badge" style="display:none">0</span></span>
+  <button class="nav-btn" id="nav-gen" onclick="gen2Open()">
+    <span class="nav-icon">⚡</span>
     <span class="nav-label">Generează</span>
   </button>
 </nav>
@@ -1938,232 +2080,354 @@ function mdRenderForma(d){
   document.getElementById('md-body').innerHTML=out;
 }
 
-// ── GENERATOR ─────────────────────────────────────────────────
-var GEN={tabIdx:0,open:false};
-var _genLiveEnrich={};
+// ── GENERATOR v2 ──────────────────────────────────────────────
+var GEN={tabIdx:0,open:false};       // stub — păstrat pentru genUpdateBadge
+var _genLiveEnrich={};               // stub
 
-function genOpen(){
-  GEN.open=true;
-  document.getElementById('gen-overlay').classList.add('open');
+var G2={
+  mode:null,cat:null,sub:null,
+  thr:1.5,period:'full',
+  scrn:1,hist:[1],
+  matches:[],top10:[],
+  loading:false,
+};
+
+var G2_CATS={
+  home:   {label:'Gazde marchează',    unit:'',         ranges:null,            icon:'🏠'},
+  away:   {label:'Oaspeți marchează',  unit:'',         ranges:null,            icon:'✈️'},
+  goals:  {label:'Goluri',             unit:'goluri',   ranges:[0.5,1.5,2.5],   icon:'⚽'},
+  cards:  {label:'Cartonașe',          unit:'cartonașe',ranges:[0.5,1.5,2.5,3.5,4.5],icon:'🟡'},
+  corners:{label:'Cornere',            unit:'cornere',  ranges:[2.5,4.5,6.5,8.5,10.5],icon:'📐'},
+};
+
+function gen2Open(){
+  document.getElementById('gen2-ov').classList.add('open');
   document.getElementById('nav-gen').classList.add('active');
-  document.querySelectorAll('.gen-tab').forEach(function(t,i){t.classList.toggle('active',i===GEN.tabIdx);});
-  genRender();
+  G2.hist=[1];G2.scrn=1;
+  g2Show(1);
 }
-function genClose(){
-  GEN.open=false;
-  document.getElementById('gen-overlay').classList.remove('open');
+function gen2Close(){
+  document.getElementById('gen2-ov').classList.remove('open');
   document.getElementById('nav-gen').classList.remove('active');
 }
-(function(){
-  var sy2=0,ov2=document.getElementById('gen-overlay');
-  ov2.addEventListener('touchstart',function(e){sy2=e.touches[0].clientY;},{passive:true});
-  ov2.addEventListener('touchend',function(e){
-    if(e.changedTouches[0].clientY-sy2>80&&document.getElementById('gen-body').scrollTop<=0)genClose();
-  },{passive:true});
-})();
-function genTab(idx){
-  GEN.tabIdx=idx;
-  document.querySelectorAll('.gen-tab').forEach(function(t,i){t.classList.toggle('active',i===idx);});
-  genRender();
-}
-function genOpenSim(){GEN.tabIdx=2;genOpen();}
-function genRender(){if(GEN.tabIdx===0)genRenderLive();else if(GEN.tabIdx===1)genRenderUpcoming();else genRenderSim();}
-
-async function genRenderSim(){
-  var body=document.getElementById('gen-body');
-  body.innerHTML=
-    '<div style="padding:4px 0 12px">'+
-    '<div style="font-size:10px;color:var(--mu);margin-bottom:4px;font-weight:700;letter-spacing:.5px">SELECTEAZĂ MECI</div>'+
-    '<select id="sim-match-sel" class="sim-select"><option value="">⏳ Se încarcă meciurile...</option></select>'+
-    '<div style="margin-top:6px;display:flex;gap:6px">'+
-    '<input id="sim-fid" class="sim-inp" placeholder="Fixture ID" type="number" style="flex:1">'+
-    '<input id="sim-hid" class="sim-inp" placeholder="Home ID" type="number" style="flex:1">'+
-    '<input id="sim-aid" class="sim-inp" placeholder="Away ID" type="number" style="flex:1">'+
-    '<input id="sim-lid" class="sim-inp" placeholder="Liga ID" type="number" style="flex:1">'+
-    '</div>'+
-    '<button id="sim-run-btn" class="sim-run-btn" onclick="simRun()">🔮 SIMULEAZĂ 10,000 SCENARII</button>'+
-    '</div>'+
-    '<div id="sim-loading" style="display:none;text-align:center;padding:24px 0">'+
-    '<div style="font-size:13px;color:var(--mu2);margin-bottom:8px">⚙️ Procesez scenarii...</div>'+
-    '<div class="sim-progress-wrap"><div class="sim-progress-fill" id="sim-prog-fill"></div></div>'+
-    '<div id="sim-count-lbl" style="font-size:11px;color:var(--mu);margin-top:6px">0 / 10,000</div>'+
-    '</div>'+
-    '<div id="sim-results" style="display:none;padding-bottom:80px"></div>';
-
-  // Fetch upcoming matches if not yet loaded (same as genRenderUpcoming)
-  if(!_pmMatches.length){
-    try{
-      var r=await fetch('/api/today');
-      var d=await r.json();
-      if(GEN.tabIdx!==2)return;
-      var raw=Array.isArray(d.response)?d.response:Array.isArray(d)?d:[];
-      _pmMatches=raw.sort(function(a,b){return new Date(a.fixture.date)-new Date(b.fixture.date);});
-    }catch(e){}
-  }
-  if(GEN.tabIdx!==2)return;
-  simPopulateDropdown();
-  if(_simData)simRender(_simData);
-}
-
-function genScore(ed,type){
-  if(!ed)return -1;
-  if(type==='home'){
-    if(ed.homeScoreRate!=null)return ed.homeScoreRate;
-    if(ed.lambdaHome!=null)return Math.round((1-Math.exp(-ed.lambdaHome))*100);
-  }
-  if(type==='away'){
-    if(ed.awayScoreRate!=null)return ed.awayScoreRate;
-    if(ed.lambdaAway!=null)return Math.round((1-Math.exp(-ed.lambdaAway))*100);
-  }
-  if(type==='over15'&&ed.over15Prob!=null)return ed.over15Prob;
-  if(type==='ev'&&ed.bestEV!=null)return ed.bestEV*100;
-  return -1;
-}
-
-function genCard(m,ed,type,isLive){
-  var fid=m.fixture&&m.fixture.id||0;
-  var hid=m.teams&&m.teams.home&&m.teams.home.id||0;
-  var aid=m.teams&&m.teams.away&&m.teams.away.id||0;
-  var hn=m.teams&&m.teams.home&&m.teams.home.name||'?';
-  var an=m.teams&&m.teams.away&&m.teams.away.name||'?';
-  var lg=m.league&&m.league.name||'';
-  var flag=m.league&&m.league.flag?'<img src="'+m.league.flag+'" style="width:11px;height:8px;object-fit:cover;border-radius:2px">':'';
-  var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
-  var timeStr;
-  if(isLive){
-    var mn=m.fixture&&m.fixture.status&&m.fixture.status.elapsed||0;
-    var hg=m.goals?m.goals.home||0:0,ag=m.goals?m.goals.away||0:0;
-    timeStr='<span class="gen-live-dot"></span>'+mn+"' · "+hg+'-'+ag;
-  }else{
-    timeStr=m.fixture&&m.fixture.date?new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
-  }
-  var val=genScore(ed,type);
-  var lbl=type==='home'?'GAZDE':type==='away'?'OASPEȚI':type==='ev'?'EV':'O1.5';
-  var clr=type==='ev'?'#22c55e':ec(val);
-  var homeStr=tLogo(m.teams&&m.teams.home,24)+(type==='home'?'<b>'+hn+'</b>':hn);
-  var awayStr=tLogo(m.teams&&m.teams.away,24)+(type==='away'?'<b>'+an+'</b>':an);
-  var meta=type==='ev'
-    ?(ed.bestBet||'')+(ed.bestCota?' @ '+ed.bestCota.toFixed(2):'')+(ed.bestKelly?' · Kelly: '+ed.bestKelly.toFixed(2)+' LTC':'')
-    :type==='over15'
-      ?'λ '+(ed.lambdaTotal!=null?Number(ed.lambdaTotal).toFixed(2):'—')+(ed.ggProb!=null?' · GG '+Math.round(ed.ggProb)+'%':'')
-      :(ed.over15Prob!=null?'O1.5 '+Math.round(ed.over15Prob)+'%':'')+(ed.ggProb!=null?' · GG '+Math.round(ed.ggProb)+'%':'');
-  return '<div class="gen-card" onclick="mdOpen('+fid+','+hid+','+aid+',this)">'+
-    '<div class="gen-card-main">'+
-      '<div class="gen-card-meta">'+flag+' '+lg+'<span class="gen-card-time"> · '+timeStr+'</span></div>'+
-      '<div class="gen-card-teams">'+homeStr+' <span style="color:var(--mu)">vs</span> '+awayStr+'</div>'+
-      '<div class="gen-card-sub">'+meta+'</div>'+
-    '</div>'+
-    '<div class="gen-card-big"><div class="gen-card-big-val" style="color:'+clr+'">'+(type==='ev'?'+':'')+Math.round(val)+'%</div><div class="gen-card-big-lbl">'+lbl+'</div></div>'+
-    '</div>';
-}
-
-function genBuildSections(items,isLive){
-  function topBy(fn){
-    return items.filter(function(x){return x.ed&&fn(x.ed)>=0;})
-      .sort(function(a,b){return fn(b.ed)-fn(a.ed);}).slice(0,10);
-  }
-  var homeTop=topBy(function(ed){return genScore(ed,'home');});
-  var awayTop=topBy(function(ed){return genScore(ed,'away');});
-  var o15Top=topBy(function(ed){return genScore(ed,'over15');});
-  var evTop=items
-    .filter(function(x){return x.ed&&x.ed.hasOdds&&(x.ed.bestEV||0)>0.04;})
-    .sort(function(a,b){return (b.ed.bestEV||0)-(a.ed.bestEV||0);})
-    .slice(0,10);
-  var pending='<div style="color:var(--mu);font-size:12px;padding:10px 0">⏳ Se încarcă datele de analiză...</div>';
-  var evSection=evTop.length
-    ?evTop.map(function(x){return genCard(x.m,x.ed,'ev',isLive);}).join('')
-    :'<div style="color:var(--mu);font-size:12px;padding:10px 0">Nicio piată cu EV &gt; 4% găsită</div>';
-  return '<div class="gen-section-hdr">💰 EV PICKS (EV &gt; 4%)</div>'+evSection+
-    '<div class="gen-section-hdr">🏠 GAZDE MARCHEAZĂ</div>'+
-    (homeTop.length?homeTop.map(function(x){return genCard(x.m,x.ed,'home',isLive);}).join(''):pending)+
-    '<div class="gen-section-hdr">✈️ OASPEȚI MARCHEAZĂ</div>'+
-    (awayTop.length?awayTop.map(function(x){return genCard(x.m,x.ed,'away',isLive);}).join(''):pending)+
-    '<div class="gen-section-hdr">⚽ OVER 1.5 TOTAL</div>'+
-    (o15Top.length?o15Top.map(function(x){return genCard(x.m,x.ed,'over15',isLive);}).join(''):pending);
-}
-
-function genRenderLive(){
-  var body=document.getElementById('gen-body');
-  if(!ST.ms.length){
-    body.innerHTML='<div class="empty"><div class="empty-icon">⚽</div><div class="empty-t">Fără date live</div><div class="empty-s">Conectează-te pentru date live</div></div>';
-    return;
-  }
-  var items=ST.ms.map(function(m){
-    var fid=m.fixture&&m.fixture.id;
-    return {m:m,ed:m.enrichData||_genLiveEnrich[fid]||null};
+function g2Show(n){
+  G2.scrn=n;
+  document.querySelectorAll('.gen2-scr').forEach(function(el,i){
+    var s=i+1;
+    el.classList.remove('act','out-l','out-r');
+    if(s===n)el.classList.add('act');
+    else if(s<n)el.classList.add('out-l');
+    else el.classList.add('out-r');
   });
-  items.forEach(function(x){
-    if(!x.ed){
-      var fid=x.m.fixture&&x.m.fixture.id;
-      var hid=x.m.teams&&x.m.teams.home&&x.m.teams.home.id;
-      var aid=x.m.teams&&x.m.teams.away&&x.m.teams.away.id;
-      if(fid&&hid&&aid&&!_genLiveEnrich['p'+fid]){
-        _genLiveEnrich['p'+fid]=true;
-        fetch(enrichUrl(hid,aid,x.m)).then(function(r){return r.json();}).then(function(ed){
-          if(!ed.error){_genLiveEnrich[fid]=ed;if(GEN.open&&GEN.tabIdx===0)genRenderLive();}
-        }).catch(function(){});
+}
+function gen2Back(){
+  if(G2.hist.length<=1){gen2Close();return;}
+  G2.hist.pop();
+  var prev=G2.hist[G2.hist.length-1];
+  g2Show(prev);
+}
+function g2Go(n){
+  if(G2.hist[G2.hist.length-1]!==n)G2.hist.push(n);
+  g2Show(n);
+}
+
+function gen2Mode(m){
+  G2.mode=m;G2.matches=[];
+  document.getElementById('g2s2-title').textContent=m==='live'?'⚡ LIVE':'📅 PRE-MECI';
+  g2Go(2);
+}
+function gen2Cat(c){
+  G2.cat=c;G2.sub=null;
+  var meta=G2_CATS[c];
+  if(c==='home'||c==='away'){
+    G2.thr=0.5;
+    g2PrepSlider();g2Go(4);gen2Load();
+  }else{
+    document.getElementById('g2s3-title').textContent=meta.label;
+    g2Go(3);
+  }
+}
+function gen2Sub(s){
+  G2.sub=s;
+  g2PrepSlider();g2Go(4);gen2Load();
+}
+function g2PrepSlider(){
+  var meta=G2_CATS[G2.cat];
+  var wrap=document.getElementById('g2slider-wrap');
+  var slider=document.getElementById('g2slider');
+  var ticks=document.getElementById('g2ticks');
+  // period tabs only for live
+  document.getElementById('g2ptabs').style.display=G2.mode==='live'?'':'none';
+  if(!meta.ranges){wrap.style.display='none';return;}
+  wrap.style.display='';
+  slider.min=0;slider.max=meta.ranges.length-1;
+  var defIdx=Math.min(1,meta.ranges.length-1);
+  slider.value=defIdx;
+  G2.thr=meta.ranges[defIdx];
+  ticks.innerHTML=meta.ranges.map(function(r){return '<span>'+r+'</span>';}).join('');
+  // title
+  var subLbl=G2.sub==='home'?'Gazde ':G2.sub==='away'?'Oaspeți ':G2.sub==='total'?'Total ':'';
+  document.getElementById('g2s4-title').textContent=meta.icon+' '+subLbl+meta.label;
+  g2UpdateLbl();
+}
+function g2UpdateLbl(){
+  var meta=G2_CATS[G2.cat];
+  if(!meta||!meta.ranges)return;
+  document.getElementById('g2thr-lbl').textContent=G2.thr;
+  document.getElementById('g2unit-lbl').textContent=meta.unit;
+}
+function gen2Slide(v){
+  var meta=G2_CATS[G2.cat];
+  if(!meta||!meta.ranges)return;
+  G2.thr=meta.ranges[parseInt(v)];
+  g2UpdateLbl();
+  g2RenderTop10();
+}
+function gen2Period(p,btn){
+  G2.period=p;
+  document.querySelectorAll('.g2ptab').forEach(function(t){t.classList.remove('act');});
+  if(btn)btn.classList.add('act');
+  g2RenderTop10();
+}
+
+async function gen2Load(){
+  if(G2.loading)return;
+  G2.loading=true;
+  document.getElementById('g2top10').innerHTML='<div class="g2spin-wrap"><div class="g2spin"></div><div class="g2spin-lbl">Se încarcă datele...</div></div>';
+  try{
+    var r=await fetch('/api/generator?mode='+G2.mode);
+    var d=await r.json();
+    G2.matches=Array.isArray(d.matches)?d.matches:[];
+    g2RenderTop10();
+  }catch(e){
+    document.getElementById('g2top10').innerHTML='<div class="g2spin-wrap"><div class="g2spin-lbl" style="color:var(--red)">Eroare: '+e.message+'</div></div>';
+  }finally{G2.loading=false;}
+}
+
+// ── scoring ──────────────────────────────────────────────────
+function g2Poi(lam,k){
+  if(lam<=0)return k===0?1:0;
+  var p=Math.exp(-lam);
+  for(var i=0;i<k;i++)p=p*lam/(i+1);
+  return p;
+}
+function g2Over(lam,thr){
+  var need=Math.floor(thr)+1,fail=0;
+  for(var k=0;k<need;k++)fail+=g2Poi(lam,k);
+  return Math.max(0,Math.min(100,(1-fail)*100));
+}
+function g2Score(m){
+  var cat=G2.cat,sub=G2.sub,thr=G2.thr,isLive=m.is_live;
+  var s=0,confirmed=false;
+  var lg=m.league||{avg_goals:2.5,pct_over_15:60,pct_over_25:40,pct_gg:50,avg_yellow:3.5,avg_corners:9};
+  var ref=m.ref_stats;
+  var h2h=m.h2h;
+  var fm=m.form||{};
+  var lv=m.live||{};
+
+  if(cat==='home'||cat==='away'){
+    var isH=(cat==='home');
+    var lam=isH?(fm.home_avg_scored||lg.avg_goals*0.55):(fm.away_avg_scored||lg.avg_goals*0.45);
+    var poisS=g2Over(lam,0.5);
+    var h2hS=isH?(h2h?h2h.pct_home_scores:lg.pct_gg):(h2h?h2h.pct_away_scores:lg.pct_gg);
+    var lgS=lg.pct_gg;
+    var livS=50;
+    if(isLive){
+      var curG=isH?m.home_goals:m.away_goals;
+      if(curG>0){confirmed=true;livS=100;}
+      else{
+        var rem=Math.max(0,90-m.minute);
+        var xg=isH?(lv.home_xg||0):(lv.away_xg||0);
+        var xgR=m.minute>0?(xg/m.minute)*rem:0;
+        livS=g2Over(Math.max(xgR,lam*rem/90),0.5);
       }
     }
+    s=isLive?(poisS*.30+h2hS*.20+lgS*.15+livS*.35):(poisS*.40+h2hS*.25+lgS*.25+poisS*.10);
+
+  }else if(cat==='goals'){
+    var isT=(!sub||sub==='total'),isHG=(sub==='home');
+    var lamH=fm.home_avg_scored||lg.avg_goals*0.55;
+    var lamA=fm.away_avg_scored||lg.avg_goals*0.45;
+    var lamG=isT?(lamH+lamA):(isHG?lamH:lamA);
+    var poisG=g2Over(lamG,thr);
+    var lgPct=thr<=1?lg.pct_over_15:lg.pct_over_25;
+    var h2hPct=thr<=1?(h2h?h2h.pct_over_15:lgPct):(h2h?h2h.pct_over_25:lgPct);
+    var refG=ref?g2Over(ref.avg_goals*(isT?1:0.5),thr):poisG;
+    var livG=50;
+    if(isLive){
+      var curGG=isT?(m.home_goals+m.away_goals):(isHG?m.home_goals:m.away_goals);
+      if(curGG>thr){confirmed=true;livG=100;}
+      else{
+        var rem2=Math.max(0,90-m.minute);
+        var xgT=isT?((lv.home_xg||0)+(lv.away_xg||0)):(isHG?(lv.home_xg||0):(lv.away_xg||0));
+        var xgR2=m.minute>0?(xgT/m.minute)*rem2:0;
+        var need2=Math.floor(thr)+1-curGG;
+        livG=need2<=0?100:g2Over(Math.max(xgR2,lamG*rem2/90),need2-1);
+      }
+    }
+    s=isLive?(poisG*.25+lgPct*.20+h2hPct*.15+refG*.10+livG*.30):(poisG*.30+lgPct*.25+h2hPct*.20+refG*.10+poisG*.15);
+
+  }else if(cat==='cards'){
+    var isTC=(!sub||sub==='total'),isHC=(sub==='home');
+    var refYC=ref?ref.avg_yellow:null;
+    var lgYC=lg.avg_yellow;
+    var avgC=refYC||lgYC;
+    var lamC=isTC?avgC:(isHC?avgC*.55:avgC*.45);
+    var poisC=g2Over(lamC,thr);
+    var refC=refYC?g2Over(refYC*(isTC?1:(isHC?.55:.45)),thr):poisC;
+    var lgC=g2Over(lgYC*(isTC?1:(isHC?.55:.45)),thr);
+    var livC=50;
+    if(isLive){
+      var curC=isTC?((lv.home_cards||0)+(lv.away_cards||0)):(isHC?(lv.home_cards||0):(lv.away_cards||0));
+      if(curC>thr){confirmed=true;livC=100;}
+      else{
+        var rem3=Math.max(0,90-m.minute);
+        var cRate=m.minute>0?(curC/m.minute)*rem3:0;
+        var needC=Math.floor(thr)+1-curC;
+        livC=needC<=0?100:g2Over(Math.max(cRate,lamC*rem3/90),needC-1);
+      }
+    }
+    s=isLive?(refC*.30+lgC*.20+poisC*.15+livC*.35):(refC*.40+lgC*.30+poisC*.30);
+
+  }else if(cat==='corners'){
+    var isTK=(!sub||sub==='total'),isHK=(sub==='home');
+    var refK=ref?ref.avg_corners:null;
+    var lgK=lg.avg_corners;
+    var avgK=refK||lgK;
+    var lamK=isTK?avgK:(isHK?avgK*.55:avgK*.45);
+    var poisK=g2Over(lamK,thr);
+    var refKS=refK?g2Over(refK*(isTK?1:(isHK?.55:.45)),thr):poisK;
+    var lgKS=g2Over(lgK*(isTK?1:(isHK?.55:.45)),thr);
+    var livK=50;
+    if(isLive){
+      var curK=isTK?((lv.home_corners||0)+(lv.away_corners||0)):(isHK?(lv.home_corners||0):(lv.away_corners||0));
+      if(curK>thr){confirmed=true;livK=100;}
+      else{
+        var rem4=Math.max(0,90-m.minute);
+        var kRate=m.minute>0?(curK/m.minute)*rem4:0;
+        var needK=Math.floor(thr)+1-curK;
+        livK=needK<=0?100:g2Over(Math.max(kRate,lamK*rem4/90),needK-1);
+      }
+    }
+    s=isLive?(refKS*.25+lgKS*.20+poisK*.20+livK*.35):(refKS*.30+lgKS*.35+poisK*.35);
+  }
+
+  return{score:Math.round(Math.max(0,Math.min(100,s))),confirmed:confirmed};
+}
+
+function g2RenderTop10(){
+  var el=document.getElementById('g2top10');
+  if(!G2.matches.length){
+    el.innerHTML='<div class="g2spin-wrap"><div class="g2spin-lbl">Niciun meci disponibil</div></div>';
+    return;
+  }
+  var scored=G2.matches.map(function(m){
+    var r=g2Score(m);return{m:m,score:r.score,confirmed:r.confirmed};
   });
-  body.innerHTML=genBuildSections(items,true);
-  genUpdateBadge();
+  scored.sort(function(a,b){
+    if(a.confirmed!==b.confirmed)return a.confirmed?1:-1;
+    return b.score-a.score;
+  });
+  G2.top10=scored.slice(0,10);
+  var html='';
+  G2.top10.forEach(function(item,idx){
+    var m=item.m,pct=item.score,done=item.confirmed;
+    var clr=pct>=75?'#22c55e':pct>=55?'#f59e0b':'#ef4444';
+    var sub='';
+    if(m.is_live)sub='<span class="gen-live-dot"></span>'+m.minute+'\' · '+m.home_goals+'-'+m.away_goals;
+    else if(m.match_date)sub=new Date(m.match_date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' · '+(m.league_name||'');
+    html+='<div class="g2row'+(done?' g2done':'')+'" onclick="g2Detail('+idx+')">';
+    html+='<div class="g2rank">#'+(idx+1)+'</div>';
+    html+='<div class="g2row-info">';
+    html+='<div class="g2row-teams">'+(m.home_team||'?')+' <span style="color:var(--mu)">vs</span> '+(m.away_team||'?')+(done?'<span class="g2conf-badge">✓</span>':'')+'</div>';
+    html+='<div class="g2row-sub">'+sub+'</div>';
+    html+='</div>';
+    html+='<div class="g2row-pct" style="color:'+clr+'">'+Math.round(pct)+'%</div>';
+    html+='</div>';
+  });
+  el.innerHTML=html;
 }
 
-async function genRenderUpcoming(){
-  var body=document.getElementById('gen-body');
-  if(!_pmMatches.length){
-    body.innerHTML='<div class="spinner"><div class="spin"></div></div>';
-    try{
-      var r=await fetch('/api/today');
-      var d=await r.json();
-      if(GEN.tabIdx!==1)return;
-      var raw=Array.isArray(d.response)?d.response:Array.isArray(d)?d:[];
-      if(!raw.length){body.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-t">Niciun meci upcoming</div></div>';return;}
-      _pmMatches=raw.sort(function(a,b){return new Date(a.fixture.date)-new Date(b.fixture.date);});
-    }catch(e){
-      if(GEN.tabIdx!==1)return;
-      body.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+e.message+'</div></div>';
-      return;
-    }
-    genEnrichUpcoming();
+function g2Detail(idx){
+  var item=G2.top10[idx];if(!item)return;
+  var m=item.m,pct=item.score;
+  var meta=G2_CATS[G2.cat];
+  var subLbl=G2.sub==='home'?'Gazde ':G2.sub==='away'?'Oaspeți ':G2.sub==='total'?'Total ':'';
+  var mktLbl=(G2.cat==='home'||G2.cat==='away')?meta.label:(subLbl+meta.label+' Over '+G2.thr);
+  var clr=pct>=75?'#22c55e':pct>=55?'#f59e0b':'#ef4444';
+  document.getElementById('g2s5-title').textContent=(m.home_team||'?')+' vs '+(m.away_team||'?');
+  var h='';
+  // hero
+  h+='<div class="g2hero">';
+  h+='<div class="g2hero-match">'+(m.home_team||'?')+' vs '+(m.away_team||'?')+'</div>';
+  h+='<div class="g2hero-mkt">'+meta.icon+' '+mktLbl+'</div>';
+  h+='<div class="g2hero-pct" style="color:'+clr+'">'+Math.round(pct)+'%</div>';
+  h+='</div>';
+  // formă
+  h+='<div class="g2section"><div class="g2sec-title">📊 Formă recentă</div>';
+  if(m.form.home_avg_scored!==null)h+='<div class="g2srow"><span class="g2srow-l">Media goluri marcate acasă</span><span class="g2srow-v">'+Number(m.form.home_avg_scored).toFixed(2)+'/meci</span></div>';
+  if(m.form.away_avg_scored!==null)h+='<div class="g2srow"><span class="g2srow-l">Media goluri marcate deplasare</span><span class="g2srow-v">'+Number(m.form.away_avg_scored).toFixed(2)+'/meci</span></div>';
+  if(m.form.home_last5)h+='<div class="g2srow"><span class="g2srow-l">Formă gazde (ult. 5 acasă)</span><span class="g2srow-v" style="font-family:monospace;letter-spacing:2px">'+m.form.home_last5+'</span></div>';
+  if(m.form.away_last5)h+='<div class="g2srow"><span class="g2srow-l">Formă oaspeți (ult. 5 deplas.)</span><span class="g2srow-v" style="font-family:monospace;letter-spacing:2px">'+m.form.away_last5+'</span></div>';
+  if(!m.form.home_avg_scored&&!m.form.home_last5)h+='<div class="g2srow"><span class="g2srow-l" style="color:var(--mu)">Date insuficiente în DB</span></div>';
+  h+='</div>';
+  // h2h
+  if(m.h2h&&m.h2h.total>=3){
+    h+='<div class="g2section"><div class="g2sec-title">📊 Head to Head ('+m.h2h.total+' meciuri)</div>';
+    h+='<div class="g2srow"><span class="g2srow-l">Media goluri</span><span class="g2srow-v">'+Number(m.h2h.avg_goals).toFixed(2)+'/meci</span></div>';
+    h+='<div class="g2srow"><span class="g2srow-l">% Over 1.5 goluri</span><span class="g2srow-v">'+Math.round(m.h2h.pct_over_15)+'%</span></div>';
+    h+='<div class="g2srow"><span class="g2srow-l">% Over 2.5 goluri</span><span class="g2srow-v">'+Math.round(m.h2h.pct_over_25)+'%</span></div>';
+    h+='<div class="g2srow"><span class="g2srow-l">% Ambele marchează</span><span class="g2srow-v">'+Math.round(m.h2h.pct_gg)+'%</span></div>';
+    h+='</div>';
   }
-  if(GEN.tabIdx!==1)return;
-  var items=_pmMatches.map(function(m){return {m:m,ed:_pmEnrich[m.fixture&&m.fixture.id]||null};});
-  body.innerHTML=genBuildSections(items,false);
-  genUpdateBadge();
-}
-
-async function genEnrichUpcoming(){
-  var toEnrich=_pmMatches.filter(function(m){
-    return m.teams&&m.teams.home&&m.teams.home.id&&m.teams.away&&m.teams.away.id&&!_pmEnrich[m.fixture&&m.fixture.id];
-  }).slice(0,50);
-  for(var i=0;i<toEnrich.length;i+=5){
-    var batch=toEnrich.slice(i,i+5);
-    await Promise.all(batch.map(async function(m){
-      try{
-        var er=await fetch(enrichUrl(m.teams.home.id,m.teams.away.id,m));
-        var ed=await er.json();
-        if(!ed.error)_pmEnrich[m.fixture.id]=ed;
-      }catch(e){}
-    }));
-    if(GEN.open&&GEN.tabIdx===1){
-      var items2=_pmMatches.map(function(m){return {m:m,ed:_pmEnrich[m.fixture&&m.fixture.id]||null};});
-      document.getElementById('gen-body').innerHTML=genBuildSections(items2,false);
-    }
-    genUpdateBadge();
+  // liga
+  h+='<div class="g2section"><div class="g2sec-title">📊 Statistică ligă — '+(m.league_name||'')+'</div>';
+  h+='<div class="g2srow"><span class="g2srow-l">Media goluri/meci</span><span class="g2srow-v">'+Number(m.league.avg_goals).toFixed(2)+'</span></div>';
+  h+='<div class="g2srow"><span class="g2srow-l">% Over 1.5</span><span class="g2srow-v">'+Math.round(m.league.pct_over_15)+'%</span></div>';
+  h+='<div class="g2srow"><span class="g2srow-l">% Over 2.5</span><span class="g2srow-v">'+Math.round(m.league.pct_over_25)+'%</span></div>';
+  if(G2.cat==='cards')h+='<div class="g2srow"><span class="g2srow-l">Media cartonașe/meci</span><span class="g2srow-v">'+Number(m.league.avg_yellow).toFixed(1)+'</span></div>';
+  if(G2.cat==='corners')h+='<div class="g2srow"><span class="g2srow-l">Media cornere/meci</span><span class="g2srow-v">'+Number(m.league.avg_corners).toFixed(1)+'</span></div>';
+  h+='</div>';
+  // arbitru
+  if(m.ref_stats&&m.referee){
+    h+='<div class="g2section"><div class="g2sec-title">📊 Arbitru — '+m.referee+'</div>';
+    h+='<div class="g2srow"><span class="g2srow-l">Media goluri/meci</span><span class="g2srow-v">'+Number(m.ref_stats.avg_goals).toFixed(2)+'</span></div>';
+    h+='<div class="g2srow"><span class="g2srow-l">Media cartonașe galbene</span><span class="g2srow-v">'+Number(m.ref_stats.avg_yellow).toFixed(1)+'/meci</span></div>';
+    h+='<div class="g2srow"><span class="g2srow-l">Media cornere</span><span class="g2srow-v">'+Number(m.ref_stats.avg_corners).toFixed(1)+'/meci</span></div>';
+    h+='</div>';
   }
+  // live context
+  if(m.is_live&&m.live){
+    h+='<div class="g2section"><div class="g2sec-title">📊 Context live · '+m.minute+'\'</div>';
+    h+='<div class="g2srow"><span class="g2srow-l">Scor</span><span class="g2srow-v">'+m.home_goals+' - '+m.away_goals+'</span></div>';
+    if(m.live.home_xg||m.live.away_xg)h+='<div class="g2srow"><span class="g2srow-l">xG total</span><span class="g2srow-v">'+Number(m.live.home_xg+m.live.away_xg).toFixed(2)+'</span></div>';
+    if(m.live.home_corners||m.live.away_corners)h+='<div class="g2srow"><span class="g2srow-l">Cornere</span><span class="g2srow-v">'+m.live.home_corners+' - '+m.live.away_corners+'</span></div>';
+    if(m.live.home_cards||m.live.away_cards)h+='<div class="g2srow"><span class="g2srow-l">Cartonașe</span><span class="g2srow-v">'+m.live.home_cards+' - '+m.live.away_cards+'</span></div>';
+    h+='</div>';
+  }
+  // AI concluzie
+  h+='<div class="g2ai"><div class="g2ai-title">🧠 Concluzie</div><div class="g2ai-text">'+g2Conclusion(m,pct,mktLbl)+'</div></div>';
+  document.getElementById('g2detail').innerHTML=h;
+  g2Go(5);
 }
 
-function genUpdateBadge(){
-  var liveCount=ST.ms.filter(function(m){
-    var ed=m.enrichData||_genLiveEnrich[m.fixture&&m.fixture.id];
-    return ed&&((ed.over15Prob||0)>=60||(ed.hasOdds&&(ed.bestEV||0)>0.04));
-  }).length;
-  var pmCount=Object.values(_pmEnrich).filter(function(ed){return(ed.over15Prob||0)>=60||(ed.hasOdds&&(ed.bestEV||0)>0.04);}).length;
-  var total=liveCount+pmCount;
-  var badge=document.getElementById('gen-badge');
-  if(badge){badge.textContent=total>99?'99+':String(total);badge.style.display=total>0?'':'none';}
+function g2Conclusion(m,pct,mktLbl){
+  var parts=[];
+  var cat=G2.cat;
+  parts.push(pct>=75?'Probabilitate ridicată ('+Math.round(pct)+'%) pentru '+mktLbl+'.':pct>=55?'Probabilitate medie ('+Math.round(pct)+'%) pentru '+mktLbl+'.':'Probabilitate relativ scăzută ('+Math.round(pct)+'%) pentru '+mktLbl+'.');
+  if(m.h2h&&m.h2h.total>=3&&(cat==='goals'||cat==='home'||cat==='away'))parts.push('H2H arată o medie de '+Number(m.h2h.avg_goals).toFixed(1)+' goluri/meci pe '+(m.h2h.total)+' meciuri directe.');
+  if(m.ref_stats&&m.referee&&cat==='cards')parts.push('Arbitrul '+m.referee+' acordă în medie '+Number(m.ref_stats.avg_yellow).toFixed(1)+' cartonașe galbene per meci.');
+  if(m.ref_stats&&m.referee&&cat==='corners')parts.push('Sub arbitrul '+m.referee+' se bat în medie '+Number(m.ref_stats.avg_corners).toFixed(1)+' cornere per meci.');
+  if(m.is_live&&m.minute>=60&&(m.home_goals+m.away_goals)===0)parts.push('Scor 0-0 după '+m.minute+' minute — riscul de gol final rămâne ridicat.');
+  if(m.form.home_avg_scored>2&&cat==='goals')parts.push('Gazda marchează în medie '+Number(m.form.home_avg_scored).toFixed(2)+' goluri/meci acasă în sezonul curent.');
+  return parts.join(' ')||'Analizează contextul și decide cu atenție.';
 }
+
+function genOpen(){gen2Open();}
+function genClose(){gen2Close();}
+function genOpenSim(){gen2Open();}
+
+function genUpdateBadge(){} // stub — badge înlocuit cu design nou
 
 // ── SEARCH ────────────────────────────────────────────────────
 function liveSearchChange(v){
