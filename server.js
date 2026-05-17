@@ -21,7 +21,7 @@ app.use(express.static(__dirname, { index: 'index.html' }));
 const apiFiles = [
   'football', 'today', 'enrich', 'match', 'players',
   'agent', 'update-results', 'health-check', 'simulate',
-  'elo', 'monte-carlo', 'match-momentum'
+  'elo', 'monte-carlo', 'match-momentum', 'accuracy'
 ];
 
 for (const name of apiFiles) {
@@ -37,7 +37,7 @@ for (const name of apiFiles) {
 }
 
 // Cron routes
-const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'coach-stats', 'weather'];
+const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'coach-stats', 'weather', 'calibration'];
 for (const name of cronFiles) {
   app.all(`/api/cron/${name}`, async (req, res) => {
     try {

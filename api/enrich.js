@@ -308,6 +308,14 @@ async function getLeagueStats(leagueId) {
   } catch (_) { return null; }
 }
 
+async function getCalibration(leagueId) {
+  if (!leagueId) return null;
+  try {
+    const r = await query('SELECT * FROM prediction_calibration WHERE league_id = $1', [leagueId]);
+    return r.rows[0] || null;
+  } catch (_) { return null; }
+}
+
 async function getRefereeStats(fixtureId) {
   // Caută numele arbitrului în prematch_data sau fixtures_history, apoi returnează stats
   if (!fixtureId) return null;
@@ -367,6 +375,64 @@ async function getCoachStatsByTeam(teamId) {
   } catch (_) { return null; }
 }
 
+// Applies calibration + all adjustments on top of raw Poisson output
+function calcFinalPrediction(poisson, calibration, weatherImpact, leagueStats, refereeStats, homeCoachStats, awayCoachStats, h2hRaw) {
+  // Layer 1: Calibration per league (multiplicative; factor=1.0 if no data → neutral)
+  const f15 = parseFloat(calibration?.calibration_factor_over15) || 1.0;
+  const f25 = parseFloat(calibration?.calibration_factor_over25) || 1.0;
+  const fGG = parseFloat(calibration?.calibration_factor_gg)     || 1.0;
+
+  let over15 = poisson.over15Prob * f15;
+  let over25 = poisson.over25Prob * f25;
+  let gg     = poisson.ggProb     * fGG;
+
+  // Layer 2: Weather (from venue_weather cron)
+  if (weatherImpact) {
+    const o25d = parseFloat(weatherImpact.impact_over25_delta) || 0;
+    if (o25d !== 0) {
+      over25 += o25d;
+      over15 += Math.round(o25d * 0.4);
+    }
+  }
+
+  // Layer 3: League profile
+  if (leagueStats?.league_type === 'open')   over25 += 5;
+  else if (leagueStats?.league_type === 'closed') over25 -= 5;
+
+  // Layer 4: Referee style
+  if (refereeStats?.referee_style === 'open')   over25 += 5;
+  else if (refereeStats?.referee_style === 'closed') over25 -= 5;
+
+  // Layer 5: Coach combination
+  const hs  = homeCoachStats?.coach_style;
+  const as_ = awayCoachStats?.coach_style;
+  if (hs && as_) {
+    if (hs === 'offensive' && as_ === 'offensive') { over25 += 12; over15 += 5; }
+    else if (hs === 'defensive' && as_ === 'defensive') { over25 -= 12; over15 -= 5; }
+  } else {
+    const single = (homeCoachStats?.total_matches >= 10 && homeCoachStats) ||
+                   (awayCoachStats?.total_matches  >= 10 && awayCoachStats);
+    if (single?.coach_style === 'offensive') { over25 += 5; over15 += 3; }
+    else if (single?.coach_style === 'defensive') { over25 -= 5; over15 -= 3; }
+  }
+
+  // Layer 6: H2H blend (30% weight if ≥5 matches)
+  if (Array.isArray(h2hRaw) && h2hRaw.length >= 5) {
+    const h2hOver15Pct = poisson.h2hOver15 ?? over15;
+    const h2hOver25Count = h2hRaw.filter(m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 2).length;
+    const h2hOver25Pct  = Math.round(h2hOver25Count / h2hRaw.length * 100);
+    over15 = over15 * 0.7 + h2hOver15Pct * 0.3;
+    over25 = over25 * 0.7 + h2hOver25Pct * 0.3;
+  }
+
+  // Layer 7: Cap 5–95%
+  return {
+    over15Prob: Math.min(95, Math.max(5, Math.round(over15))),
+    over25Prob: Math.min(95, Math.max(5, Math.round(over25))),
+    ggProb:     Math.min(95, Math.max(5, Math.round(gg))),
+  };
+}
+
 // Transform h2h rows → API-Football-like format expected by calcPoisson
 function h2hToFixtures(rows) {
   return rows.map(row => ({
@@ -408,7 +474,7 @@ export default async function handler(req, res) {
 
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, homeCoachStats, awayCoachStats, weatherImpact, leagueStats, refereeStats] = await Promise.all([
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, homeCoachStats, awayCoachStats, weatherImpact, leagueStats, refereeStats, calibration] = await Promise.all([
       getFormFromDB(hId),
       getFormFromDB(aId),
       getH2HFromDB(hId, aId),
@@ -421,6 +487,7 @@ export default async function handler(req, res) {
       fid ? getWeatherImpact(Number(fid)) : Promise.resolve(null),
       lgid ? getLeagueStats(Number(lgid)) : Promise.resolve(null),
       fid ? getRefereeStats(Number(fid)) : Promise.resolve(null),
+      lgid ? getCalibration(Number(lgid)) : Promise.resolve(null),
     ]);
 
     // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
@@ -468,52 +535,14 @@ export default async function handler(req, res) {
     // --- Calculations ---
     const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota);
 
-    // Ajustare meteo (din venue_weather, colectat de weather.js cron)
-    if (weatherImpact) {
-      const o25d = parseFloat(weatherImpact.impact_over25_delta) || 0;
-      if (o25d !== 0) {
-        result.over25Prob = Math.min(100, Math.max(0, result.over25Prob + o25d));
-        result.over15Prob = Math.min(100, Math.max(0, result.over15Prob + Math.round(o25d * 0.4)));
-      }
-    }
+    // Calibrated final predictions — 7-layer system
+    const adjusted = calcFinalPrediction(result, calibration, weatherImpact, leagueStats, refereeStats, homeCoachStats, awayCoachStats, h2h);
+    result.over15Prob = adjusted.over15Prob;
+    result.over25Prob = adjusted.over25Prob;
+    result.ggProb     = adjusted.ggProb;
 
-    // Ajustare ligă (din league_stats)
-    if (leagueStats?.league_type === 'open') {
-      result.over25Prob = Math.min(100, result.over25Prob + 5);
-    } else if (leagueStats?.league_type === 'closed') {
-      result.over25Prob = Math.max(0, result.over25Prob - 5);
-    }
-
-    // Ajustare arbitru (din referee_stats)
-    if (refereeStats?.referee_style === 'open') {
-      result.over25Prob = Math.min(100, result.over25Prob + 5);
-    } else if (refereeStats?.referee_style === 'closed') {
-      result.over25Prob = Math.max(0, result.over25Prob - 5);
-    }
-
-    // Ajustare bazată pe combinația stilurilor antrenorilor
-    const hs = homeCoachStats?.coach_style;
+    const hs  = homeCoachStats?.coach_style;
     const as_ = awayCoachStats?.coach_style;
-    if (hs && as_) {
-      if (hs === 'offensive' && as_ === 'offensive') {
-        result.over25Prob = Math.min(100, result.over25Prob + 12);
-        result.over15Prob = Math.min(100, result.over15Prob + 5);
-      } else if (hs === 'defensive' && as_ === 'defensive') {
-        result.over25Prob = Math.max(0, result.over25Prob - 12);
-        result.over15Prob = Math.max(0, result.over15Prob - 5);
-      }
-      // offensive vs defensive → fără ajustare
-    } else {
-      const single = (homeCoachStats?.total_matches >= 10 && homeCoachStats) ||
-                     (awayCoachStats?.total_matches  >= 10 && awayCoachStats);
-      if (single?.coach_style === 'offensive') {
-        result.over25Prob = Math.min(100, result.over25Prob + 5);
-        result.over15Prob = Math.min(100, result.over15Prob + 3);
-      } else if (single?.coach_style === 'defensive') {
-        result.over25Prob = Math.max(0, result.over25Prob - 5);
-        result.over15Prob = Math.max(0, result.over15Prob - 3);
-      }
-    }
 
     const evData = calcEV(result, oddsRaw, bankroll);
 
@@ -593,6 +622,14 @@ export default async function handler(req, res) {
         avg_red_cards:    parseFloat(refereeStats.avg_red_cards)    || null,
         pct_over_25:      parseFloat(refereeStats.pct_over_25)      || null,
         total_matches:    refereeStats.total_matches || null,
+      } : null,
+      calibrationData: calibration ? {
+        factor_over15: parseFloat(calibration.calibration_factor_over15) || 1.0,
+        factor_over25: parseFloat(calibration.calibration_factor_over25) || 1.0,
+        factor_gg:     parseFloat(calibration.calibration_factor_gg)     || 1.0,
+        accuracy_over15: parseFloat(calibration.accuracy_over15) || null,
+        accuracy_over25: parseFloat(calibration.accuracy_over25) || null,
+        total_matches:   calibration.total_matches || null,
       } : null,
       weatherData: weatherImpact ? {
         condition:   weatherImpact.weather_condition,

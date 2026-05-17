@@ -280,10 +280,13 @@ export default async function handler(req, res) {
     let totalMatchStats = 0;
     let totalEvents     = 0;
     let totalOdds       = 0;
+    let totalPredUpdated = 0;
 
     for (const fx of toProcess) {
       const fixtureId  = fx.fixture.id;
       const homeTeamId = fx.teams?.home?.id;
+      const homeGoals  = fx.goals?.home ?? 0;
+      const awayGoals  = fx.goals?.away ?? 0;
 
       try {
         const count = await collectFixture(fixtureId, key);
@@ -305,6 +308,21 @@ export default async function handler(req, res) {
         totalOdds += count;
       } catch (_) {}
 
+      // Update prediction results for calibration
+      try {
+        const totalGoals = homeGoals + awayGoals;
+        const bothScored = homeGoals > 0 && awayGoals > 0;
+        const r = await query(
+          `UPDATE predictions SET
+             result_over15 = $2,
+             result_over25 = $3,
+             result_gg     = $4
+           WHERE fixture_id = $1`,
+          [fixtureId, totalGoals > 1, totalGoals > 2, bothScored]
+        );
+        if (r.rowCount > 0) totalPredUpdated++;
+      } catch (_) {}
+
       await sleep(200);
     }
 
@@ -312,13 +330,14 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       date: today,
-      total_ft:    fixtures.length,
-      processed:   toProcess.length,
-      skipped:     fixtures.length - toProcess.length,
-      players:     totalPlayers,
-      match_stats: totalMatchStats,
-      events:      totalEvents,
-      odds:        totalOdds,
+      total_ft:          fixtures.length,
+      processed:         toProcess.length,
+      skipped:           fixtures.length - toProcess.length,
+      players:           totalPlayers,
+      match_stats:       totalMatchStats,
+      events:            totalEvents,
+      odds:              totalOdds,
+      predictions_updated: totalPredUpdated,
     });
   } catch (e) {
     await logCron(0, 0, 'error', e.message);
