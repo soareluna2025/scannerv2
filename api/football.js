@@ -170,11 +170,16 @@ export default async function handler(req, res) {
   const combined = [...afMatches, ...fdNew];
   log(`combined before league-filter: ${combined.length}`);
 
-  const WOMEN_RE = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
-  const LOWER_DIV_RE = /\b[3-9]\.\s*(liga|division|div)\b/i;
+  const WOMEN_RE     = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
+  const LOWER_DIV_RE = /\b[3-9]\.\s*(liga|division|div)\b|\bUSL League Two\b|\bLeague Two\b/i;
+  const YOUTH_RE     = /\bU-?1[6-9]\b|\bU-?2[0-3]\b|\bUnder.?1[6-9]\b|\bUnder.?2[0-3]\b/i;
   const filtered = combined.filter(m => {
-    if (WOMEN_RE.test(m.league?.name || '')) return false;
-    if (LOWER_DIV_RE.test(m.league?.name || '')) return false;
+    const ln = m.league?.name || '';
+    const hn = m.teams?.home?.name || '';
+    const an = m.teams?.away?.name || '';
+    if (WOMEN_RE.test(ln)) return false;
+    if (LOWER_DIV_RE.test(ln)) return false;
+    if (YOUTH_RE.test(ln) || YOUTH_RE.test(hn) || YOUTH_RE.test(an)) return false;
     if (m._src === 'fd') return true;
     return ALLOWED_LEAGUE_IDS.has(m.league?.id);
   });
