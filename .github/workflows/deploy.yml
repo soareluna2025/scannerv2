@@ -84,9 +84,12 @@ jobs:
             echo "CRONTAB ACTIV:"
             crontab -l | grep 'localhost:3000'
 
-            # Restart aplicatie PM2
-            pm2 reload alohascan 2>/dev/null || (cd /root/scannerv2 && pm2 start server.js --name alohascan)
+            # Restart aplicatie PM2 — fortat (stop+delete+start garanteaza cod nou)
+            pm2 stop alohascan 2>/dev/null || true
+            pm2 delete alohascan 2>/dev/null || true
+            cd /root/scannerv2 && pm2 start server.js --name alohascan
             pm2 save
+            sleep 3
             pm2 show alohascan | grep -q online && echo "ALOHASCAN: ONLINE" || echo "ALOHASCAN: ERROR"
 
             echo "Deploy complet: $(date)"
