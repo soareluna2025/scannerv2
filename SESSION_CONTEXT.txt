@@ -257,6 +257,19 @@ DB pe VPS (direct — parola din GitHub Secret POSTGRES_URL):
       → Echipe atacante → mai multe cornere
   Commit:    24650df + merge f89fc16
 
+[17.05.2026 ~20:10] - CATEGORIE NOUĂ GG (Ambele marchează)
+  Fișier:    index.html
+  Poziție:   Ecranul 2: 1.Gazde 2.Oaspeți 3.Goluri 4.🤝GG 5.Cartonașe 6.Cornere
+  Flux:      Cat → direct Screen 4 TOP 10 (fără sub-categorie, fără slider)
+  Algoritm:
+    PRE-MECI: compH(35%) + compA(35%) + h2h_GG(30%)
+    LIVE:     compH(25%) + compA(25%) + h2h_GG(20%) + context_live(30%)
+    compH = P(home scores) × P(away concedes)  — cross-product Poisson
+    compA = P(away scores) × P(home concedes) — cross-product Poisson
+    context_live: 0-0@60+=pressureMult, o echipă marcată=boost, ambele=confirmed
+  FIX BONUS: g2PrepSlider setează titlul S4 înainte de early return
+  Commit:    3062a12 + merge 7a508ff
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 7 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL.AAAA HH:MM] - CE S-A FĂCUT / REZULTAT / URMEAZĂ
