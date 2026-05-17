@@ -75,11 +75,19 @@ jobs:
             echo "CRONTAB ACTIV:"
             crontab -l | grep 'localhost:3000'
 
+            # Asigură că portul 3000 e deschis în firewall
+            ufw allow 3000/tcp 2>/dev/null || true
+
             # Restart serviciu systemd
             systemctl restart alohascan
+            sleep 4
+
+            # Verificare că serverul răspunde
             systemctl is-active alohascan && echo "ALOHASCAN: ONLINE" || echo "ALOHASCAN: ERROR"
+            curl -sf http://localhost:3000/health && echo " ← HEALTH OK" || echo "HEALTH FAILED — verifică logs: journalctl -u alohascan -n 50"
 
             echo "Deploy complet: $(date)"
+            echo "Accesează: http://$(curl -s ifconfig.me 2>/dev/null || echo '192.248.183.230'):3000"
         env:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
