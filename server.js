@@ -1,5 +1,12 @@
 import 'dotenv/config';
 import express from 'express';
+
+process.on('uncaughtException', (err) => {
+  console.error('[crash] uncaughtException:', err.message, err.stack);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[crash] unhandledRejection:', reason);
+});
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { query } from './api/db.js';

@@ -36,8 +36,12 @@ export default async function handler(req, res) {
 
   if (!key) return res.status(500).json({ error: 'Environment vars lipsa' });
 
-  // Asigură coloana goals_diff există (schema veche poate lipsi)
-  await query(`ALTER TABLE standings ADD COLUMN IF NOT EXISTS goals_diff INTEGER DEFAULT 0`).catch(() => {});
+  // Asigură coloana goals_diff există (schema veche are goal_diff fără 's')
+  try {
+    await query(`ALTER TABLE standings ADD COLUMN IF NOT EXISTS goals_diff INTEGER DEFAULT 0`);
+  } catch (e) {
+    console.warn('[collect-daily] ALTER TABLE standings goals_diff:', e.message);
+  }
 
   const startTime = Date.now();
   const stats = { leagues: 0, teams: 0, standings: 0, errors: [] };
@@ -65,7 +69,18 @@ export default async function handler(req, res) {
         const rows = standings[0]?.league?.standings?.[0] || [];
 
         for (const row of rows) {
-          if (!row?.team?.id || row.team.id == null) continue;
+          if (!row?.team?.id) continue;
+
+          // Inserăm echipa ÎNAINTE de standings (FK constraint)
+          await query(
+            `INSERT INTO teams (team_id, name, logo, updated_at)
+             VALUES ($1,$2,$3,$4)
+             ON CONFLICT (team_id) DO UPDATE SET
+               name=EXCLUDED.name, logo=EXCLUDED.logo, updated_at=EXCLUDED.updated_at`,
+            [row.team.id, row.team.name, row.team.logo || null, new Date().toISOString()]
+          );
+          stats.teams++;
+
           await query(
             `INSERT INTO standings
                (league_id, season, team_id, team_name, rank, points,
@@ -91,15 +106,6 @@ export default async function handler(req, res) {
             ]
           );
           stats.standings++;
-
-          await query(
-            `INSERT INTO teams (team_id, name, logo, updated_at)
-             VALUES ($1,$2,$3,$4)
-             ON CONFLICT (team_id) DO UPDATE SET
-               name=EXCLUDED.name, logo=EXCLUDED.logo, updated_at=EXCLUDED.updated_at`,
-            [row.team.id, row.team.name, row.team.logo || null, new Date().toISOString()]
-          );
-          stats.teams++;
         }
       } catch (e) {
         stats.errors.push(`league ${leagueId}: ${e.message}`);
