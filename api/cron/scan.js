@@ -215,7 +215,8 @@ async function saveLiveStats(m, f, status) {
         xg, possession, shots_on_goal, shots_total,
         corners, yellow_cards, red_cards,
         odd_home, odd_draw, odd_away)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+     ON CONFLICT DO NOTHING`,
     [
       m.fixture.id,
       f.mn,
@@ -229,9 +230,9 @@ async function saveLiveStats(m, f, status) {
       f.tC,
       yc,
       rc,
-      null,  // odd_home — nu e disponibil în datele live fără apel separat
-      null,  // odd_draw
-      null,  // odd_away
+      null,
+      null,
+      null,
     ]
   );
 }
@@ -295,6 +296,30 @@ export default async function handler(req, res) {
     log('ERROR: no FOOTBALL_API_KEY');
     return res.status(200).json({ error: 'No API key' });
   }
+
+  // Ensure live_stats table exists (idempotent)
+  await query(`
+    CREATE TABLE IF NOT EXISTS live_stats (
+      id            SERIAL PRIMARY KEY,
+      fixture_id    INTEGER NOT NULL,
+      minute        INTEGER,
+      status        VARCHAR(10),
+      home_goals    INTEGER,
+      away_goals    INTEGER,
+      xg            DECIMAL(4,2),
+      possession    DECIMAL(5,2),
+      shots_on_goal INTEGER,
+      shots_total   INTEGER,
+      corners       INTEGER,
+      yellow_cards  INTEGER,
+      red_cards     INTEGER,
+      odd_home      DECIMAL(5,2),
+      odd_draw      DECIMAL(5,2),
+      odd_away      DECIMAL(5,2),
+      created_at    TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (fixture_id, minute)
+    )
+  `).catch(() => {});
 
   _runCount++;
   log(`run #${_runCount}`);

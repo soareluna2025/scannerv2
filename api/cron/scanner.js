@@ -240,7 +240,8 @@ async function saveLiveStats(m, f, status) {
         xg, possession, shots_on_goal, shots_total,
         corners, yellow_cards, red_cards,
         odd_home, odd_draw, odd_away)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+     ON CONFLICT DO NOTHING`,
     [
       m.fixture.id,
       f.mn,
@@ -497,6 +498,30 @@ export function startScanner() {
     console.log('[scanner] No FOOTBALL_API_KEY — scanner disabled');
     return;
   }
+
+  // Init tables idempotently (fire-and-forget)
+  query(`
+    CREATE TABLE IF NOT EXISTS live_stats (
+      id            SERIAL PRIMARY KEY,
+      fixture_id    INTEGER NOT NULL,
+      minute        INTEGER,
+      status        VARCHAR(10),
+      home_goals    INTEGER,
+      away_goals    INTEGER,
+      xg            DECIMAL(4,2),
+      possession    DECIMAL(5,2),
+      shots_on_goal INTEGER,
+      shots_total   INTEGER,
+      corners       INTEGER,
+      yellow_cards  INTEGER,
+      red_cards     INTEGER,
+      odd_home      DECIMAL(5,2),
+      odd_draw      DECIMAL(5,2),
+      odd_away      DECIMAL(5,2),
+      created_at    TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (fixture_id, minute)
+    )
+  `).catch(e => console.error('[scanner] live_stats init error:', e.message));
 
   // Rulare imediată la startup
   scanLive10s();

@@ -33,9 +33,24 @@ export default async function handler(req, res) {
   if (!key) return res.status(500).json({ error: 'Environment vars lipsa' });
 
   const startTime = Date.now();
-  const stats = { leagues: 0, teams: 0, standings: 0, errors: [] };
+  const stats = { leagues: 0, teams: 0, standings: 0, fixtures: 0, errors: [] };
 
   try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS fixtures (
+        fixture_id     INTEGER PRIMARY KEY,
+        league_id      INTEGER,
+        season         INTEGER,
+        status_short   VARCHAR(10),
+        match_date     TIMESTAMPTZ,
+        home_team_id   INTEGER,
+        home_team_name VARCHAR(200),
+        away_team_id   INTEGER,
+        away_team_name VARCHAR(200),
+        updated_at     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+
     for (const leagueId of PRIORITY_LEAGUES) {
 
       try {
@@ -95,6 +110,42 @@ export default async function handler(req, res) {
         }
       } catch (e) {
         stats.errors.push(`league ${leagueId}: ${e.message}`);
+      }
+    }
+
+    // Fetch NS/scheduled fixtures for the next 7 days across all whitelisted leagues
+    const allowedSet = new Set(PRIORITY_LEAGUES.map(Number));
+    for (let d = 0; d <= 6; d++) {
+      const dt = new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10);
+      try {
+        const fxList = await fetchAPI(`/fixtures?date=${dt}`, key);
+        for (const fx of fxList) {
+          const lgId = Number(fx.league?.id);
+          if (!allowedSet.has(lgId)) continue;
+          const fid = fx.fixture?.id;
+          if (!fid) continue;
+          await query(
+            `INSERT INTO fixtures
+               (fixture_id, league_id, season, status_short, match_date,
+                home_team_id, home_team_name, away_team_id, away_team_name, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+             ON CONFLICT (fixture_id) DO UPDATE SET
+               status_short=EXCLUDED.status_short, match_date=EXCLUDED.match_date,
+               home_team_id=EXCLUDED.home_team_id, home_team_name=EXCLUDED.home_team_name,
+               away_team_id=EXCLUDED.away_team_id, away_team_name=EXCLUDED.away_team_name,
+               updated_at=NOW()`,
+            [
+              fid, lgId, fx.league?.season || SEASON,
+              fx.fixture?.status?.short || 'NS',
+              fx.fixture?.date || null,
+              fx.teams?.home?.id || null, fx.teams?.home?.name || null,
+              fx.teams?.away?.id || null, fx.teams?.away?.name || null,
+            ]
+          );
+          stats.fixtures++;
+        }
+      } catch (e) {
+        stats.errors.push(`fixtures ${dt}: ${e.message}`);
       }
     }
 
