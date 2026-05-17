@@ -1762,6 +1762,33 @@ function mdRenderSumar(d){
     out+='</div>';
   }
 
+  // Antrenori
+  if(en.coachStats&&(en.coachStats.home||en.coachStats.away)){
+    var csMap={offensive:{icon:'⚔️',label:'Ofensiv'},defensive:{icon:'🛡️',label:'Defensiv'},aggressive:{icon:'🟨',label:'Agresiv'},solid:{icon:'🔒',label:'Solid'},balanced:{icon:'⚖️',label:'Echilibrat'}};
+    out+='<div class="md-section"><div class="md-section-title">Antrenori</div>';
+    out+='<div class="league-profile">';
+    ['home','away'].forEach(function(side){
+      var cs=en.coachStats[side];
+      if(!cs||!cs.coach_name)return;
+      var cst=csMap[cs.coach_style]||csMap.balanced;
+      var sideLabel=side==='home'?'Gazdă':'Oaspete';
+      out+='<div class="lp-row"><span class="lp-label" style="font-weight:700">'+sideLabel+'</span><span class="lp-val" style="font-size:11px">'+cs.coach_name+'</span></div>';
+      out+='<div class="lp-row"><span class="lp-label">Stil</span><span class="lp-val">'+cst.icon+' '+cst.label+'</span></div>';
+      out+='<div class="lp-row"><span class="lp-label">Victorii</span><span class="lp-val">'+Math.round(cs.win_rate||0)+'%</span></div>';
+      out+='<div class="lp-row"><span class="lp-label">Over 1.5</span><span class="lp-val">'+Math.round(cs.pct_over_15||0)+'%</span></div>';
+      out+='<div class="lp-row"><span class="lp-label">Over 2.5</span><span class="lp-val">'+Math.round(cs.pct_over_25||0)+'%</span></div>';
+      if(side==='home'){out+='<div style="height:6px"></div>';}
+    });
+    if(en.coachStats.impact){
+      var imp=en.coachStats.impact;
+      out+='<div class="lp-row" style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08)">';
+      out+='<span class="lp-label">'+imp.icon+'</span>';
+      out+='<span class="lp-val" style="font-size:10px;color:var(--mu2)">'+imp.text+'</span>';
+      out+='</div>';
+    }
+    out+='</div></div>';
+  }
+
   // H2H
   if(en.h2hForm&&en.h2hForm.length){
     out+='<div class="md-section"><div class="md-section-title">H2H Direct (ultimele 5)</div>';

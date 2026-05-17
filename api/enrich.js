@@ -300,6 +300,26 @@ async function getMatchStatsFromDB(fixtureId) {
   } catch (_) { return []; }
 }
 
+async function getCoachStatsByTeam(teamId) {
+  if (!teamId) return null;
+  try {
+    const r = await query(`
+      SELECT cs.*
+      FROM (
+        SELECT home_coach_id AS coach_id, match_date FROM fixtures_history
+        WHERE home_team_id = $1 AND home_coach_id IS NOT NULL
+        UNION ALL
+        SELECT away_coach_id, match_date FROM fixtures_history
+        WHERE away_team_id = $1 AND away_coach_id IS NOT NULL
+      ) t
+      JOIN coach_stats cs ON cs.coach_id = t.coach_id
+      ORDER BY t.match_date DESC NULLS LAST
+      LIMIT 1
+    `, [teamId]);
+    return r.rows[0] || null;
+  } catch (_) { return null; }
+}
+
 // Transform h2h rows → API-Football-like format expected by calcPoisson
 function h2hToFixtures(rows) {
   return rows.map(row => ({
@@ -341,7 +361,7 @@ export default async function handler(req, res) {
 
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats] = await Promise.all([
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, homeCoachStats, awayCoachStats] = await Promise.all([
       getFormFromDB(hId),
       getFormFromDB(aId),
       getH2HFromDB(hId, aId),
@@ -349,6 +369,8 @@ export default async function handler(req, res) {
       getTeamStrengths(hId, aId),
       fid ? getInjuriesFromDB(Number(fid)) : Promise.resolve([]),
       fid ? getMatchStatsFromDB(Number(fid)) : Promise.resolve([]),
+      getCoachStatsByTeam(hId),
+      getCoachStatsByTeam(aId),
     ]);
 
     // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
@@ -395,6 +417,31 @@ export default async function handler(req, res) {
 
     // --- Calculations ---
     const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota);
+
+    // Ajustare bazată pe combinația stilurilor antrenorilor
+    const hs = homeCoachStats?.coach_style;
+    const as_ = awayCoachStats?.coach_style;
+    if (hs && as_) {
+      if (hs === 'offensive' && as_ === 'offensive') {
+        result.over25Prob = Math.min(100, result.over25Prob + 12);
+        result.over15Prob = Math.min(100, result.over15Prob + 5);
+      } else if (hs === 'defensive' && as_ === 'defensive') {
+        result.over25Prob = Math.max(0, result.over25Prob - 12);
+        result.over15Prob = Math.max(0, result.over15Prob - 5);
+      }
+      // offensive vs defensive → fără ajustare
+    } else {
+      const single = (homeCoachStats?.total_matches >= 10 && homeCoachStats) ||
+                     (awayCoachStats?.total_matches  >= 10 && awayCoachStats);
+      if (single?.coach_style === 'offensive') {
+        result.over25Prob = Math.min(100, result.over25Prob + 5);
+        result.over15Prob = Math.min(100, result.over15Prob + 3);
+      } else if (single?.coach_style === 'defensive') {
+        result.over25Prob = Math.max(0, result.over25Prob - 5);
+        result.over15Prob = Math.max(0, result.over15Prob - 3);
+      }
+    }
+
     const evData = calcEV(result, oddsRaw, bankroll);
 
     // --- Resolve xG ---
@@ -439,7 +486,26 @@ export default async function handler(req, res) {
       };
     }
 
-    const payload = { ...result, ...evData, ...confData };
+    let coachImpact = null;
+    if (hs && as_) {
+      if (hs === 'offensive' && as_ === 'offensive')
+        coachImpact = { icon: '⚔️⚔️', text: 'Ambii ofensivi — Over 2.5 +12%', delta: '+12%' };
+      else if (hs === 'defensive' && as_ === 'defensive')
+        coachImpact = { icon: '🛡️🛡️', text: 'Ambii defensivi — Under mai probabil', delta: '-12%' };
+      else if ((hs === 'offensive' && as_ === 'defensive') || (hs === 'defensive' && as_ === 'offensive'))
+        coachImpact = { icon: '⚔️🛡️', text: 'Meci echilibrat — fără ajustare', delta: '±0%' };
+      else if (hs === 'aggressive' || as_ === 'aggressive')
+        coachImpact = { icon: '🟨🟨', text: 'Stil agresiv — cartonașe probabile', delta: '' };
+    }
+
+    const payload = {
+      ...result, ...evData, ...confData,
+      coachStats: {
+        home:   homeCoachStats || null,
+        away:   awayCoachStats || null,
+        impact: coachImpact,
+      },
+    };
 
     // Fire-and-forget: colectare injuries + prediction save
     if (fid) {
