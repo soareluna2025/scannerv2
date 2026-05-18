@@ -761,6 +761,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
           </div>
         </div>
       </div>
+      <button onclick="genOpenSim()" style="width:100%;margin-top:12px;padding:13px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#818cf8;font-weight:800;font-size:13px;border-radius:12px;cursor:pointer;letter-spacing:.5px">🔮 SIMULATOR Monte Carlo</button>
     </div>
 
     <!-- S2: categorie -->
@@ -848,6 +849,32 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
         <button class="g2close" onclick="gen2Close()">✕</button>
       </div>
       <div class="g2detail" id="g2detail"></div>
+    </div>
+
+    <!-- S6: simulator -->
+    <div class="gen2-scr out-r" id="g2s6">
+      <div class="g2h">
+        <button class="g2back" onclick="gen2Back()">←</button>
+        <div class="g2title">🔮 SIMULATOR</div>
+        <button class="g2close" onclick="gen2Close()">✕</button>
+      </div>
+      <div style="padding:12px;overflow-y:auto;flex:1">
+        <select id="sim-match-sel" class="sim-select" style="margin-bottom:8px">
+          <option value="">— alege meci —</option>
+        </select>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:4px">
+          <input id="sim-fid" class="sim-inp" placeholder="Fixture ID" type="number">
+          <input id="sim-hid" class="sim-inp" placeholder="Home ID" type="number">
+          <input id="sim-aid" class="sim-inp" placeholder="Away ID" type="number">
+          <input id="sim-lid" class="sim-inp" placeholder="Liga ID" type="number">
+        </div>
+        <button id="sim-run-btn" class="sim-run-btn" onclick="simRun()">🔮 SIMULEAZĂ 10,000 SCENARII</button>
+        <div id="sim-loading" style="display:none;text-align:center;padding:24px 0">
+          <div class="sim-progress-wrap"><div class="sim-progress-fill" id="sim-prog-fill"></div></div>
+          <div id="sim-count-lbl" style="font-size:11px;color:var(--mu);margin-top:6px">0 / 10,000 scenarii</div>
+        </div>
+        <div id="sim-results" style="display:none;padding-bottom:80px"></div>
+      </div>
     </div>
 
   </div>
@@ -2531,7 +2558,13 @@ function g2Conclusion(m,pct,mktLbl){
 
 function genOpen(){gen2Open();}
 function genClose(){gen2Close();}
-function genOpenSim(){gen2Open();}
+function genOpenSim(){
+  document.getElementById('gen2-ov').classList.add('open');
+  document.getElementById('nav-gen').classList.add('active');
+  G2.hist=[1,6];G2.scrn=6;
+  g2Show(6);
+  simPopulateDropdown();
+}
 
 function genUpdateBadge(){} // stub — badge înlocuit cu design nou
 
