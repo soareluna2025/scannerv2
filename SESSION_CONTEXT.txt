@@ -806,7 +806,22 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
   - venues: surface type integrat în generator.js (batch) + g2Score (+5%/+8%/-3%)
   - pre_match_snapshots: ALTER TABLE outcome/composite_score + INSERT în enrich.js + UPDATE în update-results.js
   - admin.js: endpoint /api/admin/prediction-accuracy + accuracy în db-stats
-  Commit: prezent
+  Commit: 9efd309
+
+[18.05 ~03:45] - FIX ALERTĂ NGP FLOOD + ACTIVARE Top Oportunități
+  - scan.js + scanner.js: INSERT ... WHERE NOT EXISTS (2h window); prag 85→70
+  - enrich.js: fix formula composite_score (era /100 → stoca 0-1 în loc de 0-100)
+  - today.js: endpoint ?action=snapshots citește din predictions (nu pre_match_snapshots gol)
+  Commit: b27e1d8
+
+[18.05 ~04:10] - FIX SIMULATOR TAB DISPĂRUT
+  - CAUZA: generator redesign commit 3c00248 a șters ecranul S6 (Simulator) din HTML
+  - simulate.js era intact (sfInjuries, injFactor, toate funcțiile OK)
+  - index.html: adăugat S6 cu select meci + inputs + buton simulare + progress + results
+  - index.html: buton "🔮 SIMULATOR Monte Carlo" în S1 (ecranul de start al generatorului)
+  - index.html: genOpenSim() navighează la S6 + apelează simPopulateDropdown()
+  - ACCES: Generator (⚡ nav) → buton 🔮 SIMULATOR Monte Carlo → S6
+  Commit: 25c7cb3
 
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
