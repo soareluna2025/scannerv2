@@ -868,6 +868,31 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
     - răspuns: factors[] la nivel de răspuns (nu în simulation{})
     - UI S6: secțiune "FACTORI INFLUENȚĂ" cu icon + text + impact
   Fișiere modificate: api/monte-carlo.js, api/simulate.js, index.html
+  Commit: 5c7fb21
+
+[18.05 ~06:30] - WIN RATE CONTOR NGP + DISTRIBUȚIE MINUTE GOLURI REALE
+  FEATURE 1 — WIN RATE CONTOR (W/L/P)
+    - create-tables.sql: ALTER TABLE predictions ADD score_at_alert TEXT, outcome_ngp TEXT
+    - scanner.js: când NGP ≥ 70 → INSERT/UPSERT în predictions cu score_at_alert + outcome_ngp='PENDING'
+      liveCache[id].ngpAlertScore reține scorul la momentul alertei (per fixture, o singură dată)
+    - scanner.js: după loop-ul principal de meciuri → rezolvare batch:
+      WIN: fixture_id în liveIds ȘI scorul din liveCache s-a schimbat față de ngpAlertScore
+      LOSS: outcome_ngp='PENDING' ȘI fixture_id NOT IN liveIds (meci dispărut, max 3h)
+    - db-stats.js: query COUNT per outcome_ngp pentru azi → returnează ngpWinRate{w,l,p,resolved,rate}
+    - index.html: fetchSupabaseWinRate() acum citește /api/db-stats → ngpWinRate
+      Rate colorat: verde >60%, galben 40-60%, roșu <40%
+      setInterval 30s pentru polling automat când conectat
+  FEATURE 2 — DISTRIBUȚIE MINUTE GOLURI REALE
+    - simulate.js: sfGoalMinuteDistribution(leagueId)
+      Prioritate 1: match_events JOIN fixtures_history pentru liga curentă (≥50 goluri)
+      Prioritate 2: match_events global din toate ligile (≥100 goluri)
+      Prioritate 3: distribuție statistică FIFA: 14/15/18/16/18/19%
+    - simulate.js: goalMinDist adăugat în batch 1 (paralel cu celelate query-uri DB)
+    - răspuns: goalMinuteDistribution, goalMinuteSource, goalMinuteCount
+    - index.html: secțiunea "DISTRIBUȚIE MINUTE GOLURI" afișează sursa:
+      "✅ Distribuție calculată din X goluri reale" sau "📊 Distribuție statistică FIFA"
+  Fișiere modificate: scripts/create-tables.sql, api/cron/scanner.js, api/db-stats.js,
+                      api/simulate.js, index.html
   Commit: (pending)
 
 ================================================================================

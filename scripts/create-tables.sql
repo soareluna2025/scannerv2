@@ -894,6 +894,10 @@ CREATE TABLE IF NOT EXISTS league_stats (
 -- referee coloană în fixtures_history (adăugată idempotent)
 ALTER TABLE fixtures_history ADD COLUMN IF NOT EXISTS referee TEXT;
 
+-- NGP win-rate tracking columns on predictions
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score_at_alert TEXT;
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS outcome_ngp    TEXT DEFAULT NULL;
+
 -- ── 37. prediction_log ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS prediction_log (
   id                  SERIAL PRIMARY KEY,

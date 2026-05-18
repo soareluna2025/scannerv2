@@ -1343,17 +1343,24 @@ function renderWR(data){
 }
 async function fetchSupabaseWinRate(){
   try{
-    var r=await fetch('/api/health-check');
+    var r=await fetch('/api/db-stats');
     var d=await r.json();
-    var wr=d&&d.winRate;
-    if(wr&&wr.total>0){
-      document.getElementById('wr-w').textContent='W: '+wr.correct;
-      document.getElementById('wr-l').textContent='L: '+wr.incorrect;
-      document.getElementById('wr-p').textContent='P: '+wr.pending;
-      document.getElementById('wr-r').textContent=wr.percentage+'%';
+    var wr=d&&d.ngpWinRate;
+    if(!wr)return;
+    document.getElementById('wr-w').textContent='W: '+wr.w;
+    document.getElementById('wr-l').textContent='L: '+wr.l;
+    document.getElementById('wr-p').textContent='P: '+wr.p;
+    var rEl=document.getElementById('wr-r');
+    if(wr.rate!=null){
+      rEl.textContent=wr.rate+'%';
+      rEl.style.color=wr.rate>60?'#22c55e':wr.rate>=40?'#f59e0b':'#ef4444';
+    } else {
+      rEl.textContent='—';rEl.style.color='';
     }
   }catch(e){}
 }
+// Poll server W/L/P every 30s while connected
+setInterval(function(){if(ST.connected)fetchSupabaseWinRate();},30000);
 
 // ── PRE-MECI ──────────────────────────────────────────────────
 var PM_SENT=new Set();var PM_LOADED=false;var PM_SEARCH='';
@@ -2944,14 +2951,23 @@ function simRender(d){
     html+='</div>';
   }
 
-  // ── Goal timing ───────────────────────────────────────────
-  if(sim.goalTiming){
-    html+='<div class="sim-section"><div class="sim-section-title">DISTRIBUȚIE MINUTE GOLURI</div>';
-    Object.entries(sim.goalTiming).forEach(function(e){
+  // ── Goal timing — real distribution from match_events ────────
+  var gmd=sim.goalMinuteDistribution||sim.goalTiming;
+  if(gmd){
+    var gmdSrc=sim.goalMinuteSource||'';
+    var gmdN=sim.goalMinuteCount||0;
+    var isReal=gmdSrc&&gmdSrc.indexOf('statistică FIFA')<0;
+    var srcNote=isReal
+      ?'<span style="color:#22c55e">✅</span> Distribuție calculată din <b>'+gmdN+'</b> goluri reale'
+      :'<span style="color:var(--mu)">📊</span> Distribuție statistică FIFA (date insuficiente)';
+    html+='<div class="sim-section">';
+    html+='<div class="sim-section-title">DISTRIBUȚIE MINUTE GOLURI <span style="font-size:10px;font-weight:400;color:var(--mu)">'+gmdSrc+'</span></div>';
+    Object.entries(gmd).forEach(function(e){
       html+='<div class="sim-timing-row"><div class="sim-timing-lbl">'+e[0]+"'</div>";
       html+='<div class="sim-timing-bar"><div class="sim-timing-fill" style="width:'+e[1]+'%"></div></div>';
       html+='<div class="sim-timing-val">'+e[1]+'%</div></div>';
     });
+    html+='<div style="font-size:10px;color:var(--mu);margin-top:6px">'+srcNote+'</div>';
     html+='</div>';
   }
 

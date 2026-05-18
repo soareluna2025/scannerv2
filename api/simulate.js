@@ -154,6 +154,75 @@ async function sfInjuries(fixtureId) {
   } catch (_) { return {}; }
 }
 
+// Real goal minute distribution from match_events
+const FIFA_DISTRIBUTION = { '1-15': 14, '16-30': 15, '31-45': 18, '46-60': 16, '61-75': 18, '76-90': 19 };
+
+async function sfGoalMinuteDistribution(leagueId) {
+  const bands = [
+    ['1-15', 1, 15], ['16-30', 16, 30], ['31-45', 31, 45],
+    ['46-60', 46, 60], ['61-75', 61, 75], ['76-90', 76, 90],
+  ];
+
+  try {
+    // League-specific distribution — join match_events with fixtures_history for league_id
+    if (leagueId) {
+      const { rows: lgRows } = await query(
+        `SELECT
+           CASE
+             WHEN me.elapsed BETWEEN 1  AND 15 THEN '1-15'
+             WHEN me.elapsed BETWEEN 16 AND 30 THEN '16-30'
+             WHEN me.elapsed BETWEEN 31 AND 45 THEN '31-45'
+             WHEN me.elapsed BETWEEN 46 AND 60 THEN '46-60'
+             WHEN me.elapsed BETWEEN 61 AND 75 THEN '61-75'
+             WHEN me.elapsed BETWEEN 76 AND 90 THEN '76-90'
+           END AS band,
+           COUNT(*) AS goals
+         FROM match_events me
+         JOIN fixtures_history fh ON fh.fixture_id = me.fixture_id
+         WHERE me.type = 'Goal'
+           AND me.elapsed BETWEEN 1 AND 90
+           AND fh.league_id = $1
+         GROUP BY band`,
+        [leagueId]
+      );
+      const totalLg = lgRows.reduce((s, r) => s + Number(r.goals), 0);
+      if (totalLg >= 50) {
+        const dist = {};
+        const map = Object.fromEntries(lgRows.map(r => [r.band, Number(r.goals)]));
+        bands.forEach(([lbl]) => { dist[lbl] = totalLg > 0 ? Math.round((map[lbl] || 0) / totalLg * 100) : 0; });
+        return { dist, source: `ligă (${totalLg} goluri)`, goalCount: totalLg };
+      }
+    }
+
+    // Global fallback — all leagues
+    const { rows: glRows } = await query(
+      `SELECT
+         CASE
+           WHEN elapsed BETWEEN 1  AND 15 THEN '1-15'
+           WHEN elapsed BETWEEN 16 AND 30 THEN '16-30'
+           WHEN elapsed BETWEEN 31 AND 45 THEN '31-45'
+           WHEN elapsed BETWEEN 46 AND 60 THEN '46-60'
+           WHEN elapsed BETWEEN 61 AND 75 THEN '61-75'
+           WHEN elapsed BETWEEN 76 AND 90 THEN '76-90'
+         END AS band,
+         COUNT(*) AS goals
+       FROM match_events
+       WHERE type = 'Goal' AND elapsed BETWEEN 1 AND 90
+       GROUP BY band`
+    );
+    const totalGl = glRows.reduce((s, r) => s + Number(r.goals), 0);
+    if (totalGl >= 100) {
+      const dist = {};
+      const map = Object.fromEntries(glRows.map(r => [r.band, Number(r.goals)]));
+      bands.forEach(([lbl]) => { dist[lbl] = totalGl > 0 ? Math.round((map[lbl] || 0) / totalGl * 100) : 0; });
+      return { dist, source: `global (${totalGl} goluri)`, goalCount: totalGl };
+    }
+  } catch (_) {}
+
+  // FIFA statistical fallback
+  return { dist: { ...FIFA_DISTRIBUTION }, source: 'statistică FIFA', goalCount: 0 };
+}
+
 async function sfModelWeight(module, contextKey, weightName) {
   try {
     const { rows } = await query(
@@ -253,6 +322,7 @@ export default async function handler(req, res) {
     homePlayers, awayPlayers, injData,
     homeFormTable, awayFormTable, leagueStats,
     lambdaMult,
+    goalMinDist,
   ] = await Promise.all([
     af(`/fixtures?id=${fid}`,              'fixture'),
     af(`/fixtures/lineups?fixture=${fid}`, 'lineups'),
@@ -268,6 +338,7 @@ export default async function handler(req, res) {
     lid ? sfFormTable(aid, lid) : Promise.resolve(null),
     lid ? sfLeagueStats(lid)    : Promise.resolve(null),   // league_stats real avg
     lid ? sfModelWeight('OVER15', `league_${lid}`, 'lambda_multiplier') : Promise.resolve(null),
+    sfGoalMinuteDistribution(lid || 0),
   ]);
 
   // Fixture basics — needed before batch 2
@@ -651,6 +722,9 @@ export default async function handler(req, res) {
         ? `${+(hgCur + lH).toFixed(1)} - ${+(agCur + lA).toFixed(1)}`
         : `${+lH.toFixed(1)} - ${+lA.toFixed(1)}`,
       goalTiming: sim.goalTiming,
+      goalMinuteDistribution: goalMinDist.dist,
+      goalMinuteSource: goalMinDist.source,
+      goalMinuteCount: goalMinDist.goalCount,
       confidence: sim.confidence,
       scenarios:  sim.scenarios,
       modelCalibrated,

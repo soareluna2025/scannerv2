@@ -443,6 +443,27 @@ async function scanLive10s() {
         const conf      = ng > 70 ? ng / 100 : mk.over15 / 100;
         const msg       = `${m.teams?.home?.name} vs ${m.teams?.away?.name} — ${alertType} ${Math.round(conf * 100)}% min ${currMin}`;
         saveAlert(id, alertType, ng > 70 ? 'ng' : 'over15', msg, conf).catch(() => {});
+
+        // Track in predictions for header W/L/P counter
+        if (ng > 70 && !liveCache[id]?.ngpAlertScore) {
+          const alertScore = `${currHome}-${currAway}`;
+          liveCache[id].ngpAlertScore = alertScore;
+          query(
+            `INSERT INTO predictions
+               (fixture_id, home_team, away_team, match_date, score_at_alert, outcome_ngp, league_id, league_name)
+             VALUES ($1,$2,$3,NOW(),$4,'PENDING',$5,$6)
+             ON CONFLICT (fixture_id) DO UPDATE SET
+               score_at_alert = CASE WHEN predictions.score_at_alert IS NULL
+                                     THEN EXCLUDED.score_at_alert
+                                     ELSE predictions.score_at_alert END,
+               outcome_ngp    = CASE WHEN predictions.score_at_alert IS NULL
+                                     THEN 'PENDING'
+                                     ELSE predictions.outcome_ngp END,
+               updated_at = NOW()`,
+            [id, m.teams?.home?.name, m.teams?.away?.name, alertScore, m.league?.id, m.league?.name]
+          ).catch(() => {});
+        }
+
         // Log to prediction_log for self-learning
         logPrediction({
           fixture_id:      id,
@@ -460,6 +481,55 @@ async function scanLive10s() {
           lambda_away:     null,
         }).catch(() => {});
       }
+    }
+
+    // ── Rezolvare WIN/LOSS pentru contorul NGP din header ────────────────────
+    const liveFixtureIds = raw
+      .filter(m => LIVE_STATUS.has(m.fixture?.status?.short || ''))
+      .map(m => m.fixture?.id)
+      .filter(Boolean);
+
+    // WIN: meci încă live dar scorul s-a schimbat față de score_at_alert
+    // Detectăm prin liveCache[id].ngpAlertScore vs scorul curent
+    const winIds = [];
+    for (const m of raw) {
+      const mid = m.fixture?.id;
+      if (!mid || !LIVE_STATUS.has(m.fixture?.status?.short || '')) continue;
+      const cached = liveCache[mid];
+      if (cached?.ngpAlertScore) {
+        const curScore = `${m.goals?.home ?? 0}-${m.goals?.away ?? 0}`;
+        if (curScore !== cached.ngpAlertScore) {
+          winIds.push(mid);
+          cached.ngpAlertScore = null; // marcat — nu mai trimitem WIN repetat
+        }
+      }
+    }
+    if (winIds.length > 0) {
+      query(
+        `UPDATE predictions SET outcome_ngp='WIN', updated_at=NOW()
+         WHERE outcome_ngp='PENDING' AND fixture_id = ANY($1) AND score_at_alert IS NOT NULL`,
+        [winIds]
+      ).catch(() => {});
+    }
+
+    // LOSS: predicție PENDING dar meciul nu mai e live
+    if (liveFixtureIds.length > 0) {
+      query(
+        `UPDATE predictions SET outcome_ngp='LOSS', updated_at=NOW()
+         WHERE outcome_ngp='PENDING'
+           AND score_at_alert IS NOT NULL
+           AND match_date > NOW() - INTERVAL '3h'
+           AND fixture_id != ALL($1::int[])`,
+        [liveFixtureIds]
+      ).catch(() => {});
+    } else if (raw.length > 0) {
+      // API a returnat date dar nu există meciuri live — rezolvă toate pending
+      query(
+        `UPDATE predictions SET outcome_ngp='LOSS', updated_at=NOW()
+         WHERE outcome_ngp='PENDING'
+           AND score_at_alert IS NOT NULL
+           AND match_date > NOW() - INTERVAL '3h'`
+      ).catch(() => {});
     }
 
     // League patterns la fiecare 10 rulări
