@@ -605,8 +605,8 @@ export default async function handler(req, res) {
       // Pre-match snapshot for back-testing (only when not live)
       if (!parseInt(elapsed)) {
         const compositeScore = +(
-          (payload.over15Prob * 0.40 + payload.ggProb * 0.30 + payload.homeWin * 0.30) / 100
-        ).toFixed(2);
+          payload.over15Prob * 0.40 + payload.ggProb * 0.30 + payload.homeWin * 0.30
+        ).toFixed(1);
         query(
           `INSERT INTO pre_match_snapshots
              (fixture_id, home_team_id, away_team_id, lambda_home, lambda_away,

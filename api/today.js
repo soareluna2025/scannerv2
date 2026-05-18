@@ -57,8 +57,33 @@ export default async function handler(req, res) {
   const action = (req.query && req.query.action) ||
     new URL(req.url || '', 'http://localhost').searchParams.get('action');
   if (action === 'snapshots') {
-    // pre_match_snapshots schema does not have composite_score or outcome columns
-    return res.status(200).json({ snapshots: [] });
+    try {
+      const { rows } = await query(`
+        SELECT
+          pms.fixture_id,
+          COALESCE(pms.composite_score, pms.confidence) AS composite_score,
+          pms.over15_prob  AS over15_score,
+          pms.gg_prob      AS gg_score,
+          pms.confidence,
+          pms.outcome,
+          f.home_team_name AS home_team,
+          f.away_team_name AS away_team,
+          f.match_date     AS kickoff_time,
+          f.league_id,
+          l.name           AS league_name
+        FROM pre_match_snapshots pms
+        LEFT JOIN fixtures f ON f.fixture_id = pms.fixture_id
+        LEFT JOIN leagues  l ON l.league_id  = f.league_id
+        WHERE pms.outcome IS NULL
+          AND f.match_date > NOW()
+          AND f.match_date < NOW() + INTERVAL '3 days'
+        ORDER BY COALESCE(pms.composite_score, pms.confidence) DESC NULLS LAST
+        LIMIT 20
+      `).catch(() => ({ rows: [] }));
+      return res.status(200).json({ snapshots: rows });
+    } catch (e) {
+      return res.status(200).json({ snapshots: [], error: e.message });
+    }
   }
 
   if (!key) {

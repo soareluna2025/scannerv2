@@ -270,10 +270,14 @@ async function saveFormStats(matches, teamId) {
 
 async function saveAlert(fixtureId, alertType, market, message, confidence) {
   await query(
-    `INSERT INTO alerts
-       (fixture_id, alert_type, message, ngp_value, telegram_ok)
-     VALUES ($1,$2,$3,$4,$5)`,
-    [fixtureId, alertType, message, confidence || null, false]
+    `INSERT INTO alerts (fixture_id, alert_type, message, ngp_value, telegram_ok)
+     SELECT $1,$2,$3,$4,FALSE
+     WHERE NOT EXISTS (
+       SELECT 1 FROM alerts
+       WHERE fixture_id=$1 AND alert_type=$2
+         AND sent_at > NOW() - INTERVAL '2 hours'
+     )`,
+    [fixtureId, alertType, message, confidence || null]
   );
 }
 
@@ -362,11 +366,11 @@ export default async function handler(req, res) {
       // Save live_stats (non-blocking)
       saveLiveStats(m, f, sh).catch(e => log(`live_stats error ${m.fixture.id}: ${e.message}`));
 
-      // Save alert if NGP > 85 or over15 > 82
-      if (ng > 85 || mk.over15 > 82) {
-        const alertType = ng > 85 ? 'HIGH_NGP' : 'HIGH_OVER15';
-        const market    = ng > 85 ? 'ng' : 'over15';
-        const conf      = ng > 85 ? ng / 100 : mk.over15 / 100;
+      // Save alert once per match when NGP > 70 or over15 > 70
+      if (ng > 70 || mk.over15 > 70) {
+        const alertType = ng > 70 ? 'HIGH_NGP' : 'HIGH_OVER15';
+        const market    = ng > 70 ? 'ng' : 'over15';
+        const conf      = ng > 70 ? ng / 100 : mk.over15 / 100;
         const msg       = `${m.teams?.home?.name} vs ${m.teams?.away?.name} — ${alertType} ${Math.round(conf * 100)}% min ${elapsed}`;
         saveAlert(m.fixture.id, alertType, market, msg, conf)
           .catch(e => log(`alert error ${m.fixture.id}: ${e.message}`));
