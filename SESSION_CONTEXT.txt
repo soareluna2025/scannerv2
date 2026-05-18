@@ -823,6 +823,53 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
   - ACCES: Generator (⚡ nav) → buton 🔮 SIMULATOR Monte Carlo → S6
   Commit: 25c7cb3
 
+[18.05 ~05:30] - SELF-LEARNING ENGINE complet — 11 task-uri
+  - prediction_log (tabel 37) + model_weights (tabel 38) cu valori default în create-tables.sql
+  - api/log-prediction.js: INSERT fire-and-forget în prediction_log
+  - api/weights.js: cache greutăți cu TTL 1h, fallback specific→global
+  - api/cron/learning-analysis.js: analiză zilnică 03:30 (5 pași)
+    Pasul 1: per ligă per modul → ajustare threshold (anti-overfit: min 20, ±5-15%)
+    Pasul 2: per interval minut → factor ±10%
+    Pasul 3: per scor → factor ±8%
+    Pasul 4: re-calibrare layere confidence via CORR() PostgreSQL + normalizare
+    Pasul 5: log în cron_logs
+  - scanner.js + enrich.js: logPrediction() la fiecare alertă/predicție
+  - update-results.js: rezolvă outcome WIN/LOSS în prediction_log la FT
+  - admin.js: GET /api/admin/learning-stats
+  - health-check.js: fix tWinRate() cu query real din pre_match_snapshots
+  - server.js: loadModelWeights() la startup + rută learning-analysis
+  - deploy.yml: cron C8 30 3 * * * → POST /api/cron/learning-analysis
+  Commit: f59947e
+
+[18.05 ~06:00] - ÎMBUNĂTĂȚIRI SIMULATOR S6 (5 improvements)
+  ÎMBUNĂTĂȚIRE 1 — SELF-LEARNING INTEGRATION
+    - simulate.js: sfModelWeight() helper → SELECT din model_weights
+    - lambda_multiplier per ligă aplicat pe lambdele de bază (înainte de ajustare live)
+    - răspuns: modelCalibrated, lambdaMultiplier
+    - UI S6: badge "🧠 Model calibrat" sau "📊 Model generic" sub scorul probabil
+  ÎMBUNĂTĂȚIRE 2 — CONFIDENCE INTERVALS
+    - simulate.js: sampleSize = h2h + min(homeMatches, awayMatches), max 150
+    - ciMargin: <10→±15%, 10-30→±10%, 30-100→±5%, >100→±2%
+    - răspuns: confidenceIntervals { over15, over25, gg } cu { value, margin }
+    - UI S6: "Over 1.5: 72.2% ± 8.3%" + bară de incertitudine vizuală (gradient)
+  ÎMBUNĂTĂȚIRE 3 — SIMULARE CONDIȚIONATĂ LIVE
+    - simulate.js expune: isLive, elapsed, currentScore în răspuns
+    - Monte Carlo deja gestiona live corect (λ ajustat + currentGoals ca offset)
+    - UI S6: "🔴 LIVE · min X · Scor Y-Z" + mesaj "Simulare din minutul X"
+  ÎMBUNĂTĂȚIRE 4 — SCENARII ALTERNATIVE
+    - monte-carlo.js: simTotals[10k] → sortare → p10/p90 percentile
+    - allScoresData: parse scoruri → optimist (total≥p90), pesimist (total≤p10)
+    - surprise: prob 5-15%, cel mai mare număr goluri
+    - răspuns: sim.scenarios { optimist, pessimist, surprise } cu { score, goals, prob }
+    - UI S6: secțiune "SCENARII" cu 🟢/🔴/⚡ și prob în paranteză
+  ÎMBUNĂTĂȚIRE 5 — FACTORI CONTEXTUALI
+    - simulate.js: colectează factors[] după calculul sim
+    - Factori: accidentați (≥3), arbitru (high/low_scorer/strict), ELO>150, model calibrat
+    - răspuns: factors[] la nivel de răspuns (nu în simulation{})
+    - UI S6: secțiune "FACTORI INFLUENȚĂ" cu icon + text + impact
+  Fișiere modificate: api/monte-carlo.js, api/simulate.js, index.html
+  Commit: (pending)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash

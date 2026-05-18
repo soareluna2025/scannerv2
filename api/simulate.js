@@ -154,6 +154,17 @@ async function sfInjuries(fixtureId) {
   } catch (_) { return {}; }
 }
 
+async function sfModelWeight(module, contextKey, weightName) {
+  try {
+    const { rows } = await query(
+      `SELECT weight_value FROM model_weights
+       WHERE module=$1 AND context_key=$2 AND weight_name=$3 LIMIT 1`,
+      [module, contextKey, weightName]
+    );
+    return rows[0] ? Number(rows[0].weight_value) : null;
+  } catch (_) { return null; }
+}
+
 async function sfPlayerStats(teamId, label, dq) {
   try {
     const r = await query(
@@ -241,6 +252,7 @@ export default async function handler(req, res) {
     sbHomeFx, sbAwayFx, sbH2HData, sbStdData, sbOddsData,
     homePlayers, awayPlayers, injData,
     homeFormTable, awayFormTable, leagueStats,
+    lambdaMult,
   ] = await Promise.all([
     af(`/fixtures?id=${fid}`,              'fixture'),
     af(`/fixtures/lineups?fixture=${fid}`, 'lineups'),
@@ -255,6 +267,7 @@ export default async function handler(req, res) {
     lid ? sfFormTable(hid, lid) : Promise.resolve(null),   // form_stats season avg
     lid ? sfFormTable(aid, lid) : Promise.resolve(null),
     lid ? sfLeagueStats(lid)    : Promise.resolve(null),   // league_stats real avg
+    lid ? sfModelWeight('OVER15', `league_${lid}`, 'lambda_multiplier') : Promise.resolve(null),
   ]);
 
   // Fixture basics — needed before batch 2
@@ -479,6 +492,20 @@ export default async function handler(req, res) {
     aAtt * hDef * lgAwayGoals / eloFactor * pfAway * refFactor * injFactorA
   )), lgAwayGoals);
 
+  // ── Self-learning: apply league-specific lambda multiplier if calibrated ───
+  const modelCalibrated = lambdaMult != null && lambdaMult !== 1.0;
+  if (modelCalibrated) {
+    lH = safe(Math.max(0.2, Math.min(4.0, lH * lambdaMult)), lH);
+    lA = safe(Math.max(0.2, Math.min(4.0, lA * lambdaMult)), lA);
+  }
+
+  // ── Confidence interval margin based on available historical sample ────────
+  const sampleSize = Math.min(
+    (sbH2HData.length || h2hFx.length) + Math.min(homeFx.length, awayFx.length),
+    150
+  );
+  const ciMargin = sampleSize < 10 ? 15 : sampleSize < 30 ? 10 : sampleSize < 100 ? 5 : 2;
+
   // ── Live adjustment using REAL live statistics ─────────────────────────────
   if (isLive && elapsed > 0) {
     const mRem  = Math.max(1, 90 - elapsed);
@@ -508,6 +535,26 @@ export default async function handler(req, res) {
 
   // ── Momentum ──────────────────────────────────────────────────────────────
   const momentum = liveStats ? calcMomentum(liveStats) : null;
+
+  // ── Contextual factors that influenced the simulation ─────────────────────
+  const factors = [];
+  if (homeInjuries >= 3) factors.push({ icon: '🔴', text: `${homeInjuries} accidentați gazde`, impact: `-${Math.round((1 - injFactorH) * 100)}% goluri` });
+  if (awayInjuries >= 3) factors.push({ icon: '🔴', text: `${awayInjuries} accidentați oaspeți`, impact: `-${Math.round((1 - injFactorA) * 100)}% goluri` });
+  if (refStats) {
+    if (refStats.style === 'high_scorer') {
+      factors.push({ icon: '🟢', text: `Arbitru permisiv (${refName || ''})`, impact: `${refStats.avgGoals?.toFixed(1) || '?'} goluri/meci` });
+    } else if (refStats.style === 'low_scorer') {
+      factors.push({ icon: '🔴', text: `Arbitru restrictiv (${refName || ''})`, impact: `${refStats.avgGoals?.toFixed(1) || '?'} goluri/meci` });
+    } else if (refStats.avgYellow > 0) {
+      factors.push({ icon: '🟡', text: `Arbitru (${refName || ''})`, impact: `Avg ${refStats.avgYellow.toFixed(1)} galbene/meci` });
+    }
+  }
+  if (Math.abs(elo.eloDiff) > 150) {
+    factors.push({ icon: elo.eloDiff > 0 ? '🟢' : '🔴', text: `ELO diferență: ${elo.eloDiff > 0 ? '+' : ''}${elo.eloDiff}`, impact: elo.eloDiff > 0 ? 'Gazde superioare' : 'Oaspeți superiori' });
+  }
+  if (modelCalibrated) {
+    factors.push({ icon: '🧠', text: 'Model calibrat din date reale', impact: `λ×${lambdaMult.toFixed(2)} (${fix?.league?.name || 'ligă'})` });
+  }
 
   // ── Data quality ──────────────────────────────────────────────────────────
   const missing  = Object.values(dq).filter(v => v === '❌').length;
@@ -592,6 +639,9 @@ export default async function handler(req, res) {
       lambdaHome: +lH.toFixed(3),
       lambdaAway: +lA.toFixed(3),
       simCount: 10000,
+      isLive,
+      elapsed,
+      currentScore: isLive ? `${hgCur}-${agCur}` : null,
       results:               sim.results,
       markets:               sim.markets,
       scoreDistribution:     sim.scoreDistribution,
@@ -602,7 +652,17 @@ export default async function handler(req, res) {
         : `${+lH.toFixed(1)} - ${+lA.toFixed(1)}`,
       goalTiming: sim.goalTiming,
       confidence: sim.confidence,
+      scenarios:  sim.scenarios,
+      modelCalibrated,
+      lambdaMultiplier: lambdaMult,
+      sampleSize,
+      confidenceIntervals: {
+        over15: { value: sim.markets.over15, margin: ciMargin },
+        over25: { value: sim.markets.over25, margin: ciMargin },
+        gg:     { value: sim.markets.gg,     margin: ciMargin },
+      },
     },
+    factors,
     momentum,
     recommendation: bestBet ? {
       bestBet:    bestBet.name,

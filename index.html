@@ -2865,14 +2865,17 @@ function simRender(d){
   // ── Expected score block ──────────────────────────────────
   html+='<div class="sim-score-block">';
   html+='<div class="sim-teams">'+(fix.homeTeam||'Gazde')+' vs '+(fix.awayTeam||'Oaspeți')+'</div>';
-  if(fix.status&&['1H','2H','HT','ET','BT','P','LIVE','INT'].indexOf(fix.status)>=0){
-    html+='<div style="font-size:11px;color:#ef4444;margin-bottom:4px">🔴 LIVE '+fix.minute+"' | "+fix.score+'</div>';
+  if(sim.isLive){
+    html+='<div style="font-size:11px;color:#ef4444;font-weight:700;margin-bottom:4px">🔴 LIVE · min '+sim.elapsed+"' · Scor "+sim.currentScore+'</div>';
+    html+='<div style="font-size:10px;color:var(--mu);margin-bottom:4px">Simulare din minutul '+sim.elapsed+' — probabilitățile se referă la goluri adiționale față de scorul curent</div>';
   }
   html+='<div class="sim-score-big">'+sim.expectedScore+'</div>';
   html+='<div class="sim-likely">Scor probabil: <strong>'+(sim.mostLikelyScore||'?')+'</strong>';
   var topProb=sim.scoreDistribution&&sim.scoreDistribution[0]?sim.scoreDistribution[0].prob:null;
   if(topProb)html+=' ('+topProb+'%)';
   html+='</div>';
+  var calibBadge=sim.modelCalibrated?'<span style="font-size:10px;background:rgba(99,102,241,0.18);color:#818cf8;border-radius:8px;padding:2px 8px;font-weight:700">🧠 Model calibrat</span>':'<span style="font-size:10px;background:rgba(100,116,139,0.15);color:var(--mu);border-radius:8px;padding:2px 8px">📊 Model generic</span>';
+  html+='<div style="margin-top:6px">'+calibBadge+'</div>';
   html+='</div>';
 
   // ── Result bars ───────────────────────────────────────────
@@ -2899,20 +2902,46 @@ function simRender(d){
     html+='</div></div>';
   }
 
-  // ── Markets ───────────────────────────────────────────────
+  // ── Markets with confidence intervals ────────────────────
   if(sim.markets){
     html+='<div class="sim-section"><div class="sim-section-title">PIEȚE</div>';
-    html+='<div class="sim-market-grid">';
-    var mkts=[
-      ['Over 1.5',sim.markets.over15],['Over 2.5',sim.markets.over25],
-      ['GG',sim.markets.gg],         ['BTTS No', sim.markets.bttsNo],
-      ['Over 0.5',sim.markets.over05],['Over 3.5', sim.markets.over35],
+    var ci=sim.confidenceIntervals||{};
+    var ciMarginStr=sim.sampleSize!=null?(' <span style="font-size:10px;color:var(--mu)">(n='+sim.sampleSize+')</span>'):'';
+    // Over 1.5, Over 2.5, GG — with CI bars
+    var ciMkts=[
+      ['Over 1.5',sim.markets.over15,ci.over15],
+      ['Over 2.5',sim.markets.over25,ci.over25],
+      ['GG',      sim.markets.gg,    ci.gg],
     ];
-    mkts.forEach(function(m){
+    ciMkts.forEach(function(m){
+      var val=m[1],ciObj=m[2];
+      var margin=ciObj?ciObj.margin:null;
+      html+='<div style="margin-bottom:8px">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">';
+      html+='<span style="font-size:12px;color:var(--mu2)">'+m[0]+'</span>';
+      html+='<span style="font-weight:800;font-size:14px;color:'+ec(val)+'">'+val+'%';
+      if(margin!=null)html+=' <span style="font-size:10px;color:var(--mu);font-weight:400">± '+margin+'%</span>';
+      html+='</span></div>';
+      // Uncertainty bar
+      var lo=margin!=null?Math.max(0,val-margin):val;
+      var hi=margin!=null?Math.min(100,val+margin):val;
+      html+='<div style="position:relative;height:6px;background:var(--bor);border-radius:3px;overflow:hidden">';
+      html+='<div style="position:absolute;left:'+lo+'%;width:'+(hi-lo)+'%;height:100%;background:rgba(99,102,241,0.25);border-radius:3px"></div>';
+      html+='<div style="position:absolute;left:0;width:'+val+'%;height:100%;background:'+ec(val)+';border-radius:3px;opacity:0.8"></div>';
+      html+='</div></div>';
+    });
+    // Remaining markets compact
+    html+='<div class="sim-market-grid" style="margin-top:4px">';
+    var mkts2=[
+      ['BTTS No',sim.markets.bttsNo],['Over 0.5',sim.markets.over05],['Over 3.5',sim.markets.over35],
+    ];
+    mkts2.forEach(function(m){
       html+='<div class="sim-market-item"><div class="sim-market-name">'+m[0]+'</div>';
       html+='<div class="sim-market-val" style="color:'+ec(m[1])+'">'+m[1]+'%</div></div>';
     });
-    html+='</div></div>';
+    html+='</div>';
+    if(sim.sampleSize!=null)html+='<div style="font-size:10px;color:var(--mu);margin-top:4px">Interval calculat din '+sim.sampleSize+' meciuri istorice</div>';
+    html+='</div>';
   }
 
   // ── Goal timing ───────────────────────────────────────────
@@ -2924,6 +2953,30 @@ function simRender(d){
       html+='<div class="sim-timing-val">'+e[1]+'%</div></div>';
     });
     html+='</div>';
+  }
+
+  // ── Scenarios ─────────────────────────────────────────────
+  if(sim.scenarios&&(sim.scenarios.optimist||sim.scenarios.pessimist||sim.scenarios.surprise)){
+    var sc=sim.scenarios;
+    html+='<div class="sim-section"><div class="sim-section-title">SCENARII</div>';
+    html+='<div style="background:var(--sur2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px">';
+    if(sc.optimist)html+='<div style="display:flex;justify-content:space-between;align-items:center"><span>🟢 <strong>Optimist</strong> <span style="font-size:10px;color:var(--mu)">(top 10%)</span></span><span style="font-weight:800;color:#22c55e">'+sc.optimist.score+' <span style="font-size:10px;font-weight:400;color:var(--mu)">('+sc.optimist.prob+'%)</span></span></div>';
+    if(sc.pessimist)html+='<div style="display:flex;justify-content:space-between;align-items:center"><span>🔴 <strong>Pesimist</strong> <span style="font-size:10px;color:var(--mu)">(bot 10%)</span></span><span style="font-weight:800;color:#ef4444">'+sc.pessimist.score+' <span style="font-size:10px;font-weight:400;color:var(--mu)">('+sc.pessimist.prob+'%)</span></span></div>';
+    if(sc.surprise)html+='<div style="display:flex;justify-content:space-between;align-items:center"><span>⚡ <strong>Surpriză</strong></span><span style="font-weight:800;color:#f59e0b">'+sc.surprise.score+' <span style="font-size:10px;font-weight:400;color:var(--mu)">('+sc.surprise.prob+'%)</span></span></div>';
+    html+='</div></div>';
+  }
+
+  // ── Contextual factors ────────────────────────────────────
+  if(d.factors&&d.factors.length){
+    html+='<div class="sim-section"><div class="sim-section-title">FACTORI INFLUENȚĂ</div>';
+    html+='<div style="background:var(--sur2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px">';
+    d.factors.forEach(function(f){
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">';
+      html+='<span style="font-size:12px">'+f.icon+' '+htmlEsc(f.text)+'</span>';
+      html+='<span style="font-size:11px;color:var(--mu);white-space:nowrap">'+htmlEsc(f.impact)+'</span>';
+      html+='</div>';
+    });
+    html+='</div></div>';
   }
 
   // ── Momentum ──────────────────────────────────────────────
