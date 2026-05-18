@@ -234,11 +234,19 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .pi-str-fill{height:100%;border-radius:2px;background:#818cf8}
 /* BACKFILL UI */
 .backfill-section{margin-top:16px;padding-top:16px;border-top:1px solid var(--bor)}
-.backfill-title{font-size:13px;font-weight:700;color:var(--tx);margin-bottom:4px}
-.backfill-sub{font-size:11px;color:var(--mu);margin-bottom:10px}
-.backfill-progress{height:6px;background:var(--sur3);border-radius:3px;overflow:hidden;margin:8px 0}
+.backfill-title{font-size:13px;font-weight:700;color:var(--tx);margin-bottom:8px}
+.backfill-progress{height:6px;background:var(--sur3);border-radius:3px;overflow:hidden;margin:3px 0 8px}
 .backfill-fill{height:100%;background:linear-gradient(90deg,var(--ac),#00b894);border-radius:3px;transition:width .4s ease}
-.backfill-status{font-size:11px;color:var(--mu2);text-align:center}
+.bf-bar-label{font-size:10px;color:var(--mu2);margin-bottom:1px}
+.bf-status-info{font-size:11px;color:var(--mu);margin-bottom:8px;line-height:1.5}
+.bf-start-btn{flex:1;padding:11px;background:#00e676;color:#001a0d;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px}
+.bf-start-btn:hover{background:#00c853}
+.bf-stop-btn{flex:1;padding:11px;background:#ff1744;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;animation:bfStopPulse 1.5s ease-in-out infinite}
+@keyframes bfStopPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,23,68,.4)}50%{box-shadow:0 0 0 8px rgba(255,23,68,0)}}
+.bf-dot{width:8px;height:8px;border-radius:50%;background:#ff4444;flex-shrink:0;animation:bfDotAnim 1s ease-in-out infinite}
+@keyframes bfDotAnim{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.65)}}
+.bf-active-label{color:#ff5555;font-size:12px;font-weight:700}
+.bf-stopped-label{color:var(--mu);font-size:12px}
 .backfill-btn{width:100%;padding:10px;background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3);border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px}
 .backfill-btn:disabled{opacity:.5;cursor:default}
 
@@ -711,11 +719,34 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
       <input class="settings-input" type="number" id="bankroll-input" value="10" min="0.01" step="0.1">
     </div>
     <div class="backfill-section">
-      <div class="backfill-title">Player Intelligence — Backfill</div>
-      <div class="backfill-sub" id="bf-sub">Colectează statistici jucători pentru calculul puterii echipelor</div>
-      <div class="backfill-progress"><div class="backfill-fill" id="bf-fill" style="width:0%"></div></div>
-      <div class="backfill-status" id="bf-status">Apasă Start pentru a începe</div>
-      <button class="backfill-btn" id="bf-btn" onclick="startBackfill()">▶ Start Backfill</button>
+      <div class="backfill-title">🗄️ Backfill Date Istorice</div>
+
+      <!-- Active state -->
+      <div id="bf-active" style="display:none">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div class="bf-dot"></div>
+          <span class="bf-active-label">ACTIV — Colectez date...</span>
+        </div>
+        <div class="bf-status-info" id="bf-current-info">Sezon — · Ligă —</div>
+        <div class="bf-bar-label">Progres: <span id="bf-pct">0</span>% (<span id="bf-done">0</span>/<span id="bf-total">0</span> perechi)</div>
+        <div class="backfill-progress"><div class="backfill-fill" id="bf-fill" style="width:0%"></div></div>
+        <div class="bf-bar-label" style="margin-top:4px">API azi: <span id="bf-api-used">0</span> / 150,000 — rămase: <span id="bf-api-rem">150,000</span></div>
+        <div class="backfill-progress" style="height:4px;margin-bottom:0">
+          <div id="bf-api-fill" style="height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:3px;transition:width .4s ease;width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Stopped state -->
+      <div id="bf-stopped">
+        <div class="bf-status-info" id="bf-stopped-info">Nicio rulare anterioară</div>
+        <div class="bf-bar-label" id="bf-stopped-api" style="display:none">API azi: <span id="bf-api-used2">0</span> / 150,000</div>
+      </div>
+
+      <!-- Buttons -->
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="bf-start-btn" class="bf-start-btn" onclick="startBF()">▶ START</button>
+        <button id="bf-stop-btn" class="bf-stop-btn" style="display:none" onclick="stopBF()">⏹ STOP</button>
+      </div>
     </div>
     <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:8px;border-bottom:none">
       <div style="display:flex;align-items:center;justify-content:space-between">
@@ -1036,53 +1067,67 @@ var CFG={MC:80,MD:20,RI:30000};
 var WR_KEY='alohascan_wr_v2';
 var BANKROLL_KEY='alohascan_bankroll';
 function getBankroll(){return parseFloat(localStorage.getItem(BANKROLL_KEY))||10;}
-function settingsOpen(){document.getElementById('bankroll-input').value=getBankroll();document.getElementById('settings-overlay').classList.add('open');}
-function settingsClose(){var v=parseFloat(document.getElementById('bankroll-input').value);if(v>0)localStorage.setItem(BANKROLL_KEY,v);document.getElementById('settings-overlay').classList.remove('open');}
-var _bfRunning=false,_bfIdx=0,_bfTotal=0;
-async function startBackfill(){
-  if(_bfRunning)return;
-  var btn=document.getElementById('bf-btn');
-  var fill=document.getElementById('bf-fill');
-  var status=document.getElementById('bf-status');
-  _bfRunning=true;btn.disabled=true;btn.textContent='⏳ Se procesează...';
-  _bfIdx=0;
-  async function step(){
-    if(_bfIdx>=_bfTotal){
-      _bfRunning=false;btn.disabled=false;btn.textContent='▶ Reîncepe Backfill';
-      status.textContent='Complet! '+_bfTotal+' ligi procesate.';
-      fill.style.width='100%';return;
+function settingsOpen(){document.getElementById('bankroll-input').value=getBankroll();document.getElementById('settings-overlay').classList.add('open');refreshBFStatus();}
+function settingsClose(){var v=parseFloat(document.getElementById('bankroll-input').value);if(v>0)localStorage.setItem(BANKROLL_KEY,v);document.getElementById('settings-overlay').classList.remove('open');if(_bfTimer){clearInterval(_bfTimer);_bfTimer=null;}}
+var _bfTimer=null;
+async function startBF(){
+  try{
+    var r=await fetch('/api/backfill/start',{method:'POST'});
+    var d=await r.json();
+    if(d.error){alert('Eroare: '+d.error);return;}
+    refreshBFStatus();
+    if(_bfTimer)clearInterval(_bfTimer);
+    _bfTimer=setInterval(refreshBFStatus,5000);
+  }catch(e){alert('Eroare: '+e.message);}
+}
+async function stopBF(){
+  try{
+    await fetch('/api/backfill/stop',{method:'POST'});
+    refreshBFStatus();
+    if(_bfTimer){clearInterval(_bfTimer);_bfTimer=null;}
+  }catch(e){alert('Eroare: '+e.message);}
+}
+async function refreshBFStatus(){
+  try{
+    var r=await fetch('/api/backfill/status');
+    var d=await r.json();
+    var startBtn=document.getElementById('bf-start-btn');
+    var stopBtn=document.getElementById('bf-stop-btn');
+    var activeDiv=document.getElementById('bf-active');
+    var stoppedDiv=document.getElementById('bf-stopped');
+    if(!startBtn)return;
+    if(d.running){
+      startBtn.style.display='none';stopBtn.style.display='flex';
+      activeDiv.style.display='block';stoppedDiv.style.display='none';
+      var info='';
+      if(d.currentSeason)info+='Sezon '+d.currentSeason;
+      if(d.currentLeague)info+=' · Ligă '+d.currentLeague.id+(d.currentLeague.name?' ('+d.currentLeague.name+')':'');
+      if(d.totalFixtures)info+=' · Fixture '+d.currentFixtureIndex+'/'+d.totalFixtures;
+      document.getElementById('bf-current-info').textContent=info||'Se procesează...';
+      document.getElementById('bf-pct').textContent=d.progressPct||0;
+      document.getElementById('bf-done').textContent=(d.completedLeagues||0).toLocaleString();
+      document.getElementById('bf-total').textContent=(d.totalLeagues||0).toLocaleString();
+      document.getElementById('bf-fill').style.width=(d.progressPct||0)+'%';
+      var used=d.apiUsedToday||0;var rem=d.apiRemainingToday||150000;
+      document.getElementById('bf-api-used').textContent=used.toLocaleString();
+      document.getElementById('bf-api-rem').textContent=rem.toLocaleString();
+      document.getElementById('bf-api-fill').style.width=Math.min(100,used/1500)+'%';
+      if(!_bfTimer)_bfTimer=setInterval(refreshBFStatus,5000);
+    }else{
+      startBtn.style.display='flex';stopBtn.style.display='none';
+      activeDiv.style.display='none';stoppedDiv.style.display='block';
+      var stInfo=document.getElementById('bf-stopped-info');
+      var stApi=document.getElementById('bf-stopped-api');
+      if(d.completedLeagues>0){
+        stInfo.textContent='Progres: '+d.progressPct+'% ('+d.completedLeagues.toLocaleString()+'/'+d.totalLeagues.toLocaleString()+' perechi) · ETA: '+d.estimatedTimeRemaining;
+        stApi.style.display='block';
+        document.getElementById('bf-api-used2').textContent=(d.apiUsedToday||0).toLocaleString();
+      }else{
+        stInfo.textContent='Nicio rulare anterioară';stApi.style.display='none';
+      }
+      if(_bfTimer){clearInterval(_bfTimer);_bfTimer=null;}
     }
-    try{
-      var r=await fetch('/api/players?action=backfill&league_index='+_bfIdx);
-      var d=await r.json();
-      _bfIdx++;
-      var pct=Math.round(_bfIdx/_bfTotal*100);
-      fill.style.width=pct+'%';
-      var next=d.next_index!=null?d.next_index:null;
-      status.textContent=pct+'% · Ligă '+(d.league_id||_bfIdx)+' · '+(_bfIdx)+'/'+_bfTotal;
-      if(next!=null&&_bfRunning)setTimeout(step,300);
-      else{_bfRunning=false;btn.disabled=false;btn.textContent='▶ Reîncepe Backfill';status.textContent='Complet!';}
-    }catch(e){
-      status.textContent='Eroare la liga '+_bfIdx+' (skip): '+e.message;
-      _bfIdx++;
-      setTimeout(step,1000);
-    }
-  }
-  var progR=await fetch('/api/players?action=progress').catch(function(){return null;});
-  if(progR){
-    var pd=await progR.json().catch(function(){return null;});
-    if(pd&&pd.total){
-      _bfTotal=pd.total;
-      var sub=document.getElementById('bf-sub');
-      if(sub)sub.textContent='Colectează statistici jucători pentru calculul puterii echipelor ('+_bfTotal+' ligi)';
-    }
-    if(pd&&pd.total){
-      var processed=(pd.done||0)+(pd.error||0);
-      if(processed>0){_bfIdx=processed;var pct2=Math.round(processed/_bfTotal*100);fill.style.width=pct2+'%';status.textContent=pct2+'% deja procesat ('+processed+'/'+_bfTotal+') · continuând...';}
-    }
-  }
-  if(!_bfTotal){_bfRunning=false;btn.disabled=false;btn.textContent='▶ Start Backfill';status.textContent='Eroare: nu s-a putut obține lista de ligi.';return;}
-  step();
+  }catch(e){console.error('refreshBFStatus:',e.message);}
 }
 async function runHealthCheck(){
   var el=document.getElementById('health-results');

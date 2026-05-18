@@ -10,7 +10,7 @@ process.on('unhandledRejection', (reason) => {
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { query } from './api/db.js';
-import { runDailyBackfill, initBackfillProgress } from './api/backfill.js';
+import { runDailyBackfill, initBackfillProgress, startBackfill, stopBackfill, getBackfillStatus, resumeOnStartup } from './api/backfill.js';
 import { startScanner } from './api/cron/scanner.js';
 import adminRouter from './api/admin.js';
 import { loadModelWeights } from './api/weights.js';
@@ -73,17 +73,28 @@ app.get('/health', (req, res) => {
 });
 
 // Backfill routes
-app.get('/api/backfill/start', async (req, res) => {
-  runDailyBackfill(); // async, fără await — rulează în background
-  res.json({ status: 'started' });
+app.post('/api/backfill/start', async (req, res) => {
+  try {
+    const result = await startBackfill();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/backfill/stop', async (req, res) => {
+  try {
+    const result = await stopBackfill();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/backfill/status', async (req, res) => {
   try {
-    const result = await query(
-      'SELECT status, COUNT(*) AS count FROM backfill_progress GROUP BY status ORDER BY status'
-    );
-    res.json(result.rows);
+    const result = await getBackfillStatus();
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -97,6 +108,7 @@ app.get('*', (req, res) => {
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`AlohaScan pornit pe http://0.0.0.0:${PORT}`);
   await initBackfillProgress();
+  await resumeOnStartup();
   startScanner();
   loadModelWeights().catch(e => console.error('[weights] initial load failed:', e.message));
 });

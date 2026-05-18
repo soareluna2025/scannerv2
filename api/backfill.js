@@ -1,340 +1,332 @@
-// api/backfill.js
-// Backfill date istorice 2022-2025 pentru toate ligile.
-// Planul pe faze (una pe zi, la 03:00 UTC / 05:00 Germania):
-//   fixtures_2022 → fixtures_2023 → fixtures_2024 → fixtures_2025
-//   → players → h2h → standings → teams_stats → done
-// Rate limit: oprire la 95.000 req/zi (limita API = 100.000)
+// api/backfill.js — Season-first backfill (2026→2022)
+// Per-fixture: statistics + events + players
+// Persistent state in app_settings (resume after VPS restart)
 
 import { query } from './db.js';
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
+import { calcPlayerScore } from './calc-utils.js';
 
-const SEASONS    = [2022, 2023, 2024, 2025];
+const SEASONS    = [2026, 2025, 2024, 2023, 2022];
 const LEAGUE_IDS = [...ALLOWED_LEAGUE_IDS];
 const BASE_URL   = 'https://v3.football.api-sports.io';
-const STOP_AT    = 95_000;
-const DELAY_MS   = 200;
-
-const PHASES = [
-  'fixtures_2022', 'fixtures_2023', 'fixtures_2024', 'fixtures_2025',
-  'players', 'h2h', 'standings', 'teams_stats',
-];
-
-const PHASE_SEASON = {
-  fixtures_2022: 2022, fixtures_2023: 2023,
-  fixtures_2024: 2024, fixtures_2025: 2025,
-};
-
-let reqCount = 0;
-let running  = false;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const DELAY_MS   = 250;
+const STOP_AT    = 100_000; // reserve 50k/day for live scanner
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function log(msg)  { console.log(`[backfill] ${new Date().toISOString()} ${msg}`); }
-function key()     {
+function apiKey()  {
   return process.env.API_FOOTBALL_KEY
       || process.env.FOOTBALL_API_KEY
       || process.env.APIFOOTBALL_KEY;
 }
 
+// ── In-memory state ───────────────────────────────────────────────────────────
+
+let running           = false;
+let stopFlag          = false;
+let apiUsedToday      = 0;
+let apiDateTracked    = '';
+let currentSeasonIdx  = 0;
+let currentLeagueIdx  = 0;
+let currentFixtureIdx = 0;
+let currentLeagueId   = null;
+let currentSeason     = null;
+let totalFixtures     = 0;
+
+// ── App Settings ──────────────────────────────────────────────────────────────
+
+async function initAppSettings() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key        TEXT PRIMARY KEY,
+      value      TEXT,
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await query(`ALTER TABLE backfill_progress ADD COLUMN IF NOT EXISTS current_season INTEGER`);
+  await query(`ALTER TABLE backfill_progress ADD COLUMN IF NOT EXISTS current_fixture_index INTEGER DEFAULT 0`);
+  await query(`ALTER TABLE backfill_progress ADD COLUMN IF NOT EXISTS total_fixtures INTEGER DEFAULT 0`);
+}
+
+async function getSetting(key) {
+  try {
+    const r = await query('SELECT value FROM app_settings WHERE key=$1', [key]);
+    return r.rows[0]?.value ?? null;
+  } catch { return null; }
+}
+
+async function setSetting(key, value) {
+  try {
+    await query(
+      `INSERT INTO app_settings (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()`,
+      [key, String(value)]
+    );
+  } catch (e) { log(`setSetting ${key} error: ${e.message}`); }
+}
+
+async function savePosition(si, li, fi) {
+  await setSetting('backfill_season_idx',  String(si));
+  await setSetting('backfill_league_idx',  String(li));
+  await setSetting('backfill_fixture_idx', String(fi));
+}
+
+// ── API Fetch with rate-limit handling ────────────────────────────────────────
+
 async function apiFetch(endpoint) {
-  const k = key();
+  const k = apiKey();
   if (!k) throw new Error('API_FOOTBALL_KEY missing');
   await sleep(DELAY_MS);
-  let res = await fetch(`${BASE_URL}${endpoint}`, { headers: { 'x-apisports-key': k } });
-  reqCount++;
+
+  // Initialize / reset daily counter once per day
+  const today = new Date().toISOString().slice(0, 10);
+  if (apiDateTracked !== today) {
+    const savedDate = await getSetting('backfill_api_date');
+    if (savedDate === today) {
+      apiUsedToday = parseInt(await getSetting('backfill_api_used') || '0');
+    } else {
+      apiUsedToday = 0;
+      await setSetting('backfill_api_date', today);
+      await setSetting('backfill_api_used', '0');
+    }
+    apiDateTracked = today;
+  }
+
+  let res = await fetch(`${BASE_URL}${endpoint}`, {
+    headers: { 'x-apisports-key': k },
+  });
+  apiUsedToday++;
+
+  if (apiUsedToday % 20 === 0) {
+    await setSetting('backfill_api_used', String(apiUsedToday));
+  }
+
   if (res.status === 429) {
-    log(`429 rate-limit pe ${endpoint} — aștept 60s`);
+    log(`429 rate-limit — waiting 60s`);
     await sleep(60_000);
     res = await fetch(`${BASE_URL}${endpoint}`, { headers: { 'x-apisports-key': k } });
-    reqCount++;
+    apiUsedToday++;
   }
+
+  if (apiUsedToday >= STOP_AT) {
+    stopFlag = true;
+    log(`Daily limit ${STOP_AT} reached — auto-stopping`);
+  }
+
   return res.json();
 }
 
-// ── Phase tracking ────────────────────────────────────────────────────────────
+// ── Collect functions ─────────────────────────────────────────────────────────
 
-function phaseIndex(status) {
-  if (status === 'pending') return -1;
-  if (status === 'done')    return PHASES.length;
-  const i = PHASES.indexOf(status);
-  return i === -1 ? -1 : i;
-}
-
-async function getCurrentPhase() {
-  const { rows } = await query('SELECT status FROM backfill_progress');
-  for (let i = 0; i < PHASES.length; i++) {
-    if (rows.some(r => phaseIndex(r.status) < i)) return PHASES[i];
-  }
-  return null; // toate ligile done
-}
-
-async function getLeaguesForPhase(phase) {
-  const idx = PHASES.indexOf(phase);
-  const { rows } = await query(
-    "SELECT league_id, status FROM backfill_progress WHERE status != 'done'"
-  );
-  return rows.filter(r => phaseIndex(r.status) < idx).map(r => r.league_id);
-}
-
-// ── Faza: fixtures ────────────────────────────────────────────────────────────
-
-async function runFixtures(leagueId, season) {
-  const data = await apiFetch(`/fixtures?league=${leagueId}&season=${season}`);
-  const list = data.response || [];
-  let count = 0;
-  for (const fx of list) {
-    const { fixture: f, teams: t, goals: g, score: sc } = fx;
+async function collectStats(fixtureId) {
+  const data  = await apiFetch(`/fixtures/statistics?fixture=${fixtureId}`);
+  const teams = data.response || [];
+  for (const t of teams) {
+    const s = {};
+    for (const e of t.statistics) s[e.type] = e.value;
     await query(
-      `INSERT INTO fixtures_history
-         (fixture_id, league_id, season,
-          home_team_id, home_team_name, away_team_id, away_team_name,
-          home_goals, away_goals, home_ht, away_ht, status_short, match_date)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-       ON CONFLICT (fixture_id) DO NOTHING`,
+      `INSERT INTO match_stats
+         (fixture_id, team_id, team_name,
+          shots_on_goal, shots_total, blocked_shots,
+          shots_insidebox, shots_outsidebox,
+          expected_goals, ball_possession,
+          total_passes, passes_accurate, pass_percentage,
+          fouls, yellow_cards, red_cards, corner_kicks, offsides, goalkeeper_saves)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       ON CONFLICT (fixture_id, team_id) DO NOTHING`,
       [
-        f.id, leagueId, season,
-        t.home.id, t.home.name, t.away.id, t.away.name,
-        g.home, g.away,
-        sc?.halftime?.home ?? null, sc?.halftime?.away ?? null,
-        f.status?.short || null, f.date || null,
+        fixtureId, t.team.id, t.team.name,
+        parseInt(s['Shots on Goal'])     || 0,
+        parseInt(s['Total Shots'])       || 0,
+        parseInt(s['Blocked Shots'])     || 0,
+        parseInt(s['Shots insidebox'])   || 0,
+        parseInt(s['Shots outsidebox'])  || 0,
+        parseFloat(s['expected_goals'])  || null,
+        parseFloat(s['Ball Possession']) || null,
+        parseInt(s['Total passes'])      || 0,
+        parseInt(s['Passes accurate'])   || 0,
+        parseFloat(s['Passes %'])        || null,
+        parseInt(s['Fouls'])             || 0,
+        parseInt(s['Yellow Cards'])      || 0,
+        parseInt(s['Red Cards'])         || 0,
+        parseInt(s['Corner Kicks'])      || 0,
+        parseInt(s['Offsides'])          || 0,
+        parseInt(s['Goalkeeper Saves'])  || 0,
       ]
     );
-    // Upsert echipe
-    for (const tm of [t.home, t.away]) {
-      await query(
-        `INSERT INTO teams (team_id, name, logo)
-         VALUES ($1,$2,$3)
-         ON CONFLICT (team_id) DO UPDATE SET
-           name=EXCLUDED.name, logo=EXCLUDED.logo, updated_at=NOW()`,
-        [tm.id, tm.name, tm.logo || null]
-      );
-    }
-    count++;
   }
-  return count;
 }
 
-// ── Faza: players ─────────────────────────────────────────────────────────────
-
-async function runPlayers(leagueId) {
-  let total = 0;
-  for (const season of SEASONS) {
-    if (reqCount >= STOP_AT) break;
-    let page = 1;
-    while (reqCount < STOP_AT) {
-      const data = await apiFetch(`/players?league=${leagueId}&season=${season}&page=${page}`);
-      const players    = data.response || [];
-      const totalPages = data.paging?.total || 1;
-      for (const entry of players) {
-        const pl   = entry.player || {};
-        const stat = (entry.statistics || [])[0] || {};
-        await query(
-          `INSERT INTO players_season
-             (player_id, team_id, league_id, season, player_name,
-              nationality, position, age, appearances, lineups,
-              minutes, goals, assists, yellow_cards, red_cards, rating)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-           ON CONFLICT (player_id, league_id, season) DO UPDATE SET
-             team_id=EXCLUDED.team_id, appearances=EXCLUDED.appearances,
-             lineups=EXCLUDED.lineups, minutes=EXCLUDED.minutes,
-             goals=EXCLUDED.goals, assists=EXCLUDED.assists,
-             yellow_cards=EXCLUDED.yellow_cards, red_cards=EXCLUDED.red_cards,
-             rating=EXCLUDED.rating, updated_at=NOW()`,
-          [
-            pl.id, stat.team?.id || null, leagueId, season,
-            pl.name || null, pl.nationality || null,
-            stat.games?.position || null, pl.age || null,
-            stat.games?.appearences || 0, stat.games?.lineups || 0,
-            stat.games?.minutes    || 0,
-            stat.goals?.total      || 0, stat.goals?.assists || 0,
-            stat.cards?.yellow     || 0, stat.cards?.red     || 0,
-            stat.games?.rating ? parseFloat(stat.games.rating) : null,
-          ]
-        );
-        total++;
-      }
-      if (page >= totalPages) break;
-      page++;
-    }
+async function collectEvents(fixtureId) {
+  const data   = await apiFetch(`/fixtures/events?fixture=${fixtureId}`);
+  const events = data.response || [];
+  if (!events.length) return;
+  await query('DELETE FROM match_events WHERE fixture_id=$1', [fixtureId]);
+  for (const ev of events) {
+    await query(
+      `INSERT INTO match_events
+         (fixture_id, elapsed, elapsed_extra, team_id, player_id, player_name,
+          assist_id, assist_name, type, detail, comments)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [
+        fixtureId,
+        ev.time?.elapsed    || 0,
+        ev.time?.extra      || null,
+        ev.team?.id         || null,
+        ev.player?.id       || null,
+        ev.player?.name     || null,
+        ev.assist?.id       || null,
+        ev.assist?.name     || null,
+        ev.type,
+        ev.detail,
+        ev.comments         || null,
+      ]
+    );
   }
-  return total;
 }
 
-// ── Faza: h2h ─────────────────────────────────────────────────────────────────
-
-async function runH2H(leagueId) {
-  const { rows: pairs } = await query(
-    `SELECT DISTINCT
-       LEAST(home_team_id, away_team_id)    AS t1,
-       GREATEST(home_team_id, away_team_id) AS t2
-     FROM fixtures_history
-     WHERE league_id = $1
-       AND home_team_id IS NOT NULL AND away_team_id IS NOT NULL`,
-    [leagueId]
-  );
-  let count = 0;
-  for (const { t1, t2 } of pairs) {
-    if (reqCount >= STOP_AT) break;
-    const data    = await apiFetch(`/fixtures/headtohead?h2h=${t1}-${t2}&last=20`);
-    const matches = data.response || [];
-    for (const m of matches) {
-      const hid = m.teams?.home?.id;
-      const aid = m.teams?.away?.id;
-      if (!hid || !aid) continue;
+async function collectPlayers(fixtureId) {
+  const data  = await apiFetch(`/fixtures/players?fixture=${fixtureId}`);
+  const teams = data.response || [];
+  for (const team of teams) {
+    for (const p of team.players || []) {
+      const pl   = p.player    || {};
+      const stat = (p.statistics || [])[0] || {};
+      if (!pl.id) continue;
+      const rating   = stat.games?.rating ? parseFloat(stat.games.rating) : null;
+      const goals    = stat.goals?.total   || 0;
+      const assists  = stat.goals?.assists  || 0;
+      const passAcc  = stat.passes?.accuracy != null ? parseFloat(stat.passes.accuracy) : null;
+      const sot      = stat.shots?.on       || 0;
       await query(
-        `INSERT INTO h2h
-           (team1_id, team2_id, fixture_id,
-            home_team_id, away_team_id, home_goals, away_goals,
-            match_date, league_id, season)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-         ON CONFLICT (team1_id, team2_id, fixture_id) DO UPDATE SET
-           home_goals=EXCLUDED.home_goals, away_goals=EXCLUDED.away_goals`,
+        `INSERT INTO player_stats
+           (player_id, fixture_id, team_id, team_name, player_name, position, rating,
+            goals, assists, pass_accuracy, shots_on_target, minutes_played,
+            yellow_cards, red_cards, dribbles_success, player_score)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+         ON CONFLICT (player_id, fixture_id) DO NOTHING`,
         [
-          Math.min(hid, aid), Math.max(hid, aid), m.fixture.id,
-          hid, aid,
-          m.goals?.home ?? null, m.goals?.away ?? null,
-          m.fixture.date || null,
-          m.league?.id || leagueId,
-          m.league?.season || null,
+          pl.id, fixtureId, team.team?.id, team.team?.name || '',
+          pl.name || '', stat.games?.position || null,
+          rating, goals, assists, passAcc, sot,
+          stat.games?.minutes || 0,
+          stat.cards?.yellow || 0, stat.cards?.red || 0,
+          stat.dribbles?.success || 0,
+          calcPlayerScore(rating, goals, assists, passAcc, sot),
         ]
       );
-      count++;
     }
   }
-  return count;
 }
 
-// ── Faza: standings ───────────────────────────────────────────────────────────
+// ── Core: process one league+season ──────────────────────────────────────────
 
-async function runStandings(leagueId) {
-  let count = 0;
-  for (const season of SEASONS) {
-    if (reqCount >= STOP_AT) break;
-    const data = await apiFetch(`/standings?league=${leagueId}&season=${season}`);
-    const rows = data.response?.[0]?.league?.standings?.[0] || [];
-    for (const row of rows) {
-      await query(
-        `INSERT INTO standings
-           (league_id, season, team_id, team_name, team_logo,
-            rank, points, goals_diff, form, status, description,
-            played, win, draw, lose, goals_for, goals_against)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-         ON CONFLICT (league_id, season, team_id) DO UPDATE SET
-           rank=EXCLUDED.rank, points=EXCLUDED.points,
-           goals_diff=EXCLUDED.goals_diff, form=EXCLUDED.form,
-           played=EXCLUDED.played, win=EXCLUDED.win,
-           draw=EXCLUDED.draw, lose=EXCLUDED.lose,
-           goals_for=EXCLUDED.goals_for, goals_against=EXCLUDED.goals_against,
-           updated_at=NOW()`,
-        [
-          leagueId, season,
-          row.team.id, row.team.name, row.team.logo || null,
-          row.rank, row.points, row.goalsDiff || 0,
-          row.form || null, row.status || null, row.description || null,
-          row.all?.played || 0,
-          row.all?.win    || 0, row.all?.draw || 0, row.all?.lose || 0,
-          row.all?.goals?.for     || 0,
-          row.all?.goals?.against || 0,
-        ]
-      );
-      count++;
-    }
-  }
-  return count;
-}
+async function processLeagueSeason(leagueId, season, si, li, startFi) {
+  const data     = await apiFetch(`/fixtures?league=${leagueId}&season=${season}&status=FT`);
+  const fixtures = data.response || [];
+  totalFixtures  = fixtures.length;
 
-// ── Faza: teams_stats ─────────────────────────────────────────────────────────
+  log(`Season ${season} league ${leagueId}: ${fixtures.length} FT fixtures (from idx ${startFi})`);
 
-async function runTeamsStats(leagueId) {
-  const { rows: teamRows } = await query(
-    `SELECT DISTINCT home_team_id AS tid FROM fixtures_history WHERE league_id=$1 AND home_team_id IS NOT NULL
-     UNION
-     SELECT DISTINCT away_team_id         FROM fixtures_history WHERE league_id=$1 AND away_team_id IS NOT NULL`,
-    [leagueId]
-  );
-  let count = 0;
-  for (const { tid } of teamRows) {
-    for (const season of SEASONS) {
-      if (reqCount >= STOP_AT) break;
-      const data = await apiFetch(`/teams/statistics?team=${tid}&league=${leagueId}&season=${season}`);
-      const s = data.response;
-      if (!s) continue;
-      const fx = s.fixtures || {};
-      const g  = s.goals    || {};
-      const cs = s.clean_sheet || {};
-      await query(
-        `INSERT INTO teams_stats
-           (team_id, league_id, season, form,
-            played_home, played_away, played_total,
-            wins_home,   wins_away,   wins_total,
-            draws_home,  draws_away,  draws_total,
-            loses_home,  loses_away,  loses_total,
-            goals_for_home, goals_for_away, goals_for_total,
-            goals_against_home, goals_against_away, goals_against_total,
-            avg_goals_for, avg_goals_against,
-            clean_sheets_home, clean_sheets_away, clean_sheets_total)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
-                 $17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
-         ON CONFLICT (team_id, league_id, season) DO UPDATE SET
-           form=EXCLUDED.form, played_total=EXCLUDED.played_total,
-           wins_total=EXCLUDED.wins_total, goals_for_total=EXCLUDED.goals_for_total,
-           goals_against_total=EXCLUDED.goals_against_total, updated_at=NOW()`,
-        [
-          tid, leagueId, season, s.form || null,
-          fx.played?.home  || 0, fx.played?.away  || 0, fx.played?.total  || 0,
-          fx.wins?.home    || 0, fx.wins?.away    || 0, fx.wins?.total    || 0,
-          fx.draws?.home   || 0, fx.draws?.away   || 0, fx.draws?.total   || 0,
-          fx.loses?.home   || 0, fx.loses?.away   || 0, fx.loses?.total   || 0,
-          g.for?.total?.home     || 0, g.for?.total?.away     || 0, g.for?.total?.total     || 0,
-          g.against?.total?.home || 0, g.against?.total?.away || 0, g.against?.total?.total || 0,
-          parseFloat(g.for?.average?.total)     || null,
-          parseFloat(g.against?.average?.total) || null,
-          cs.home || 0, cs.away || 0, cs.total || 0,
-        ]
-      );
-      count++;
-    }
-  }
-  return count;
-}
-
-// ── Progress updates ──────────────────────────────────────────────────────────
-
-async function markDone(leagueId, phase, fCount, pCount) {
-  const isLast  = phase === PHASES.at(-1);
-  const newStat = isLast ? 'done' : phase;
   await query(
     `UPDATE backfill_progress
-     SET status=$1, fixtures_processed=fixtures_processed+$2,
-         players_upserted=players_upserted+$3, last_run=NOW(), error_msg=NULL
+     SET status='in_progress', current_season=$1, current_fixture_index=$2, total_fixtures=$3, last_run=NOW()
      WHERE league_id=$4`,
-    [newStat, fCount, pCount, leagueId]
-  );
-}
+    [season, startFi, fixtures.length, leagueId]
+  ).catch(() => {});
 
-async function markError(leagueId, errMsg) {
+  for (let fi = startFi; fi < fixtures.length; fi++) {
+    if (stopFlag) {
+      await savePosition(si, li, fi);
+      await query(
+        `UPDATE backfill_progress SET current_fixture_index=$1 WHERE league_id=$2`,
+        [fi, leagueId]
+      ).catch(() => {});
+      return;
+    }
+
+    const fid = fixtures[fi]?.fixture?.id;
+    if (!fid) continue;
+
+    currentFixtureIdx = fi;
+
+    // Skip already-collected fixtures
+    const [hasStats, hasEvents, hasPlayers] = await Promise.all([
+      query('SELECT 1 FROM match_stats    WHERE fixture_id=$1 LIMIT 1', [fid]).then(r => r.rows.length > 0),
+      query('SELECT 1 FROM match_events   WHERE fixture_id=$1 LIMIT 1', [fid]).then(r => r.rows.length > 0),
+      query('SELECT 1 FROM player_stats   WHERE fixture_id=$1 LIMIT 1', [fid]).then(r => r.rows.length > 0),
+    ]);
+
+    if (!hasStats)   { try { await collectStats(fid);   } catch (e) { log(`stats   ${fid}: ${e.message}`); } }
+    if (!hasEvents)  { try { await collectEvents(fid);  } catch (e) { log(`events  ${fid}: ${e.message}`); } }
+    if (!hasPlayers) { try { await collectPlayers(fid); } catch (e) { log(`players ${fid}: ${e.message}`); } }
+
+    if (fi % 50 === 0) await savePosition(si, li, fi);
+  }
+
+  // League+season done — reset fixture index
+  await savePosition(si, li + 1, 0);
   await query(
-    `UPDATE backfill_progress SET status='error', last_run=NOW(), error_msg=$1
-     WHERE league_id=$2`,
-    [String(errMsg).slice(0, 500), leagueId]
-  );
+    `UPDATE backfill_progress
+     SET current_fixture_index=$1, total_fixtures=$2 WHERE league_id=$3`,
+    [fixtures.length, fixtures.length, leagueId]
+  ).catch(() => {});
 }
 
-async function logCron(phase, leagues, fixtures, players, status, errMsg, durMs) {
+// ── Core: main loop ───────────────────────────────────────────────────────────
+
+async function runBackfillLoop(startSi, startLi, startFi) {
   try {
-    await query(
-      `INSERT INTO cron_logs (job_name, fixtures_processed, players_upserted, status, error_msg, duration_ms)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [`backfill:${phase}`, fixtures, players, status, errMsg || null, durMs]
-    );
-  } catch (_) {}
+    log(`Loop start: season[${startSi}]=${SEASONS[startSi]}, league[${startLi}], fixture[${startFi}]`);
+
+    for (let si = startSi; si < SEASONS.length; si++) {
+      const season  = SEASONS[si];
+      const firstLi = (si === startSi) ? startLi : 0;
+
+      for (let li = firstLi; li < LEAGUE_IDS.length; li++) {
+        if (stopFlag) {
+          await savePosition(si, li, 0);
+          log(`Stopped at season ${season}, league ${LEAGUE_IDS[li]}`);
+          return;
+        }
+
+        const leagueId       = LEAGUE_IDS[li];
+        currentSeasonIdx  = si;
+        currentLeagueIdx  = li;
+        currentLeagueId   = leagueId;
+        currentSeason     = season;
+        currentFixtureIdx = (si === startSi && li === startLi) ? startFi : 0;
+
+        if (li % 10 === 0) await savePosition(si, li, currentFixtureIdx);
+
+        try {
+          await processLeagueSeason(
+            leagueId, season, si, li,
+            (si === startSi && li === startLi) ? startFi : 0
+          );
+        } catch (e) {
+          log(`Error season ${season} league ${leagueId}: ${e.message}`);
+        }
+
+        if (stopFlag) { await savePosition(si, li + 1, 0); return; }
+      }
+    }
+
+    log('Backfill complete!');
+    await savePosition(0, 0, 0);
+  } finally {
+    running  = false;
+    stopFlag = false;
+    await setSetting('backfill_running', 'false');
+    await setSetting('backfill_api_used', String(apiUsedToday));
+  }
 }
 
-// ── Exported: init ────────────────────────────────────────────────────────────
+// ── Exports ───────────────────────────────────────────────────────────────────
 
 export async function initBackfillProgress() {
   try {
+    await initAppSettings();
     for (const leagueId of LEAGUE_IDS) {
       await query(
         `INSERT INTO backfill_progress (league_id, status, fixtures_processed, players_upserted)
@@ -343,70 +335,140 @@ export async function initBackfillProgress() {
         [leagueId]
       );
     }
-    log(`backfill_progress: ${LEAGUE_IDS.length} ligi inițializate`);
+    log(`Initialized: ${LEAGUE_IDS.length} leagues`);
   } catch (e) {
     log(`initBackfillProgress error: ${e.message}`);
   }
 }
 
-// ── Exported: daily run ───────────────────────────────────────────────────────
+export async function startBackfill() {
+  if (running) return { error: 'already running' };
 
-export async function runDailyBackfill() {
-  if (running) { log('deja rulează — skip'); return; }
-  running  = true;
-  reqCount = 0;
-  const t0 = Date.now();
-
-  try {
-    const phase = await getCurrentPhase();
-    if (!phase) { log('toate ligile done — backfill complet'); running = false; return; }
-
-    const leagues = await getLeaguesForPhase(phase);
-    log(`faza: ${phase} | ligi rămase: ${leagues.length}`);
-
-    let totalFx = 0, totalPl = 0, done = 0;
-
-    for (const leagueId of leagues) {
-      if (reqCount >= STOP_AT) { log(`limită ${reqCount} req atinsă — oprire`); break; }
-
-      try {
-        let fCount = 0, pCount = 0;
-
-        if (PHASE_SEASON[phase]) {
-          fCount = await runFixtures(leagueId, PHASE_SEASON[phase]);
-          log(`fixtures ${PHASE_SEASON[phase]} liga ${leagueId}: ${fCount} meciuri | req ${reqCount}`);
-        } else if (phase === 'players') {
-          pCount = await runPlayers(leagueId);
-          log(`players liga ${leagueId}: ${pCount} jucători | req ${reqCount}`);
-        } else if (phase === 'h2h') {
-          fCount = await runH2H(leagueId);
-          log(`h2h liga ${leagueId}: ${fCount} intrări | req ${reqCount}`);
-        } else if (phase === 'standings') {
-          fCount = await runStandings(leagueId);
-          log(`standings liga ${leagueId}: ${fCount} rânduri | req ${reqCount}`);
-        } else if (phase === 'teams_stats') {
-          fCount = await runTeamsStats(leagueId);
-          log(`teams_stats liga ${leagueId}: ${fCount} rânduri | req ${reqCount}`);
-        }
-
-        await markDone(leagueId, phase, fCount, pCount);
-        totalFx += fCount;
-        totalPl += pCount;
-        done++;
-      } catch (e) {
-        log(`liga ${leagueId} eroare: ${e.message}`);
-        await markError(leagueId, e.message);
-      }
-    }
-
-    const dur    = Date.now() - t0;
-    const status = reqCount >= STOP_AT ? 'stopped_limit' : 'ok';
-    log(`terminat: ${done} ligi, ${totalFx} fixtures, ${totalPl} jucători, ${reqCount} req, ${dur}ms`);
-    await logCron(phase, done, totalFx, totalPl, status, null, dur);
-  } catch (e) {
-    log(`eroare fatală: ${e.message}`);
-    await logCron('error', 0, 0, 0, 'error', e.message, Date.now() - t0);
-  } finally {
-    running = false;
+  // Load / reset daily API counter
+  const today = new Date().toISOString().slice(0, 10);
+  const savedDate = await getSetting('backfill_api_date');
+  if (savedDate === today) {
+    apiUsedToday = parseInt(await getSetting('backfill_api_used') || '0');
+  } else {
+    apiUsedToday = 0;
+    await setSetting('backfill_api_date', today);
+    await setSetting('backfill_api_used', '0');
   }
+  apiDateTracked = today;
+
+  // Load resume position
+  const si = Math.min(parseInt(await getSetting('backfill_season_idx')  || '0'), SEASONS.length - 1);
+  const li = Math.min(parseInt(await getSetting('backfill_league_idx')  || '0'), LEAGUE_IDS.length - 1);
+  const fi = parseInt(await getSetting('backfill_fixture_idx') || '0');
+
+  running           = true;
+  stopFlag          = false;
+  currentSeasonIdx  = si;
+  currentLeagueIdx  = li;
+  currentFixtureIdx = fi;
+  currentSeason     = SEASONS[si]    || SEASONS[0];
+  currentLeagueId   = LEAGUE_IDS[li] || LEAGUE_IDS[0];
+
+  await setSetting('backfill_running', 'true');
+  log(`Started — resuming from season[${si}]=${currentSeason}, league[${li}]=${currentLeagueId}, fixture[${fi}]`);
+
+  runBackfillLoop(si, li, fi).catch(e => {
+    log(`Fatal: ${e.message}`);
+    running = false;
+    setSetting('backfill_running', 'false').catch(() => {});
+  });
+
+  return {
+    started: true,
+    resumedFrom: { season: currentSeason, leagueId: currentLeagueId, fixtureIndex: fi },
+  };
+}
+
+export async function stopBackfill() {
+  if (!running) return { stopped: false, message: 'not running' };
+  stopFlag = true;
+  await setSetting('backfill_running', 'false');
+  log(`Stop requested — season ${currentSeason}, league ${currentLeagueId}`);
+  return {
+    stopped:    true,
+    lastSeason: currentSeason,
+    lastLeague: currentLeagueId,
+  };
+}
+
+export async function getBackfillStatus() {
+  const today     = new Date().toISOString().slice(0, 10);
+  const savedDate = await getSetting('backfill_api_date');
+  const usedToday = (savedDate === today)
+    ? parseInt(await getSetting('backfill_api_used') || '0')
+    : 0;
+
+  // Use in-memory state when running, otherwise read last saved position from DB
+  let si = currentSeasonIdx, li = currentLeagueIdx, fi = currentFixtureIdx;
+  let lid = currentLeagueId, season = currentSeason;
+  if (!running) {
+    si     = Math.min(parseInt(await getSetting('backfill_season_idx')  || '0'), SEASONS.length - 1);
+    li     = Math.min(parseInt(await getSetting('backfill_league_idx')  || '0'), LEAGUE_IDS.length - 1);
+    fi     = parseInt(await getSetting('backfill_fixture_idx') || '0');
+    lid    = LEAGUE_IDS[li] || null;
+    season = SEASONS[si]    || null;
+  }
+
+  let leagueName = null;
+  if (lid) {
+    try {
+      const r = await query('SELECT name FROM leagues WHERE league_id=$1', [lid]);
+      leagueName = r.rows[0]?.name || null;
+    } catch {}
+  }
+
+  const totalPairs     = SEASONS.length * LEAGUE_IDS.length;
+  const completedPairs = si * LEAGUE_IDS.length + li;
+  const progressPct    = totalPairs > 0
+    ? Math.round(completedPairs / totalPairs * 1000) / 10
+    : 0;
+
+  // Rough estimate: ~10 req per league (1 fixtures + avg 3 fixtures × 3 calls)
+  const remainingPairs = Math.max(0, totalPairs - completedPairs);
+  const estimatedMs    = remainingPairs * 10 * DELAY_MS;
+
+  return {
+    running,
+    currentLeague:       lid ? { id: lid, name: leagueName } : null,
+    currentSeason:       season,
+    currentFixtureIndex: fi,
+    totalFixtures,
+    totalLeagues:        totalPairs,
+    completedLeagues:    completedPairs,
+    progressPct,
+    apiUsedToday:        usedToday,
+    apiRemainingToday:   Math.max(0, 150_000 - usedToday),
+    estimatedTimeRemaining: formatDuration(estimatedMs),
+  };
+}
+
+export async function resumeOnStartup() {
+  try {
+    const wasRunning = await getSetting('backfill_running');
+    if (wasRunning === 'true') {
+      log('Auto-resuming backfill after restart');
+      await startBackfill();
+    }
+  } catch (e) {
+    log(`resumeOnStartup error: ${e.message}`);
+  }
+}
+
+// Kept for legacy callers — no-op in the new design
+export async function runDailyBackfill() {
+  log('runDailyBackfill called — use startBackfill() instead');
+}
+
+function formatDuration(ms) {
+  if (!ms || ms <= 0) return '—';
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return '<1m';
 }
