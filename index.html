@@ -478,7 +478,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 /* shared helpers kept from old gen */
 @keyframes spin{to{transform:rotate(360deg)}}
 .gen-live-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--ac);animation:pulse 1.5s ease-in-out infinite;vertical-align:middle;margin-right:2px}
-.star-btn{position:absolute;top:8px;right:8px;background:none;border:none;font-size:16px;cursor:pointer;opacity:0.5;transition:opacity .2s;z-index:2;line-height:1;padding:2px}
+.star-btn{background:none;border:none;font-size:13px;cursor:pointer;opacity:0.45;transition:opacity .2s;line-height:1;padding:0 4px 0 0;flex-shrink:0;vertical-align:middle}
 .star-btn.active{opacity:1}
 .star-btn:hover{opacity:1}
 .fav-header{display:flex;align-items:center;justify-content:space-between;padding:10px 12px 4px}
@@ -773,7 +773,6 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     <span class="wr-l" id="wr-l">L: 0</span>
     <span class="wr-p" id="wr-p">P: 0</span>
     <span class="wr-r" id="wr-r">—</span>
-    <span class="wr-reset" onclick="resetWR()" title="Reset">↺</span>
   </div>
 </div>
 
@@ -784,16 +783,8 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   <div class="tab-content active" id="tab-live">
     <div class="connect-area" id="connect-area">
       <button class="btn-connect" id="btn-conn" onclick="toggleConn()">CONECTARE</button>
-      <div class="connect-hint">Date live în timp real</div>
     </div>
     <div id="live-body" style="display:none">
-      <div class="chips" id="region-chips">
-        <div class="chip active" onclick="filterRegion(this,'all')">Toate</div>
-        <div class="chip" onclick="filterRegion(this,'europe')">Europa</div>
-        <div class="chip" onclick="filterRegion(this,'americas')">Americas</div>
-        <div class="chip" onclick="filterRegion(this,'asia')">Asia</div>
-        <div class="chip" onclick="filterRegion(this,'africa')">Africa</div>
-      </div>
       <div class="score-chips" id="score-chips"></div>
       <div id="match-list"></div>
     </div>
@@ -1134,7 +1125,7 @@ async function runHealthCheck(){
     btn.disabled=false;btn.textContent='TEST';
   }
 }
-var ST={ms:[],connected:false,ws:null,region:'all',score:'all'};
+var ST={ms:[],connected:false,ws:null,score:'all'};
 
 // ── CLOCK ────────────────────────────────────────────────────
 function tickClock(){
@@ -1226,24 +1217,6 @@ function calcScore(m){
   };
 }
 
-// ── REGION FILTER ─────────────────────────────────────────────
-var EUROPE_KWORDS=['england','spain','germany','france','italy','portugal','netherlands','belgium','scotland','turkey','russia','ukraine','greece','sweden','norway','denmark','poland','czech','austria','switzerland','croatia','serbia','romania','bulgaria','hungary','slovakia','finland'];
-var AMERICAS_KWORDS=['brazil','argentina','mexico','colombia','chile','peru','ecuador','uruguay','usa','canada','venezuela','bolivia','paraguay'];
-var ASIA_KWORDS=['japan','korea','china','saudi','uae','qatar','iran','india','australia','indonesia','thailand'];
-var AFRICA_KWORDS=['nigeria','egypt','morocco','south africa','ghana','senegal','cameroon','ivory'];
-
-function matchRegion(m,reg){
-  if(reg==='all')return true;
-  var c=(m.league&&(m.league.country||m.league.name)||'').toLowerCase();
-  var kw=reg==='europe'?EUROPE_KWORDS:reg==='americas'?AMERICAS_KWORDS:reg==='asia'?ASIA_KWORDS:AFRICA_KWORDS;
-  return kw.some(function(k){return c.indexOf(k)>=0;});
-}
-function filterRegion(el,reg){
-  ST.region=reg;
-  document.querySelectorAll('#region-chips .chip').forEach(function(c){c.classList.remove('active');});
-  el.classList.add('active');
-  renderMatches();
-}
 function filterScore(el,score){
   ST.score=score;
   document.querySelectorAll('#score-chips .score-chip').forEach(function(c){c.classList.remove('active');});
@@ -1265,12 +1238,12 @@ function connect(){
     if(ok){
       ST.connected=true;
       sessionStorage.setItem('wasConnected','1');
-      btn.textContent='DECONECTARE';btn.classList.add('connected');
-      document.getElementById('connect-area').style.marginBottom='0';
+      document.getElementById('connect-area').style.display='none';
       document.getElementById('live-body').style.display='block';
       document.getElementById('live-badge').style.display='flex';
       document.getElementById('stats-bar').style.display='flex';
       document.getElementById('wr-bar').style.display='flex';
+      document.getElementById('page').style.top='141px';
       fetchSupabaseWinRate();
       _autoIt=setInterval(function(){loadLive();},CFG.RI);
     } else {
@@ -1281,12 +1254,14 @@ function connect(){
 function disconnect(){
   ST.connected=false;clearInterval(_autoIt);
   sessionStorage.removeItem('wasConnected');
+  document.getElementById('connect-area').style.display='';
   document.getElementById('btn-conn').textContent='CONECTARE';
   document.getElementById('btn-conn').classList.remove('connected');
   document.getElementById('live-body').style.display='none';
   document.getElementById('live-badge').style.display='none';
   document.getElementById('stats-bar').style.display='none';
   document.getElementById('wr-bar').style.display='none';
+  document.getElementById('page').style.top='56px';
 }
 
 async function loadLive(cb){
@@ -1324,7 +1299,6 @@ function ngpColor(p){return p>=80?'#00d4a8':p>=60?'#ffd166':'#ff6b6b';}
 
 function renderMatches(){
   var ms=ST.ms.filter(function(m){
-    if(!matchRegion(m,ST.region))return false;
     if(ST.score!=='all'){
       var hg=m.goals?m.goals.home||0:0;
       var ag=m.goals?m.goals.away||0:0;
@@ -1379,10 +1353,9 @@ function renderMatches(){
       var aid2=m.teams&&m.teams.away&&m.teams.away.id||0;
       var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===m.teams.home.id;});
       var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===m.teams.away.id;});
-      out+='<div class="card" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer;position:relative">';
-      out+='<button class="star-btn'+(isFav(fid2)?' active':'')+'" onclick="event.stopPropagation();toggleFav('+fid2+',this)">'+(isFav(fid2)?'⭐':'☆')+'</button>';
+      out+='<div class="card" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer">';
       out+='<div class="card-league">';
-      out+='<div class="league-name">'+flag+(lg.name||'')+'</div>';
+      out+='<div class="league-name"><button class="star-btn'+(isFav(fid2)?' active':'')+'" onclick="event.stopPropagation();toggleFav('+fid2+',this)">'+(isFav(fid2)?'⭐':'☆')+'</button>'+flag+(lg.name||'')+'</div>';
       var _sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
       var _b=matchTimeBadge(_sh,mn);
       out+='<div class="card-minute">'
@@ -1399,11 +1372,13 @@ function renderMatches(){
       out+='<div class="ngp-pct" style="color:'+c+'">'+ng+'%</div></div>';
       out+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+ng+'%;background:'+c+'"></div></div>';
       var tg=hg+ag;
+      var _cc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
       out+='<div class="markets">';
       if(tg===0)out+='<div class="mkt">Over 0.5 <span>'+mk.over05+'%</span></div>';
       if(tg<2)out+='<div class="mkt">Over 1.5 <span>'+mk.over15+'%</span></div>';
       if(tg<3)out+='<div class="mkt">Over 2.5 <span>'+mk.over25+'%</span></div>';
       if(tg>=3&&tg<4)out+='<div class="mkt">Over 3.5 <span>'+mk.over35+'%</span></div>';
+      if(_cc)out+='<div class="mkt" style="color:var(--mu);margin-left:auto">('+_cc+')</div>';
       out+='</div>';
       var ed=m.enrichData;
       if(ed){
@@ -1670,12 +1645,11 @@ function renderPM(){
     var kickoff=m.fixture&&m.fixture.date?new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
     var enr=_pmEnrich[fid];
     var isTop=enr&&probs.length&&(enr.over15Prob||0)>=topThresh&&topThresh<999;
+    var _pmcc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
     html+='<div class="pm-card" onclick="mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer;position:relative">';
-    html+='<button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>';
-    html+='<div class="pm-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">';
-    html+='<div><div class="pm-kickoff">'+flag+lg+' · 🕐 '+kickoff+'</div>';
-    html+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu);font-size:13px;font-weight:600">vs</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div></div>';
-    if(isTop)html+='<span class="badge-top">TOP PICK</span>';
+    html+='<div class="pm-header">';
+    html+='<div class="pm-kickoff"><button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>'+flag+lg+' · 🕐 '+kickoff+'</div>';
+    html+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu);font-size:13px;font-weight:600">vs</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div>';
     html+='</div>';
     if(enr){
       html+='<div class="pm-body">';
@@ -1707,10 +1681,21 @@ function renderPM(){
             '<span class="conf-label">ÎNCREDERE</span>'+
           '</div>'+safeBadge+'</div>';
       }
-      if(enr.teamStrengthHome!=null||enr.teamStrengthAway!=null){
-        var sh=enr.teamStrengthHome!=null?enr.teamStrengthHome:'?';
-        var sa=enr.teamStrengthAway!=null?enr.teamStrengthAway:'?';
-        html+='<div class="enrich-row" style="margin-top:6px"><span class="str-badge">STR: '+sh+' vs '+sa+'</span></div>';
+      var _hasStr=enr.teamStrengthHome!=null||enr.teamStrengthAway!=null;
+      if(_hasStr||isTop||_pmcc){
+        html+='<div class="enrich-row" style="margin-top:6px;align-items:center">';
+        if(_hasStr){
+          var sh=enr.teamStrengthHome!=null?enr.teamStrengthHome:'?';
+          var sa=enr.teamStrengthAway!=null?enr.teamStrengthAway:'?';
+          html+='<span class="str-badge">STR: '+sh+' vs '+sa+'</span>';
+        }
+        if(isTop||_pmcc){
+          html+='<span style="margin-left:auto;display:flex;align-items:center;gap:6px">';
+          if(_pmcc)html+='<span style="font-size:9px;color:var(--mu);font-weight:700">('+_pmcc+')</span>';
+          if(isTop)html+='<span class="badge-top">TOP PICK</span>';
+          html+='</span>';
+        }
+        html+='</div>';
       }
       html+='</div>';
     }else{
@@ -3047,11 +3032,10 @@ function renderFavs(){
     }else{
       timeStr=m.fixture&&m.fixture.date?'<span style="font-size:10px;color:var(--mu)">🕐 '+new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>':'';
     }
-    var s='<div class="pm-card" style="position:relative;cursor:pointer" onclick="mdOpen('+fid+','+hid+','+aid+',this)">';
-    s+='<button class="star-btn active" onclick="event.stopPropagation();removeFav('+fid+')">⭐</button>';
-    s+='<div class="pm-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">';
-    s+='<div><div class="pm-kickoff">'+flag+lg+' · '+timeStr+'</div>';
-    s+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu)">'+hg+' - '+ag+'</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div></div>';
+    var s='<div class="pm-card" style="cursor:pointer" onclick="mdOpen('+fid+','+hid+','+aid+',this)">';
+    s+='<div class="pm-header">';
+    s+='<div class="pm-kickoff"><button class="star-btn active" onclick="event.stopPropagation();removeFav('+fid+')">⭐</button>'+flag+lg+' · '+timeStr+'</div>';
+    s+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu)">'+hg+' - '+ag+'</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div>';
     s+='</div>';
     if(ed&&ed.homeWin!=null){
       s+='<div class="pm-body">';
