@@ -9,6 +9,7 @@
 // scan.js rămâne neschimbat (disponibil manual la /api/cron/scan).
 
 import { query } from '../db.js';
+import { logPrediction } from '../log-prediction.js';
 
 const FOOTBALL_KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
@@ -442,6 +443,22 @@ async function scanLive10s() {
         const conf      = ng > 70 ? ng / 100 : mk.over15 / 100;
         const msg       = `${m.teams?.home?.name} vs ${m.teams?.away?.name} — ${alertType} ${Math.round(conf * 100)}% min ${currMin}`;
         saveAlert(id, alertType, ng > 70 ? 'ng' : 'over15', msg, conf).catch(() => {});
+        // Log to prediction_log for self-learning
+        logPrediction({
+          fixture_id:      id,
+          league_id:       m.league?.id,
+          league_name:     m.league?.name,
+          home_team:       m.teams?.home?.name,
+          away_team:       m.teams?.away?.name,
+          minute:          currMin,
+          score:           `${currHome}-${currAway}`,
+          module:          alertType === 'HIGH_NGP' ? 'NGP' : 'OVER15',
+          predicted_value: alertType === 'HIGH_NGP' ? ng : mk.over15,
+          threshold_used:  70,
+          ngp_value:       ng,
+          lambda_home:     null,
+          lambda_away:     null,
+        }).catch(() => {});
       }
     }
 

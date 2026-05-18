@@ -321,4 +321,89 @@ router.get('/access-log', (req, res) => {
   res.json({ ok: true, entries: [...accessLog].reverse().slice(0, 50) });
 });
 
+// ── GET /api/admin/learning-stats ───────────────────────────────────────────
+router.get('/learning-stats', async (req, res) => {
+  try {
+    const safe = q => query(q).catch(() => ({ rows: [] }));
+
+    const [totals, byModule, byLeague, recentWeights] = await Promise.all([
+      safe(`SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE outcome!='PENDING') AS resolved,
+        COUNT(*) FILTER (WHERE outcome='PENDING') AS pending,
+        COUNT(*) FILTER (WHERE outcome='WIN') AS wins,
+        ROUND(100.0*COUNT(*) FILTER (WHERE outcome='WIN')/NULLIF(COUNT(*) FILTER (WHERE outcome!='PENDING'),0),1) AS global_win_rate
+        FROM prediction_log`),
+      safe(`SELECT module,
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE outcome!='PENDING') AS resolved,
+        COUNT(*) FILTER (WHERE outcome='WIN') AS wins,
+        ROUND(100.0*COUNT(*) FILTER (WHERE outcome='WIN')/NULLIF(COUNT(*) FILTER (WHERE outcome!='PENDING'),0),1) AS win_rate,
+        MAX(created_at) AS last_prediction
+        FROM prediction_log
+        GROUP BY module ORDER BY module`),
+      safe(`SELECT pl.league_id, pl.league_name,
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE pl.outcome='WIN') AS wins,
+        ROUND(100.0*COUNT(*) FILTER (WHERE pl.outcome='WIN')/NULLIF(COUNT(*) FILTER (WHERE pl.outcome!='PENDING'),0),1) AS win_rate
+        FROM prediction_log pl
+        WHERE pl.outcome != 'PENDING' AND pl.league_id IS NOT NULL
+        GROUP BY pl.league_id, pl.league_name
+        HAVING COUNT(*) >= 10
+        ORDER BY win_rate DESC NULLS LAST
+        LIMIT 10`),
+      safe(`SELECT module, context_key, weight_name, weight_value, default_value, sample_size, win_rate, confidence_level, last_updated
+        FROM model_weights
+        WHERE last_updated > NOW() - INTERVAL '7 days'
+          AND weight_value != default_value
+        ORDER BY last_updated DESC LIMIT 20`),
+    ]);
+
+    const t = totals.rows[0] || {};
+    const mod = byModule.rows.map(r => ({
+      module:       r.module,
+      total:        Number(r.total),
+      resolved:     Number(r.resolved),
+      wins:         Number(r.wins),
+      win_rate:     r.win_rate ? Number(r.win_rate) : null,
+      last_prediction: r.last_prediction,
+      trend: r.win_rate > 60 ? 'good' : r.win_rate < 45 ? 'poor' : 'neutral',
+    }));
+
+    const globalWR = t.global_win_rate ? Number(t.global_win_rate) : null;
+    const confidence = Number(t.resolved) >= 100 ? 'HIGH' : Number(t.resolved) >= 30 ? 'MEDIUM' : 'LOW';
+
+    res.json({
+      ok: true,
+      total_predictions: Number(t.total || 0),
+      resolved:          Number(t.resolved || 0),
+      pending:           Number(t.pending || 0),
+      wins:              Number(t.wins || 0),
+      global_win_rate:   globalWR,
+      model_confidence:  confidence,
+      by_module:         mod,
+      by_league_top10:   byLeague.rows.map(r => ({
+        league_id:   Number(r.league_id),
+        league_name: r.league_name,
+        total:       Number(r.total),
+        wins:        Number(r.wins),
+        win_rate:    Number(r.win_rate),
+      })),
+      weights_updated_recently: recentWeights.rows.map(r => ({
+        module:       r.module,
+        context_key:  r.context_key,
+        weight_name:  r.weight_name,
+        old_value:    Number(r.default_value),
+        new_value:    Number(r.weight_value),
+        samples:      Number(r.sample_size),
+        win_rate:     r.win_rate ? Number(r.win_rate) : null,
+        confidence:   r.confidence_level,
+        updated_at:   r.last_updated,
+      })),
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 export default router;

@@ -1,0 +1,247 @@
+// POST /api/cron/learning-analysis
+// Runs daily at 03:30 — analyzes prediction_log and updates model_weights
+import { query } from '../db.js';
+
+const MIN_SAMPLES     = 20;
+const MAX_ADJ_LOW     = 0.05;   // ±5% when confidence LOW  (<30 samples)
+const MAX_ADJ_MEDIUM  = 0.10;   // ±10% MEDIUM (30-100)
+const MAX_ADJ_HIGH    = 0.15;   // ±15% HIGH (>100)
+const THRESHOLD_MIN   = 50;
+const THRESHOLD_MAX   = 95;
+
+function confidenceLevel(n) {
+  return n < 30 ? 'LOW' : n <= 100 ? 'MEDIUM' : 'HIGH';
+}
+function maxAdj(n) {
+  return n < 30 ? MAX_ADJ_LOW : n <= 100 ? MAX_ADJ_MEDIUM : MAX_ADJ_HIGH;
+}
+
+async function clampedThresholdUpdate(module, contextKey, currentVal, winRate, n) {
+  const adj     = maxAdj(n);
+  let newVal;
+  if (winRate < 0.45) {
+    // Bad — raise threshold (be more selective)
+    newVal = currentVal * (1 + adj);
+  } else if (winRate > 0.75) {
+    // Great — lower threshold slightly (capture more)
+    newVal = currentVal * (1 - adj * 0.5);
+  } else {
+    return null; // no change needed
+  }
+  newVal = Math.min(THRESHOLD_MAX, Math.max(THRESHOLD_MIN, newVal));
+  const cl = confidenceLevel(n);
+  await query(
+    `INSERT INTO model_weights (module, context_key, weight_name, weight_value, default_value, sample_size, win_rate, confidence_level, last_updated)
+     VALUES ($1, $2, 'threshold', $3, $4, $5, $6, $7, NOW())
+     ON CONFLICT (module, context_key, weight_name) DO UPDATE SET
+       weight_value     = EXCLUDED.weight_value,
+       sample_size      = EXCLUDED.sample_size,
+       win_rate         = EXCLUDED.win_rate,
+       confidence_level = EXCLUDED.confidence_level,
+       last_updated     = NOW()`,
+    [module, contextKey, +newVal.toFixed(2), +currentVal.toFixed(2), n, +(winRate * 100).toFixed(1), cl]
+  );
+  return newVal;
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+
+  const started   = Date.now();
+  let analyzed    = 0;
+  let adjustments = 0;
+  const log       = [];
+
+  try {
+    // ── PASUL 1: Per ligă per modul ─────────────────────────────
+    const { rows: byLeague } = await query(`
+      SELECT league_id, module,
+        COUNT(*) AS total,
+        SUM(CASE WHEN outcome='WIN' THEN 1 ELSE 0 END) AS wins,
+        AVG(predicted_value) AS avg_predicted
+      FROM prediction_log
+      WHERE outcome != 'PENDING'
+        AND created_at > NOW() - INTERVAL '90 days'
+        AND league_id IS NOT NULL
+      GROUP BY league_id, module
+      HAVING COUNT(*) >= ${MIN_SAMPLES}
+    `);
+
+    for (const row of byLeague) {
+      const n       = Number(row.total);
+      const winRate = Number(row.wins) / n;
+      const ctxKey  = `league_${row.league_id}`;
+      analyzed     += n;
+
+      // Get current threshold (specific or global fallback)
+      const { rows: cur } = await query(
+        `SELECT weight_value FROM model_weights
+         WHERE module=$1 AND context_key IN ($2,'global') AND weight_name='threshold'
+         ORDER BY CASE WHEN context_key=$2 THEN 0 ELSE 1 END LIMIT 1`,
+        [row.module, ctxKey]
+      );
+      const curVal = cur[0] ? Number(cur[0].weight_value) : 65;
+      const result = await clampedThresholdUpdate(row.module, ctxKey, curVal, winRate, n);
+      if (result != null) {
+        adjustments++;
+        log.push({ type: 'league', module: row.module, league_id: row.league_id, old: curVal, new: +result.toFixed(2), win_rate: +(winRate*100).toFixed(1), n });
+      }
+    }
+
+    // ── PASUL 2: Per interval de minut ──────────────────────────
+    const minuteBands = [
+      ['0_15', 0, 15], ['15_30', 15, 30], ['30_45', 30, 45],
+      ['45_60', 45, 60], ['60_75', 60, 75], ['75_90', 75, 90],
+    ];
+    for (const [band, lo, hi] of minuteBands) {
+      const { rows: bm } = await query(`
+        SELECT module,
+          COUNT(*) AS total,
+          SUM(CASE WHEN outcome='WIN' THEN 1 ELSE 0 END) AS wins
+        FROM prediction_log
+        WHERE outcome != 'PENDING'
+          AND minute >= $1 AND minute < $2
+          AND created_at > NOW() - INTERVAL '90 days'
+        GROUP BY module
+        HAVING COUNT(*) >= ${MIN_SAMPLES}
+      `, [lo, hi]);
+
+      for (const row of bm) {
+        const n       = Number(row.total);
+        const winRate = Number(row.wins) / n;
+        const factor  = winRate > 0.70 ? 1.10 : winRate < 0.40 ? 0.90 : 1.0;
+        if (factor === 1.0) continue;
+        const cl = confidenceLevel(n);
+        await query(
+          `INSERT INTO model_weights (module, context_key, weight_name, weight_value, default_value, sample_size, win_rate, confidence_level, last_updated)
+           VALUES ($1, $2, 'minute_factor', $3, 1.0, $4, $5, $6, NOW())
+           ON CONFLICT (module, context_key, weight_name) DO UPDATE SET
+             weight_value=EXCLUDED.weight_value, sample_size=EXCLUDED.sample_size,
+             win_rate=EXCLUDED.win_rate, confidence_level=EXCLUDED.confidence_level,
+             last_updated=NOW()`,
+          [row.module, `minute_${band}`, factor, n, +(winRate*100).toFixed(1), cl]
+        );
+        adjustments++;
+        log.push({ type: 'minute', band, module: row.module, factor, win_rate: +(winRate*100).toFixed(1), n });
+      }
+    }
+
+    // ── PASUL 3: Per scor la momentul predicției ─────────────────
+    const { rows: byScore } = await query(`
+      SELECT score_at_prediction, module,
+        COUNT(*) AS total,
+        SUM(CASE WHEN outcome='WIN' THEN 1 ELSE 0 END) AS wins
+      FROM prediction_log
+      WHERE outcome != 'PENDING'
+        AND score_at_prediction IS NOT NULL
+        AND created_at > NOW() - INTERVAL '90 days'
+      GROUP BY score_at_prediction, module
+      HAVING COUNT(*) >= ${MIN_SAMPLES}
+    `);
+
+    for (const row of byScore) {
+      const n       = Number(row.total);
+      const winRate = Number(row.wins) / n;
+      const factor  = winRate > 0.70 ? 1.08 : winRate < 0.40 ? 0.92 : 1.0;
+      if (factor === 1.0) continue;
+      const ctxKey = `score_${(row.score_at_prediction||'').replace('-','_')}`;
+      await query(
+        `INSERT INTO model_weights (module, context_key, weight_name, weight_value, default_value, sample_size, win_rate, confidence_level, last_updated)
+         VALUES ($1, $2, 'score_factor', $3, 1.0, $4, $5, $6, NOW())
+         ON CONFLICT (module, context_key, weight_name) DO UPDATE SET
+           weight_value=EXCLUDED.weight_value, sample_size=EXCLUDED.sample_size,
+           win_rate=EXCLUDED.win_rate, confidence_level=EXCLUDED.confidence_level,
+           last_updated=NOW()`,
+        [row.module, ctxKey, factor, n, +(winRate*100).toFixed(1), confidenceLevel(n)]
+      );
+      adjustments++;
+    }
+
+    // ── PASUL 4: Re-calibrare greutăți layere Confidence ─────────
+    const { rows: layerStats } = await query(`
+      SELECT
+        AVG(CASE WHEN outcome='WIN' THEN 1.0 ELSE 0.0 END) AS overall_wr,
+        CORR(layer1_score, CASE WHEN outcome='WIN' THEN 1.0 ELSE 0.0 END) AS corr1,
+        CORR(layer2_score, CASE WHEN outcome='WIN' THEN 1.0 ELSE 0.0 END) AS corr2,
+        CORR(layer3_score, CASE WHEN outcome='WIN' THEN 1.0 ELSE 0.0 END) AS corr3,
+        CORR(layer4_score, CASE WHEN outcome='WIN' THEN 1.0 ELSE 0.0 END) AS corr4,
+        CORR(layer5_score, CASE WHEN outcome='WIN' THEN 1.0 ELSE 0.0 END) AS corr5,
+        CORR(layer6_score, CASE WHEN outcome='WIN' THEN 1.0 ELSE 0.0 END) AS corr6,
+        CORR(layer7_score, CASE WHEN outcome='WIN' THEN 1.0 ELSE 0.0 END) AS corr7,
+        COUNT(*) AS total
+      FROM prediction_log
+      WHERE module = 'CONFIDENCE'
+        AND outcome != 'PENDING'
+        AND created_at > NOW() - INTERVAL '90 days'
+        AND layer1_score IS NOT NULL
+    `);
+
+    if (layerStats[0] && Number(layerStats[0].total) >= MIN_SAMPLES) {
+      const row = layerStats[0];
+      const corrs = [1,2,3,4,5,6,7].map(i => Math.max(0, Number(row[`corr${i}`]) || 0));
+      const total = corrs.reduce((s, v) => s + v, 0);
+      if (total > 0) {
+        // Get current weights
+        const { rows: curW } = await query(
+          `SELECT weight_name, weight_value FROM model_weights
+           WHERE module='CONFIDENCE' AND context_key='global' AND weight_name LIKE 'layer%_weight'`
+        );
+        const curMap = Object.fromEntries(curW.map(r => [r.weight_name, Number(r.weight_value)]));
+        const adj = maxAdj(Number(row.total));
+
+        for (let i = 1; i <= 7; i++) {
+          const name    = `layer${i}_weight`;
+          const curVal  = curMap[name] || 0.14;
+          const target  = corrs[i-1] / total;
+          // Blend: 20% toward correlation-based target, capped by adj
+          const delta   = Math.min(adj, Math.abs(target - curVal)) * Math.sign(target - curVal);
+          const newVal  = Math.max(0.02, Math.min(0.50, curVal + delta * 0.2));
+          await query(
+            `UPDATE model_weights SET weight_value=$1, last_updated=NOW()
+             WHERE module='CONFIDENCE' AND context_key='global' AND weight_name=$2`,
+            [+newVal.toFixed(4), name]
+          );
+        }
+        // Normalize so sum = 1.0
+        const { rows: fresh } = await query(
+          `SELECT weight_name, weight_value FROM model_weights
+           WHERE module='CONFIDENCE' AND context_key='global' AND weight_name LIKE 'layer%_weight'`
+        );
+        const sum = fresh.reduce((s, r) => s + Number(r.weight_value), 0);
+        if (sum > 0) {
+          for (const r of fresh) {
+            await query(
+              `UPDATE model_weights SET weight_value=$1 WHERE module='CONFIDENCE' AND context_key='global' AND weight_name=$2`,
+              [+(Number(r.weight_value) / sum).toFixed(4), r.weight_name]
+            );
+          }
+        }
+        adjustments += 7;
+        log.push({ type: 'confidence_layers', n: Number(row.total), normalized: true });
+      }
+    }
+
+    // ── PASUL 5: Log în cron_logs ────────────────────────────────
+    await query(
+      `INSERT INTO cron_logs (job_name, ran_at, status, fixtures_processed, error_msg)
+       VALUES ('learning-analysis', NOW(), 'ok', $1, NULL)`,
+      [analyzed]
+    ).catch(() => {});
+
+    const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+    return res.json({
+      ok: true,
+      analyzed,
+      adjustments,
+      elapsed_s: elapsed,
+      log: log.slice(0, 50),
+    });
+  } catch (e) {
+    await query(
+      `INSERT INTO cron_logs (job_name, ran_at, status, error_msg)
+       VALUES ('learning-analysis', NOW(), 'error', $1)`,
+      [e.message]
+    ).catch(() => {});
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+}

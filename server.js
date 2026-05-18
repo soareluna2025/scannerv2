@@ -13,6 +13,7 @@ import { query } from './api/db.js';
 import { runDailyBackfill, initBackfillProgress } from './api/backfill.js';
 import { startScanner } from './api/cron/scanner.js';
 import adminRouter from './api/admin.js';
+import { loadModelWeights } from './api/weights.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -44,7 +45,7 @@ for (const name of apiFiles) {
 }
 
 // Cron routes
-const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats'];
+const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'learning-analysis'];
 for (const name of cronFiles) {
   app.all(`/api/cron/${name}`, async (req, res) => {
     try {
@@ -96,4 +97,5 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`AlohaScan pornit pe http://0.0.0.0:${PORT}`);
   await initBackfillProgress();
   startScanner();
+  loadModelWeights().catch(e => console.error('[weights] initial load failed:', e.message));
 });

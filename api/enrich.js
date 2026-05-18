@@ -1,5 +1,6 @@
 import { calcPoisson6x6, parseOddsItem, calcEV } from './calc-utils.js';
 import { query } from './db.js';
+import { logPrediction } from './log-prediction.js';
 
 // One-time migration: ensure pre_match_snapshots has outcome + composite_score columns
 query(`ALTER TABLE pre_match_snapshots
@@ -626,6 +627,46 @@ export default async function handler(req, res) {
             compositeScore,
           ]
         ).catch(() => {});
+
+        // Log OVER15 prediction for self-learning
+        if (payload.over15Prob > 0) {
+          logPrediction({
+            fixture_id: Number(fid), league_id: lgid ? Number(lgid) : null,
+            league_name: lg, home_team: hn, away_team: an, match_date: dt || null,
+            minute: parseInt(elapsed) || 0,
+            score: elapsed > 0 ? `${parseInt(req.query.hg)||0}-${parseInt(req.query.ag)||0}` : '0-0',
+            module: 'OVER15',
+            predicted_value: payload.over15Prob, threshold_used: 65,
+            lambda_home: payload.lambdaHome, lambda_away: payload.lambdaAway,
+            layer1: payload.layer1 ?? null, layer2: payload.layer2 ?? null,
+            layer3: payload.layer3 ?? null, layer4: payload.layer4 ?? null,
+            layer5: payload.layer5 ?? null, layer6: payload.layer6 ?? null,
+            layer7: payload.layer7 ?? null,
+          }).catch(() => {});
+          logPrediction({
+            fixture_id: Number(fid), league_id: lgid ? Number(lgid) : null,
+            league_name: lg, home_team: hn, away_team: an, match_date: dt || null,
+            minute: parseInt(elapsed) || 0,
+            score: elapsed > 0 ? `${parseInt(req.query.hg)||0}-${parseInt(req.query.ag)||0}` : '0-0',
+            module: 'GG',
+            predicted_value: payload.ggProb, threshold_used: 60,
+            lambda_home: payload.lambdaHome, lambda_away: payload.lambdaAway,
+          }).catch(() => {});
+          if (payload.confidenceScore > 0) {
+            logPrediction({
+              fixture_id: Number(fid), league_id: lgid ? Number(lgid) : null,
+              league_name: lg, home_team: hn, away_team: an, match_date: dt || null,
+              minute: parseInt(elapsed) || 0,
+              module: 'CONFIDENCE',
+              predicted_value: payload.confidenceScore, threshold_used: 70,
+              lambda_home: payload.lambdaHome, lambda_away: payload.lambdaAway,
+              layer1: payload.layer1 ?? null, layer2: payload.layer2 ?? null,
+              layer3: payload.layer3 ?? null, layer4: payload.layer4 ?? null,
+              layer5: payload.layer5 ?? null, layer6: payload.layer6 ?? null,
+              layer7: payload.layer7 ?? null,
+            }).catch(() => {});
+          }
+        }
       }
 
       query(

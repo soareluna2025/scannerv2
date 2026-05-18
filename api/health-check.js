@@ -425,8 +425,30 @@ async function t18() {
 
 // ── WIN RATE din pre_match_snapshots ─────────────────────────────────────────
 async function tWinRate() {
-  // pre_match_snapshots schema does not have outcome column
-  return { correct: 0, total: 0, incorrect: 0, pending: 0, percentage: 0 };
+  try {
+    const { rows } = await query(`
+      SELECT
+        COUNT(*) FILTER (WHERE outcome='WIN')  AS wins,
+        COUNT(*) FILTER (WHERE outcome='LOSS') AS losses,
+        COUNT(*) FILTER (WHERE outcome IS NULL OR outcome='PENDING') AS pending,
+        COUNT(*) FILTER (WHERE outcome IN ('WIN','LOSS')) AS resolved
+      FROM pre_match_snapshots
+    `);
+    const r = rows[0] || {};
+    const wins     = Number(r.wins    || 0);
+    const losses   = Number(r.losses  || 0);
+    const pending  = Number(r.pending || 0);
+    const resolved = Number(r.resolved|| 0);
+    return {
+      correct:    wins,
+      incorrect:  losses,
+      pending,
+      total:      resolved,
+      percentage: resolved > 0 ? Math.round(wins / resolved * 100) : 0,
+    };
+  } catch (_) {
+    return { correct: 0, total: 0, incorrect: 0, pending: 0, percentage: 0 };
+  }
 }
 
 // ── HANDLER ──────────────────────────────────────────────────────────────────

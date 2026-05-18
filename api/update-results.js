@@ -59,6 +59,30 @@ export default async function handler(req, res) {
              WHERE fixture_id = $2 AND outcome IS NULL`,
             [(hg + ag) >= 2, pred.fixture_id]
           ).catch(() => {});
+
+          // Resolve prediction_log outcomes for self-learning
+          const isOver15 = (hg + ag) >= 2;
+          const isOver25 = (hg + ag) >= 3;
+          const isGG     = hg > 0 && ag > 0;
+
+          // Resolve OVER15 predictions
+          query(`UPDATE prediction_log SET outcome=CASE WHEN $1 THEN 'WIN' ELSE 'LOSS' END, actual_value=$2, resolved_at=NOW() WHERE fixture_id=$3 AND module='OVER15' AND outcome='PENDING'`,
+            [isOver15, hg + ag, pred.fixture_id]).catch(() => {});
+          // Resolve OVER25
+          query(`UPDATE prediction_log SET outcome=CASE WHEN $1 THEN 'WIN' ELSE 'LOSS' END, actual_value=$2, resolved_at=NOW() WHERE fixture_id=$3 AND module='OVER25' AND outcome='PENDING'`,
+            [isOver25, hg + ag, pred.fixture_id]).catch(() => {});
+          // Resolve GG
+          query(`UPDATE prediction_log SET outcome=CASE WHEN $1 THEN 'WIN' ELSE 'LOSS' END, actual_value=$2, resolved_at=NOW() WHERE fixture_id=$3 AND module='GG' AND outcome='PENDING'`,
+            [isGG, isGG ? 1 : 0, pred.fixture_id]).catch(() => {});
+          // Resolve CONFIDENCE — WIN if over15 was correct (same logic as pre_match_snapshots)
+          query(`UPDATE prediction_log SET outcome=CASE WHEN (predicted_value>=55 AND $1) OR (predicted_value<45 AND NOT $1) THEN 'WIN' ELSE 'LOSS' END, actual_value=$2, resolved_at=NOW() WHERE fixture_id=$3 AND module='CONFIDENCE' AND outcome='PENDING'`,
+            [isOver15, hg + ag, pred.fixture_id]).catch(() => {});
+          // Resolve NGP — WIN if total goals at end > total goals at prediction time
+          query(`UPDATE prediction_log SET
+            outcome=CASE WHEN $1 > CAST(SPLIT_PART(score_at_prediction,'-',1) AS INT) + CAST(SPLIT_PART(score_at_prediction,'-',2) AS INT) THEN 'WIN' ELSE 'LOSS' END,
+            actual_value=$1, resolved_at=NOW()
+            WHERE fixture_id=$2 AND module='NGP' AND outcome='PENDING'`,
+            [hg + ag, pred.fixture_id]).catch(() => {});
         }
       } catch (_) { /* skip fixture, try next */ }
     }
