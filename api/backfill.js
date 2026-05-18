@@ -327,6 +327,16 @@ async function runBackfillLoop(startSi, startLi, startFi) {
 export async function initBackfillProgress() {
   try {
     await initAppSettings();
+
+    // Remove rows for leagues no longer in the whitelist (keeps progress for valid leagues)
+    const { rowCount } = await query(
+      `DELETE FROM backfill_progress
+       WHERE league_id != ALL($1::int[])`,
+      [LEAGUE_IDS]
+    );
+    if (rowCount > 0) log(`Removed ${rowCount} stale leagues from backfill_progress`);
+
+    // Insert missing whitelist leagues
     for (const leagueId of LEAGUE_IDS) {
       await query(
         `INSERT INTO backfill_progress (league_id, status, fixtures_processed, players_upserted)
@@ -335,7 +345,7 @@ export async function initBackfillProgress() {
         [leagueId]
       );
     }
-    log(`Initialized: ${LEAGUE_IDS.length} leagues`);
+    log(`Initialized: ${LEAGUE_IDS.length} leagues in backfill_progress`);
   } catch (e) {
     log(`initBackfillProgress error: ${e.message}`);
   }
