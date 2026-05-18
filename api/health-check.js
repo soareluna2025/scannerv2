@@ -98,29 +98,36 @@ async function t2() {
 
 // ── TEST 3: backfill_progress status ────────────────────────────────────────
 async function t3() {
-  const r = await query('SELECT status FROM backfill_progress');
+  const [r, rSetting] = await Promise.all([
+    query('SELECT status FROM backfill_progress'),
+    query("SELECT value FROM app_settings WHERE key='backfill_running'").catch(() => ({ rows: [] })),
+  ]);
   const arr = r.rows;
 
   const done        = arr.filter(x => x.status === 'done').length;
   const pending     = arr.filter(x => x.status === 'pending').length;
-  const in_progress = arr.filter(x => x.status === 'running').length;
+  const in_progress = arr.filter(x => x.status === 'in_progress').length;
   const error       = arr.filter(x => x.status === 'error').length;
   const total       = arr.length;
+  const isRunning   = rSetting.rows[0]?.value === 'true';
 
   if (!total) {
     return {
       status: '⚠️ WARN',
       message: 'backfill_progress gol — backfill nu a pornit niciodată',
-      data: { done: 0, pending: 0, in_progress: 0, error: 0, total: 0 },
+      data: { done: 0, pending: 0, in_progress: 0, error: 0, total: 0, running: false },
     };
   }
 
+  const pass = done > 0 || isRunning;
   return {
-    status: done > 0 ? '✅ PASS' : '⚠️ WARN',
-    message: done > 0
-      ? `${done}/${total} ligi procesate${error ? ` (${error} erori)` : ''}`
-      : 'Niciun backfill completat — rulează Start Backfill din Settings',
-    data: { done, pending, in_progress, error, total },
+    status: pass ? '✅ PASS' : '⚠️ WARN',
+    message: isRunning && done === 0
+      ? `Backfill activ — ${in_progress} ligi în progres, ${pending} în așteptare`
+      : done > 0
+        ? `${done}/${total} ligi procesate${isRunning ? ' (activ)' : ''}${error ? ` · ${error} erori` : ''}`
+        : 'Niciun backfill completat — rulează Start Backfill din Settings',
+    data: { done, pending, in_progress, error, total, running: isRunning },
   };
 }
 
