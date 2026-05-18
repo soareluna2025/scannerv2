@@ -228,6 +228,8 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .pi-team{flex:1;background:rgba(255,255,255,.04);border-radius:8px;padding:8px}
 .pi-team-name{font-size:10px;color:var(--mu);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-str-val{font-size:18px;font-weight:900;color:#818cf8}
+.pi-str-na{color:var(--mu);font-size:16px;font-weight:600}
+.pi-na{font-size:11px;color:var(--mu);padding:6px 0;font-style:italic}
 .pi-str-bar{height:3px;background:var(--sur3);border-radius:2px;overflow:hidden;margin-top:4px}
 .pi-str-fill{height:100%;border-radius:2px;background:#818cf8}
 /* BACKFILL UI */
@@ -1808,14 +1810,27 @@ function mdRenderSumar(d){
     }
     // Player Intelligence section
     if(en.teamStrengthHome!=null||en.teamStrengthAway!=null){
-      var sh2=en.teamStrengthHome!=null?en.teamStrengthHome:0;
-      var sa2=en.teamStrengthAway!=null?en.teamStrengthAway:0;
+      var sh2=en.teamStrengthHome&&en.teamStrengthHome>0?en.teamStrengthHome:null;
+      var sa2=en.teamStrengthAway&&en.teamStrengthAway>0?en.teamStrengthAway:null;
       out+='<div class="pi-section">';
       out+='<div class="pi-title">⚡ Player Intelligence</div>';
-      out+='<div class="pi-teams">';
-      out+='<div class="pi-team"><div class="pi-team-name">'+hn+'</div><div class="pi-str-val">'+sh2+'</div><div class="pi-str-bar"><div class="pi-str-fill" style="width:'+sh2+'%"></div></div></div>';
-      out+='<div class="pi-team"><div class="pi-team-name">'+an+'</div><div class="pi-str-val">'+sa2+'</div><div class="pi-str-bar"><div class="pi-str-fill" style="width:'+sa2+'%"></div></div></div>';
-      out+='</div></div>';
+      if(!sh2&&!sa2){
+        out+='<div class="pi-na">Date indisponibile — statistici jucători lipsesc pentru ambele echipe</div>';
+      } else {
+        out+='<div class="pi-teams">';
+        if(sh2){
+          out+='<div class="pi-team"><div class="pi-team-name">'+hn+'</div><div class="pi-str-val">'+sh2+'</div><div class="pi-str-bar"><div class="pi-str-fill" style="width:'+sh2+'%"></div></div></div>';
+        } else {
+          out+='<div class="pi-team"><div class="pi-team-name">'+hn+'</div><div class="pi-str-val pi-str-na">—</div><div class="pi-str-bar"></div></div>';
+        }
+        if(sa2){
+          out+='<div class="pi-team"><div class="pi-team-name">'+an+'</div><div class="pi-str-val">'+sa2+'</div><div class="pi-str-bar"><div class="pi-str-fill" style="width:'+sa2+'%"></div></div></div>';
+        } else {
+          out+='<div class="pi-team"><div class="pi-team-name">'+an+'</div><div class="pi-str-val pi-str-na">—</div><div class="pi-str-bar"></div></div>';
+        }
+        out+='</div>';
+      }
+      out+='</div>';
     }
     out+='</div>';
   }
@@ -2069,7 +2084,18 @@ function mdRenderSumar(d){
 function mdRenderFormatii(d){
   var lineups=d.lineups||[];
   if(!lineups.length){
-    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-t">Formații indisponibile</div><div class="empty-s">Formațiile nu sunt disponibile pentru această ligă sau meciul nu a început</div></div>';
+    var st=_md&&_md.data&&_md.data.fixture&&_md.data.fixture.fixture&&_md.data.fixture.fixture.status&&_md.data.fixture.fixture.status.short||'';
+    var msg='';
+    if(st==='NS'||st==='TBD'||st==='PST'||st==='CANC'||st==='ABD'){
+      msg='<div class="empty-s">Formațiile vor fi disponibile cu ~1h înainte de startul meciului</div>';
+    } else if(st==='FT'||st==='AET'||st==='PEN'||st==='AWD'||st==='WO'){
+      msg='<div class="empty-s">Formațiile nu au fost transmise de API pentru acest meci</div>';
+    } else if(st==='1H'||st==='2H'||st==='HT'||st==='ET'||st==='BT'||st==='P'){
+      msg='<div class="empty-s">Formațiile nu sunt disponibile pentru această ligă sau competiție</div>';
+    } else {
+      msg='<div class="empty-s">Formațiile nu sunt disponibile pentru această ligă sau meciul nu a început</div>';
+    }
+    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-t">Formații indisponibile</div>'+msg+'</div>';
     return;
   }
   var out='';
@@ -2114,7 +2140,16 @@ function mdPlayerRow(pl,allPlayers){
 function mdRenderJucatori(d){
   var players=d.players||[];
   if(!players.length){
-    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">👤</div><div class="empty-t">Statistici indisponibile</div><div class="empty-s">Statistici jucători indisponibile pentru această ligă</div></div>';
+    var st=_md&&_md.data&&_md.data.fixture&&_md.data.fixture.fixture&&_md.data.fixture.fixture.status&&_md.data.fixture.fixture.status.short||'';
+    var msg='';
+    if(st==='NS'||st==='TBD'||st==='PST'||st==='CANC'||st==='ABD'){
+      msg='<div class="empty-s">Statisticile jucătorilor vor fi disponibile după startul meciului</div>';
+    } else if(st==='FT'||st==='AET'||st==='PEN'||st==='AWD'||st==='WO'){
+      msg='<div class="empty-s">Statisticile nu au fost transmise de API pentru acest meci finalizat</div>';
+    } else {
+      msg='<div class="empty-s">Statistici jucători indisponibile pentru această ligă</div>';
+    }
+    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">👤</div><div class="empty-t">Statistici indisponibile</div>'+msg+'</div>';
     return;
   }
   var out='<div class="md-section"><div class="md-section-title">Top jucători după rating</div>';
