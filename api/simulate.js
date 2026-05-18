@@ -224,9 +224,9 @@ export default async function handler(req, res) {
     needOdds   ? af(`/odds?fixture=${fid}&bookmaker=8`,               'oddsFb')     : Promise.resolve(null),
   ]);
 
-  // Resolve final datasets
-  const homeFx     = needHomeFx ? (apiFbHomeFx || []) : [];
-  const awayFx     = needAwayFx ? (apiFbAwayFx || []) : [];
+  // Resolve final datasets — use DB data when sufficient, fall back to API
+  const homeFx     = needHomeFx ? (apiFbHomeFx || []) : sbHomeFx;
+  const awayFx     = needAwayFx ? (apiFbAwayFx || []) : sbAwayFx;
   const h2hFx      = needH2H    ? (apiFbH2H    || []) : h2hToSimFormat(sbH2HData);
   const standingsRes = needStd
     ? (apiFbStd || [])
@@ -305,24 +305,25 @@ export default async function handler(req, res) {
   // ── Squad strength from DB ────────────────────────────────────
   function calcSquad(players) {
     if (!players.length) return null;
-    const ratings    = players.map(p => p.rating).filter(r => r != null);
+    // pg returns NUMERIC columns as strings — force Number() to avoid string-concat NaN
+    const ratings    = players.map(p => p.rating).filter(r => r != null).map(Number);
     const avgRating  = ratings.length ? ratings.reduce((s, r) => s + r, 0) / ratings.length : 7.0;
-    const avgPassAcc = players.reduce((s, p) => s + (p.pass_accuracy    || 0), 0) / players.length;
-    const avgSOT     = players.reduce((s, p) => s + (p.shots_on_target  || 0), 0) / players.length;
-    const topScorer  = players.reduce((b, p) => (p.goals || 0) > (b.goals || 0) ? p : b, {});
-    const key3       = [...players].sort((a, b) => (b.player_score || 0) - (a.player_score || 0)).slice(0, 3);
+    const avgPassAcc = players.reduce((s, p) => s + (Number(p.pass_accuracy)   || 0), 0) / players.length;
+    const avgSOT     = players.reduce((s, p) => s + (Number(p.shots_on_target) || 0), 0) / players.length;
+    const topScorer  = players.reduce((b, p) => (Number(p.goals) || 0) > (Number(b.goals) || 0) ? p : b, {});
+    const key3       = [...players].sort((a, b) => (Number(b.player_score) || 0) - (Number(a.player_score) || 0)).slice(0, 3);
     const strength   = Math.round(
       (avgRating / 10 * 100) * 0.35 +
       Math.min(100, avgSOT * 12) * 0.25 +
       avgPassAcc * 0.20 +
-      Math.min(100, (topScorer.goals || 0) * 20) * 0.20
+      Math.min(100, (Number(topScorer.goals) || 0) * 20) * 0.20
     );
     return {
       avgRating:        +avgRating.toFixed(2),
       avgPassAccuracy:  +avgPassAcc.toFixed(1),
       avgShotsOnTarget: +avgSOT.toFixed(1),
-      topScorer:        { name: topScorer.player_name || '—', goals: topScorer.goals || 0 },
-      keyPlayers:       key3.map(p => ({ name: p.player_name, score: p.player_score })),
+      topScorer:        { name: topScorer.player_name || '—', goals: Number(topScorer.goals) || 0 },
+      keyPlayers:       key3.map(p => ({ name: p.player_name, score: Number(p.player_score) })),
       strength,
       playerCount:      players.length,
     };
@@ -367,8 +368,9 @@ export default async function handler(req, res) {
   const injFactorH = homeInjuries >= 5 ? 0.90 : homeInjuries >= 3 ? 0.95 : 1.0;
   const injFactorA = awayInjuries >= 5 ? 0.90 : awayInjuries >= 3 ? 0.95 : 1.0;
 
-  let lH = Math.max(0.3, Math.min(4.0, hAtt * aDef * lgH * eloFactor * pfHome * 1.15 * injFactorH));
-  let lA = Math.max(0.3, Math.min(4.0, aAtt * hDef * lgH / eloFactor * pfAway * injFactorA));
+  const safe = (v, fb) => (Number.isFinite(v) ? v : fb);
+  let lH = safe(Math.max(0.3, Math.min(4.0, hAtt * aDef * lgH * eloFactor * pfHome * 1.15 * injFactorH)), lgH * 1.1);
+  let lA = safe(Math.max(0.3, Math.min(4.0, aAtt * hDef * lgH / eloFactor * pfAway * injFactorA)), lgH * 0.9);
 
   if (isLive && elapsed > 0) {
     const mRem = Math.max(1, 90 - elapsed);
