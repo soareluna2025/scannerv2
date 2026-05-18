@@ -913,6 +913,19 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
                       api/simulate.js, index.html
   Commit: ea3dd45
 
+[18.05 ~09:00] - FIX BACKFILL SYNC ALLOWED_LEAGUE_IDS
+  PROBLEMA: backfill_progress conținea 241 rânduri (ligi din versiuni vechi)
+            față de 214 din ALLOWED_LEAGUE_IDS actual → waste API pe ligi
+            care nu sunt în whitelist
+  FIX: initBackfillProgress() acum face DELETE ... WHERE NOT ALL($1::int[])
+       înainte de INSERT, eliminând rândurile stale
+       startBackfill() și getBackfillStatus() iterau deja corect prin
+       LEAGUE_IDS (array in-memory din ALLOWED_LEAGUE_IDS)
+  Fișier modificat: api/backfill.js (initBackfillProgress +11 linii)
+  Test după deploy pe VPS:
+    SELECT COUNT(*) FROM backfill_progress; → trebuie 214 (ALLOWED_LEAGUE_IDS.size)
+  Commit: 20409d1
+
 [18.05 ~08:00] - BACKFILL COMPLET REDESIGN — season-first, persistent state, START/STOP UI
   TASK 1 — UI: buton verde START + buton roșu pulsant STOP (înlocuiesc vechiul ▶ Start Backfill)
   TASK 2 — Progress bars: backfill (perechi completate/total) + API usage (azi/150000), refresh 5s
