@@ -893,6 +893,48 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
       "✅ Distribuție calculată din X goluri reale" sau "📊 Distribuție statistică FIFA"
   Fișiere modificate: scripts/create-tables.sql, api/cron/scanner.js, api/db-stats.js,
                       api/simulate.js, index.html
+  Commit: ea3dd45
+
+[18.05 ~07:00] - TAB CLASAMENT + PROFIL ARBITRU + STADION + METEO
+  TASK 1 — BARĂ TAB-URI GLISANTĂ
+    - index.html CSS: .md-tabs → overflow-x:auto, white-space:nowrap, scrollbar ascuns
+    - .md-tab: flex:none (nu mai flex:1), padding:12px 14px, white-space:nowrap
+    - Ordine tab-uri: SUMAR | FORMAȚII | JUCĂTORI | FORMĂ | CLASAMENT
+  TASK 2 — TAB CLASAMENT
+    - api/standings-data.js (nou): GET /api/standings-data?league=X&season=Y&hid=X&aid=Y
+      Sursă 1: standings table din DB (rank, played, win, draw, lose, goals_for/against/diff, points)
+      Sursă 2: API-Football fallback /standings?league=X&season=Y
+      Returnează: standings[], homeRank, awayRank, homePoints, awayPoints, season
+    - server.js: adăugat standings-data la apiFiles
+    - index.html: mdRenderClasament() async fn
+      _standingsCache[lid_season] previne fetch repetat
+      Tabel Pos|Echipă|J|V|E|Î|GF|GA|GD|Pct cu logo 16x16 per echipă
+      Colorare rânduri: srow-home (verde) echipă cu mai multe puncte,
+                        srow-away (roșu) echipă cu mai puține, srow-even (galben) egal
+  TASK 3 — PROFIL ARBITRU ÎMBUNĂTĂȚIT în SUMAR
+    - Secțiunea "Arbitru" înlocuită cu "Profil Arbitru" mai detaliată
+    - Arată arbitul din fix.fixture.referee (mereu disponibil din match API)
+    - Statistici complete: 🟡Galbene, 🔴Roșii, ⚽Goluri, 📐Cornere, 🎯Penalty
+    - Pattern text dinamic: avg_yellow>4.5→sever, <2.5→permisiv, avg_goals>2.8→ofensiv, pct_gg>55→GG frecvent
+    - Dacă arbitru necunoscut sau date insuficiente → mesaj adecvat
+  TASK 4 — STADION & LOCAȚIE în SUMAR
+    - api/venue-weather.js (nou): GET /api/venue-weather?venue_id=X&dt=ISO_DATE
+      Sursă venue: venues table (venue_id, name, city, country, capacity, surface, lat, lon)
+    - index.html: mdBuildVenueWeatherHTML() builder pentru secțiunile venue+meteo
+      _venueWeatherCache[fid] previne fetch-uri repetate
+      Placeholder div #md-venue-sec-{fid} → replaced async când datele sosesc
+      Afișează: 🏟️Stadion, 🌍Oraș+Țară, 👥Capacitate, 🌱Suprafață (artificial⚡/gazon🌿)
+  TASK 5 — METEO PROGNOZĂ în SUMAR
+    - Același endpoint venue-weather.js folosește Open-Meteo (gratuit, fără cheie API)
+      URL: api.open-meteo.com/v1/forecast?latitude=X&longitude=Y&hourly=temperature_2m...
+      Caută slotul orar cel mai apropiat de ora meciului
+    - Cache server-side 30min per locație (lat/lon)
+    - Afișează: icon+condiții, temperatură°C, vânt km/h, precipitații mm
+    - Influență automată: temp<5°C→❄️Frig, precip>5mm→🌧️Ploaie, vânt>40→💨, temp>30°C→🔥
+    - Dacă coordonate lipsesc din DB → "Meteo indisponibil"
+  TASK 6 — Nu necesită cheie API (Open-Meteo e gratuit fără autentificare)
+  Fișiere noi: api/standings-data.js, api/venue-weather.js
+  Fișiere modificate: server.js, index.html, SESSION_CONTEXT.txt
   Commit: (pending)
 
 ================================================================================

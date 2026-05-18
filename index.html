@@ -371,12 +371,20 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   background:var(--sur2);color:var(--tx);font-size:18px;cursor:pointer;
   display:flex;align-items:center;justify-content:center}
 .md-title{font-size:13px;font-weight:700;color:var(--mu2);text-align:center;flex:1;padding:0 8px}
-.md-tabs{display:flex;border-bottom:1px solid var(--bor);flex-shrink:0;
-  background:rgba(8,13,24,.8)}
-.md-tab{flex:1;padding:12px 4px;font-size:11px;font-weight:700;text-align:center;
+.md-tabs{display:flex;overflow-x:auto;white-space:nowrap;border-bottom:1px solid var(--bor);flex-shrink:0;
+  background:rgba(8,13,24,.8);-webkit-overflow-scrolling:touch}
+.md-tabs::-webkit-scrollbar{display:none}
+.md-tab{flex:none;padding:12px 14px;font-size:11px;font-weight:700;text-align:center;
   color:var(--mu);border:none;background:none;cursor:pointer;letter-spacing:.4px;
-  border-bottom:2px solid transparent;transition:all .2s}
+  border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
 .md-tab.active{color:var(--ac);border-bottom-color:var(--ac)}
+.standings-tbl{width:100%;border-collapse:collapse;font-size:11px}
+.standings-tbl th{color:var(--mu);font-weight:700;padding:4px 3px;text-align:center;border-bottom:1px solid var(--bor)}
+.standings-tbl td{padding:5px 3px;text-align:center;border-bottom:1px solid rgba(255,255,255,.05)}
+.standings-tbl .tn{text-align:left;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow-home{background:rgba(34,197,94,.10)}
+.srow-away{background:rgba(239,68,68,.10)}
+.srow-even{background:rgba(245,158,11,.08)}
 .md-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px}
 .md-body::-webkit-scrollbar{display:none}
 
@@ -728,6 +736,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     <button class="md-tab" onclick="mdTab(1)">FORMAȚII</button>
     <button class="md-tab" onclick="mdTab(2)">JUCĂTORI</button>
     <button class="md-tab" onclick="mdTab(3)">FORMĂ</button>
+    <button class="md-tab" onclick="mdTab(4)">CLASAMENT</button>
   </div>
   <div class="md-body" id="md-body">
     <div class="spinner"><div class="spin"></div></div>
@@ -1745,13 +1754,17 @@ function mdTab(idx){
   mdRender();
 }
 
+var _standingsCache={};
+var _venueWeatherCache={};
+
 function mdRender(){
   if(!_md.data){return;}
   var d=_md.data;
   if(_md.tabIdx===0)mdRenderSumar(d);
   else if(_md.tabIdx===1)mdRenderFormatii(d);
   else if(_md.tabIdx===2)mdRenderJucatori(d);
-  else mdRenderForma(d);
+  else if(_md.tabIdx===3)mdRenderForma(d);
+  else if(_md.tabIdx===4)mdRenderClasament(d);
 }
 
 function mdRenderSumar(d){
@@ -1965,19 +1978,77 @@ function mdRenderSumar(d){
     out+='</div></div>';
   }
 
-  if(en.refereeStats&&Number(en.refereeStats.total_matches)>=5){
-    var rs=en.refereeStats;
-    var rsMap={strict:{icon:'🔴',label:'Strict'},lenient:{icon:'🟢',label:'Permisiv'},open:{icon:'🟡',label:'Deschis'},neutral:{icon:'⚪',label:'Neutru'},closed:{icon:'🔵',label:'Închis'}};
-    var rst=rsMap[rs.referee_style]||rsMap.neutral;
-    out+='<div class="md-section"><div class="md-section-title">Arbitru</div>';
+  // ── PROFIL ARBITRU (Task 3) ───────────────────────────────
+  (function(){
+    var refName=fix&&fix.fixture&&fix.fixture.referee?fix.fixture.referee:null;
+    var rs=en.refereeStats||null;
+    var hasStats=rs&&Number(rs.total_matches)>=5;
+    var rsStyleMap={
+      strict:{icon:'🔴',label:'Strict'},lenient:{icon:'🟢',label:'Permisiv'},
+      open:{icon:'⚽',label:'Ofensiv'},closed:{icon:'🛡️',label:'Defensiv'},
+      neutral:{icon:'⚪',label:'Neutru'},high_scorer:{icon:'⚽',label:'Ofensiv'},
+      low_scorer:{icon:'🛡️',label:'Defensiv'}
+    };
+    out+='<div class="md-section"><div class="md-section-title">Profil Arbitru</div>';
     out+='<div class="league-profile">';
-    out+='<div class="lp-row"><span class="lp-label">Nume</span><span class="lp-val" style="font-size:11px">'+rs.referee_name+'</span></div>';
-    out+='<div class="lp-row"><span class="lp-label">Stil</span><span class="lp-val">'+rst.icon+' '+rst.label+'</span></div>';
-    out+='<div class="lp-row"><span class="lp-label">Medie galbene</span><span class="lp-val">'+parseFloat(rs.avg_yellow_cards).toFixed(1)+' / meci</span></div>';
-    out+='<div class="lp-row"><span class="lp-label">Medie goluri</span><span class="lp-val">'+parseFloat(rs.avg_goals).toFixed(2)+' / meci</span></div>';
-    out+='<div class="lp-row"><span class="lp-label">Over 2.5</span><span class="lp-val">'+Math.round(rs.pct_over_25)+'%</span></div>';
+    if(refName){
+      out+='<div class="lp-row"><span class="lp-label">Nume</span><span class="lp-val" style="font-size:11px">'+htmlEsc(refName)+'</span></div>';
+    } else {
+      out+='<div class="lp-row"><span class="lp-label">Arbitru</span><span class="lp-val" style="color:var(--mu)">Necunoscut</span></div>';
+    }
+    if(hasStats){
+      var rst=rsStyleMap[rs.referee_style]||rsStyleMap.neutral;
+      out+='<div class="lp-row"><span class="lp-label">Stil</span><span class="lp-val">'+rst.icon+' '+rst.label+'</span></div>';
+      out+='<div class="lp-row"><span class="lp-label">🟡 Galbene</span><span class="lp-val">'+parseFloat(rs.avg_yellow_cards||0).toFixed(1)+' / meci</span></div>';
+      out+='<div class="lp-row"><span class="lp-label">🔴 Roșii</span><span class="lp-val">'+parseFloat(rs.avg_red_cards||0).toFixed(1)+' / meci</span></div>';
+      out+='<div class="lp-row"><span class="lp-label">⚽ Goluri</span><span class="lp-val">'+parseFloat(rs.avg_goals||0).toFixed(1)+' / meci</span></div>';
+      if(rs.avg_corners!=null)out+='<div class="lp-row"><span class="lp-label">📐 Cornere</span><span class="lp-val">'+parseFloat(rs.avg_corners).toFixed(1)+' / meci</span></div>';
+      if(rs.avg_penalties!=null)out+='<div class="lp-row"><span class="lp-label">🎯 Penalty</span><span class="lp-val">'+parseFloat(rs.avg_penalties).toFixed(1)+' / meci</span></div>';
+      // Pattern text
+      var pattern=[];
+      var avgY=parseFloat(rs.avg_yellow_cards||0);
+      var avgG=parseFloat(rs.avg_goals||0);
+      var pctGG=parseFloat(rs.pct_gg||0);
+      if(avgY>4.5)pattern.push('Arbitru sever — intervine frecvent, echipele agresive sunt dezavantajate');
+      else if(avgY<2.5)pattern.push('Arbitru permisiv — lasă jocul să curgă, meciurile tind spre mai multe goluri');
+      if(avgG>2.8)pattern.push('Favorabil meciurilor cu goluri — Over 2.5 are istoric bun cu acest arbitru');
+      if(pctGG>55)pattern.push('Ambele echipe marchează frecvent în meciurile conduse de acest arbitru');
+      if(pattern.length){
+        out+='<div style="margin-top:6px;padding:8px;background:rgba(99,102,241,.1);border-radius:8px;font-size:11px;color:var(--mu2);line-height:1.5">';
+        pattern.forEach(function(p){out+='<div>💡 '+htmlEsc(p)+'</div>';});
+        out+='</div>';
+      }
+    } else {
+      out+='<div class="lp-row"><span class="lp-label">Statistici</span><span class="lp-val" style="color:var(--mu)">Date indisponibile</span></div>';
+    }
     out+='</div></div>';
-  }
+  })();
+
+  // ── STADION & METEO placeholder (Tasks 4 + 5) ────────────────
+  (function(){
+    var fid=_md.fixtureId;
+    var cached=_venueWeatherCache[fid];
+    var venueId=fix&&fix.fixture&&fix.fixture.venue&&fix.fixture.venue.id?fix.fixture.venue.id:0;
+    var venueName=fix&&fix.fixture&&fix.fixture.venue&&fix.fixture.venue.name?fix.fixture.venue.name:null;
+    var venueCity=fix&&fix.fixture&&fix.fixture.venue&&fix.fixture.venue.city?fix.fixture.venue.city:null;
+    var matchDt=fix&&fix.fixture&&fix.fixture.date?fix.fixture.date:null;
+    out+='<div id="md-venue-sec-'+fid+'"></div>';
+    if(cached){
+      out=out.replace('<div id="md-venue-sec-'+fid+'"></div>', mdBuildVenueWeatherHTML(cached, venueName, venueCity));
+    } else if(venueId&&matchDt){
+      // Fire async fetch
+      setTimeout(function(){
+        fetch('/api/venue-weather?venue_id='+venueId+'&dt='+encodeURIComponent(matchDt))
+          .then(function(r){return r.json();})
+          .then(function(d){
+            if(_md.fixtureId!==fid)return;
+            _venueWeatherCache[fid]=d;
+            var el=document.getElementById('md-venue-sec-'+fid);
+            if(el)el.outerHTML=mdBuildVenueWeatherHTML(d, venueName, venueCity);
+          }).catch(function(){});
+      },0);
+    }
+  })();
 
   // H2H
   if(en.h2hForm&&en.h2hForm.length){
@@ -2117,6 +2188,137 @@ function mdRenderForma(d){
   }
 
   document.getElementById('md-body').innerHTML=out;
+}
+
+// ── STADION + METEO HTML builder ──────────────────────────────
+function mdBuildVenueWeatherHTML(data, fallbackName, fallbackCity) {
+  var v=data&&data.venue;
+  var w=data&&data.weather;
+  var out='';
+
+  // STADION
+  out+='<div class="md-section"><div class="md-section-title">Stadion & Locație</div>';
+  out+='<div class="league-profile">';
+  var name=v?v.name:fallbackName;
+  var city=v?v.city:fallbackCity;
+  if(name)out+='<div class="lp-row"><span class="lp-label">🏟️ Stadion</span><span class="lp-val" style="font-size:11px">'+htmlEsc(name)+'</span></div>';
+  if(city){
+    var loc=htmlEsc(city)+(v&&v.country?', '+htmlEsc(v.country):'');
+    out+='<div class="lp-row"><span class="lp-label">🌍 Oraș</span><span class="lp-val">'+loc+'</span></div>';
+  }
+  if(v&&v.capacity&&Number(v.capacity)>0)out+='<div class="lp-row"><span class="lp-label">👥 Capacitate</span><span class="lp-val">'+Number(v.capacity).toLocaleString()+' locuri</span></div>';
+  if(v&&v.surface){
+    var surfLabel=v.surface==='artificial'?'Teren artificial ⚡':v.surface==='grass'?'Gazon natural 🌿':htmlEsc(v.surface);
+    out+='<div class="lp-row"><span class="lp-label">🌱 Suprafață</span><span class="lp-val">'+surfLabel+'</span></div>';
+  }
+  if(!v&&!name&&!city)out+='<div class="lp-row"><span style="color:var(--mu);font-size:11px">Date stadion indisponibile</span></div>';
+  out+='</div></div>';
+
+  // METEO
+  out+='<div class="md-section"><div class="md-section-title">Meteo la Ora Meciului</div>';
+  if(w){
+    out+='<div class="league-profile">';
+    out+='<div class="lp-row"><span class="lp-label">'+w.icon+' Condiții</span><span class="lp-val">'+htmlEsc(w.description)+'</span></div>';
+    if(w.temperature!=null)out+='<div class="lp-row"><span class="lp-label">🌡️ Temperatură</span><span class="lp-val">'+w.temperature+'°C</span></div>';
+    out+='<div class="lp-row"><span class="lp-label">💨 Vânt</span><span class="lp-val">'+w.wind+' km/h</span></div>';
+    out+='<div class="lp-row"><span class="lp-label">💧 Precipitații</span><span class="lp-val">'+w.precipitation+' mm</span></div>';
+    out+='</div>';
+    if(w.influence&&w.influence.length){
+      out+='<div style="margin-top:6px;padding:8px;background:rgba(99,102,241,.1);border-radius:8px;font-size:11px;color:var(--mu2);line-height:1.6">';
+      w.influence.forEach(function(n){out+='<div>'+htmlEsc(n)+'</div>';});
+      out+='</div>';
+    }
+  } else if(v&&v.latitude&&Number(v.latitude)){
+    out+='<div style="color:var(--mu);font-size:11px;padding:4px 0">⏳ Se încarcă prognoza...</div>';
+  } else {
+    out+='<div style="color:var(--mu);font-size:11px;padding:4px 0">Meteo indisponibil — coordonate stadion lipsă</div>';
+  }
+  out+='</div>';
+  return out;
+}
+
+// ── CLASAMENT tab renderer ─────────────────────────────────────
+async function mdRenderClasament(d) {
+  var body=document.getElementById('md-body');
+  var fid=_md.fixtureId;
+  var fix=d.fixture;
+  var lid=fix&&fix.league&&fix.league.id?fix.league.id:0;
+  var hid=fix&&fix.teams&&fix.teams.home&&fix.teams.home.id?fix.teams.home.id:_md.homeId;
+  var aid=fix&&fix.teams&&fix.teams.away&&fix.teams.away.id?fix.teams.away.id:_md.awayId;
+  var season=fix&&fix.league&&fix.league.season?fix.league.season:new Date().getFullYear()-1;
+
+  if(!lid){
+    body.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-t">Indisponibil</div><div class="empty-s">Liga nu a putut fi identificată</div></div>';
+    return;
+  }
+
+  // Use cache or fetch
+  var cacheKey=lid+'_'+season;
+  if(!_standingsCache[cacheKey]){
+    body.innerHTML='<div class="spinner"><div class="spin"></div></div>';
+    try{
+      var r=await fetch('/api/standings-data?league='+lid+'&season='+season+'&hid='+hid+'&aid='+aid);
+      var data2=await r.json();
+      if(data2.error)throw new Error(data2.error);
+      _standingsCache[cacheKey]=data2;
+    }catch(e){
+      body.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+e.message+'</div></div>';
+      return;
+    }
+    // Check still on clasament tab and same fixture
+    if(_md.tabIdx!==4||_md.fixtureId!==fid)return;
+  }
+
+  var sd=_standingsCache[cacheKey];
+  var rows=sd.standings||[];
+  if(!rows.length){
+    body.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-t">Date indisponibile</div><div class="empty-s">Clasamentul nu este disponibil în baza de date și nu s-a putut prelua din API</div></div>';
+    return;
+  }
+
+  var homeId2=Number(hid),awayId2=Number(aid);
+  var homePoints=sd.homePoints,awayPoints=sd.awayPoints;
+
+  var out='<div style="padding:0 0 8px"><div style="font-size:11px;color:var(--mu);margin-bottom:8px">'+
+    (fix&&fix.league?fix.league.name:'')+'<span style="float:right">Sezon '+season+'</span></div>';
+  out+='<div style="overflow-x:auto"><table class="standings-tbl">';
+  out+='<thead><tr><th>#</th><th class="tn">Echipă</th><th>J</th><th>V</th><th>E</th><th>Î</th><th>GF</th><th>GA</th><th>GD</th><th style="color:var(--ac)">Pct</th></tr></thead>';
+  out+='<tbody>';
+  rows.forEach(function(row){
+    var tid=Number(row.team_id);
+    var isHome=tid===homeId2,isAway=tid===awayId2;
+    var rowCls='';
+    if(isHome||isAway){
+      if(homePoints!=null&&awayPoints!=null){
+        if(homePoints===awayPoints)rowCls='srow-even';
+        else if(isHome&&homePoints>awayPoints)rowCls='srow-home';
+        else if(isAway&&awayPoints>homePoints)rowCls='srow-home';
+        else rowCls='srow-away';
+      } else {
+        rowCls=isHome?'srow-home':'srow-away';
+      }
+    }
+    var logoHtml=row.team_logo?'<img src="'+row.team_logo+'" width="16" height="16" style="vertical-align:middle;margin-right:4px;border-radius:2px" onerror="this.style.display=\'none\'">':'';
+    var bold=isHome||isAway?'font-weight:800;':'';
+    out+='<tr class="'+rowCls+'">';
+    out+='<td style="color:var(--mu)">'+row.rank+'</td>';
+    out+='<td class="tn" style="'+bold+'">'+logoHtml+htmlEsc(row.team_name||'')+'</td>';
+    out+='<td>'+row.played+'</td><td>'+row.win+'</td><td>'+row.draw+'</td><td>'+row.lose+'</td>';
+    out+='<td>'+row.goals_for+'</td><td>'+row.goals_against+'</td>';
+    out+='<td style="color:'+(Number(row.goals_diff)>=0?'#22c55e':'#ef4444')+'">'+
+      (Number(row.goals_diff)>0?'+':'')+row.goals_diff+'</td>';
+    out+='<td style="font-weight:800;color:var(--ac)">'+row.points+'</td>';
+    out+='</tr>';
+  });
+  out+='</tbody></table></div>';
+  // Legend
+  out+='<div style="display:flex;gap:12px;font-size:10px;color:var(--mu);margin-top:8px">';
+  out+='<span><span style="display:inline-block;width:10px;height:10px;background:rgba(34,197,94,.3);border-radius:2px;margin-right:4px"></span>Echipă în avantaj</span>';
+  out+='<span><span style="display:inline-block;width:10px;height:10px;background:rgba(239,68,68,.2);border-radius:2px;margin-right:4px"></span>Echipă în dezavantaj</span>';
+  out+='<span><span style="display:inline-block;width:10px;height:10px;background:rgba(245,158,11,.15);border-radius:2px;margin-right:4px"></span>Egal</span>';
+  out+='</div>';
+  out+='</div>';
+  body.innerHTML=out;
 }
 
 // ── GENERATOR v2 ──────────────────────────────────────────────
