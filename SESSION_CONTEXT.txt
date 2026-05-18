@@ -913,6 +913,23 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
                       api/simulate.js, index.html
   Commit: ea3dd45
 
+[18.05 ~15:30] - UI: STATUS TIMP MECI INTELIGENT + ELIMINAT REFRESH + SEARCH
+  TASK 1 — Eliminat definitiv din index.html:
+    - Butonul "↻ Refresh" din tab LIVE, PRE-MECI, PREFERATE
+    - Input "Cauta echipa..." din tab LIVE și PRE-MECI
+    - CSS: .search-wrap, .search-inp, .search-clear, .refresh-btn și variante
+    - JS: liveSearchChange/Clear, pmSearchChange/Clear,
+          manualRefreshLive/PM/Favs, ST.searchQ, PM_SEARCH, filtrele asociate
+  TASK 2 — Adăugat matchTimeBadge(sh, elapsed) — badge dinamic per fază meci:
+    1H ≤45' → verde "R1·{n}'" | 1H >45' → portocaliu "R1·45+{n}'"
+    HT      → galben "PAUZĂ·HT" (fără dot)
+    2H ≤90' → albastru "R2·{n}'" | 2H >90' → portocaliu "R2·90+{n}'"
+    ET      → roșu "EXTRA·{n}'" | P → mov "PENALTYURI"
+    FT/AET/PEN → gri "FINAL" (fără dot) | dot pulsant pentru faze active
+    Aplicat în: card live (renderMatches), modal detaliu (md-min-badge), card Preferate
+  Fișier modificat: index.html (−83/+32 linii)
+  Commit: 0cb55e4
+
 [18.05 ~14:45] - FIX HEALTH-CHECK BACKFILL WARN FALS POZITIV
   PROBLEMA: t3() returna WARN "Niciun backfill completat" chiar dacă
             backfill rulează activ (status='in_progress' în backfill_progress)
