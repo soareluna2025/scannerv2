@@ -913,6 +913,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
                       api/simulate.js, index.html
   Commit: ea3dd45
 
+[18.05 ~14:45] - FIX HEALTH-CHECK BACKFILL WARN FALS POZITIV
+  PROBLEMA: t3() returna WARN "Niciun backfill completat" chiar dacă
+            backfill rulează activ (status='in_progress' în backfill_progress)
+  FIX: t3() verifică acum OR: done>0 SAU backfill_running='true' în app_settings
+       Dacă oricare true → PASS cu mesaj descriptiv ("Backfill activ — X ligi în progres")
+       Dacă ambele false → WARN (chiar nu a rulat niciodată)
+       Fixat și filtrul in_progress: 'running' → 'in_progress' (statusul real din DB)
+  Fișier modificat: api/health-check.js (t3() +15 linii)
+  Commit: 8dc408b
+
 [18.05 ~09:00] - FIX BACKFILL SYNC ALLOWED_LEAGUE_IDS
   PROBLEMA: backfill_progress conținea 241 rânduri (ligi din versiuni vechi)
             față de 214 din ALLOWED_LEAGUE_IDS actual → waste API pe ligi
