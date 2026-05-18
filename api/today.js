@@ -60,24 +60,22 @@ export default async function handler(req, res) {
     try {
       const { rows } = await query(`
         SELECT
-          pms.fixture_id,
-          COALESCE(pms.composite_score, pms.confidence) AS composite_score,
-          pms.over15_prob  AS over15_score,
-          pms.gg_prob      AS gg_score,
-          pms.confidence,
-          pms.outcome,
-          f.home_team_name AS home_team,
-          f.away_team_name AS away_team,
-          f.match_date     AS kickoff_time,
-          f.league_id,
-          l.name           AS league_name
-        FROM pre_match_snapshots pms
-        LEFT JOIN fixtures f ON f.fixture_id = pms.fixture_id
-        LEFT JOIN leagues  l ON l.league_id  = f.league_id
-        WHERE pms.outcome IS NULL
-          AND f.match_date > NOW()
-          AND f.match_date < NOW() + INTERVAL '3 days'
-        ORDER BY COALESCE(pms.composite_score, pms.confidence) DESC NULLS LAST
+          p.fixture_id,
+          ROUND(p.over15_prob * 0.40 + p.gg_prob * 0.30 + COALESCE(p.confidence, 50) * 0.30, 1)
+            AS composite_score,
+          p.over15_prob  AS over15_score,
+          p.gg_prob      AS gg_score,
+          p.confidence,
+          p.home_team,
+          p.away_team,
+          p.match_date   AS kickoff_time,
+          p.league_id,
+          p.league_name
+        FROM predictions p
+        WHERE p.match_date > NOW()
+          AND p.match_date < NOW() + INTERVAL '3 days'
+          AND p.result_over15 IS NULL
+        ORDER BY (p.over15_prob * 0.40 + p.gg_prob * 0.30 + COALESCE(p.confidence, 50) * 0.30) DESC NULLS LAST
         LIMIT 20
       `).catch(() => ({ rows: [] }));
       return res.status(200).json({ snapshots: rows });
