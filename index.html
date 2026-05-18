@@ -92,8 +92,8 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   padding:10px 14px 8px;border-bottom:1px solid var(--bor)}
 .league-name{font-size:10px;font-weight:700;color:var(--mu2);text-transform:uppercase;letter-spacing:.5px}
 .card-minute{display:flex;align-items:center;gap:5px}
-.min-dot{width:5px;height:5px;border-radius:50%;background:var(--ac);animation:pulse 1.5s ease-in-out infinite}
-.min-val{font-size:11px;font-weight:700;color:var(--ac)}
+.min-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;animation:pulse 1.5s ease-in-out infinite}
+.min-val{font-size:11px;font-weight:700;font-family:'Menlo','Courier New',monospace}
 .card-teams{padding:12px 14px}
 .team-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .team-row:last-child{margin-bottom:0}
@@ -476,14 +476,6 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   text-align:center;line-height:13px;pointer-events:none}
 
 /* shared helpers kept from old gen */
-.search-wrap{position:relative;margin:8px 12px 6px;display:flex;align-items:center}
-.search-inp{width:100%;padding:8px 32px 8px 10px;background:rgba(255,255,255,0.06);border:1px solid var(--bor);border-radius:10px;color:var(--tx);font-size:13px;outline:none}
-.search-inp::placeholder{color:var(--mu)}
-.search-inp:focus{border-color:var(--ac)}
-.search-clear{position:absolute;right:8px;background:none;border:none;color:var(--mu);font-size:14px;cursor:pointer;display:none;line-height:1;padding:2px 4px}
-.refresh-btn{background:none;border:1px solid var(--bor);color:var(--mu);font-size:12px;font-weight:700;padding:5px 10px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:4px;transition:color .2s}
-.refresh-btn:hover{color:var(--tx)}
-.refresh-btn.spinning .rf-icon{display:inline-block;animation:spin 0.6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .gen-live-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--ac);animation:pulse 1.5s ease-in-out infinite;vertical-align:middle;margin-right:2px}
 .star-btn{position:absolute;top:8px;right:8px;background:none;border:none;font-size:16px;cursor:pointer;opacity:0.5;transition:opacity .2s;z-index:2;line-height:1;padding:2px}
@@ -795,13 +787,6 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
       <div class="connect-hint">Date live în timp real</div>
     </div>
     <div id="live-body" style="display:none">
-      <div class="search-wrap" id="live-search-wrap">
-        <input class="search-inp" id="live-search" placeholder="Cauta echipa..." oninput="liveSearchChange(this.value)" autocomplete="off">
-        <button class="search-clear" id="live-search-clear" onclick="liveSearchClear()">✕</button>
-      </div>
-      <div style="display:flex;justify-content:flex-end;padding:4px 12px 0">
-        <button class="refresh-btn" id="live-rf-btn" onclick="manualRefreshLive()"><span class="rf-icon">↻</span> Refresh</button>
-      </div>
       <div class="chips" id="region-chips">
         <div class="chip active" onclick="filterRegion(this,'all')">Toate</div>
         <div class="chip" onclick="filterRegion(this,'europe')">Europa</div>
@@ -816,13 +801,6 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 
   <!-- TAB: PRE-MECI -->
   <div class="tab-content" id="tab-pre">
-    <div class="search-wrap">
-      <input class="search-inp" id="pm-search" placeholder="Cauta echipa..." oninput="pmSearchChange(this.value)" autocomplete="off">
-      <button class="search-clear" id="pm-search-clear" onclick="pmSearchClear()">✕</button>
-    </div>
-    <div style="display:flex;justify-content:flex-end;padding:4px 12px 0">
-      <button class="refresh-btn" id="pre-rf-btn" onclick="manualRefreshPM()"><span class="rf-icon">↻</span> Refresh</button>
-    </div>
     <div id="pm-body">
       <div class="empty">
         <div class="empty-icon">📅</div>
@@ -839,9 +817,6 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 
   <!-- TAB: PREFERATE -->
   <div class="tab-content" id="tab-fav">
-    <div style="display:flex;justify-content:flex-end;padding:4px 12px 0">
-      <button class="refresh-btn" id="fav-rf-btn" onclick="manualRefreshFavs()"><span class="rf-icon">↻</span> Refresh</button>
-    </div>
     <div id="fav-body">
       <div class="empty"><div class="empty-icon">⭐</div><div class="empty-t">Preferate</div><div class="empty-s">Apasă ⭐ pe orice meci pentru a-l salva</div></div>
     </div>
@@ -1159,7 +1134,7 @@ async function runHealthCheck(){
     btn.disabled=false;btn.textContent='TEST';
   }
 }
-var ST={ms:[],connected:false,ws:null,region:'all',score:'all',searchQ:''};
+var ST={ms:[],connected:false,ws:null,region:'all',score:'all'};
 
 // ── CLOCK ────────────────────────────────────────────────────
 function tickClock(){
@@ -1349,12 +1324,6 @@ function ngpColor(p){return p>=80?'#00d4a8':p>=60?'#ffd166':'#ff6b6b';}
 
 function renderMatches(){
   var ms=ST.ms.filter(function(m){
-    if(ST.searchQ){
-      var hn=(m.teams&&m.teams.home&&m.teams.home.name||'').toLowerCase();
-      var an=(m.teams&&m.teams.away&&m.teams.away.name||'').toLowerCase();
-      var q=ST.searchQ.toLowerCase();
-      if(hn.indexOf(q)<0&&an.indexOf(q)<0)return false;
-    }
     if(!matchRegion(m,ST.region))return false;
     if(ST.score!=='all'){
       var hg=m.goals?m.goals.home||0:0;
@@ -1414,7 +1383,11 @@ function renderMatches(){
       out+='<button class="star-btn'+(isFav(fid2)?' active':'')+'" onclick="event.stopPropagation();toggleFav('+fid2+',this)">'+(isFav(fid2)?'⭐':'☆')+'</button>';
       out+='<div class="card-league">';
       out+='<div class="league-name">'+flag+(lg.name||'')+'</div>';
-      out+='<div class="card-minute"><div class="min-dot"></div><div class="min-val">'+mn+"'</div></div>";
+      var _sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
+      var _b=matchTimeBadge(_sh,mn);
+      out+='<div class="card-minute">'
+        +(_b.dot?'<div class="min-dot" style="background:'+_b.c+'"></div>':'')
+        +'<div class="min-val" style="color:'+_b.c+'">'+_b.t+'</div></div>';
       out+='</div>';
       out+='<div class="card-teams">';
       out+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+(m.teams&&m.teams.home&&m.teams.home.name||'—')+(hRed?' 🟥':'')+'</span></div><div class="team-score'+(hWin?' winning':'')+'">'+hg+'</div></div>';
@@ -1534,7 +1507,7 @@ async function fetchSupabaseWinRate(){
 setInterval(function(){if(ST.connected)fetchSupabaseWinRate();},30000);
 
 // ── PRE-MECI ──────────────────────────────────────────────────
-var PM_SENT=new Set();var PM_LOADED=false;var PM_SEARCH='';
+var PM_SENT=new Set();var PM_LOADED=false;
 var _pmMatches=[];
 var _pmEnrich={};
 
@@ -1686,14 +1659,6 @@ function renderPM(){
   var analyzedCount=Object.keys(_pmEnrich).length;
   var pendingTxt=analyzedCount<total?' · <span style="opacity:.6">⏳ '+(total-analyzedCount)+' neanalzate</span>':'';
   var html='<div class="pm-summary"><span class="pm-summary-t">'+total+' meciuri · '+analyzedCount+' analizate'+pendingTxt+'</span></div>';
-  if(PM_SEARCH){
-    var q=PM_SEARCH.toLowerCase();
-    sorted=sorted.filter(function(m){
-      var hn=(m.teams&&m.teams.home&&m.teams.home.name||'').toLowerCase();
-      var an=(m.teams&&m.teams.away&&m.teams.away.name||'').toLowerCase();
-      return hn.indexOf(q)>=0||an.indexOf(q)>=0;
-    });
-  }
   sorted.forEach(function(m){
     var fid=m.fixture&&m.fixture.id;
     var hid=m.teams&&m.teams.home&&m.teams.home.id;
@@ -2002,7 +1967,10 @@ function mdRenderSumar(d){
   out+='<div class="md-team-name">'+tLogo(fix&&fix.teams&&fix.teams.away,48)+'<span>'+an+'</span></div>';
   out+='</div></div>';
   if(isLive){
-    out+='<div class="md-minute"><div class="md-min-badge"><div class="min-dot"></div>'+mn+"'</div></div>";
+    var _mb=matchTimeBadge(sh,mn);
+    out+='<div class="md-minute"><div class="md-min-badge" style="color:'+_mb.c+';border-color:'+_mb.c+'40;background:'+_mb.c+'18">'
+      +(_mb.dot?'<div class="min-dot" style="background:'+_mb.c+'"></div>':'')
+      +_mb.t+'</div></div>';
   }
 
   // Events (goals/cards) summary
@@ -2972,43 +2940,23 @@ function genOpenSim(){
 
 function genUpdateBadge(){} // stub — badge înlocuit cu design nou
 
-// ── SEARCH ────────────────────────────────────────────────────
-function liveSearchChange(v){
-  ST.searchQ=v.trim();
-  document.getElementById('live-search-clear').style.display=v?'block':'none';
-  renderMatches();
-}
-function liveSearchClear(){
-  document.getElementById('live-search').value='';
-  liveSearchChange('');
-}
-function pmSearchChange(v){
-  PM_SEARCH=v.trim();
-  document.getElementById('pm-search-clear').style.display=v?'block':'none';
-  renderPM();
-}
-function pmSearchClear(){
-  document.getElementById('pm-search').value='';
-  pmSearchChange('');
-}
-
-// ── REFRESH MANUAL ────────────────────────────────────────────
-function manualRefreshLive(){
-  var btn=document.getElementById('live-rf-btn');
-  if(btn)btn.classList.add('spinning');
-  loadLive(function(){if(btn)btn.classList.remove('spinning');});
-}
-function manualRefreshPM(){
-  var btn=document.getElementById('pre-rf-btn');
-  if(btn)btn.classList.add('spinning');
-  _pmMatches=[];_pmEnrich={};
-  loadPM().then(function(){if(btn)btn.classList.remove('spinning');}).catch(function(){if(btn)btn.classList.remove('spinning');});
-}
-function manualRefreshFavs(){
-  var btn=document.getElementById('fav-rf-btn');
-  if(btn)btn.classList.add('spinning');
-  renderFavs();
-  if(btn)setTimeout(function(){btn.classList.remove('spinning');},400);
+// ── MATCH TIME BADGE ──────────────────────────────────────────
+function matchTimeBadge(sh,elapsed){
+  elapsed=elapsed||0;
+  if(sh==='1H'){
+    if(elapsed<=45)return{dot:true,c:'#22c55e',t:"R1 · "+elapsed+"'"};
+    return{dot:true,c:'#f97316',t:"R1 · 45+"+(elapsed-45)+"'"};
+  }
+  if(sh==='HT')return{dot:false,c:'#eab308',t:'PAUZĂ · HT'};
+  if(sh==='2H'){
+    if(elapsed<=90)return{dot:true,c:'#3b82f6',t:"R2 · "+elapsed+"'"};
+    return{dot:true,c:'#f97316',t:"R2 · 90+"+(elapsed-90)+"'"};
+  }
+  if(sh==='ET')return{dot:true,c:'#ef4444',t:"EXTRA · "+elapsed+"'"};
+  if(sh==='P')return{dot:true,c:'#a855f7',t:'PENALTYURI'};
+  if(sh==='FT'||sh==='AET'||sh==='PEN')return{dot:false,c:'#6b7280',t:'FINAL'};
+  if(elapsed>0)return{dot:true,c:'var(--ac)',t:elapsed+"'"};
+  return{dot:false,c:'var(--mu)',t:sh||'—'};
 }
 
 // ── FAVORITES ─────────────────────────────────────────────────
@@ -3094,7 +3042,8 @@ function renderFavs(){
       var mn=m.fixture&&m.fixture.status&&m.fixture.status.elapsed||0;
       var sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
       var isLv=['1H','2H','HT','ET','P'].indexOf(sh)>=0;
-      timeStr=isLv?'<span style="color:var(--ac);font-size:10px">● '+mn+"'</span>":'<span style="color:var(--mu);font-size:10px">FT</span>';
+      var _fb=matchTimeBadge(sh,mn);
+      timeStr=isLv?'<span style="color:'+_fb.c+';font-size:10px;font-family:monospace">'+(_fb.dot?'● ':'')+_fb.t+'</span>':'<span style="color:#6b7280;font-size:10px">FINAL</span>';
     }else{
       timeStr=m.fixture&&m.fixture.date?'<span style="font-size:10px;color:var(--mu)">🕐 '+new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>':'';
     }
