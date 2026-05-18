@@ -653,11 +653,11 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
         <line x1="86"  y1="258" x2="122" y2="258" stroke="url(#spl-teal)" stroke-width="5"   stroke-linecap="round" opacity="0.5"/>
       </g>
 
-      <!-- LETTER A -->
+      <!-- LETTER A — single evenodd path, no background-colored cutout -->
       <g id="spl-A">
-        <polygon points="132,342 192,128 224,128 164,342" fill="url(#spl-teal)"/>
-        <polygon points="192,128 224,128 288,342 256,342" fill="url(#spl-teal)"/>
-        <polygon points="152,262 176,196 208,196 184,262" fill="#0a0e1a" opacity="0.95"/>
+        <path fill-rule="evenodd" fill="url(#spl-teal)"
+          d="M 132,342 L 192,128 L 224,128 L 288,342 L 256,342 L 208,183 L 164,342 Z
+             M 152,262 L 176,196 L 208,196 L 184,262 Z"/>
       </g>
 
       <!-- LETTER S -->
