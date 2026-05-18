@@ -2959,12 +2959,33 @@ function simRender(d){
   if(rd.awayForm&&rd.awayForm.form5){html+='<div class="sim-form-chips">';rd.awayForm.form5.forEach(function(f){html+='<span class="sim-form-chip '+f+'">'+f+'</span>';});html+='</div>';}
   html+='</div></div></div>';
 
+  // ── Referee + League real data ────────────────────────────
+  if(rd.referee||rd.leagueAvgGoals){
+    html+='<div class="sim-section"><div class="sim-section-title">DATE REALE LIGĂ & ARBITRU</div>';
+    html+='<table class="sim-data-tbl">';
+    if(rd.leagueAvgGoals){
+      html+='<tr><td>Medie goluri/meci ligă</td><td style="text-align:right"><b>'+rd.leagueAvgGoals+'</b> <span style="color:var(--mu);font-size:10px">('+rd.leagueSource+')</span></td></tr>';
+    }
+    if(rd.leagueOver15Pct!=null)html+='<tr><td>% Over 1.5 în ligă</td><td style="text-align:right"><b>'+rd.leagueOver15Pct+'%</b></td></tr>';
+    if(rd.leagueGGPct!=null)html+='<tr><td>% GG în ligă</td><td style="text-align:right"><b>'+rd.leagueGGPct+'%</b></td></tr>';
+    if(rd.referee){
+      html+='<tr><td>Arbitru</td><td style="text-align:right">'+htmlEsc(rd.referee)+'</td></tr>';
+      if(rd.refereeStyle)html+='<tr><td>Stil arbitru</td><td style="text-align:right"><b style="color:var(--ac)">'+rd.refereeStyle+'</b>'+(rd.refereeMatches?' ('+rd.refereeMatches+' meciuri)':'')+'</td></tr>';
+      if(rd.refereeAvgGoals)html+='<tr><td>Medie goluri arbitru</td><td style="text-align:right"><b>'+rd.refereeAvgGoals+'</b></td></tr>';
+    }
+    if(rd.homeFormSource||rd.awayFormSource){
+      html+='<tr><td>Sursă formă gazde</td><td style="text-align:right" style="color:var(--mu)">'+( rd.homeFormSource||'—')+'</td></tr>';
+      html+='<tr><td>Sursă formă oaspeți</td><td style="text-align:right" style="color:var(--mu)">'+( rd.awayFormSource||'—')+'</td></tr>';
+    }
+    html+='</table></div>';
+  }
+
   // ── Data sources ──────────────────────────────────────────
   if(rd.dataSources){
-    html+='<div class="sim-section"><div class="sim-section-title">DATE REALE FOLOSITE';
+    html+='<div class="sim-section"><div class="sim-section-title">SURSE DATE';
     html+='<span style="float:right;color:var(--ac)">'+rd.dataQuality+'</span></div>';
     html+='<table class="sim-data-tbl">';
-    var srcLabels={fixture:'Meci curent',homeForm:'Formă gazde',awayForm:'Formă oaspeți',h2h:'H2H direct',lineups:'Formații',homePlayers:'Jucători gazde',awayPlayers:'Jucători oaspeți',standings:'Clasament',odds:'Cote Bet365'};
+    var srcLabels={fixture:'Meci curent',homeForm:'Formă gazde',awayForm:'Formă oaspeți',h2h:'H2H',lineups:'Formații',homePlayers:'Jucători gazde',awayPlayers:'Jucători oaspeți',standings:'Clasament',odds:'Cote',leagueStats:'Statistici ligă',referee:'Arbitru',liveStats:'Stats live'};
     Object.entries(rd.dataSources).forEach(function(e){
       html+='<tr><td>'+(srcLabels[e[0]]||e[0])+'</td><td style="text-align:right">'+e[1]+'</td></tr>';
     });
