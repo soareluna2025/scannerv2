@@ -221,8 +221,16 @@ POST /api/admin/trigger-cron   → body: { job: "league-stats"|... } → fire-an
 
 ── BACKFILL ENDPOINT-URI ─────────────────────────────────────────────────────
 
-GET /api/backfill/start  → pornește runDailyBackfill() async
-GET /api/backfill/status → GROUP BY status din backfill_progress
+POST /api/backfill/start  → startBackfill(): season-first loop 2026→2022,
+                            per-fixture stats+events+players, resume din app_settings
+                            Returnează: { started, resumedFrom: {season, leagueId, fixtureIndex} }
+POST /api/backfill/stop   → stopBackfill(): setează stopFlag, salvează poziție
+                            Returnează: { stopped, lastSeason, lastLeague }
+GET  /api/backfill/status → getBackfillStatus(): stare detaliată
+                            Returnează: { running, currentLeague{id,name}, currentSeason,
+                                          currentFixtureIndex, totalFixtures,
+                                          totalLeagues, completedLeagues, progressPct,
+                                          apiUsedToday, apiRemainingToday, estimatedTimeRemaining }
 
 ── ALTE ENDPOINT-URI ─────────────────────────────────────────────────────────
 
@@ -391,10 +399,20 @@ cron_logs
   Citește: admin/cron-status, admin/errors, health-check.js
 
 backfill_progress
-  Coloane: league_id (UNIQUE), status (pending/running/done/error),
-           fixtures_processed, players_upserted, last_run, error_msg
-  Scrie:   backfill.js, server.js (initBackfillProgress la startup)
-  Citește: /api/backfill/status, health-check.js
+  Coloane: league_id (UNIQUE), status (pending/in_progress/done/error),
+           fixtures_processed, players_upserted, last_run, error_msg,
+           current_season (adăugat dinamic), current_fixture_index (adăugat dinamic),
+           total_fixtures (adăugat dinamic)
+  Scrie:   backfill.js (season-first loop), server.js (initBackfillProgress la startup)
+  Citește: /api/backfill/status
+
+app_settings
+  Coloane: key TEXT (PK), value TEXT, updated_at TIMESTAMP
+  Scrie:   backfill.js (persistent state: running flag, API counter, poziție)
+  Citește: backfill.js (resume după restart), /api/backfill/status
+  Chei folosite: backfill_running, backfill_api_date, backfill_api_used,
+                 backfill_season_idx, backfill_league_idx, backfill_fixture_idx
+  Creat:   dinamic de backfill.js initAppSettings() la startup
 
 prematch_data
   Coloane: fixture_id, stage (1-7), data_type, payload (JSONB), collected_at (PK: 3 coloane)
@@ -606,7 +624,7 @@ J. GENERATOR SCORING (index.html → g2Score)
   - Scanner live in-process (scanner.js: 10s/60s/60min)
   - Cron jobs via VPS crontab
   - Deploy automat: push main → GitHub Actions → VPS
-  - Backfill date istorice 2022-2025 (multi-phase)
+  - Backfill date istorice 2022-2026 (season-first, persistent, resume-capable)
   - form_stats calculat via SQL batch (collect-daily)
   - league_stats, referee_stats (cron 04:00)
   - Generator 5 ecrane (6 categorii: home, away, goals, GG, cards, corners)
@@ -894,6 +912,21 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
   Fișiere modificate: scripts/create-tables.sql, api/cron/scanner.js, api/db-stats.js,
                       api/simulate.js, index.html
   Commit: ea3dd45
+
+[18.05 ~08:00] - BACKFILL COMPLET REDESIGN — season-first, persistent state, START/STOP UI
+  TASK 1 — UI: buton verde START + buton roșu pulsant STOP (înlocuiesc vechiul ▶ Start Backfill)
+  TASK 2 — Progress bars: backfill (perechi completate/total) + API usage (azi/150000), refresh 5s
+  TASK 3 — POST /api/backfill/start: season-first 2026→2022, per-fixture stats+events+players,
+            429→60s pause, skip fixture-uri deja colectate, continuă până STOP/limită
+  TASK 4 — POST /api/backfill/stop: setează stopFlag, salvează poziție în app_settings
+  TASK 5 — Schema: CREATE TABLE app_settings(key PK, value, updated_at)
+            ALTER TABLE backfill_progress ADD current_season, current_fixture_index, total_fixtures
+  TASK 6 — GET /api/backfill/status: running, currentLeague{id,name}, currentSeason,
+            completedLeagues, totalLeagues, progressPct, apiUsedToday, estimatedTimeRemaining
+  TASK 7 — UI status: ACTIV → current info + ETA + API usage bar; OPRIT → last progress + API today
+  TASK 8 — server.js: resumeOnStartup() la boot — dacă backfill_running=true în DB → auto-resume
+  Fișiere modificate: api/backfill.js (rescris complet), server.js, index.html, SESSION_CONTEXT.txt
+  Commit: b26df36
 
 [18.05 ~07:00] - TAB CLASAMENT + PROFIL ARBITRU + STADION + METEO
   TASK 1 — BARĂ TAB-URI GLISANTĂ
