@@ -15,7 +15,7 @@ jobs:
           host: ${{ secrets.VPS_IP }}
           username: root
           password: ${{ secrets.VPS_PASSWORD }}
-          envs: API_FOOTBALL_KEY,POSTGRES_URL,ANTHROPIC_API_KEY,XAI_API_KEY,GITHUB_BACKUP_TOKEN
+          envs: API_FOOTBALL_KEY,POSTGRES_URL,ANTHROPIC_API_KEY,XAI_API_KEY,BACKUP_TOKEN
           command_timeout: 8m
           script: |
             export PATH="/snap/bin:$PATH"
@@ -43,8 +43,8 @@ jobs:
             echo "ENV OK: $(wc -l < /root/scannerv2/.env) chei"
 
             # Backup token — scris din secret GitHub
-            if [ -n "$GITHUB_BACKUP_TOKEN" ]; then
-              echo "$GITHUB_BACKUP_TOKEN" > /root/.github_backup_token
+            if [ -n "$BACKUP_TOKEN" ]; then
+              echo "$BACKUP_TOKEN" > /root/.github_backup_token
               chmod 600 /root/.github_backup_token
               echo "BACKUP TOKEN: setat"
             fi
@@ -112,4 +112,4 @@ jobs:
           POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
-          GITHUB_BACKUP_TOKEN: ${{ secrets.GITHUB_BACKUP_TOKEN }}
+          BACKUP_TOKEN: ${{ secrets.BACKUP_TOKEN }}
