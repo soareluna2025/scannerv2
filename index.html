@@ -1241,7 +1241,8 @@ function connectWS(){
     try{
       var msg=JSON.parse(ev.data);
       if(msg.type==='LIVE_UPDATE'&&msg.payload&&Array.isArray(msg.payload.matches)){
-        ST.ms=msg.payload.matches.map(function(m){m._s=calcScore(m);return m;});
+        var _ed={};ST.ms.forEach(function(m){if(m.enrichData)_ed[m.fixture&&m.fixture.id]=m.enrichData;});
+        ST.ms=msg.payload.matches.map(function(m){m._s=calcScore(m);var e=_ed[m.fixture&&m.fixture.id];if(e)m.enrichData=e;return m;});
         renderMatches();updateStats();trackWR();genUpdateBadge();
       }
     }catch(_){}
@@ -1302,7 +1303,8 @@ async function loadLive(cb){
     if(!r.ok)throw new Error('HTTP '+r.status);
     var d=await r.json();
     var raw=Array.isArray(d.response)?d.response:(Array.isArray(d)?d:[]);
-    ST.ms=raw.map(function(m){m._s=calcScore(m);return m;});
+    var _ed={};ST.ms.forEach(function(m){if(m.enrichData)_ed[m.fixture&&m.fixture.id]=m.enrichData;});
+    ST.ms=raw.map(function(m){m._s=calcScore(m);var e=_ed[m.fixture&&m.fixture.id];if(e)m.enrichData=e;return m;});
     renderMatches();
     updateStats();
     trackWR();
@@ -1328,6 +1330,70 @@ function updateStats(){
 
 // ── RENDER MATCHES ────────────────────────────────────────────
 function ngpColor(p){return p>=80?'#00d4a8':p>=60?'#ffd166':'#ff6b6b';}
+
+function buildCardHtml(m,lgName){
+  var s=m._s||{};var mk=s.mk||{};
+  var hg=s.hg||0;var ag=s.ag||0;var mn=s.mn||0;var ng=s.ng||0;
+  var hWin=hg>ag;var aWin=ag>hg;var c=ngpColor(ng);
+  var flag=m.league&&m.league.flag?'<img src="'+m.league.flag+'" style="width:12px;height:9px;object-fit:cover;border-radius:2px;margin-right:4px;">':'';
+  var fid2=m.fixture&&m.fixture.id||0;
+  var hid2=m.teams&&m.teams.home&&m.teams.home.id||0;
+  var aid2=m.teams&&m.teams.away&&m.teams.away.id||0;
+  var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.home&&m.teams.home.id);});
+  var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.away&&m.teams.away.id);});
+  var _sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
+  var _b=matchTimeBadge(_sh,mn);
+  var o='';
+  o+='<div class="card" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer">';
+  o+='<div class="card-league">';
+  o+='<div class="league-name"><button class="star-btn'+(isFav(fid2)?' active':'')+'" onclick="event.stopPropagation();toggleFav('+fid2+',this)">'+(isFav(fid2)?'⭐':'☆')+'</button>'+flag+(lgName||'')+'</div>';
+  o+='<div class="card-minute">'+(_b.dot?'<div class="min-dot" style="background:'+_b.c+'"></div>':'')+'<div class="min-val" style="color:'+_b.c+'">'+_b.t+'</div></div>';
+  o+='</div>';
+  o+='<div class="card-teams">';
+  o+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+(m.teams&&m.teams.home&&m.teams.home.name||'—')+(hRed?' 🟥':'')+'</span></div><div class="team-score'+(hWin?' winning':'')+'">'+hg+'</div></div>';
+  o+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.away,32)+'<span>'+(m.teams&&m.teams.away&&m.teams.away.name||'—')+(aRed?' 🟥':'')+'</span></div><div class="team-score'+(aWin?' winning':'')+'">'+ag+'</div></div>';
+  o+='</div>';
+  o+='<div class="card-footer">';
+  o+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
+  if(s.forte)o+='<div class="badge-forte">⚡ FORTE</div>';
+  o+='<div class="ngp-pct" style="color:'+c+'">'+ng+'%</div></div>';
+  o+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+ng+'%;background:'+c+'"></div></div>';
+  var tg=hg+ag;var _cc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
+  o+='<div class="markets">';
+  if(tg===0)o+='<div class="mkt">Over 0.5 <span>'+mk.over05+'%</span></div>';
+  if(tg<2)o+='<div class="mkt">Over 1.5 <span>'+mk.over15+'%</span></div>';
+  if(tg<3)o+='<div class="mkt">Over 2.5 <span>'+mk.over25+'%</span></div>';
+  if(tg>=3&&tg<4)o+='<div class="mkt">Over 3.5 <span>'+mk.over35+'%</span></div>';
+  if(_cc)o+='<div class="mkt" style="color:var(--mu);margin-left:auto">('+_cc+')</div>';
+  o+='</div>';
+  var ed=m.enrichData;
+  if(ed){
+    var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
+    if(ed.homeWin!=null)o+='<div class="enrich-row hda-row"><span class="hda-h" style="color:'+ec(ed.homeWin)+'">H:'+ed.homeWin+'%</span><span class="hda-d" style="color:'+ec(ed.draw)+'">D:'+ed.draw+'%</span><span class="hda-a" style="color:'+ec(ed.awayWin)+'">A:'+ed.awayWin+'%</span></div>';
+    if(ed.hasOdds){
+      if(ed.bestEV>0){
+        o+='<div class="ev-row"><span class="ev-val ev-pos">EV: +'+Math.round(ed.bestEV*100)+'%</span>';
+        o+='<span class="ev-bet">'+(ed.bestBet||'')+' @ '+(ed.bestCota?ed.bestCota.toFixed(2):'—')+'</span>';
+        if(ed.bestKelly)o+='<span class="ev-kelly">Kelly: '+ed.bestKelly.toFixed(2)+' LTC</span>';
+        o+='</div>';
+      }else{
+        o+='<div class="ev-row"><span class="ev-val ev-neg" style="font-size:10px">EV: NO VALUE</span></div>';
+      }
+    }
+    o+='<div class="enrich-row">';
+    if(ed.over15Prob!=null)o+='<span class="enr" style="color:'+ec(ed.over15Prob)+'">O1.5 '+Math.round(ed.over15Prob)+'%</span>';
+    if(ed.ggProb!=null)o+='<span class="enr" style="color:'+ec(ed.ggProb)+'">GG '+Math.round(ed.ggProb)+'%</span>';
+    if(ed.lambdaTotal!=null)o+='<span class="enr" style="color:var(--mu2)">λ '+Number(ed.lambdaTotal).toFixed(2)+'</span>';
+    if(ed.confidence)o+='<span class="badge-conf '+ed.confidence+'">'+ed.confidence+'</span>';
+    o+='</div>';
+    o+='<div class="enrich-row">';
+    if(ed.homeScoreRate!=null)o+='<span class="enr" style="color:'+ec(ed.homeScoreRate)+'">Gazde '+ed.homeScoreRate+'%</span>';
+    if(ed.awayScoreRate!=null)o+='<span class="enr" style="color:'+ec(ed.awayScoreRate)+'">Oaspeti '+ed.awayScoreRate+'%</span>';
+    o+='</div>';
+  }
+  o+='</div></div>';
+  return o;
+}
 
 function renderMatches(){
   var ms=ST.ms.filter(function(m){
@@ -1362,87 +1428,49 @@ function renderMatches(){
     leagues[lid].ms.push(m);
   });
 
+  var list=document.getElementById('match-list');
+
   if(!ms.length){
-    document.getElementById('match-list').innerHTML=
-      '<div class="empty"><div class="empty-icon">⚽</div><div class="empty-t">Niciun meci</div><div class="empty-s">Nu există meciuri pentru filtrele selectate</div></div>';
+    // API returned nothing — keep existing DOM to avoid blank flash
+    if(!ST.ms.length) return;
+    list.innerHTML='<div class="empty"><div class="empty-icon">⚽</div><div class="empty-t">Niciun meci</div><div class="empty-s">Nu există meciuri pentru filtrele selectate</div></div>';
     return;
   }
 
-  var out='';
+  // Map existing card elements by fixture id for reuse
+  var existing={};
+  list.querySelectorAll('.card[data-fid]').forEach(function(el){
+    existing[el.dataset.fid]=el;
+  });
+
+  // Build ordered node list — reuse unchanged cards, rebuild only changed ones
+  var newNodes=[];
   leagueOrder.forEach(function(lid){
     var lg=leagues[lid];
     lg.ms.sort(function(a,b){return((b._s&&b._s.ng)||0)-((a._s&&a._s.ng)||0);});
     lg.ms.forEach(function(m){
-      var s=m._s||{};var mk=s.mk||{};
-      var hg=s.hg||0;var ag=s.ag||0;
-      var mn=s.mn||0;
-      var ng=s.ng||0;
-      var hWin=hg>ag;var aWin=ag>hg;
-      var c=ngpColor(ng);
-      var flag=m.league&&m.league.flag?'<img src="'+m.league.flag+'" style="width:12px;height:9px;object-fit:cover;border-radius:2px;margin-right:4px;">':'';
-      var fid2=m.fixture&&m.fixture.id||0;
-      var hid2=m.teams&&m.teams.home&&m.teams.home.id||0;
-      var aid2=m.teams&&m.teams.away&&m.teams.away.id||0;
-      var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===m.teams.home.id;});
-      var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===m.teams.away.id;});
-      out+='<div class="card" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer">';
-      out+='<div class="card-league">';
-      out+='<div class="league-name"><button class="star-btn'+(isFav(fid2)?' active':'')+'" onclick="event.stopPropagation();toggleFav('+fid2+',this)">'+(isFav(fid2)?'⭐':'☆')+'</button>'+flag+(lg.name||'')+'</div>';
-      var _sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
-      var _b=matchTimeBadge(_sh,mn);
-      out+='<div class="card-minute">'
-        +(_b.dot?'<div class="min-dot" style="background:'+_b.c+'"></div>':'')
-        +'<div class="min-val" style="color:'+_b.c+'">'+_b.t+'</div></div>';
-      out+='</div>';
-      out+='<div class="card-teams">';
-      out+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+(m.teams&&m.teams.home&&m.teams.home.name||'—')+(hRed?' 🟥':'')+'</span></div><div class="team-score'+(hWin?' winning':'')+'">'+hg+'</div></div>';
-      out+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.away,32)+'<span>'+(m.teams&&m.teams.away&&m.teams.away.name||'—')+(aRed?' 🟥':'')+'</span></div><div class="team-score'+(aWin?' winning':'')+'">'+ag+'</div></div>';
-      out+='</div>';
-      out+='<div class="card-footer">';
-      out+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
-      if(s.forte)out+='<div class="badge-forte">⚡ FORTE</div>';
-      out+='<div class="ngp-pct" style="color:'+c+'">'+ng+'%</div></div>';
-      out+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+ng+'%;background:'+c+'"></div></div>';
-      var tg=hg+ag;
-      var _cc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
-      out+='<div class="markets">';
-      if(tg===0)out+='<div class="mkt">Over 0.5 <span>'+mk.over05+'%</span></div>';
-      if(tg<2)out+='<div class="mkt">Over 1.5 <span>'+mk.over15+'%</span></div>';
-      if(tg<3)out+='<div class="mkt">Over 2.5 <span>'+mk.over25+'%</span></div>';
-      if(tg>=3&&tg<4)out+='<div class="mkt">Over 3.5 <span>'+mk.over35+'%</span></div>';
-      if(_cc)out+='<div class="mkt" style="color:var(--mu);margin-left:auto">('+_cc+')</div>';
-      out+='</div>';
-      var ed=m.enrichData;
-      if(ed){
-        var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
-        if(ed.homeWin!=null)out+='<div class="enrich-row hda-row"><span class="hda-h" style="color:'+ec(ed.homeWin)+'">H:'+ed.homeWin+'%</span><span class="hda-d" style="color:'+ec(ed.draw)+'">D:'+ed.draw+'%</span><span class="hda-a" style="color:'+ec(ed.awayWin)+'">A:'+ed.awayWin+'%</span></div>';
-        if(ed.hasOdds){
-          if(ed.bestEV>0){
-            out+='<div class="ev-row">';
-            out+='<span class="ev-val ev-pos">EV: +'+Math.round(ed.bestEV*100)+'%</span>';
-            out+='<span class="ev-bet">'+(ed.bestBet||'')+' @ '+(ed.bestCota?ed.bestCota.toFixed(2):'—')+'</span>';
-            if(ed.bestKelly)out+='<span class="ev-kelly">Kelly: '+ed.bestKelly.toFixed(2)+' LTC</span>';
-            out+='</div>';
-          }else{
-            out+='<div class="ev-row"><span class="ev-val ev-neg" style="font-size:10px">EV: NO VALUE</span></div>';
-          }
-        }
-        out+='<div class="enrich-row">';
-        if(ed.over15Prob!=null)out+='<span class="enr" style="color:'+ec(ed.over15Prob)+'">O1.5 '+Math.round(ed.over15Prob)+'%</span>';
-        if(ed.ggProb!=null)out+='<span class="enr" style="color:'+ec(ed.ggProb)+'">GG '+Math.round(ed.ggProb)+'%</span>';
-        if(ed.lambdaTotal!=null)out+='<span class="enr" style="color:var(--mu2)">λ '+Number(ed.lambdaTotal).toFixed(2)+'</span>';
-        if(ed.confidence)out+='<span class="badge-conf '+ed.confidence+'">'+ed.confidence+'</span>';
-        out+='</div>';
-        out+='<div class="enrich-row">';
-        if(ed.homeScoreRate!=null)out+='<span class="enr" style="color:'+ec(ed.homeScoreRate)+'">Gazde '+ed.homeScoreRate+'%</span>';
-        if(ed.awayScoreRate!=null)out+='<span class="enr" style="color:'+ec(ed.awayScoreRate)+'">Oaspeti '+ed.awayScoreRate+'%</span>';
-        out+='</div>';
+      var s=m._s||{};
+      var fid=String(m.fixture&&m.fixture.id||0);
+      var sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
+      var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.home&&m.teams.home.id);});
+      var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.away&&m.teams.away.id);});
+      var snap=[s.hg||0,s.ag||0,s.mn||0,Math.round(s.ng||0),sh,s.forte?1:0,hRed?1:0,aRed?1:0].join('|');
+      var cur=existing[fid];
+      if(cur&&cur.dataset.snap===snap){
+        newNodes.push(cur);
+      } else {
+        var tmp=document.createElement('div');
+        tmp.innerHTML=buildCardHtml(m,lg.name);
+        var newEl=tmp.firstElementChild;
+        newEl.dataset.fid=fid;
+        newEl.dataset.snap=snap;
+        newNodes.push(newEl);
       }
-      out+='</div></div>';
     });
   });
+
   var sy=document.getElementById('page').scrollTop;
-  document.getElementById('match-list').innerHTML=out;
+  list.replaceChildren.apply(list,newNodes);
   document.getElementById('page').scrollTop=sy;
 }
 
