@@ -600,6 +600,7 @@ J. GENERATOR SCORING (index.html → g2Score)
   */5 * * * *  → /api/cron/prematch-enrichment   (7 etape pre-meci)
   0 2 * * *    → /api/update-results              (actualizare rezultate predicții)
   0 3 * * *    → /api/backfill/start              (backfill date istorice)
+  30 3 * * *   → /root/scripts/backup-db.sh       (backup PostgreSQL → GitHub soareluna2025/scannerv2-backups)
   0 4 * * *    → /api/cron/league-stats           (statistici per ligă)
   0 4 * * *    → /api/cron/referee-stats          (statistici per arbitru)
   0 6 * * *    → /api/cron/collect-daily          (standings, teams, form_stats)
@@ -611,6 +612,7 @@ J. GENERATOR SCORING (index.html → g2Score)
     scanPreMatch()   la fiecare 60 minute
 
   Logs crontab: /var/log/alohascan-cron.log
+  Logs backup:  /var/log/alohascan-backup.log
   Logs app:     journalctl -u alohascan -f
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1057,6 +1059,19 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
        WIN daca gol dupa alerta (in timp ce live); LOSS dupa FT confirmat in DB;
        LOSS dupa 3h fallback; evita false LOSS la disparitii temporare din API
   Commit: 45194d7
+
+[22.05.2026] - Backup automat PostgreSQL configurat
+  Script:    scripts/backup-db.sh — dump 19 tabele gzip per zi, push la GitHub
+  Repo:      soareluna2025/scannerv2-backups (privat — creat manual de utilizator)
+  Token:     GITHUB_BACKUP_TOKEN secret GitHub → scris la deploy în /root/.github_backup_token
+  Crontab:   30 3 * * * /root/scripts/backup-db.sh (C9 în deploy.yml)
+  Retenție:  7 zile local + 7 zile în GitHub repo
+  Securitate: parola DB extrasă din POSTGRES_URL (.env), NU hardcoded
+  deploy.yml: +backup token write la /root/.github_backup_token
+              +cp backup-db.sh → /root/scripts/ + chmod +x
+              +env GITHUB_BACKUP_TOKEN: ${{ secrets.GITHUB_BACKUP_TOKEN }}
+  PREREQUISIT: utilizatorul trebuie să creeze manual repo soareluna2025/scannerv2-backups
+               și să adauge GITHUB_BACKUP_TOKEN în GitHub Secrets (PAT cu repo write scope)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 13. AUDIT COMPLET — 22.05.2026

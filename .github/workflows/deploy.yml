@@ -15,7 +15,7 @@ jobs:
           host: ${{ secrets.VPS_IP }}
           username: root
           password: ${{ secrets.VPS_PASSWORD }}
-          envs: API_FOOTBALL_KEY,POSTGRES_URL,ANTHROPIC_API_KEY,XAI_API_KEY
+          envs: API_FOOTBALL_KEY,POSTGRES_URL,ANTHROPIC_API_KEY,XAI_API_KEY,GITHUB_BACKUP_TOKEN
           command_timeout: 8m
           script: |
             export PATH="/snap/bin:$PATH"
@@ -42,6 +42,19 @@ jobs:
             chmod 600 /root/scannerv2/.env
             echo "ENV OK: $(wc -l < /root/scannerv2/.env) chei"
 
+            # Backup token — scris din secret GitHub
+            if [ -n "$GITHUB_BACKUP_TOKEN" ]; then
+              echo "$GITHUB_BACKUP_TOKEN" > /root/.github_backup_token
+              chmod 600 /root/.github_backup_token
+              echo "BACKUP TOKEN: setat"
+            fi
+
+            # Backup script — instalare
+            mkdir -p /root/scripts
+            cp /root/scannerv2/scripts/backup-db.sh /root/scripts/backup-db.sh
+            chmod +x /root/scripts/backup-db.sh
+            echo "BACKUP SCRIPT: instalat"
+
             # Crontab-uri — idempotent (fiecare linie înlocuiește versiunea veche)
             LOG="/var/log/alohascan-cron.log"
 
@@ -53,6 +66,7 @@ jobs:
             C6="0 4 * * * curl -sf http://localhost:3000/api/cron/league-stats >> $LOG 2>&1"
             C7="0 4 * * * curl -sf http://localhost:3000/api/cron/referee-stats >> $LOG 2>&1"
             C8="30 3 * * * curl -s -X POST http://localhost:3000/api/cron/learning-analysis >> /root/scannerv2/logs/learning.log 2>&1"
+            C9="30 3 * * * /root/scripts/backup-db.sh >> /var/log/alohascan-backup.log 2>&1"
 
             (
               crontab -l 2>/dev/null \
@@ -64,7 +78,8 @@ jobs:
                 | grep -v 'api/cron/collect-finished' \
                 | grep -v 'api/cron/league-stats' \
                 | grep -v 'api/cron/referee-stats' \
-                | grep -v 'api/cron/learning-analysis'
+                | grep -v 'api/cron/learning-analysis' \
+                | grep -v 'backup-db.sh'
               echo "$C0"
               echo "$C2"
               echo "$C3"
@@ -73,6 +88,7 @@ jobs:
               echo "$C6"
               echo "$C7"
               echo "$C8"
+              echo "$C9"
             ) | crontab -
 
             echo "CRONTAB ACTIV:"
@@ -96,3 +112,4 @@ jobs:
           POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          GITHUB_BACKUP_TOKEN: ${{ secrets.GITHUB_BACKUP_TOKEN }}
