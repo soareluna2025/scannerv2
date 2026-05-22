@@ -1010,6 +1010,27 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
   Fișiere modificate: server.js, index.html, SESSION_CONTEXT.txt
   Commit: (pending)
 
+[22.05.2026] - FIX M1-M10: toate problemele mediu rezolvate
+  M1:  api/utils/fetch-api.js — helper global fetchApiFootball() cu retry 429 (30s/60s/120s),
+       aplicat in: enrich.js, match.js, update-results.js, collect-finished.js,
+       collect-daily.js, referee-stats.js, generator.js
+  M2:  match.js — matchCache Map cu TTL dinamic (live=1min, NS/FT=10min), eviction >100,
+       fallback DB pentru h2h/form/odds înainte de apel API
+  M3:  backfill.js — getRealApiUsage() citește /status real la fiecare 10min, salvează
+       backfill_api_used + backfill_api_limit în app_settings
+  M4:  update-results.js — LIMIT 50 (era 100), sleep(500ms) între fiecare predicție
+  M5:  scanner.js — saveFormStats() inserează meci FT în fixtures_history + recalculează
+       form_stats (last5_home/away, avg_scored/conceded) pentru ambele echipe
+  M6:  enrich.js — fetchAndStoreInjuries() skip dacă date există în DB cu MAX(updated_at) < 6h
+  M7:  generator.js — enrichLiveStats() fetch /fixtures/statistics pentru top-10 meciuri
+       prioritare (min>45 sau 0-0 după 30min), populează m.statistics cu date reale
+  M8:  enrich.js — logPrediction() chei fixate: breakdown.poisson/forma/h2h/live/ev/
+       consistenta/putereEchipe (erau payload.layer1-7 care returnau null)
+  M9:  backfill.js — fetchWithBackoff() exponential backoff via fetchApiFootball;
+       getBackfillStatus() citește limita reală din app_settings.backfill_api_limit
+  M10: ecosystem.config.cjs șters (scan.js nu mai există de luni)
+  Commit: 4c01343
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 13. AUDIT COMPLET — 22.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
