@@ -1044,6 +1044,20 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
          Sunderland/Wolverhampton fără false positive
   Commit: fd6a363
 
+[22.05.2026] - FIX mn1-mn6: cod mort sters, cache eviction, sezon dinamic, NGP corect
+  mn1: server.js — sters runDailyBackfill din import (stub nefolosit in backfill.js)
+  mn2: scanner.js — stearsa saveH2H (definita dar niciodata apelata)
+  mn3: cache eviction adaugat: formCache scanner.js (max 500),
+       weatherCache venue-weather.js (max 200), cache simulate.js (max 100)
+  mn4: today.js — fereastra extinsa la 30h (now-2h → now+28h)
+       acoperă meciurile 00:00-02:00 pierdute cu fereastra 24h strict
+  mn5: league-stats.js — getCurrentSeason() dinamic (month<8 → year-1, altfel year)
+       returneaza 2025 in mai 2026 ✓
+  mn6: scanner.js — resolveNGPOutcomes() inlocuieste logica WIN/LOSS veche:
+       WIN daca gol dupa alerta (in timp ce live); LOSS dupa FT confirmat in DB;
+       LOSS dupa 3h fallback; evita false LOSS la disparitii temporare din API
+  Commit: 45194d7
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 13. AUDIT COMPLET — 22.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
