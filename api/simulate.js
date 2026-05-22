@@ -5,6 +5,13 @@ import { query }         from './db.js';
 
 const cache = new Map();
 const CACHE_TTL = 120000; // 2 minutes
+const CACHE_MAX = 100;
+
+function evictSimCache() {
+  if (cache.size > CACHE_MAX) {
+    [...cache.keys()].slice(0, Math.floor(CACHE_MAX / 2)).forEach(k => cache.delete(k));
+  }
+}
 
 function statVal(arr, name) {
   const s = arr?.find(x => x.type === name);
@@ -747,6 +754,7 @@ export default async function handler(req, res) {
     } : null,
   };
 
+  evictSimCache();
   cache.set(ck, { data: result, ts: Date.now() });
   return res.status(200).json(result);
 }

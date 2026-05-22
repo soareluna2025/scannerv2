@@ -4,6 +4,15 @@
 
 import { query } from '../db.js';
 
+function getCurrentSeason() {
+  const now   = new Date();
+  const month = now.getMonth() + 1; // 1-12
+  const year  = now.getFullYear();
+  return month < 8 ? year - 1 : year; // înainte de august → sezon anterior
+}
+
+const SEASON = getCurrentSeason();
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -119,7 +128,7 @@ export default async function handler(req, res) {
       `, [
         lid,
         nameMap[lid] || null,
-        2025,
+        SEASON,
         parseInt(row.total_matches),
         row.avg_goals_per_match,
         row.avg_home_goals,

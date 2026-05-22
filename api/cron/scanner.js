@@ -59,6 +59,14 @@ async function fetchWithRetry(path, maxRetries = 2) {
 
 const formCache = {}; // { [key]: { ts, val } }
 const FORM_CACHE_TTL = 3_600_000; // 1 hour
+const FORM_CACHE_MAX = 500;
+
+function evictFormCache() {
+  const keys = Object.keys(formCache);
+  if (keys.length > FORM_CACHE_MAX) {
+    keys.slice(0, Math.floor(FORM_CACHE_MAX / 2)).forEach(k => delete formCache[k]);
+  }
+}
 
 function log(msg) { console.log(`[scanner] ${new Date().toISOString()} ${msg}`); }
 
@@ -100,6 +108,7 @@ async function getFormGoals(teamId, isHome) {
     );
     const row2 = r2.rows[0];
     const val = (row2 && parseInt(row2.cnt) >= 3) ? (parseFloat(row2.avg_g) || 0.35) : 0.35;
+    evictFormCache();
     formCache[cKey] = { ts: Date.now(), val };
     return val;
   } catch (_) {
@@ -416,31 +425,6 @@ async function saveLiveStats(m, f, status) {
   );
 }
 
-async function saveH2H(matches) {
-  for (const match of matches) {
-    const hg  = match.goals?.home ?? 0;
-    const ag  = match.goals?.away ?? 0;
-    const hid = match.teams?.home?.id;
-    const aid = match.teams?.away?.id;
-    if (!hid || !aid) continue;
-    await query(
-      `INSERT INTO h2h
-         (team1_id, team2_id, fixture_id, home_team_id, away_team_id,
-          match_date, home_goals, away_goals, league_id, season)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-       ON CONFLICT (team1_id, team2_id, fixture_id) DO UPDATE SET
-         home_goals=EXCLUDED.home_goals, away_goals=EXCLUDED.away_goals`,
-      [
-        Math.min(hid, aid), Math.max(hid, aid),
-        match.fixture.id, hid, aid,
-        match.fixture?.date || null,
-        hg, ag,
-        match.league?.id || null,
-        new Date().getFullYear(),
-      ]
-    );
-  }
-}
 
 async function saveAlert(fixtureId, alertType, market, message, confidence) {
   await query(
@@ -453,6 +437,52 @@ async function saveAlert(fixtureId, alertType, market, message, confidence) {
      )`,
     [fixtureId, alertType, message, confidence || null]
   );
+}
+
+// ── mn6: Rezolvare robustă WIN/LOSS NGP — verifică FT în DB ─────────────────
+
+async function resolveNGPOutcomes(liveMatches) {
+  const liveMap = new Map(liveMatches.map(m => [m.fixture?.id, m]));
+
+  const { rows: pending } = await query(`
+    SELECT fixture_id, score_at_alert, created_at
+    FROM predictions
+    WHERE outcome_ngp = 'PENDING'
+      AND score_at_alert IS NOT NULL
+      AND created_at < NOW() - INTERVAL '5 minutes'
+  `).catch(() => ({ rows: [] }));
+
+  for (const pred of pending) {
+    const fid = pred.fixture_id;
+    const liveMatch = liveMap.get(fid);
+
+    if (liveMatch) {
+      // Meciul e încă live — WIN dacă s-a marcat gol după alertă
+      const [ah, aa] = (pred.score_at_alert || '0-0').split('-').map(Number);
+      const alertTotal = (ah || 0) + (aa || 0);
+      const curTotal   = (liveMatch.goals?.home || 0) + (liveMatch.goals?.away || 0);
+      if (curTotal > alertTotal) {
+        query(`UPDATE predictions SET outcome_ngp='WIN', updated_at=NOW() WHERE fixture_id=$1 AND outcome_ngp='PENDING'`, [fid]).catch(() => {});
+      }
+    } else {
+      // Meciul a dispărut din live — verifică în fixtures_history dacă e FT
+      const { rows: ftRows } = await query(
+        `SELECT status_short FROM fixtures_history WHERE fixture_id=$1`,
+        [fid]
+      ).catch(() => ({ rows: [] }));
+
+      if (ftRows[0]?.status_short === 'FT') {
+        // Confirmat terminat — LOSS (nu s-a marcat gol după alertă — altfel era WIN deja)
+        query(`UPDATE predictions SET outcome_ngp='LOSS', updated_at=NOW() WHERE fixture_id=$1 AND outcome_ngp='PENDING'`, [fid]).catch(() => {});
+      } else {
+        // Status necunoscut — aşteaptă max 3h, apoi forţează LOSS
+        const ageH = (Date.now() - new Date(pred.created_at).getTime()) / 3_600_000;
+        if (ageH > 3) {
+          query(`UPDATE predictions SET outcome_ngp='LOSS', updated_at=NOW() WHERE fixture_id=$1 AND outcome_ngp='PENDING'`, [fid]).catch(() => {});
+        }
+      }
+    }
+  }
 }
 
 // ── Ciclu 1: /fixtures?live=all — la fiecare 10 secunde ──────────────────────
@@ -600,54 +630,8 @@ async function scanLive10s() {
       }
     }
 
-    // ── Rezolvare WIN/LOSS pentru contorul NGP din header ────────────────────
-    const liveFixtureIds = raw
-      .filter(m => LIVE_STATUS.has(m.fixture?.status?.short || ''))
-      .map(m => m.fixture?.id)
-      .filter(Boolean);
-
-    // WIN: meci încă live dar scorul s-a schimbat față de score_at_alert
-    // Detectăm prin liveCache[id].ngpAlertScore vs scorul curent
-    const winIds = [];
-    for (const m of raw) {
-      const mid = m.fixture?.id;
-      if (!mid || !LIVE_STATUS.has(m.fixture?.status?.short || '')) continue;
-      const cached = liveCache[mid];
-      if (cached?.ngpAlertScore) {
-        const curScore = `${m.goals?.home ?? 0}-${m.goals?.away ?? 0}`;
-        if (curScore !== cached.ngpAlertScore) {
-          winIds.push(mid);
-          cached.ngpAlertScore = null; // marcat — nu mai trimitem WIN repetat
-        }
-      }
-    }
-    if (winIds.length > 0) {
-      query(
-        `UPDATE predictions SET outcome_ngp='WIN', updated_at=NOW()
-         WHERE outcome_ngp='PENDING' AND fixture_id = ANY($1) AND score_at_alert IS NOT NULL`,
-        [winIds]
-      ).catch(() => {});
-    }
-
-    // LOSS: predicție PENDING dar meciul nu mai e live
-    if (liveFixtureIds.length > 0) {
-      query(
-        `UPDATE predictions SET outcome_ngp='LOSS', updated_at=NOW()
-         WHERE outcome_ngp='PENDING'
-           AND score_at_alert IS NOT NULL
-           AND match_date > NOW() - INTERVAL '3h'
-           AND fixture_id != ALL($1::int[])`,
-        [liveFixtureIds]
-      ).catch(() => {});
-    } else if (raw.length > 0) {
-      // API a returnat date dar nu există meciuri live — rezolvă toate pending
-      query(
-        `UPDATE predictions SET outcome_ngp='LOSS', updated_at=NOW()
-         WHERE outcome_ngp='PENDING'
-           AND score_at_alert IS NOT NULL
-           AND match_date > NOW() - INTERVAL '3h'`
-      ).catch(() => {});
-    }
+    // ── Rezolvare WIN/LOSS pentru contorul NGP — mn6 ────────────────────────
+    resolveNGPOutcomes(raw).catch(e => log(`resolveNGPOutcomes: ${e.message}`));
 
     // League patterns la fiecare 10 rulări
     _patternRunCount++;

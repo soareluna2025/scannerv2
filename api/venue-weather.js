@@ -2,6 +2,13 @@ import { query } from './db.js';
 
 const weatherCache = new Map(); // `${lat2},${lon2}` → { ts, data }
 const CACHE_TTL    = 1_800_000; // 30 min
+const CACHE_MAX    = 200;
+
+function evictWeatherCache() {
+  if (weatherCache.size > CACHE_MAX) {
+    [...weatherCache.keys()].slice(0, Math.floor(CACHE_MAX / 2)).forEach(k => weatherCache.delete(k));
+  }
+}
 
 // Fallback coordinates for cities when venue lat/lon is missing from DB
 const CITY_COORDS = {
@@ -305,6 +312,7 @@ export default async function handler(req, res) {
             precipitation: Math.round(precip * 10) / 10,
             influence:     influence(temp, precip, wind),
           };
+          evictWeatherCache();
           weatherCache.set(ck, { ts: Date.now(), data: weather });
         }
       } catch (_) {}

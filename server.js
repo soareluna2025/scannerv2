@@ -11,7 +11,7 @@ process.on('unhandledRejection', (reason) => {
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { query } from './api/db.js';
-import { runDailyBackfill, initBackfillProgress, startBackfill, stopBackfill, getBackfillStatus, resumeOnStartup } from './api/backfill.js';
+import { initBackfillProgress, startBackfill, stopBackfill, getBackfillStatus, resumeOnStartup } from './api/backfill.js';
 import { startScanner } from './api/cron/scanner.js';
 import adminRouter from './api/admin.js';
 import { loadModelWeights } from './api/weights.js';

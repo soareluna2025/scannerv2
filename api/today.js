@@ -14,8 +14,9 @@ function dateStr(offsetDays) {
 
 async function getFixturesFromDB() {
   try {
-    const now  = new Date();
-    const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const now      = new Date();
+    const dateFrom = new Date(now.getTime() - 2  * 60 * 60 * 1000); // -2h
+    const dateTo   = new Date(now.getTime() + 28 * 60 * 60 * 1000); // +28h
     const allowedIds = [...ALLOWED_LEAGUE_IDS];
     const r = await query(
       `SELECT f.fixture_id AS id, f.match_date AS kickoff_time, f.status_short, f.status_long,
@@ -29,7 +30,7 @@ async function getFixturesFromDB() {
          AND f.match_date >= $1 AND f.match_date <= $2
          AND f.league_id = ANY($3)
        ORDER BY f.match_date ASC`,
-      [now.toISOString(), in24h.toISOString(), allowedIds]
+      [dateFrom.toISOString(), dateTo.toISOString(), allowedIds]
     );
     return r.rows;
   } catch (_) { return []; }
@@ -154,17 +155,18 @@ export default async function handler(req, res) {
     };
     log(`raw per day: ${d0}=${counts.day0} ${d1}=${counts.day1}`);
 
-    const now    = Date.now();
-    const cutoff = now + 24 * 60 * 60 * 1000;
-    const seen   = new Set();
-    const raw    = [
+    const now      = Date.now();
+    const dateFrom = now - 2  * 60 * 60 * 1000; // -2h
+    const dateTo   = now + 28 * 60 * 60 * 1000; // +28h
+    const seen     = new Set();
+    const raw      = [
       ...(j0.response || []),
       ...(j1.response || []),
     ].filter(m => {
       if (!m.fixture?.id || seen.has(m.fixture.id)) return false;
       seen.add(m.fixture.id);
       const kickoff = new Date(m.fixture.date).getTime();
-      return kickoff >= now && kickoff <= cutoff;
+      return kickoff >= dateFrom && kickoff <= dateTo;
     });
     log(`raw total (deduped, 24h window): ${raw.length}`);
 
