@@ -19,6 +19,7 @@ async function getFixturesFromDB() {
   try {
     const now  = new Date();
     const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const allowedIds = [...ALLOWED_LEAGUE_IDS];
     const r = await query(
       `SELECT f.fixture_id AS id, f.match_date AS kickoff_time, f.status_short, f.status_long,
               f.league_id, f.home_team_id, f.away_team_id,
@@ -29,8 +30,9 @@ async function getFixturesFromDB() {
        LEFT JOIN teams ta ON ta.team_id = f.away_team_id
        WHERE f.status_short = 'NS'
          AND f.match_date >= $1 AND f.match_date <= $2
+         AND f.league_id = ANY($3)
        ORDER BY f.match_date ASC`,
-      [now.toISOString(), in24h.toISOString()]
+      [now.toISOString(), in24h.toISOString(), allowedIds]
     );
     return r.rows;
   } catch (_) { return []; }
@@ -95,8 +97,9 @@ export default async function handler(req, res) {
     log(`db fixtures: ${dbFixtures.length}`);
 
     if (dbFixtures.length >= 5) {
-      const afterLeague = dbFixtures.filter(f => ALLOWED_LEAGUE_IDS.has(f.league_id));
-      log(`after league filter (db): ${afterLeague.length}`);
+      // Use Number() to guard against pg returning league_id as string
+      const afterLeague = dbFixtures.filter(f => ALLOWED_LEAGUE_IDS.has(Number(f.league_id)));
+      log(`after league filter (db): ${afterLeague.length}/${dbFixtures.length} (removed ${dbFixtures.length - afterLeague.length})`);
 
       const leagueIds = [...new Set(afterLeague.map(f => f.league_id))];
       const leagueRows = await getLeaguesFromDB(leagueIds);
@@ -178,8 +181,8 @@ export default async function handler(req, res) {
     });
     log(`raw total (deduped, 24h window): ${raw.length}`);
 
-    const afterLeague = raw.filter(m => ALLOWED_LEAGUE_IDS.has(m.league?.id));
-    log(`after league filter: ${afterLeague.length} (removed ${raw.length - afterLeague.length})`);
+    const afterLeague = raw.filter(m => ALLOWED_LEAGUE_IDS.has(Number(m.league?.id)));
+    log(`after league filter: ${afterLeague.length}/${raw.length} (removed ${raw.length - afterLeague.length})`);
 
     const afterWomen = afterLeague.filter(m => !WOMEN_RE.test(m.league?.name || ''));
     log(`after women filter: ${afterWomen.length} (removed ${afterLeague.length - afterWomen.length})`);
