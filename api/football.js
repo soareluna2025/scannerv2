@@ -177,30 +177,51 @@ export default async function handler(req, res) {
   log(`fd contributing ${fdNew.length} new matches (not in af)`);
 
   const combined = [...afMatches, ...fdNew];
-  log(`combined before league-filter: ${combined.length}`);
+  log(`combined before filters: ${combined.length}`);
 
-  const WOMEN_RE     = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
-  const LOWER_DIV_RE = /\b[3-9]\.\s*(liga|division|div)\b|\bUSL League Two\b|\bLeague Two\b/i;
-  const YOUTH_RE     = /\bU-?1[6-9]\b|\bU-?2[0-3]\b|\bUnder.?1[6-9]\b|\bUnder.?2[0-3]\b/i;
+  // ── Filters ────────────────────────────────────────────────────
+  // WOMEN_RE: English + Dutch (vrouwen/dames) + German (frauen/damen) +
+  //           French (femmes) + Italian (femminile) + Portuguese (feminino) +
+  //           standalone "W" suffix (e.g. "Eredivisie W") + "Damen"
+  const WOMEN_RE = /women|feminin|femenin|ladies|female|w league|nwsl|wsl|vrouwen|dames|frauen|damen|femmes|femminile|feminino|\bW\b/i;
+
+  // LOWER_DIV_RE: numbered tiers (3.-9.) + named lower tiers (German Oberliga and below)
+  const LOWER_DIV_RE = /\b[3-9]\.\s*(liga|division|div)\b|\bUSL League Two\b|\bLeague Two\b|\bOberliga\b|\bLandesliga\b|\bKreisliga\b|\bBezirksliga\b|\bVerbandsliga\b|\bVorbandsliga\b/i;
+
+  const YOUTH_RE = /\bU-?1[6-9]\b|\bU-?2[0-3]\b|\bUnder.?1[6-9]\b|\bUnder.?2[0-3]\b/i;
+
+  let cntWomen = 0, cntLowerDiv = 0, cntYouth = 0, cntWhitelist = 0;
+
   const filtered = combined.filter(m => {
     const ln = m.league?.name || '';
     const hn = m.teams?.home?.name || '';
     const an = m.teams?.away?.name || '';
-    if (WOMEN_RE.test(ln)) return false;
-    if (LOWER_DIV_RE.test(ln)) return false;
-    if (YOUTH_RE.test(ln) || YOUTH_RE.test(hn) || YOUTH_RE.test(an)) return false;
+    if (WOMEN_RE.test(ln))                                          { cntWomen++;    return false; }
+    if (LOWER_DIV_RE.test(ln))                                      { cntLowerDiv++; return false; }
+    if (YOUTH_RE.test(ln) || YOUTH_RE.test(hn) || YOUTH_RE.test(an)) { cntYouth++;   return false; }
+    // fd source: already filtered to top leagues via fdCompMap — skip whitelist
     if (m._src === 'fd') return true;
-    return ALLOWED_LEAGUE_IDS.has(m.league?.id);
+    // af source: must be in ALLOWED_LEAGUE_IDS; Number() guards against string IDs
+    if (!ALLOWED_LEAGUE_IDS.has(Number(m.league?.id)))              { cntWhitelist++; return false; }
+    return true;
   });
 
-  const blocked = combined.filter(m =>
-    m._src === 'af' && !ALLOWED_LEAGUE_IDS.has(m.league?.id) && !WOMEN_RE.test(m.league?.name || '')
-  );
-  if (blocked.length) {
-    const ids = [...new Map(blocked.map(m => [m.league.id, `${m.league.id}:"${m.league.name}" (${m.league.country})`])).values()];
-    log(`af leagues BLOCKED by whitelist (${blocked.length} matches): ${ids.join(' | ')}`);
+  log(`filters: women=${cntWomen} lowerDiv=${cntLowerDiv} youth=${cntYouth} whitelist=${cntWhitelist} → kept=${filtered.length}/${combined.length}`);
+
+  // Log leagues blocked by whitelist (not already caught by regex filters)
+  if (cntWhitelist > 0) {
+    const blockedLeagues = combined.filter(m =>
+      m._src === 'af' &&
+      !WOMEN_RE.test(m.league?.name || '') &&
+      !LOWER_DIV_RE.test(m.league?.name || '') &&
+      !ALLOWED_LEAGUE_IDS.has(Number(m.league?.id))
+    );
+    const ids = [...new Map(blockedLeagues.map(m => [
+      m.league?.id,
+      `${m.league?.id}:"${m.league?.name}" (${m.league?.country})`,
+    ])).values()];
+    if (ids.length) log(`whitelist BLOCKED leagues: ${ids.join(' | ')}`);
   }
-  log(`league filter: ${combined.length} → ${filtered.length} (removed ${combined.length - filtered.length})`);
 
   log(`final combined: ${filtered.length}`);
   const result = { response: filtered };
