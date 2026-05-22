@@ -1031,6 +1031,19 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
   M10: ecosystem.config.cjs șters (scan.js nu mai există de luni)
   Commit: 4c01343
 
+[22.05.2026] - RESCRIS COMPLET sistem filtrare ligi
+  api/utils/league-filter.js — modul centralizat NOU:
+    WOMEN_TERMS: 34 termeni multilingv (EN/FR/DE/NL/FI/SV/PT/ES/CZ/PL/IT/HU/TR)
+    YOUTH_TERMS: Under, U17-U23, Youth, Junior, Reserve, Academy, B Team, Primavera...
+    LOWER_DIV_TERMS: Oberliga, Landesliga, Liga 3+, Division 3+, Futsal, Virtual...
+    isAllowedLeague(name, id, whitelist) — ID whitelist + termeni în numele ligii
+    isAllowedMatch(match, whitelist) — ligă OK + echipe fără " W" + fără WOMEN_TERMS
+  Aplicat în: football.js, today.js (căi DB+API), generator.js, scanner.js
+  Șters: WOMEN_RE, LOWER_DIV_RE, YOUTH_RE din toate fișierele
+  Teste: 7/7 pass — feminin blocat, Premier League/Bundesliga permis,
+         Sunderland/Wolverhampton fără false positive
+  Commit: fd6a363
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 13. AUDIT COMPLET — 22.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
