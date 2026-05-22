@@ -1227,6 +1227,33 @@ function filterScore(el,score){
 
 // ── WEBSOCKET / CONNECT ───────────────────────────────────────
 var _autoIt=null;
+var _ws=null;
+var _wsReconnectTimer=null;
+
+function connectWS(){
+  if(_ws&&(_ws.readyState===0||_ws.readyState===1))return;
+  var proto=location.protocol==='https:'?'wss':'ws';
+  _ws=new WebSocket(proto+'://'+location.host);
+  _ws.onopen=function(){
+    if(_wsReconnectTimer){clearTimeout(_wsReconnectTimer);_wsReconnectTimer=null;}
+  };
+  _ws.onmessage=function(ev){
+    try{
+      var msg=JSON.parse(ev.data);
+      if(msg.type==='LIVE_UPDATE'&&msg.payload&&Array.isArray(msg.payload.matches)){
+        ST.ms=msg.payload.matches.map(function(m){m._s=calcScore(m);return m;});
+        renderMatches();updateStats();trackWR();genUpdateBadge();
+      }
+    }catch(_){}
+  };
+  _ws.onclose=function(){
+    if(ST.connected&&!_wsReconnectTimer){
+      _wsReconnectTimer=setTimeout(connectWS,5000);
+    }
+  };
+  _ws.onerror=function(){_ws.close();};
+}
+
 function toggleConn(){
   if(ST.connected){disconnect();return;}
   connect();
@@ -1246,6 +1273,7 @@ function connect(){
       document.getElementById('wr-bar').style.display='flex';
       document.getElementById('page').style.top='141px';
       fetchSupabaseWinRate();
+      connectWS();
       _autoIt=setInterval(function(){loadLive();},CFG.RI);
     } else {
       btn.textContent='CONECTARE';
@@ -1253,7 +1281,10 @@ function connect(){
   });
 }
 function disconnect(){
-  ST.connected=false;clearInterval(_autoIt);
+  ST.connected=false;
+  if(_ws){_ws.close();_ws=null;}
+  if(_wsReconnectTimer){clearTimeout(_wsReconnectTimer);_wsReconnectTimer=null;}
+  clearInterval(_autoIt);
   sessionStorage.removeItem('wasConnected');
   document.getElementById('connect-area').style.display='';
   document.getElementById('btn-conn').textContent='CONECTARE';

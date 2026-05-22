@@ -980,6 +980,41 @@ VALUES
   ('GENERATOR',  'global', 'threshold',              60,    60)
 ON CONFLICT (module, context_key, weight_name) DO NOTHING;
 
+-- ── 39. match_snapshots ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS match_snapshots (
+  fixture_id    INTEGER PRIMARY KEY,
+  league_id     INTEGER,
+  home_team     TEXT,
+  away_team     TEXT,
+  status_short  TEXT,
+  minute        INTEGER,
+  home_goals    INTEGER DEFAULT 0,
+  away_goals    INTEGER DEFAULT 0,
+  ng            INTEGER,
+  over15        INTEGER,
+  outcome       TEXT DEFAULT 'LIVE',
+  composite_score NUMERIC(5,2),
+  final_home    INTEGER,
+  final_away    INTEGER,
+  resolved_at   TIMESTAMP,
+  created_at    TIMESTAMP DEFAULT NOW(),
+  updated_at    TIMESTAMP DEFAULT NOW()
+);
+
+-- ── 40. league_patterns ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS league_patterns (
+  league_id   INTEGER PRIMARY KEY,
+  sample_size INTEGER DEFAULT 0,
+  avg_ng      NUMERIC(5,2),
+  avg_over15  NUMERIC(5,2),
+  avg_goals   NUMERIC(4,2),
+  avg_cards   NUMERIC(4,2),
+  avg_corners NUMERIC(4,2),
+  over15_pct  NUMERIC(5,2),
+  gg_pct      NUMERIC(5,2),
+  updated_at  TIMESTAMP DEFAULT NOW()
+);
+
 -- ================================================================
 --  VERIFICARE
 -- ================================================================

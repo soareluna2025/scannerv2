@@ -21,6 +21,39 @@ const liveCache     = {}; // { [fixtureId]: { home_goals, away_goals, status, mi
 const prematchCache = {}; // { [fixtureId]: { ts, composite } }
 
 let _patternRunCount = 0;
+let _scanCounter = 0;
+
+function getMatchPriority(m) {
+  const sh  = m.fixture?.status?.short || '';
+  const mn  = m.fixture?.status?.elapsed ?? 0;
+  const hg  = m.goals?.home ?? 0;
+  const ag  = m.goals?.away ?? 0;
+  if (DONE_STATUS.has(sh) || sh === 'HT') return 'low';
+  if (mn >= 75 || (hg + ag === 0 && mn >= 60)) return 'high';
+  return 'medium';
+}
+
+async function fetchWithRetry(path, maxRetries = 2) {
+  const url = `https://v3.football.api-sports.io${path}`;
+  const headers = { 'x-apisports-key': FOOTBALL_KEY };
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const r = await fetch(url, { headers });
+      if (r.status === 429) {
+        const wait = attempt === 0 ? 30_000 : 60_000;
+        log(`fetchWithRetry 429 on ${path} — waiting ${wait / 1000}s`);
+        await sleep(wait);
+        continue;
+      }
+      const d = await r.json();
+      return d.response || [];
+    } catch (e) {
+      if (attempt === maxRetries) throw e;
+      await sleep(2000);
+    }
+  }
+  return [];
+}
 
 const formCache = {}; // { [key]: { ts, val } }
 const FORM_CACHE_TTL = 3_600_000; // 1 hour
@@ -354,8 +387,9 @@ async function saveAlert(fixtureId, alertType, market, message, confidence) {
 
 async function scanLive10s() {
   if (!FOOTBALL_KEY) return;
+  _scanCounter++;
   try {
-    const raw = await apiFetch('/fixtures?live=all');
+    const raw = await fetchWithRetry('/fixtures?live=all');
     log(`live10s: ${raw.length} matches from API`);
 
     // Prefetch real form goals per team (cached 1h in formCache)
@@ -374,6 +408,8 @@ async function scanLive10s() {
         h2hGGRate:     Math.min(0.90, (hG + aG) / 3.5),
       };
     }));
+
+    const processedMatches = [];
 
     for (const m of raw) {
       const sh = m.fixture?.status?.short || '';
@@ -394,6 +430,11 @@ async function scanLive10s() {
 
       if (!LIVE_STATUS.has(sh)) continue;
 
+      // Priority throttling: medium every 2nd scan, low every 5th
+      const priority = getMatchPriority(m);
+      if (priority === 'medium' && _scanCounter % 2 !== 0) { processedMatches.push(m); continue; }
+      if (priority === 'low'    && _scanCounter % 5 !== 0) { processedMatches.push(m); continue; }
+
       const currHome = m.goals?.home ?? 0;
       const currAway = m.goals?.away ?? 0;
       const currMin  = m.fixture?.status?.elapsed ?? 0;
@@ -406,14 +447,14 @@ async function scanLive10s() {
           status: sh, minute: currMin, lineupsFetched: true,
           formData: matchFd[id] || {},
         };
-        apiFetch(`/fixtures/lineups?fixture=${id}`)
+        fetchWithRetry(`/fixtures/lineups?fixture=${id}`)
           .then(lineups => { if (liveCache[id]) liveCache[id].lineups = lineups; })
           .catch(() => {});
       } else {
         // Scorul s-a schimbat — fetch events imediat
         if (prev.home_goals !== currHome || prev.away_goals !== currAway) {
           log(`score change ${id}: ${currHome}-${currAway}`);
-          apiFetch(`/fixtures/events?fixture=${id}`)
+          fetchWithRetry(`/fixtures/events?fixture=${id}`)
             .then(events => { if (liveCache[id]) liveCache[id].events = events; })
             .catch(() => {});
         }
@@ -436,6 +477,8 @@ async function scanLive10s() {
         home_goals:   currHome,      away_goals: currAway,
         ng,           over15: mk.over15,         outcome: 'LIVE',
       }).catch(e => log(`upsertSnapshot ${id}: ${e.message}`));
+
+      processedMatches.push({ ...m, _ng: ng, _mk: mk });
 
       // Alerte — o singura data per meci cand NGP trece de 70%
       if (ng > 70 || mk.over15 > 70) {
@@ -554,6 +597,12 @@ async function scanLive10s() {
         log(`league patterns: ${count} updated`);
       }).catch(() => {});
     }
+
+    // Broadcast WebSocket + cache pentru reconectări
+    global.lastLiveData = { matches: processedMatches, ts: Date.now() };
+    if (typeof global.wsBroadcast === 'function') {
+      global.wsBroadcast('LIVE_UPDATE', global.lastLiveData);
+    }
   } catch (e) {
     log(`scanLive10s error: ${e.message}`);
   }
@@ -569,7 +618,7 @@ async function scanLiveStats() {
 
   for (const id of activeIds) {
     try {
-      const stats = await apiFetch(`/fixtures/statistics?fixture=${id}`);
+      const stats = await fetchWithRetry(`/fixtures/statistics?fixture=${id}`);
       if (!stats.length || !liveCache[id]) continue;
 
       const cached = liveCache[id];
@@ -653,11 +702,56 @@ async function scanPreMatch() {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
+async function ensureTables() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS match_snapshots (
+        fixture_id    INTEGER PRIMARY KEY,
+        league_id     INTEGER,
+        home_team     TEXT,
+        away_team     TEXT,
+        status_short  TEXT,
+        minute        INTEGER,
+        home_goals    INTEGER DEFAULT 0,
+        away_goals    INTEGER DEFAULT 0,
+        ng            INTEGER,
+        over15        INTEGER,
+        outcome       TEXT DEFAULT 'LIVE',
+        composite_score NUMERIC(5,2),
+        final_home    INTEGER,
+        final_away    INTEGER,
+        resolved_at   TIMESTAMP,
+        created_at    TIMESTAMP DEFAULT NOW(),
+        updated_at    TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await query(`
+      CREATE TABLE IF NOT EXISTS league_patterns (
+        league_id   INTEGER PRIMARY KEY,
+        sample_size INTEGER DEFAULT 0,
+        avg_ng      NUMERIC(5,2),
+        avg_over15  NUMERIC(5,2),
+        avg_goals   NUMERIC(4,2),
+        avg_cards   NUMERIC(4,2),
+        avg_corners NUMERIC(4,2),
+        over15_pct  NUMERIC(5,2),
+        gg_pct      NUMERIC(5,2),
+        updated_at  TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    log('ensureTables: match_snapshots + league_patterns OK');
+  } catch (e) {
+    log(`ensureTables error: ${e.message}`);
+  }
+}
+
 export function startScanner() {
   if (!FOOTBALL_KEY) {
     console.log('[scanner] No FOOTBALL_API_KEY — scanner disabled');
     return;
   }
+
+  ensureTables();
 
   // Rulare imediată la startup
   scanLive10s();

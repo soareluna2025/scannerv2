@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import { WebSocketServer } from 'ws';
 
 process.on('uncaughtException', (err) => {
   console.error('[crash] uncaughtException:', err.message, err.stack);
@@ -105,10 +106,27 @@ app.get('*', (req, res) => {
   res.sendFile(join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', async () => {
+const httpServer = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`AlohaScan pornit pe http://0.0.0.0:${PORT}`);
   await initBackfillProgress();
   await resumeOnStartup();
   startScanner();
   loadModelWeights().catch(e => console.error('[weights] initial load failed:', e.message));
 });
+
+const wss = new WebSocketServer({ server: httpServer });
+
+wss.on('connection', (ws) => {
+  if (global.lastLiveData) {
+    ws.send(JSON.stringify({ type: 'LIVE_UPDATE', payload: global.lastLiveData }));
+  }
+  ws.on('error', () => {});
+});
+
+global.wsBroadcast = function (type, payload) {
+  if (wss.clients.size === 0) return;
+  const msg = JSON.stringify({ type, payload });
+  for (const client of wss.clients) {
+    if (client.readyState === 1) client.send(msg);
+  }
+};

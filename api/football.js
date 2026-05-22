@@ -33,13 +33,18 @@ async function fetchH2H(homeId, awayId, key) {
 }
 
 const enrichCache = new Map();
+const ENRICH_TTL = 5 * 60 * 1000; // 5 minutes
 
 async function enrichOne(m, key) {
   const hId = m.teams?.home?.id;
   const aId = m.teams?.away?.id;
   if (!hId || !aId) return m;
-  const cacheKey = `${hId}-${aId}`;
-  if (enrichCache.has(cacheKey)) return { ...m, ...enrichCache.get(cacheKey) };
+  const cacheKey = `${hId}_${aId}`;
+  const cached = enrichCache.get(cacheKey);
+  if (cached) {
+    if (Date.now() - cached.ts < ENRICH_TTL) return { ...m, ...cached.data };
+    enrichCache.delete(cacheKey);
+  }
 
   const stats = m.statistics || [];
   const liveStats = {
@@ -60,9 +65,13 @@ async function enrichOne(m, key) {
     }
   }
 
+  if (enrichCache.size > 200) {
+    [...enrichCache.keys()].slice(0, 100).forEach(k => enrichCache.delete(k));
+  }
+
   const h2h = await fetchH2H(hId, aId, key);
   const enriched = { ...h2h, liveStats };
-  enrichCache.set(cacheKey, enriched);
+  enrichCache.set(cacheKey, { data: enriched, ts: Date.now() });
   return { ...m, ...enriched };
 }
 
@@ -198,7 +207,12 @@ export default async function handler(req, res) {
 
   // ── Optional enrichment ────────────────────────────────────────
   const toEnrich = filtered
-    .filter(m => m._src !== 'fd' && m.teams?.home?.id && m.teams?.away?.id && !enrichCache.has(m.fixture.id))
+    .filter(m => {
+      if (m._src === 'fd' || !m.teams?.home?.id || !m.teams?.away?.id) return false;
+      const ck = `${m.teams.home.id}_${m.teams.away.id}`;
+      const c = enrichCache.get(ck);
+      return !c || Date.now() - c.ts >= ENRICH_TTL;
+    })
     .slice(0, 5);
 
   if (toEnrich.length && key) {
