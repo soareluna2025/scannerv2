@@ -19,8 +19,9 @@ const LIVE_STATUS = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'INT']);
 const DONE_STATUS = new Set(['FT', 'AET', 'PEN']);
 
 // Stare în memorie
-const liveCache     = {}; // { [fixtureId]: { home_goals, away_goals, status, minute, lineupsFetched } }
-const prematchCache = {}; // { [fixtureId]: { ts, composite } }
+const liveCache         = {}; // { [fixtureId]: { home_goals, away_goals, status, minute, lineupsFetched } }
+const prematchCache     = {}; // { [fixtureId]: { ts, composite } }
+const _lastBroadcastSnap = {}; // { [fixtureId]: snap string } — pentru delta updates
 
 let _patternRunCount = 0;
 let _scanCounter = 0;
@@ -656,10 +657,37 @@ async function scanLive10s() {
       }).catch(() => {});
     }
 
-    // Broadcast WebSocket + cache pentru reconectări
-    global.lastLiveData = { matches: processedMatches, ts: Date.now() };
+    // ── Delta broadcast — full la fiecare 5min, delta când sunt schimbări ────
     if (typeof global.wsBroadcast === 'function') {
-      global.wsBroadcast('LIVE_UPDATE', global.lastLiveData);
+      const now = Date.now();
+      const isFullUpdate = !global._lastFullBroadcast ||
+                           (now - global._lastFullBroadcast) > 5 * 60 * 1000;
+
+      const changedMatches = processedMatches.filter(m => {
+        const fid = m.fixture?.id;
+        if (!fid) return false;
+        const snap = [m.goals?.home, m.goals?.away,
+                      m.fixture?.status?.elapsed, m.fixture?.status?.short].join('|');
+        if (_lastBroadcastSnap[fid] === snap) return false;
+        _lastBroadcastSnap[fid] = snap;
+        return true;
+      });
+
+      // Curăță snap-uri pentru meciuri terminate
+      const activeIds = new Set(processedMatches.map(m => m.fixture?.id));
+      Object.keys(_lastBroadcastSnap).forEach(id => {
+        if (!activeIds.has(Number(id))) delete _lastBroadcastSnap[id];
+      });
+
+      const liveData = { matches: processedMatches, ts: now };
+      global.lastLiveData = liveData;
+
+      if (isFullUpdate) {
+        global._lastFullBroadcast = now;
+        global.wsBroadcast('LIVE_UPDATE', liveData);
+      } else if (changedMatches.length > 0) {
+        global.wsBroadcast('LIVE_DELTA', { changed: changedMatches, ts: now });
+      }
     }
   } catch (e) {
     log(`scanLive10s error: ${e.message}`);

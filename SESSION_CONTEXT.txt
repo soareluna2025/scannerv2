@@ -1060,6 +1060,15 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
        LOSS dupa 3h fallback; evita false LOSS la disparitii temporare din API
   Commit: 45194d7
 
+[23.05.2026] - WebSocket optimizat complet (5 îmbunătățiri)
+  OPT1: server.js — heartbeat ping/pong la 30s, terminate client inactiv; browser trimite PING la 25s
+  OPT2: index.html — reconnect exponențial 1s→2s→4s→...→30s (reset la succes), înlocuiește fix 5s
+  OPT3: server.js — perMessageDeflate activat (threshold 1KB, level 3, clientNoContextTakeover)
+  OPT4: scanner.js — delta broadcast: FULL la fiecare 5min, LIVE_DELTA doar meciuri schimbate
+        _lastBroadcastSnap per fixture; index.html handler LIVE_DELTA: patch ST.ms in-place
+  OPT5: index.html — ws-indicator în header: dot verde/galben/roșu + label RT/.../OFF
+        updateWSState('connected'|'connecting'|'disconnected') apelat din onopen/onclose/disconnect
+
 [22.05.2026] - Backup automat PostgreSQL configurat
   Script:    scripts/backup-db.sh — dump 19 tabele gzip per zi, push la GitHub
   Repo:      soareluna2025/scannerv2-backups (privat — creat manual de utilizator)

@@ -47,6 +47,11 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   animation:pulse 1.5s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
 .clock{font-size:12px;color:var(--mu2);font-variant-numeric:tabular-nums;font-weight:600}
+.ws-indicator{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:700}
+.ws-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.ws-dot.connected{background:#22c55e;animation:pulse 2s infinite}
+.ws-dot.connecting{background:#f59e0b;animation:pulse 0.8s infinite}
+.ws-dot.disconnected{background:#ef4444}
 
 /* STATS BAR */
 .stats{display:flex;gap:0;overflow-x:auto;
@@ -695,6 +700,10 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     <div class="live-badge" id="live-badge" style="display:none">
       <div class="live-dot"></div>LIVE
     </div>
+    <div class="ws-indicator" id="ws-indicator" style="display:none">
+      <div class="ws-dot disconnected" id="ws-dot"></div>
+      <span id="ws-label">WS</span>
+    </div>
     <div class="clock" id="clock">--:--:--</div>
     <button class="settings-btn" onclick="settingsOpen()" title="Setări">⚙</button>
   </div>
@@ -1229,13 +1238,33 @@ function filterScore(el,score){
 var _autoIt=null;
 var _ws=null;
 var _wsReconnectTimer=null;
+var _wsHeartbeat=null;
+var _wsReconnectDelay=1000;
+var _wsMaxDelay=30000;
+
+function updateWSState(state){
+  var dot=document.getElementById('ws-dot');
+  var lbl=document.getElementById('ws-label');
+  var ind=document.getElementById('ws-indicator');
+  if(!dot)return;
+  ind.style.display='flex';
+  dot.className='ws-dot '+state;
+  lbl.textContent=state==='connected'?'RT':state==='connecting'?'...':'OFF';
+}
 
 function connectWS(){
   if(_ws&&(_ws.readyState===0||_ws.readyState===1))return;
+  updateWSState('connecting');
   var proto=location.protocol==='https:'?'wss':'ws';
   _ws=new WebSocket(proto+'://'+location.host);
   _ws.onopen=function(){
+    _wsReconnectDelay=1000;
     if(_wsReconnectTimer){clearTimeout(_wsReconnectTimer);_wsReconnectTimer=null;}
+    updateWSState('connected');
+    if(_wsHeartbeat)clearInterval(_wsHeartbeat);
+    _wsHeartbeat=setInterval(function(){
+      if(_ws&&_ws.readyState===WebSocket.OPEN)_ws.send(JSON.stringify({type:'PING'}));
+    },25000);
   };
   _ws.onmessage=function(ev){
     try{
@@ -1244,12 +1273,26 @@ function connectWS(){
         var _ed={};ST.ms.forEach(function(m){if(m.enrichData)_ed[m.fixture&&m.fixture.id]=m.enrichData;});
         ST.ms=msg.payload.matches.map(function(m){m._s=calcScore(m);var e=_ed[m.fixture&&m.fixture.id];if(e)m.enrichData=e;return m;});
         renderMatches();updateStats();trackWR();genUpdateBadge();
+      } else if(msg.type==='LIVE_DELTA'&&msg.payload&&Array.isArray(msg.payload.changed)){
+        var _ed={};ST.ms.forEach(function(m){if(m.enrichData)_ed[m.fixture&&m.fixture.id]=m.enrichData;});
+        msg.payload.changed.forEach(function(m){
+          m._s=calcScore(m);
+          var ed=_ed[m.fixture&&m.fixture.id];if(ed)m.enrichData=ed;
+          var idx=ST.ms.findIndex(function(x){return x.fixture&&x.fixture.id===(m.fixture&&m.fixture.id);});
+          if(idx>=0)ST.ms[idx]=m; else ST.ms.push(m);
+        });
+        renderMatches();updateStats();
+        if(msg.payload.ts)document.getElementById('s-upd').textContent=new Date(msg.payload.ts).toTimeString().slice(0,5);
       }
     }catch(_){}
   };
   _ws.onclose=function(){
+    _ws=null;
+    if(_wsHeartbeat){clearInterval(_wsHeartbeat);_wsHeartbeat=null;}
     if(ST.connected&&!_wsReconnectTimer){
-      _wsReconnectTimer=setTimeout(connectWS,5000);
+      updateWSState('connecting');
+      _wsReconnectTimer=setTimeout(function(){_wsReconnectTimer=null;connectWS();},_wsReconnectDelay);
+      _wsReconnectDelay=Math.min(_wsReconnectDelay*2,_wsMaxDelay);
     }
   };
   _ws.onerror=function(){_ws.close();};
@@ -1285,6 +1328,8 @@ function disconnect(){
   ST.connected=false;
   if(_ws){_ws.close();_ws=null;}
   if(_wsReconnectTimer){clearTimeout(_wsReconnectTimer);_wsReconnectTimer=null;}
+  if(_wsHeartbeat){clearInterval(_wsHeartbeat);_wsHeartbeat=null;}
+  _wsReconnectDelay=1000;
   clearInterval(_autoIt);
   sessionStorage.removeItem('wasConnected');
   document.getElementById('connect-area').style.display='';
@@ -1292,6 +1337,7 @@ function disconnect(){
   document.getElementById('btn-conn').classList.remove('connected');
   document.getElementById('live-body').style.display='none';
   document.getElementById('live-badge').style.display='none';
+  document.getElementById('ws-indicator').style.display='none';
   document.getElementById('stats-bar').style.display='none';
   document.getElementById('wr-bar').style.display='none';
   document.getElementById('page').style.top='56px';

@@ -114,14 +114,37 @@ const httpServer = app.listen(PORT, '0.0.0.0', async () => {
   loadModelWeights().catch(e => console.error('[weights] initial load failed:', e.message));
 });
 
-const wss = new WebSocketServer({ server: httpServer });
+const wss = new WebSocketServer({
+  server: httpServer,
+  perMessageDeflate: {
+    zlibDeflateOptions: { chunkSize: 1024, memLevel: 7, level: 3 },
+    zlibInflateOptions: { chunkSize: 10 * 1024 },
+    clientNoContextTakeover: true,
+    serverNoContextTakeover: true,
+    serverMaxWindowBits: 10,
+    concurrencyLimit: 10,
+    threshold: 1024,
+  },
+});
+
+const heartbeatInterval = setInterval(() => {
+  wss.clients.forEach(ws => {
+    if (ws.isAlive === false) return ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
 
 wss.on('connection', (ws) => {
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
+  ws.on('error', () => {});
   if (global.lastLiveData) {
     ws.send(JSON.stringify({ type: 'LIVE_UPDATE', payload: global.lastLiveData }));
   }
-  ws.on('error', () => {});
 });
+
+wss.on('close', () => clearInterval(heartbeatInterval));
 
 global.wsBroadcast = function (type, payload) {
   if (wss.clients.size === 0) return;
