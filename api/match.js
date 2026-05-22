@@ -1,5 +1,10 @@
 import { calcPoisson6x6, parseOddsItem, calcEV } from './calc-utils.js';
 import { query } from './db.js';
+import { fetchApiFootball } from './utils/fetch-api.js';
+
+const matchCache = new Map();
+const MATCH_CACHE_TTL        =      60_000; // 1 min — live matches
+const MATCH_CACHE_TTL_STATIC = 10 * 60_000; // 10 min — NS / FT
 
 function calcPoisson(hGames, aGames, h2h, hId) {
   const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
@@ -73,25 +78,58 @@ export default async function handler(req, res) {
   const hId      = Number(h);
   const aId      = Number(a);
   const bankroll = parseFloat(br) || 10;
-  const hdr      = { 'x-apisports-key': key };
+
+  // ── Cache check ───────────────────────────────────────────────
+  const cachedEntry = matchCache.get(id);
+  if (cachedEntry) {
+    const status = cachedEntry.data?.fixture?.fixture?.status?.short || 'NS';
+    const isLive = ['1H', '2H', 'ET', 'BT', 'P', 'LIVE'].includes(status);
+    const ttl    = isLive ? MATCH_CACHE_TTL : MATCH_CACHE_TTL_STATIC;
+    if (Date.now() - cachedEntry.ts < ttl) {
+      return res.status(200).json(cachedEntry.data);
+    }
+    matchCache.delete(id);
+  }
+
+  // Cache eviction
+  if (matchCache.size > 100) {
+    [...matchCache.keys()].slice(0, 50).forEach(k => matchCache.delete(k));
+  }
 
   try {
-    const [rFix, rLineups, rPlayers, rEvents, rHForm, rAForm, rH2H, rOdds, dbLogos] = await Promise.all([
-      fetch(`https://v3.football.api-sports.io/fixtures?id=${id}`, { headers: hdr }),
-      fetch(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${id}`, { headers: hdr }),
-      fetch(`https://v3.football.api-sports.io/fixtures/players?fixture=${id}`, { headers: hdr }),
-      fetch(`https://v3.football.api-sports.io/fixtures/events?fixture=${id}`, { headers: hdr }),
-      fetch(`https://v3.football.api-sports.io/fixtures?team=${h}&last=20&status=FT`, { headers: hdr }),
-      fetch(`https://v3.football.api-sports.io/fixtures?team=${a}&last=20&status=FT`, { headers: hdr }),
-      fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${h}-${a}&last=10`, { headers: hdr }),
-      fetch(`https://v3.football.api-sports.io/odds?fixture=${id}&bookmaker=8`, { headers: hdr }),
+    // ── DB fallback: h2h, form, standings ─────────────────────
+    const [dbH2H, dbHForm, dbAForm, dbOddsRows, dbLogos] = await Promise.all([
+      query('SELECT home_team_id, away_team_id, home_goals, away_goals, match_date FROM h2h WHERE (home_team_id=$1 AND away_team_id=$2) OR (home_team_id=$2 AND away_team_id=$1) ORDER BY match_date DESC LIMIT 10', [hId, aId]).catch(() => ({ rows: [] })),
+      query('SELECT home_team_id, away_team_id, home_goals, away_goals FROM fixtures_history WHERE (home_team_id=$1 OR away_team_id=$1) AND status_short=\'FT\' ORDER BY match_date DESC LIMIT 20', [hId]).catch(() => ({ rows: [] })),
+      query('SELECT home_team_id, away_team_id, home_goals, away_goals FROM fixtures_history WHERE (home_team_id=$1 OR away_team_id=$1) AND status_short=\'FT\' ORDER BY match_date DESC LIMIT 20', [aId]).catch(() => ({ rows: [] })),
+      query('SELECT *, bet_name AS market, value_name AS label, value_odd AS odd_value FROM odds WHERE fixture_id=$1 AND bookmaker_id=8', [Number(id)]).catch(() => ({ rows: [] })),
       query('SELECT team_id, logo FROM teams WHERE team_id = ANY($1)', [[hId, aId]]).catch(() => ({ rows: [] })),
     ]);
 
-    const [dFix, dLineups, dPlayers, dEvents, dHForm, dAForm, dH2H, dOdds] = await Promise.all([
-      rFix.json(), rLineups.json(), rPlayers.json(), rEvents.json(),
-      rHForm.json(), rAForm.json(), rH2H.json(), rOdds.json(),
+    const needH2H   = dbH2H.rows.length   < 3;
+    const needHForm = dbHForm.rows.length  < 3;
+    const needAForm = dbAForm.rows.length  < 3;
+    const needOdds  = dbOddsRows.rows.length === 0;
+
+    // ── Always fetch fixture details, lineups, players, events ─
+    const [rFix, rLineups, rPlayers, rEvents, rHForm, rAForm, rH2H, rOdds] = await Promise.all([
+      fetchApiFootball(`/fixtures?id=${id}`),
+      fetchApiFootball(`/fixtures/lineups?fixture=${id}`),
+      fetchApiFootball(`/fixtures/players?fixture=${id}`),
+      fetchApiFootball(`/fixtures/events?fixture=${id}`),
+      needHForm ? fetchApiFootball(`/fixtures?team=${h}&last=20&status=FT`) : null,
+      needAForm ? fetchApiFootball(`/fixtures?team=${a}&last=20&status=FT`) : null,
+      needH2H   ? fetchApiFootball(`/fixtures/headtohead?h2h=${h}-${a}&last=10`) : null,
+      needOdds  ? fetchApiFootball(`/odds?fixture=${id}&bookmaker=8`) : null,
     ]);
+
+    const [dFix, dLineups, dPlayers, dEvents] = await Promise.all([
+      rFix.json(), rLineups.json(), rPlayers.json(), rEvents.json(),
+    ]);
+    const dHForm = needHForm ? await rHForm.json() : null;
+    const dAForm = needAForm ? await rAForm.json() : null;
+    const dH2H   = needH2H  ? await rH2H.json()   : null;
+    const dOdds  = needOdds  ? await rOdds.json()  : null;
 
     const logoMap = Object.fromEntries((dbLogos.rows || []).map(r => [Number(r.team_id), r.logo]));
 
@@ -104,23 +142,48 @@ export default async function handler(req, res) {
     const players = dPlayers.response || [];
     const events  = dEvents.response  || [];
 
-    const hGames = (dHForm.response || []).filter(m => m.teams?.home?.id === hId).slice(0, 10);
-    const aGames = (dAForm.response || []).filter(m => m.teams?.away?.id === aId).slice(0, 10);
-    const h2h    = (dH2H.response   || []).slice(0, 10);
+    // Resolve h2h
+    const h2hFromDB = dbH2H.rows.map(r => ({
+      teams: { home: { id: r.home_team_id }, away: { id: r.away_team_id } },
+      goals: { home: r.home_goals ?? 0, away: r.away_goals ?? 0 },
+      fixture: { date: r.match_date },
+    }));
+    const h2h = needH2H
+      ? (dH2H?.response || []).slice(0, 10)
+      : h2hFromDB;
 
+    // Resolve form
+    const toFormMatch = r => ({
+      teams: { home: { id: r.home_team_id }, away: { id: r.away_team_id } },
+      goals: { home: r.home_goals ?? 0, away: r.away_goals ?? 0 },
+    });
+    const hGames = needHForm
+      ? (dHForm?.response || []).filter(m => m.teams?.home?.id === hId).slice(0, 10)
+      : dbHForm.rows.map(toFormMatch).slice(0, 10);
+    const aGames = needAForm
+      ? (dAForm?.response || []).filter(m => m.teams?.away?.id === aId).slice(0, 10)
+      : dbAForm.rows.map(toFormMatch).slice(0, 10);
+
+    // Resolve odds
     let oddsRaw = null;
-    const oddsItem = (dOdds.response || [])[0];
-    if (oddsItem) {
-      oddsRaw = parseOddsItem(oddsItem);
+    if (!needOdds && dbOddsRows.rows.length > 0) {
+      const betsMap = {};
+      for (const r of dbOddsRows.rows) {
+        if (!betsMap[r.market]) betsMap[r.market] = [];
+        betsMap[r.market].push({ value: r.label, odd: String(r.odd_value) });
+      }
+      oddsRaw = parseOddsItem({
+        bookmakers: [{ id: 8, name: 'Bet365', bets: Object.entries(betsMap).map(([name, values]) => ({ name, values })) }],
+      });
+    } else if (needOdds && dOdds) {
+      const oddsItem = (dOdds.response || [])[0];
+      if (oddsItem) oddsRaw = parseOddsItem(oddsItem);
     }
     if (!oddsRaw && fixture?.league?.id) {
       try {
-        const rOdds2 = await fetch(
-          `https://v3.football.api-sports.io/odds?league=${fixture.league.id}&season=${new Date().getFullYear()}&bookmaker=8`,
-          { headers: hdr }
-        );
-        const dOdds2 = await rOdds2.json();
-        const item2  = (dOdds2.response || []).find(x => x.fixture?.id === Number(id));
+        const r2 = await fetchApiFootball(`/odds?league=${fixture.league.id}&season=${new Date().getFullYear()}&bookmaker=8`);
+        const d2 = await r2.json();
+        const item2 = (d2.response || []).find(x => x.fixture?.id === Number(id));
         if (item2) oddsRaw = parseOddsItem(item2);
       } catch (_) {}
     }
@@ -170,7 +233,9 @@ export default async function handler(req, res) {
       }))
     ).sort((a, b) => (b.rating || 0) - (a.rating || 0));
 
-    res.status(200).json({ fixture, lineups, players: flatPlayers, events, enrich });
+    const responseData = { fixture, lineups, players: flatPlayers, events, enrich };
+    matchCache.set(id, { data: responseData, ts: Date.now() });
+    res.status(200).json(responseData);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

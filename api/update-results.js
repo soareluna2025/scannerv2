@@ -2,6 +2,9 @@
 // Fetches pending predictions (no result yet) and fills in real match outcomes.
 
 import { query } from './db.js';
+import { fetchApiFootball } from './utils/fetch-api.js';
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 export default async function handler(req, res) {
   const afKey = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
@@ -10,10 +13,11 @@ export default async function handler(req, res) {
 
   try {
     // Select predictions without results where match_date has passed
+    // M4: Limit 50 per run — excess processat la rularea urmatoare (02:00)
     const pendingRes = await query(
       `SELECT id, fixture_id FROM predictions
        WHERE result_over15 IS NULL AND match_date < NOW()
-       LIMIT 100`
+       LIMIT 50`
     );
 
     const pending = pendingRes.rows;
@@ -22,11 +26,10 @@ export default async function handler(req, res) {
     }
 
     let updated = 0;
-    const hdr = { 'x-apisports-key': afKey };
 
     for (const pred of pending) {
       try {
-        const fr  = await fetch(`https://v3.football.api-sports.io/fixtures?id=${pred.fixture_id}`, { headers: hdr });
+        const fr  = await fetchApiFootball(`/fixtures?id=${pred.fixture_id}`);
         const fd  = await fr.json();
         const fix = fd.response?.[0];
         if (!fix) continue;
@@ -85,6 +88,8 @@ export default async function handler(req, res) {
             [hg + ag, pred.fixture_id]).catch(() => {});
         }
       } catch (_) { /* skip fixture, try next */ }
+      // M4: 500ms pauza intre requesturi pentru a nu satura API-ul
+      await sleep(500);
     }
 
     return res.status(200).json({ updated, total: pending.length });

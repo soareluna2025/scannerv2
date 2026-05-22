@@ -1,11 +1,9 @@
 import { query } from '../db.js';
 import { calcPlayerScore } from '../calc-utils.js';
+import { fetchApiFootball } from '../utils/fetch-api.js';
 
-async function collectFixture(fixtureId, key) {
-  const r = await fetch(
-    `https://v3.football.api-sports.io/fixtures/players?fixture=${fixtureId}`,
-    { headers: { 'x-apisports-key': key } }
-  );
+async function collectFixture(fixtureId) {
+  const r = await fetchApiFootball(`/fixtures/players?fixture=${fixtureId}`);
   const data = await r.json();
   const teams = data.response || [];
   if (!teams.length) return 0;
@@ -74,11 +72,8 @@ async function collectFixture(fixtureId, key) {
   return rows.length;
 }
 
-async function collectMatchStats(fixtureId, homeTeamId, key) {
-  const r = await fetch(
-    `https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,
-    { headers: { 'x-apisports-key': key } }
-  );
+async function collectMatchStats(fixtureId, homeTeamId) {
+  const r = await fetchApiFootball(`/fixtures/statistics?fixture=${fixtureId}`);
   const data = await r.json();
   const teamStats = data.response || [];
   if (!teamStats.length) return 0;
@@ -134,11 +129,8 @@ async function collectMatchStats(fixtureId, homeTeamId, key) {
   return teamStats.length;
 }
 
-async function collectMatchEvents(fixtureId, key) {
-  const r = await fetch(
-    `https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,
-    { headers: { 'x-apisports-key': key } }
-  );
+async function collectMatchEvents(fixtureId) {
+  const r = await fetchApiFootball(`/fixtures/events?fixture=${fixtureId}`);
   const data = await r.json();
   const events = data.response || [];
   if (!events.length) return 0;
@@ -171,11 +163,8 @@ async function collectMatchEvents(fixtureId, key) {
   return events.length;
 }
 
-async function collectOdds(fixtureId, key) {
-  const r = await fetch(
-    `https://v3.football.api-sports.io/odds?fixture=${fixtureId}&bookmaker=8`,
-    { headers: { 'x-apisports-key': key } }
-  );
+async function collectOdds(fixtureId) {
+  const r = await fetchApiFootball(`/odds?fixture=${fixtureId}&bookmaker=8`);
   const data = await r.json();
   const oddsResponse = data.response?.[0] || null;
   if (!oddsResponse) return 0;
@@ -225,10 +214,7 @@ export default async function handler(req, res) {
 
   try {
     // Get today's FT fixtures
-    const fxRes = await fetch(
-      `https://v3.football.api-sports.io/fixtures?date=${today}&status=FT`,
-      { headers: { 'x-apisports-key': key } }
-    );
+    const fxRes = await fetchApiFootball(`/fixtures?date=${today}&status=FT`);
     const fxData = await fxRes.json();
     const fixtures = fxData.response || [];
 
@@ -257,22 +243,22 @@ export default async function handler(req, res) {
       const homeTeamId = fx.teams?.home?.id;
 
       try {
-        const count = await collectFixture(fixtureId, key);
+        const count = await collectFixture(fixtureId);
         totalPlayers += count;
       } catch (e) { console.error('collectFixture error:', fixtureId, e.message); }
 
       try {
-        const count = await collectMatchStats(fixtureId, homeTeamId, key);
+        const count = await collectMatchStats(fixtureId, homeTeamId);
         totalMatchStats += count;
       } catch (_) {}
 
       try {
-        const count = await collectMatchEvents(fixtureId, key);
+        const count = await collectMatchEvents(fixtureId);
         totalEvents += count;
       } catch (_) {}
 
       try {
-        const count = await collectOdds(fixtureId, key);
+        const count = await collectOdds(fixtureId);
         totalOdds += count;
       } catch (_) {}
 

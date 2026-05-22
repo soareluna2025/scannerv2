@@ -313,6 +313,76 @@ async function upsertLeaguePattern(row) {
   );
 }
 
+// M5: Save FT match to fixtures_history and update form_stats for both teams
+async function saveFormStats(m) {
+  const fid    = m.fixture?.id;
+  const hid    = m.teams?.home?.id;
+  const aid    = m.teams?.away?.id;
+  const lid    = m.league?.id;
+  const hg     = m.goals?.home ?? null;
+  const ag     = m.goals?.away ?? null;
+  const dt     = m.fixture?.date || new Date().toISOString();
+  const season = new Date().getFullYear();
+
+  if (!fid || !hid || !aid || hg === null || ag === null) return;
+
+  try {
+    await query(`
+      INSERT INTO fixtures_history
+        (fixture_id, league_id, season,
+         home_team_id, home_team_name, away_team_id, away_team_name,
+         home_goals, away_goals, status_short, match_date)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'FT',$10)
+      ON CONFLICT (fixture_id) DO UPDATE SET
+        home_goals=EXCLUDED.home_goals, away_goals=EXCLUDED.away_goals, status_short='FT'
+    `, [fid, lid, season, hid, m.teams?.home?.name || '', aid, m.teams?.away?.name || '', hg, ag, dt]);
+
+    const hr = await query(`
+      SELECT
+        string_agg(CASE WHEN home_goals>away_goals THEN 'W' WHEN home_goals=away_goals THEN 'D' ELSE 'L' END,
+                   '' ORDER BY match_date DESC) AS last5,
+        AVG(home_goals)::NUMERIC(5,2) AS avg_scored,
+        AVG(away_goals)::NUMERIC(5,2) AS avg_conceded
+      FROM (SELECT home_goals,away_goals,match_date FROM fixtures_history
+            WHERE home_team_id=$1 AND status_short='FT' AND home_goals IS NOT NULL
+            ORDER BY match_date DESC LIMIT 5) sub
+    `, [hid]);
+    if (hr.rows[0]?.avg_scored !== null) {
+      const r = hr.rows[0];
+      await query(`
+        INSERT INTO form_stats (team_id,league_id,season,last5_home,avg_scored_home,avg_conceded_home,updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,NOW())
+        ON CONFLICT (team_id,league_id,season) DO UPDATE SET
+          last5_home=EXCLUDED.last5_home, avg_scored_home=EXCLUDED.avg_scored_home,
+          avg_conceded_home=EXCLUDED.avg_conceded_home, updated_at=NOW()
+      `, [hid, lid, season, r.last5, r.avg_scored, r.avg_conceded]);
+    }
+
+    const ar = await query(`
+      SELECT
+        string_agg(CASE WHEN away_goals>home_goals THEN 'W' WHEN away_goals=home_goals THEN 'D' ELSE 'L' END,
+                   '' ORDER BY match_date DESC) AS last5,
+        AVG(away_goals)::NUMERIC(5,2) AS avg_scored,
+        AVG(home_goals)::NUMERIC(5,2) AS avg_conceded
+      FROM (SELECT home_goals,away_goals,match_date FROM fixtures_history
+            WHERE away_team_id=$1 AND status_short='FT' AND away_goals IS NOT NULL
+            ORDER BY match_date DESC LIMIT 5) sub
+    `, [aid]);
+    if (ar.rows[0]?.avg_scored !== null) {
+      const r = ar.rows[0];
+      await query(`
+        INSERT INTO form_stats (team_id,league_id,season,last5_away,avg_scored_away,avg_conceded_away,updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,NOW())
+        ON CONFLICT (team_id,league_id,season) DO UPDATE SET
+          last5_away=EXCLUDED.last5_away, avg_scored_away=EXCLUDED.avg_scored_away,
+          avg_conceded_away=EXCLUDED.avg_conceded_away, updated_at=NOW()
+      `, [aid, lid, season, r.last5, r.avg_scored, r.avg_conceded]);
+    }
+  } catch (e) {
+    log(`saveFormStats ${fid}: ${e.message}`);
+  }
+}
+
 async function saveLiveStats(m, f, status) {
   await query(
     `INSERT INTO live_stats
@@ -423,6 +493,7 @@ async function scanLive10s() {
           const fa = m.goals?.away ?? 0;
           resolveOutcome(id, (fh + fa) >= 2 ? 'WIN' : 'LOSS', fh, fa)
             .catch(e => log(`resolveOutcome ${id}: ${e.message}`));
+          saveFormStats(m).catch(e => log(`saveFormStats ${id}: ${e.message}`)); // M5
           delete liveCache[id];
         }
         continue;

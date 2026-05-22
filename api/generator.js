@@ -1,4 +1,5 @@
 import { query } from './db.js';
+import { fetchApiFootball } from './utils/fetch-api.js';
 
 const KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 const LIVE_S = new Set(['1H','HT','2H','ET','BT','P','SUSP','INT','LIVE']);
@@ -27,12 +28,25 @@ export default async function handler(req, res) {
     let rawMatches = [];
 
     if (mode === 'live') {
-      const r = await fetch('https://v3.football.api-sports.io/fixtures?live=all', {
-        headers: { 'x-apisports-key': KEY },
-      });
+      const r = await fetchApiFootball('/fixtures?live=all');
       const d = await r.json();
       rawMatches = (d.response || []).filter(m => LIVE_S.has(m.fixture?.status?.short))
         .map(m => ({ ...m, _venue_id: m.fixture?.venue?.id || null }));
+
+      // M7: Enrich high-priority live matches with fresh statistics
+      const priorityMatches = rawMatches.filter(m => {
+        const min = m.fixture?.status?.elapsed ?? 0;
+        const hg  = m.goals?.home ?? 0;
+        const ag  = m.goals?.away ?? 0;
+        return min > 45 || (hg + ag === 0 && min >= 30);
+      }).slice(0, 10);
+      await Promise.allSettled(priorityMatches.map(async m => {
+        try {
+          const sr = await fetchApiFootball(`/fixtures/statistics?fixture=${m.fixture.id}`);
+          const sd = await sr.json();
+          if (Array.isArray(sd.response) && sd.response.length) m.statistics = sd.response;
+        } catch (_) {}
+      }));
     } else {
       const now = new Date();
       const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);

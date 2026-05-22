@@ -1,19 +1,7 @@
 import { calcPoisson6x6, parseOddsItem, calcEV } from './calc-utils.js';
 import { query } from './db.js';
 import { logPrediction } from './log-prediction.js';
-
-// One-time migration: ensure pre_match_snapshots has outcome + composite_score columns
-query(`ALTER TABLE pre_match_snapshots
-  ADD COLUMN IF NOT EXISTS outcome TEXT,
-  ADD COLUMN IF NOT EXISTS composite_score NUMERIC(5,2)`).catch(() => {});
-
-async function fetchWithRetry(url, opts, attempts = 2) {
-  for (let i = 0; i < attempts; i++) {
-    try { return await fetch(url, opts); } catch (e) {
-      if (i === attempts - 1) throw e;
-    }
-  }
-}
+import { fetchApiFootball } from './utils/fetch-api.js';
 
 function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
   if (!elapsed || elapsed <= 0) return { lambda: lambdaBase, dynamic: false };
@@ -317,12 +305,17 @@ async function getInjuriesFromDB(fixtureId) {
   } catch (_) { return []; }
 }
 
-async function fetchAndStoreInjuries(fixtureId, key) {
+async function fetchAndStoreInjuries(fixtureId) {
   try {
-    const r = await fetch(
-      `https://v3.football.api-sports.io/injuries?fixture=${fixtureId}`,
-      { headers: { 'x-apisports-key': key } }
+    // M6: verifica DB înainte de API — skip dacă există date mai recente de 6h
+    const existing = await query(
+      `SELECT COUNT(*) AS cnt, MAX(updated_at) AS last_update FROM injuries WHERE fixture_id = $1`,
+      [fixtureId]
     );
+    const lastUpdate = existing.rows[0]?.last_update;
+    if (lastUpdate && new Date(lastUpdate) > new Date(Date.now() - 6 * 60 * 60 * 1000)) return;
+
+    const r = await fetchApiFootball(`/injuries?fixture=${fixtureId}`);
     const data = await r.json();
     const list = data.response || [];
     for (const item of list) {
@@ -463,10 +456,10 @@ export default async function handler(req, res) {
     const needOdds  = fid && sbOddsRows.length === 0;
 
     const [apiFbHForm, apiFbAForm, apiFbH2H, apiFbOdds] = await Promise.all([
-      needHForm ? fetchWithRetry(`https://v3.football.api-sports.io/fixtures?team=${h}&last=20&status=FT`, { headers: hdr }).then(r => r.json()) : null,
-      needAForm ? fetchWithRetry(`https://v3.football.api-sports.io/fixtures?team=${a}&last=20&status=FT`, { headers: hdr }).then(r => r.json()) : null,
-      needH2H   ? fetchWithRetry(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${h}-${a}&last=10`, { headers: hdr }).then(r => r.json()) : null,
-      needOdds  ? fetchWithRetry(`https://v3.football.api-sports.io/odds?fixture=${fid}`, { headers: hdr }).then(r => r.json()) : null,
+      needHForm ? fetchApiFootball(`/fixtures?team=${h}&last=20&status=FT`).then(r => r.json()) : null,
+      needAForm ? fetchApiFootball(`/fixtures?team=${a}&last=20&status=FT`).then(r => r.json()) : null,
+      needH2H   ? fetchApiFootball(`/fixtures/headtohead?h2h=${h}-${a}&last=10`).then(r => r.json()) : null,
+      needOdds  ? fetchApiFootball(`/odds?fixture=${fid}`).then(r => r.json()) : null,
     ]);
 
     // Resolve final datasets
@@ -496,10 +489,7 @@ export default async function handler(req, res) {
       // League-level fallback
       if (!oddsRaw && lgid) {
         try {
-          const r5 = await fetch(
-            `https://v3.football.api-sports.io/odds?league=${lgid}&season=${new Date().getFullYear()}`,
-            { headers: hdr }
-          );
+          const r5 = await fetchApiFootball(`/odds?league=${lgid}&season=${new Date().getFullYear()}`);
           const d5 = await r5.json();
           const item2 = (d5.response || []).find(x => x.fixture?.id === Number(fid));
           if (item2) oddsRaw = parseOddsItem(item2);
@@ -601,7 +591,7 @@ export default async function handler(req, res) {
 
     // Fire-and-forget: colectare injuries + prediction save + pre_match snapshot
     if (fid) {
-      fetchAndStoreInjuries(Number(fid), key);
+      fetchAndStoreInjuries(Number(fid));
 
       // Pre-match snapshot for back-testing (only when not live)
       if (!parseInt(elapsed)) {
@@ -638,10 +628,13 @@ export default async function handler(req, res) {
             module: 'OVER15',
             predicted_value: payload.over15Prob, threshold_used: 65,
             lambda_home: payload.lambdaHome, lambda_away: payload.lambdaAway,
-            layer1: payload.layer1 ?? null, layer2: payload.layer2 ?? null,
-            layer3: payload.layer3 ?? null, layer4: payload.layer4 ?? null,
-            layer5: payload.layer5 ?? null, layer6: payload.layer6 ?? null,
-            layer7: payload.layer7 ?? null,
+            layer1: payload.breakdown?.poisson     ?? null,
+            layer2: payload.breakdown?.forma        ?? null,
+            layer3: payload.breakdown?.h2h          ?? null,
+            layer4: payload.breakdown?.live         ?? null,
+            layer5: payload.breakdown?.ev           ?? null,
+            layer6: payload.breakdown?.consistenta  ?? null,
+            layer7: payload.breakdown?.putereEchipe ?? null,
           }).catch(() => {});
           logPrediction({
             fixture_id: Number(fid), league_id: lgid ? Number(lgid) : null,
@@ -660,10 +653,13 @@ export default async function handler(req, res) {
               module: 'CONFIDENCE',
               predicted_value: payload.confidenceScore, threshold_used: 70,
               lambda_home: payload.lambdaHome, lambda_away: payload.lambdaAway,
-              layer1: payload.layer1 ?? null, layer2: payload.layer2 ?? null,
-              layer3: payload.layer3 ?? null, layer4: payload.layer4 ?? null,
-              layer5: payload.layer5 ?? null, layer6: payload.layer6 ?? null,
-              layer7: payload.layer7 ?? null,
+              layer1: payload.breakdown?.poisson     ?? null,
+              layer2: payload.breakdown?.forma        ?? null,
+              layer3: payload.breakdown?.h2h          ?? null,
+              layer4: payload.breakdown?.live         ?? null,
+              layer5: payload.breakdown?.ev           ?? null,
+              layer6: payload.breakdown?.consistenta  ?? null,
+              layer7: payload.breakdown?.putereEchipe ?? null,
             }).catch(() => {});
           }
         }

@@ -4,6 +4,7 @@
 
 import { query } from '../db.js';
 import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
+import { fetchApiFootball } from '../utils/fetch-api.js';
 
 const PRIORITY_LEAGUES = [...ALLOWED_LEAGUE_IDS];
 
@@ -13,10 +14,8 @@ const _y = new Date().getFullYear();
 const _m = new Date().getMonth(); // 0=ian
 const SEASON = _m < 7 ? _y - 1 : _y; // înainte de august → sezon precedent
 
-async function fetchAPI(endpoint, key) {
-  const res = await fetch(`https://v3.football.api-sports.io${endpoint}`, {
-    headers: { 'x-apisports-key': key },
-  });
+async function fetchAPI(endpoint) {
+  const res = await fetchApiFootball(endpoint);
   const data = await res.json();
   return data.response || [];
 }
@@ -50,7 +49,7 @@ export default async function handler(req, res) {
     for (const leagueId of PRIORITY_LEAGUES) {
 
       try {
-        const standings = await fetchAPI(`/standings?league=${leagueId}&season=${SEASON}`, key);
+        const standings = await fetchAPI(`/standings?league=${leagueId}&season=${SEASON}`);
         if (!standings.length) continue;
 
         const league = standings[0]?.league;

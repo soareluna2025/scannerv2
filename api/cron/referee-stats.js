@@ -3,6 +3,7 @@
 // Rulează zilnic la 04:00 — upsert FT fixtures din API, calcul SQL local
 
 import { query } from '../db.js';
+import { fetchApiFootball } from '../utils/fetch-api.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -18,7 +19,6 @@ export default async function handler(req, res) {
   const key = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
   if (!key) return res.status(500).json({ error: 'API_FOOTBALL_KEY neconfigurat' });
 
-  const hdr   = { 'x-apisports-key': key };
   const start = Date.now();
 
   try {
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     let apiFetched = 0;
     for (const date of dates) {
       try {
-        const r    = await fetch(`https://v3.football.api-sports.io/fixtures?date=${date}`, { headers: hdr });
+        const r    = await fetchApiFootball(`/fixtures?date=${date}`);
         const data = await r.json();
         for (const fix of data.response || []) {
           const fid = fix.fixture?.id;

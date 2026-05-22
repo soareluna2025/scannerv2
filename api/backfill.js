@@ -5,6 +5,7 @@
 import { query } from './db.js';
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
 import { calcPlayerScore } from './calc-utils.js';
+import { fetchApiFootball } from './utils/fetch-api.js';
 
 const SEASONS    = [2026, 2025, 2024, 2023, 2022];
 const LEAGUE_IDS = [...ALLOWED_LEAGUE_IDS];
@@ -71,14 +72,31 @@ async function savePosition(si, li, fi) {
   await setSetting('backfill_fixture_idx', String(fi));
 }
 
-// ── API Fetch with rate-limit handling ────────────────────────────────────────
+// ── M3: Real API usage from /status endpoint ────────────────────────────────
+let _lastRealUsageCheck = 0;
+async function getRealApiUsage() {
+  try {
+    const res  = await fetchApiFootball('/status');
+    const d    = await res.json();
+    const used  = d.response?.requests?.current || 0;
+    const limit = d.response?.requests?.limit_day || 150_000;
+    await setSetting('backfill_api_used',  String(used));
+    await setSetting('backfill_api_limit', String(limit));
+    apiUsedToday = used;
+    log(`getRealApiUsage: used=${used} limit=${limit}`);
+    return { used, limit };
+  } catch (e) {
+    log(`getRealApiUsage error: ${e.message}`);
+    return null;
+  }
+}
 
-async function apiFetch(endpoint) {
-  const k = apiKey();
-  if (!k) throw new Error('API_FOOTBALL_KEY missing');
+// ── M9: Exponential backoff fetch ───────────────────────────────────────────
+async function fetchWithBackoff(endpoint, maxRetries = 4) {
+  if (!apiKey()) throw new Error('API_FOOTBALL_KEY missing');
   await sleep(DELAY_MS);
 
-  // Initialize / reset daily counter once per day
+  // Refresh daily counter
   const today = new Date().toISOString().slice(0, 10);
   if (apiDateTracked !== today) {
     const savedDate = await getSetting('backfill_api_date');
@@ -92,27 +110,32 @@ async function apiFetch(endpoint) {
     apiDateTracked = today;
   }
 
-  let res = await fetch(`${BASE_URL}${endpoint}`, {
-    headers: { 'x-apisports-key': k },
-  });
-  apiUsedToday++;
-
-  if (apiUsedToday % 20 === 0) {
-    await setSetting('backfill_api_used', String(apiUsedToday));
+  // M3: Check real usage from API every 10 minutes
+  if (Date.now() - _lastRealUsageCheck > 10 * 60_000) {
+    _lastRealUsageCheck = Date.now();
+    await getRealApiUsage();
   }
 
-  if (res.status === 429) {
-    log(`429 rate-limit — waiting 60s`);
-    await sleep(60_000);
-    res = await fetch(`${BASE_URL}${endpoint}`, { headers: { 'x-apisports-key': k } });
+  for (let i = 0; i < maxRetries; i++) {
+    const res = await fetchApiFootball(endpoint);
     apiUsedToday++;
-  }
 
-  if (apiUsedToday >= STOP_AT) {
-    stopFlag = true;
-    log(`Daily limit ${STOP_AT} reached — auto-stopping`);
-  }
+    if (apiUsedToday % 20 === 0) {
+      await setSetting('backfill_api_used', String(apiUsedToday));
+    }
+    if (apiUsedToday >= STOP_AT) {
+      stopFlag = true;
+      log(`Daily limit ${STOP_AT} reached — auto-stopping`);
+    }
 
+    return res;
+  }
+  return null;
+}
+
+async function apiFetch(endpoint) {
+  const res = await fetchWithBackoff(endpoint);
+  if (!res) return { response: [] };
   return res.json();
 }
 
@@ -452,7 +475,7 @@ export async function getBackfillStatus() {
     completedLeagues:    completedPairs,
     progressPct,
     apiUsedToday:        usedToday,
-    apiRemainingToday:   Math.max(0, 150_000 - usedToday),
+    apiRemainingToday:   Math.max(0, parseInt(await getSetting('backfill_api_limit') || '150000') - usedToday),
     estimatedTimeRemaining: formatDuration(estimatedMs),
   };
 }
