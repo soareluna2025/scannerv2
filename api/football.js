@@ -1,4 +1,5 @@
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
+import { isAllowedMatch } from './utils/league-filter.js';
 
 function log(msg) {
   console.log(`[football] ${new Date().toISOString()} ${msg}`);
@@ -109,40 +110,9 @@ export default async function handler(req, res) {
   const passedStatus = raw.filter(m => LIVE_STATUSES.has(m.fixture?.status?.short));
   log(`af status-filter: ${passedStatus.length}/${raw.length}`);
 
-  // ── Filters ────────────────────────────────────────────────────
-  const WOMEN_RE = /women|feminin|femenin|ladies|female|w league|nwsl|wsl|vrouwen|dames|frauen|damen|femmes|femminile|feminino|\bW\b/i;
-  const LOWER_DIV_RE = /\b[3-9]\.\s*(liga|division|div)\b|\bUSL League Two\b|\bLeague Two\b|\bOberliga\b|\bLandesliga\b|\bKreisliga\b|\bBezirksliga\b|\bVerbandsliga\b|\bVorbandsliga\b/i;
-  const YOUTH_RE = /\bU-?1[6-9]\b|\bU-?2[0-3]\b|\bUnder.?1[6-9]\b|\bUnder.?2[0-3]\b/i;
-
-  let cntWomen = 0, cntLowerDiv = 0, cntYouth = 0, cntWhitelist = 0;
-
-  const filtered = passedStatus.filter(m => {
-    const ln = m.league?.name || '';
-    const hn = m.teams?.home?.name || '';
-    const an = m.teams?.away?.name || '';
-    if (WOMEN_RE.test(ln))                                            { cntWomen++;    return false; }
-    if (LOWER_DIV_RE.test(ln))                                        { cntLowerDiv++; return false; }
-    if (YOUTH_RE.test(ln) || YOUTH_RE.test(hn) || YOUTH_RE.test(an)) { cntYouth++;    return false; }
-    if (!ALLOWED_LEAGUE_IDS.has(Number(m.league?.id)))                { cntWhitelist++; return false; }
-    return true;
-  });
-
-  log(`filters: women=${cntWomen} lowerDiv=${cntLowerDiv} youth=${cntYouth} whitelist=${cntWhitelist} → kept=${filtered.length}/${passedStatus.length}`);
-
-  if (cntWhitelist > 0) {
-    const blockedLeagues = passedStatus.filter(m =>
-      !WOMEN_RE.test(m.league?.name || '') &&
-      !LOWER_DIV_RE.test(m.league?.name || '') &&
-      !ALLOWED_LEAGUE_IDS.has(Number(m.league?.id))
-    );
-    const ids = [...new Map(blockedLeagues.map(m => [
-      m.league?.id,
-      `${m.league?.id}:"${m.league?.name}" (${m.league?.country})`,
-    ])).values()];
-    if (ids.length) log(`whitelist BLOCKED: ${ids.join(' | ')}`);
-  }
-
-  log(`final: ${filtered.length}`);
+  // ── Filters — sistem centralizat din utils/league-filter.js ────
+  const filtered = passedStatus.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
+  log(`[Filter] ${passedStatus.length} meciuri → ${filtered.length} după filtrare`);
 
   // ── Optional enrichment ────────────────────────────────────────
   const toEnrich = filtered

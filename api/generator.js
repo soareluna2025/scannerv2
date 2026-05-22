@@ -1,5 +1,7 @@
 import { query } from './db.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
+import { ALLOWED_LEAGUE_IDS } from './leagues.js';
+import { isAllowedMatch } from './utils/league-filter.js';
 
 const KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 const LIVE_S = new Set(['1H','HT','2H','ET','BT','P','SUSP','INT','LIVE']);
@@ -90,6 +92,9 @@ export default async function handler(req, res) {
         };
       });
     }
+
+    // Filtru centralizat — elimină feminin/tineret/ligi inferioare
+    rawMatches = rawMatches.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
 
     if (!rawMatches.length) return res.json({ ok: true, mode, count: 0, matches: [] });
 

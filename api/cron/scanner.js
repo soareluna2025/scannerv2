@@ -10,6 +10,8 @@
 
 import { query } from '../db.js';
 import { logPrediction } from '../log-prediction.js';
+import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
+import { isAllowedMatch } from '../utils/league-filter.js';
 
 const FOOTBALL_KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
@@ -459,8 +461,9 @@ async function scanLive10s() {
   if (!FOOTBALL_KEY) return;
   _scanCounter++;
   try {
-    const raw = await fetchWithRetry('/fixtures?live=all');
-    log(`live10s: ${raw.length} matches from API`);
+    const rawAll = await fetchWithRetry('/fixtures?live=all');
+    const raw = rawAll.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
+    log(`live10s: ${rawAll.length} din API → ${raw.length} după filtrare`);
 
     // Prefetch real form goals per team (cached 1h in formCache)
     const matchFd = {};

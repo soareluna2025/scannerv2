@@ -1,13 +1,10 @@
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
 import { query } from './db.js';
+import { isAllowedMatch } from './utils/league-filter.js';
 
 function log(msg) {
   console.log(`[today] ${new Date().toISOString()} ${msg}`);
 }
-
-const WOMEN_RE     = /women|feminin|femenin|ladies|female|w league|nwsl|wsl/i;
-const LOWER_DIV_RE = /\b[3-9]\.\s*(liga|division|div)\b|\bUSL League Two\b|\bLeague Two\b/i;
-const YOUTH_RE     = /\bU-?1[6-9]\b|\bU-?2[0-3]\b|\bUnder.?1[6-9]\b|\bUnder.?2[0-3]\b/i;
 
 function dateStr(offsetDays) {
   const d = new Date();
@@ -116,26 +113,16 @@ export default async function handler(req, res) {
         };
       });
 
-      const afterWomen = raw.filter(m => !WOMEN_RE.test(m.league?.name || ''));
-      const afterDiv   = afterWomen.filter(m => !LOWER_DIV_RE.test(m.league?.name || ''));
-      const afterYouth = afterDiv.filter(m =>
-        !YOUTH_RE.test(m.league?.name || '') &&
-        !YOUTH_RE.test(m.teams?.home?.name || '') &&
-        !YOUTH_RE.test(m.teams?.away?.name || '')
-      );
-
-      log(`final (db): ${afterYouth.length}`);
+      const allowed = raw.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
+      log(`[Filter] ${raw.length} meciuri → ${allowed.length} după filtrare (db)`);
 
       return res.status(200).json({
-        response: afterYouth.sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date)),
+        response: allowed.sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date)),
         _debug: {
-          source:        'postgres',
-          rawTotal:      dbFixtures.length,
-          afterLeague:   afterLeague.length,
-          afterWomen:    afterWomen.length,
-          afterLowerDiv: afterDiv.length,
-          afterYouth:    afterYouth.length,
-          final:         afterYouth.length,
+          source:      'postgres',
+          rawTotal:    dbFixtures.length,
+          afterLeague: afterLeague.length,
+          final:       allowed.length,
         },
       });
     }
@@ -181,23 +168,10 @@ export default async function handler(req, res) {
     });
     log(`raw total (deduped, 24h window): ${raw.length}`);
 
-    const afterLeague = raw.filter(m => ALLOWED_LEAGUE_IDS.has(Number(m.league?.id)));
-    log(`after league filter: ${afterLeague.length}/${raw.length} (removed ${raw.length - afterLeague.length})`);
+    const afterAll = raw.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
+    log(`[Filter] ${raw.length} meciuri → ${afterAll.length} după filtrare (api)`);
 
-    const afterWomen = afterLeague.filter(m => !WOMEN_RE.test(m.league?.name || ''));
-    log(`after women filter: ${afterWomen.length} (removed ${afterLeague.length - afterWomen.length})`);
-
-    const afterDiv = afterWomen.filter(m => !LOWER_DIV_RE.test(m.league?.name || ''));
-    log(`after lower-div filter: ${afterDiv.length} (removed ${afterWomen.length - afterDiv.length})`);
-
-    const afterYouth = afterDiv.filter(m =>
-      !YOUTH_RE.test(m.league?.name || '') &&
-      !YOUTH_RE.test(m.teams?.home?.name || '') &&
-      !YOUTH_RE.test(m.teams?.away?.name || '')
-    );
-    log(`after youth filter: ${afterYouth.length} (removed ${afterDiv.length - afterYouth.length})`);
-
-    const result = afterYouth
+    const result = afterAll
       .map(m => ({
         fixture: { id: m.fixture.id, date: m.fixture.date, status: m.fixture.status },
         league:  { id: m.league.id, name: m.league.name, country: m.league.country, flag: m.league.flag },
@@ -241,15 +215,12 @@ export default async function handler(req, res) {
     return res.status(200).json({
       response: result,
       _debug: {
-        source:        'api-football',
-        days:          [d0, d1],
-        window:        '24h',
-        rawPerDay:     counts,
-        rawTotal:      raw.length,
-        afterLeague:   afterLeague.length,
-        afterWomen:    afterWomen.length,
-        afterLowerDiv: afterDiv.length,
-        final:         result.length,
+        source:    'api-football',
+        days:      [d0, d1],
+        window:    '24h',
+        rawPerDay: counts,
+        rawTotal:  raw.length,
+        final:     result.length,
       },
     });
 
