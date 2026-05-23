@@ -1,3 +1,41 @@
+# REGULI CLAUDE — AlohaScan Scanner V2
+
+> Acest fișier conține regulile fixe pentru sesiunile Claude pe acest repo.
+> Documentația tehnică completă a aplicației urmează după aceste reguli.
+
+---
+
+## 1. REGULI GENERALE
+
+- **După ORICE task finalizat**, actualizează `SESSION_CONTEXT.txt` secțiunea 12 cu ce s-a făcut (format: `[ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash`) și push.
+- **NU modifica niciodată** valoarea `10.000` simulări Monte Carlo din `api/monte-carlo.js` (parametrul `nSims` / `iterations`).
+- **NU committa niciodată** chei, token-uri, parole sau fișiere `.env`. Verifică `git diff` înainte de commit dacă ai dubii.
+- **Întotdeauna commit + push pe `main`** după orice modificare finalizată — push-ul pe main declanșează auto-deploy via GitHub Actions.
+
+## 2. STACK
+
+- **Runtime:** Node.js ESM (`/snap/bin/node`)
+- **DB:** PostgreSQL local pe VPS (`db: elefant`, `user: alohascan`)
+- **NU Supabase** — ignoră orice referință veche în cod sau documentație
+- **Deploy:** `git push origin main` → GitHub Actions (`deploy.yml`) → SSH pe VPS → `git reset --hard + npm install + systemctl restart alohascan`
+
+## 3. WORKFLOW STANDARD
+
+1. **Citește `SESSION_CONTEXT.txt`** la începutul oricărei sesiuni noi — conține istoric, stare DB, probleme cunoscute, task-uri în curs.
+2. **Lucrează pe branch `claude/...`** (ex. `claude/session-context-review-MNZ8Y`), apoi merge în `main` și push.
+3. **Verifică sintaxa** cu `node --check <fișier.js>` după orice editare de fișier JavaScript, înainte de commit.
+
+## 4. ARHITECTURĂ
+
+- **Filtre de ligi**: DOAR prin `isAllowedLeague()` / `isAllowedMatch()` din `api/utils/league-filter.js`. NU duplica logica WOMEN_TERMS / YOUTH_TERMS / LOWER_DIV_TERMS în alte fișiere.
+- **Apeluri API-Football**: DOAR prin `fetchApiFootball()` din `api/utils/fetch-api.js` — gestionează retry 429 cu backoff (30s/60s/120s) și autentificare. NU folosi `fetch()` direct pentru `v3.football.api-sports.io`.
+- **Limitele API zilnice** (plan 150.000/zi):
+  - **Scanner live**: rezervă **50.000/zi** (buget țintă)
+  - **Backfill**: maxim **50.000/zi** (constanta `STOP_AT` în `api/backfill.js` — atenție: în prezent setată la `100_000`, vezi audit C2 din SESSION_CONTEXT sec. 13)
+  - Restul (~50.000/zi): cron-uri (prematch-enrichment, collect-daily, collect-finished, referee-stats) + ad-hoc UI
+
+---
+
 # AlohaScan - Documentație Completă
 
 ## Ce face aplicația
