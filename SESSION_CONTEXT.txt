@@ -1263,6 +1263,39 @@ NEXT STEPS (prioritizat):
   LEAGUES.txt + BLACKLIST.txt: actualizate (228/79, 17 ID-uri excluse rămase)
   Commit: 4e6bc76
 
+[23.05.2026] - VERIFICARE ID 238 + backfill league filter audit
+  ÎNTREBARE 1: există ID 238 în ALLOWED_LEAGUE_IDS?
+    DA — api/leagues.js:344 → 238 = Egyptian Cup
+    Localizat în secțiunea AFRICA → Egypt, grupat cu:
+      233 Premier League, 234 Second Division, 238 Egyptian Cup
+    Respectă regula CLAUDE.md "maxim Liga 1 + Liga 2 + Cupă per țară".
+    Concluzie: LEGITIM, nu necesită modificare.
+
+  ÎNTREBARE 2: backfill.js folosește isAllowedLeague() pentru a valida numele?
+    NU — backfill.js importă DOAR ALLOWED_LEAGUE_IDS (linia 6) și fetchApiFootball
+    (linia 8). Linia 11: const LEAGUE_IDS = [...ALLOWED_LEAGUE_IDS];
+    Iterația din runBackfillLoop (305-336) folosește LEAGUE_IDS[li] direct, fără
+    verificare pe numele ligii. grep "isAllowedLeague\|isAllowedMatch" în
+    backfill.js = 0 apariții.
+
+    Comparativ, isAllowedMatch() este folosit în: today.js (2x), football.js (1x),
+    generator.js (1x), cron/scanner.js (1x) — adică în codul care PROCESEAZĂ
+    răspunsul API live. Backfill-ul (date istorice) sare peste această validare.
+
+  IMPLICAȚIE: Backfill are încredere oarbă în whitelist-ul de ID-uri. Dacă
+    API-Football redenumește o ligă sub același ID (ex. devine "U21" sau
+    adaugă "Women"), backfill continuă să colecteze. Filtrele WOMEN_TERMS,
+    YOUTH_TERMS, LOWER_DIV_TERMS din league-filter.js NU protejează backfill-ul.
+    Risc curent mic (whitelist 228 verificat manual în LEAGUES.txt), dar
+    inconsistență existentă între live-path (filtrat dublu) și backfill (doar ID).
+
+  RECOMANDARE (neimplementată încă):
+    În processLeagueSeason() — după fetch /fixtures?league=X&season=Y&status=FT,
+    validează numele ligii din primul fixture (data.response[0].league.name)
+    cu isAllowedLeague(name, leagueId, ALLOWED_LEAGUE_IDS). Dacă fals → skip
+    + log + UPDATE backfill_progress SET status='filtered_out'.
+  Commit: (verificare, fără modificări de cod)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
