@@ -3,6 +3,10 @@ import { query } from './db.js';
 import { logPrediction } from './log-prediction.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
 
+const PRE_MATCH_STATUSES = new Set(['NS']);
+const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
+const FINISHED_STATUSES = new Set(['FT','AET','PEN','SUSP','ABD','AWD','WO']);
+
 function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
   if (!elapsed || elapsed <= 0) return { lambda: lambdaBase, dynamic: false };
   const minutesLeft = Math.max(1, 90 - elapsed);
@@ -148,7 +152,7 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData) {
   }
 
   // Layer 5 — EV: folosim evData calculat deja (elimină hardcodarea la 50%)
-  let score5 = 50;
+  let score5 = null;
   let bestMarket = null, bestCota = null, bestEV = null;
   if (evData?.hasOdds) {
     const candidates = [
@@ -215,10 +219,10 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData) {
     { score: score2, w: 0.20 },
     { score: score3, w: 0.10 },
     { score: score4, w: 0.15 },
-    { score: score5, w: 0.08 },
+    { score: score5, w: 0 }, // Kelly — exclus din predicție, calculat separat
     { score: score6, w: 0.05 },
     { score: score7, w: 0.20 },
-  ].filter(l => l.score != null);
+  ].filter(l => l.score !== null).filter(l => l.w > 0);
   const totalW = layers.reduce((s, l) => s + l.w, 0);
   const confidenceScore = Math.round(layers.reduce((s, l) => s + l.score * (l.w / totalW), 0));
   const hasStr = score7 != null;
@@ -426,7 +430,7 @@ export default async function handler(req, res) {
   const key = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
   if (!key) return res.status(500).json({ error: 'API_FOOTBALL_KEY neconfigurat' });
 
-  const { h, a, fid, hn, an, lg, lgid, dt, br, elapsed, hg, ag, soth, sota, ref } = req.query;
+  const { h, a, fid, hn, an, lg, lgid, dt, br, elapsed, hg, ag, soth, sota, ref, status_short } = req.query;
   if (!h || !a) return res.status(400).json({ error: 'Parametri h si a sunt necesari' });
 
   const hId      = Number(h);
@@ -594,7 +598,7 @@ export default async function handler(req, res) {
       fetchAndStoreInjuries(Number(fid));
 
       // Pre-match snapshot for back-testing (only when not live)
-      if (!parseInt(elapsed)) {
+      if (PRE_MATCH_STATUSES.has(status_short) || (!parseInt(elapsed) && !LIVE_STATUSES.has(status_short))) {
         const compositeScore = +(
           payload.over15Prob * 0.40 + payload.ggProb * 0.30 + payload.homeWin * 0.30
         ).toFixed(1);
