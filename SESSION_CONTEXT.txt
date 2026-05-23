@@ -1318,6 +1318,33 @@ NEXT STEPS (prioritizat):
   Commit: 935c28d
   Push: main (053845f..935c28d) — declanșează deploy GitHub Actions
 
+[23.05.2026] - CLAUDE.md: adăugat secțiune REGULI CLAUDE la început
+  FIȘIER: CLAUDE.md (root repo)
+  ACȚIUNE: Prepend secțiune nouă "REGULI CLAUDE" înaintea documentației existente
+    (documentația tehnică păstrată neatinsă mai jos).
+  CONȚINUT REGULI (4 secțiuni):
+    1. REGULI GENERALE
+       - După ORICE task → actualizare SESSION_CONTEXT.txt sec. 12 + push
+       - NU modifica valoarea 10.000 simulări Monte Carlo (api/monte-carlo.js)
+       - NU committa chei / token-uri / .env
+       - Commit + push pe main după orice modificare finalizată
+    2. STACK
+       - Node.js ESM, PostgreSQL local (elefant/alohascan), NU Supabase
+       - Deploy: push main → GitHub Actions → VPS
+    3. WORKFLOW STANDARD
+       - Citește SESSION_CONTEXT.txt la începutul oricărei sesiuni
+       - Lucrează pe branch claude/... și merge în main
+       - node --check după orice editare de fișier JS
+    4. ARHITECTURĂ
+       - Filtre ligi: DOAR isAllowedLeague/isAllowedMatch din league-filter.js
+       - Apeluri API-Football: DOAR fetchApiFootball() din utils/fetch-api.js
+       - Limite API: scanner 50k/zi + backfill 50k/zi + restul (cron/UI)
+  NOTĂ: regula "backfill 50k/zi" e intent — STOP_AT în backfill.js este în
+    prezent 100_000 (audit C2 deja documentat în sec. 13). Update-ul la 50_000
+    rămâne ca task separat când userul decide.
+  Commit: 73dac3b
+  Push: main (edee53e..73dac3b) — declanșează deploy GitHub Actions
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
