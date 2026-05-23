@@ -1345,6 +1345,30 @@ NEXT STEPS (prioritizat):
   Commit: 73dac3b
   Push: main (edee53e..73dac3b) — declanșează deploy GitHub Actions
 
+[23.05.2026] - Sters folderul icons/ si manifest.json din root
+  FISIERE STERSE (13 total, ~169 KB):
+    icons/ — folder complet:
+      icon-192.png (21.6 KB), icon-192.svg (2.1 KB),
+      icon-512.png (70.1 KB), icon-512.svg (2.1 KB),
+      icon-20@2x.png (3.2 KB), icon-20@3x.png (5.3 KB),
+      icon-29@2x.png (5.3 KB), icon-29@3x.png (8.3 KB),
+      icon-40@2x.png (7.4 KB), icon-40@3x.png (12.5 KB),
+      icon-60@2x.png (12.5 KB), icon-60@3x.png (20.1 KB)
+    manifest.json (537 B) — PWA manifest cu 2 iconite (192/512), purpose maskable
+  REFERINTE RAMASE SUSPENDATE (vor 404 in productie, NU au fost curatate):
+    service-worker.js:16 — cache.addAll(['/', '/index.html', '/manifest.json'])
+      → install-ul SW va esua atomic (addAll respinge tot cache-ul daca un URL 404)
+      → fara caching offline
+    index.html:21 — <link rel="manifest" href="/manifest.json">
+      → 404 in consola browser, install-ul PWA dezactivat
+      → app inca functioneaza normal
+    index.html:11 — <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+      → deja rupt inainte (file-ul nu exista in root), neafectat de stergere
+  TODO: cleanup separat al referintelor de mai sus daca se confirma ca PWA
+    nu mai e dorit. Daca PWA ramane planificat → restaurare via git revert.
+  Commit: 20d0d70
+  Push: main (87c75b1..20d0d70) — declanseaza deploy GitHub Actions
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
