@@ -1417,6 +1417,81 @@ NEXT STEPS (prioritizat):
   Commit: 34b7259
   Push: main (b00180e..34b7259) — declanseaza deploy GitHub Actions
 
+[23.05.2026] - REDESIGN COMPLET admin.html — UI premium dark+neon green
+  FISIER: admin.html (rescris integral, 484 -> 667 linii)
+  TRIGGER: user a trimis screenshot mockup cu design dorit
+  DESIGN APLICAT:
+    Fonturi (Google Fonts, preconnect):
+      Rajdhani 400/500/600/700 — body + UI
+      JetBrains Mono 400/500/600 — valori numerice + ENV keys
+    Paleta:
+      bg page         #030B12   (aproape negru)
+      bg card         #06121A
+      bg inner        #091821
+      border          #0E2232
+      accent green    #00E896   (neon, glow drop-shadow pe iconite)
+      text primary    #E6EFEC
+      text muted      #8FA09D / #6A7B79
+      red (LIPSA)     #FF5577
+      yellow (warn)   #FFD166
+  SECTIUNI NOI (in ordine de jos in sus):
+    HEADER STICKY
+      - Brand "ALOHA<SCAN>" (SCAN verde), subtitle "ADMIN PANEL"
+        + badge ONLINE pulsant (dot animation)
+      - Card "CONEXIUNE SECURIZATA" cu 24 dots animate (keyframes dotF)
+      - Buton "Conectare" outline cu hover green
+    STATUS SISTEM (grid 4 col, mobile fallback 2x2)
+      - 4 celule: Node.js (hexagon SVG), Uptime (clock SVG),
+        Memorie Heap (chip SVG), Baza de date (cylinder SVG)
+      - Valoare mare mono, label gri, sub-label verde caps
+    VARIABILE ENV (lista vertical)
+      - Sigla "Σ" SVG header
+      - Render dinamic din d.env_keys, badge SET (verde) / LIPSA (rosu)
+    BAZA DE DATE (grid 5 col, 9 celule)
+      - Iconite SVG unice per tabel (fixtures, league, referee, match,
+        h2h, standings, predictions, player, live)
+      - Footer button "VEZI TOATE TABELELE >" scroll to cron
+    API FOOTBALL USAGE
+      - Stanga: 4 randuri (Plan, Expira, Utilizate azi, Ramase) +
+        bara orizontala + procent verde
+      - Dreapta: circular SVG progress 130x130, raza 56,
+        dasharray 351.86, dashoffset calculat live din pct
+        Centru: "<pct>%" + label "UTILIZARE"
+    MECIURI LIVE
+      - Header: titlu + counter " <n> LIVE >" cu dot pulsant
+      - Tabs sport: Fotbal (activ default), Baschet, Tenis, Altele
+        cu badge count per categorie. Click pe non-fotbal => mesaj
+        ca datele sunt doar pt fotbal
+      - Lista meciuri cu minut/echipe/scor/status badge
+    CRON JOBS (re-stilat din vechi, grid 1fr auto auto auto)
+    ERORI RECENTE (cards bg3 cu rosu pentru mesaj)
+    BACKFILL DATE ISTORICE (pastrat logica, restilat la noua paleta)
+    HEALTH CHECK (buton RULEAZA TEST, render rezultate inline)
+  BOTTOM NAV FIXED (z-index 100, blur backdrop)
+    5 tab-uri cu icoane SVG monoline:
+    Dashboard (grid 2x2, activ default, scroll top)
+    Matches (mingie, link /)
+    Database (cylinder, scroll la cron)
+    API (code <>, scroll la cardAPI)
+    Settings (gear, scroll la cardHealth)
+    Activ: text+iconita verde + drop-shadow glow
+  JS PASTRAT INTEGRAL — toate functiile pastrate cu aceeasi semnatura:
+    saveKeyAndRefresh, init, refresh, apiFetch, toast, fmtDate,
+    fmtUptime, fmtNum, statusBadge
+    loadStatus, loadDB, loadAPI, loadLive, loadCron, loadErrors
+    startBF, stopBF, refreshBFStatus, runHealthCheck, triggerCron
+  Endpoints API neschimbate (/api/admin/status, /api/admin/db-stats,
+    /api/admin/api-usage, /api/admin/live-matches, /api/admin/cron-status,
+    /api/admin/errors, /api/admin/trigger-cron, /api/backfill/*,
+    /api/health-check). Date dinamice, refresh 30s.
+  RESPONSIVE:
+    < 380px: status-grid -> 2col, db-grid -> 3col, sport-tabs -> 2col
+    >= 600px: max-width container -> 720px
+  COMPATIBILITATE: localStorage cheie "aloha_admin_key" pastrata (nu
+    pierde auth-ul existent). Service worker neafectat.
+  Commit: d6d730a
+  Push: main (3a820b9..d6d730a) — declanseaza deploy GitHub Actions
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
