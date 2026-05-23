@@ -2183,6 +2183,49 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat (nu sters, in caz de rollback)
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX api/match.js awayForm — perspectiva W/D/L corecta
+  Bug detectat in raport audit Poisson + sesizat dupa fix calcPoisson:
+    Linia 39: formResult(m, false) — al doilea parametru hardcodat false.
+    Cand echipa B (away in meciul nostru) juca acasa in vreun meci anterior,
+    sirul W/D/L afisat era calculat din perspectiva oaspetelui — adica
+    INVERS. B castigat acasa 3-1 → sir "L" in loc de "W".
+  Fix aplicat (api/match.js linia 39 DOAR):
+    formResult(m, false) → formResult(m, m.teams?.home?.id === aId)
+    Logica identica cu homeForm linia 33: m.teams?.home?.id === hId
+  Test sintetic (echipa B, 5 meciuri: 3H + 2A):
+    Meci 1: B acasa vs X, 3-1   → REAL W, OLD "L" ❌, NEW "W" ✅
+    Meci 2: B deplasare la Y, 0-2 → REAL L, OLD "L" ✅, NEW "L" ✅
+    Meci 3: B acasa vs Z, 2-0   → REAL W, OLD "L" ❌, NEW "W" ✅
+    Meci 4: B deplasare la W, 3-1 (W 1, B 3) → REAL W, OLD "W" ✅, NEW "W" ✅
+    Meci 5: B acasa vs V, 1-1   → REAL D, OLD "D" ✅, NEW "D" ✅
+    Sir OLD (bug):     L L L W D
+    Sir NEW (fix):     W L W W D
+    Ground truth:      W L W W D
+    OLD: 2/5 eronate (cele 2 victorii ACASA marcate ca LOSS)
+    NEW: 5/5 corect
+  Impact: doar afisaj UI (lambdas NU sunt afectate de formResult). Echipele
+    care joaca mixt H/A in ultimele 5 meciuri apareau gresit slabe/puternice.
+  Verificare: node --check api/match.js OK | doar match.js modificat
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: 971d3fa
+
+[24.05.2026] - MERGE → main (fix awayForm) + deploy
+  Metoda: fast-forward push direct (git push origin BRANCH:main)
+  Range: 828526d..971d3fa — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Verificari post-push:
+    origin/main HEAD: 971d3fa ✅
+    api/match.js SHA: 5b7e1e038f110638bb6adf7e4ea5de7a5355c79c ✅
+    Continut verificat via mcp__github__get_file_contents:
+      Linia 33: formResult(m, m.teams?.home?.id === hId)   homeForm  ✅
+      Linia 39: formResult(m, m.teams?.home?.id === aId)   awayForm  ✅ (FIX)
+  Deploy: GitHub Actions declansat automat pe push main
+    workflow deploy.yml → SSH VPS → git reset --hard + npm install + restart
+    Verificare live: NU posibila din container (egress restrictionat)
+    Pentru utilizator: verificati GitHub Actions sau /health pe VPS
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
