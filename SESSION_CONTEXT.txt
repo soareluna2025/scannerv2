@@ -1296,6 +1296,28 @@ NEXT STEPS (prioritizat):
     + log + UPDATE backfill_progress SET status='filtered_out'.
   Commit: (verificare, fără modificări de cod)
 
+[23.05.2026] - FIX backfill: validare nume ligă din API cu isAllowedLeague
+  Rezolvă inconsistența documentată în intrarea anterioară.
+  FIȘIER: api/backfill.js
+    + import isAllowedLeague din ./utils/league-filter.js
+    + în processLeagueSeason(), după fetch /fixtures:
+        if (fixtures.length > 0) {
+          leagueName = fixtures[0]?.league?.name;
+          if (!isAllowedLeague(leagueName, leagueId, ALLOWED_LEAGUE_IDS)) {
+            log(`SKIP: ligă neautorizată ${leagueId} ${leagueName}`);
+            return;
+          }
+        }
+  COMPORTAMENT NOU: dacă API-Football returnează un nume care conține termeni
+    din WOMEN_TERMS (34) / YOUTH_TERMS (24) / LOWER_DIV_TERMS (38), liga e
+    sărită complet pentru sezonul respectiv (skip stats + events + players).
+  COST: 1 request API per ligă filtrată (cel pentru /fixtures), apoi 0 requests
+    suplimentare. Fără numele din API nu se poate valida — trade-off acceptabil.
+  PROTECȚIE: backfill acum simetric cu live-path (today.js, football.js,
+    generator.js, cron/scanner.js) — filtru dublu ID + nume.
+  Commit: 935c28d
+  Push: main (053845f..935c28d) — declanșează deploy GitHub Actions
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
