@@ -2031,6 +2031,49 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382
   Commit: 9200d53
 
+[24.05.2026] - KELLY CLEANUP Pasul 2/2 — UI
+  - Sters Kelly din index.html (11 locuri)
+  - bestKelly/kellyOver15/kellyGG/bankroll eliminate
+  - Kelly complet absent din intreaga aplicatie
+  Detalii tehnice (index.html):
+    CSS sterse:
+      .ev-kelly (badge Kelly)
+      .settings-btn .settings-overlay .settings-overlay.open .settings-modal
+      .settings-modal h3 .settings-row .settings-row:last-of-type .settings-label
+      .settings-sub .settings-input .settings-save (11 reguli — orfane dupa stergerea overlay-ului)
+    HTML sters:
+      buton <button class="settings-btn" onclick="settingsOpen()">⚙</button> din header
+      <div class="settings-overlay">...</div> overlay complet (continea DOAR bankroll input)
+    JS sters:
+      var BANKROLL_KEY='alohascan_bankroll'
+      function getBankroll()
+      function settingsOpen()
+      function settingsClose()
+    JS modificat:
+      buildCardHtml() — sters `if(ed.bestKelly)o+='<span class="ev-kelly">Kelly: '+...`
+      renderPM() — sters `+(enr.bestKelly?'<span class="ev-kelly">Kelly: '+...:'')`
+      enrichUrl() — sters `&br='+getBankroll()` din URL /api/enrich
+      mdFetch() — sters `&br='+getBankroll()` din URL /api/match
+      mdRenderSumar() — sters coloana <th>Kelly</th>, kelly:en.kellyOver15/kellyGG din rows,
+                        kellyStr ternary, ' · Kelly: '+(en.bestKelly?...) din Best Bet summary
+  Verificare:
+    grep "kelly|bankroll|settings-|getBankroll|BANKROLL_KEY|ev-kelly" in index.html: ZERO match
+    3 blocuri inline <script> validate cu new Function(): SYNTAX OK
+      (122645 bytes + 3204 bytes + 306 bytes)
+    Backend nemodificat: api/ status clean (verificat cu git status)
+  Diff stat: 11 insertions, 45 deletions
+  Impact post-deploy:
+    - Header: butonul ⚙ disparut, ws-indicator si clock raman in pozitie
+    - Settings: complet inaccesibil (functionalitate Kelly disparuta integral)
+    - Card LIVE: ev-row arata "EV: +X% | bet @ cota" — fara badge Kelly verde
+    - Card PRE-MECI: identic, fara badge Kelly
+    - Detalii meci: tabel EV are 4 coloane (Piata/Model/Cota/EV) in loc de 5
+    - Best Bet box: doar "EV: +X%" — fara " · Kelly: X LTC"
+    - localStorage `alohascan_bankroll` ramane in browserele utilizatorilor existenti
+      (vechi data — nemai citita; nu rupe nimic, doar zace)
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: fbfb12b
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
