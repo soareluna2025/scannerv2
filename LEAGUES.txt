@@ -1,13 +1,13 @@
 =====================================
 ALOHASCAN — LISTE COMPLETE CAMPIONATE
 =====================================
-Total: 214 campionate | 76 țări
+Total: 228 campionate | 79 țări
 
 Sursa: api/leagues.js (ALLOWED_LEAGUE_IDS)
 Generat: 23.05.2026
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EUROPA  (70 campionate · 29 țări)
+EUROPA  (79 campionate · 29 țări)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
  1. ANGLIA
@@ -23,6 +23,7 @@ EUROPA  (70 campionate · 29 țări)
 
  3. BELARUS
   ID 116 — Vysheyshaya Liga
+  ID 486 — Belarusian Cup
 
  4. BELGIA
   ID 144 — Pro League
@@ -31,6 +32,7 @@ EUROPA  (70 campionate · 29 țări)
 
  5. BULGARIA
   ID 172 — First Professional League
+  ID 174 — Bulgarian Cup
 
  6. CEHIA
   ID 345 — Fortuna Liga
@@ -54,6 +56,7 @@ EUROPA  (70 campionate · 29 țări)
 
 10. FINLANDA
   ID 244 — Veikkausliiga
+  ID 246 — Finnish Cup
 
 11. FRANȚA
   ID  61 — Ligue 1
@@ -77,6 +80,7 @@ EUROPA  (70 campionate · 29 țări)
 
 15. KAZAHSTAN
   ID 389 — Premier League
+  ID 498 — Kazakhstan Cup
 
 16. NORVEGIA
   ID 103 — Eliteserien
@@ -105,6 +109,7 @@ EUROPA  (70 campionate · 29 țări)
 
 21. RUSIA
   ID 235 — Premier League
+  ID 237 — Russian Cup
 
 22. SCOȚIA
   ID 179 — Premiership
@@ -113,9 +118,11 @@ EUROPA  (70 campionate · 29 țări)
 
 23. SERBIA
   ID 392 — SuperLiga
+  ID 394 — Kup Srbije
 
 24. SLOVACIA
   ID 332 — Super Liga
+  ID 680 — Slovak Cup
 
 25. SPANIA
   ID 140 — La Liga
@@ -134,9 +141,11 @@ EUROPA  (70 campionate · 29 țări)
 
 28. UCRAINA
   ID 333 — Premier League
+  ID 336 — Ukrainian Cup
 
 29. UNGARIA
   ID 271 — Nemzeti Bajnokság I
+  ID 275 — Magyar Kupa
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 AMERICA DE SUD  (31 campionate · 10 țări)
@@ -194,7 +203,7 @@ AMERICA DE SUD  (31 campionate · 10 țări)
   ID 155 — Copa Venezuela
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-AMERICA DE NORD ȘI CENTRALĂ  (22 campionate · 8 țări)
+AMERICA DE NORD ȘI CENTRALĂ  (24 campionate · 9 țări)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
  1. CANADA
@@ -230,13 +239,17 @@ AMERICA DE NORD ȘI CENTRALĂ  (22 campionate · 8 țări)
   ID 256 — Primera División
   ID 380 — Segunda División
 
- 8. SUA
+ 8. PANAMA
+  ID 306 — Primera División
+
+ 9. SUA
   ID 253 — MLS
   ID 255 — USL Championship
   ID 257 — US Open Cup
+  ID 909 — MLS Next Pro
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ASIA  (53 campionate · 19 țări)
+ASIA  (53 campionate · 21 țări)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
  1. ARABIA SAUDITĂ
@@ -244,88 +257,92 @@ ASIA  (53 campionate · 19 țări)
   ID 308 — First Division
   ID 313 — King Cup
 
- 2. CHINA
+ 2. BAHRAIN
+  ID 415 — Premier League
+
+ 3. CHINA
   ID 169 — Super League
   ID 170 — League One
   ID 171 — FA Cup
 
- 3. COREEA DE SUD
+ 4. COREEA DE SUD
   ID 292 — K League 1
   ID 293 — K League 2
   ID 294 — Korean FA Cup
 
- 4. EMIRATELE ARABE UNITE
+ 5. EMIRATELE ARABE UNITE
   ID 433 — Pro League
   ID 434 — First Division
   ID 435 — UAE Cup
 
- 5. HONG KONG
-  ID 499 — Premier League
-  ID 500 — First Division
-  ID 503 — HK FA Cup
+ 6. FILIPINE
+  ID 483 — PFL (Philippine Football League)
 
- 6. INDIA
+ 7. HONG KONG
+  ID 499 — Premier League
+
+ 8. INDIA
   ID 323 — Indian Super League
   ID 324 — I-League
   ID 325 — Durand Cup
 
- 7. INDONEZIA
+ 9. INDONEZIA
   ID 391 — Liga 1
   ID 460 — Liga 2
   ID 461 — Indonesian Cup
 
- 8. IRAK
+10. IRAK
   ID 302 — Premier League
   ID 303 — Division 1
   ID 304 — Iraqi Cup
 
- 9. IRAN
+11. IRAN
   ID 290 — Persian Gulf Pro League
   ID 291 — Azadegan League
   ID 295 — Hazfi Cup
 
-10. IORDANIA
+12. IORDANIA
   ID 474 — Pro League
   ID 475 — Division 1
   ID 494 — Jordan Cup
 
-11. JAPONIA
+13. JAPONIA
   ID  98 — J1 League
   ID  99 — J2 League
   ID 100 — Emperor's Cup
 
-12. KUWEIT
+14. KUWEIT
   ID 299 — Premier League
   ID 300 — Division 1
   ID 493 — Emir Cup
 
-13. MALAEZIA
+15. MALAEZIA
   ID 518 — Super League
   ID 519 — Premier League
   ID 520 — Malaysia Cup
 
-14. OMAN
+16. OMAN
   ID 309 — Professional League
   ID 491 — Division 1
   ID 492 — Sultan Qaboos Cup
 
-15. QATAR
+17. QATAR
   ID  19 — Qatar Stars League
   ID  21 — QSL
   ID  22 — Emir Cup
 
-16. SINGAPORE
+18. SINGAPORE
   ID 502 — Premier League
 
-17. TAILANDA
+19. TAILANDA
   ID 296 — Thai League 1
   ID 297 — Thai League 2
   ID 298 — Thai FA Cup
 
-18. UZBEKISTAN
+20. UZBEKISTAN
   ID 335 — Super League
 
-19. VIETNAM
+21. VIETNAM
   ID 340 — V.League 1
   ID 341 — V.League 2
   ID 342 — Vietnamese Cup
@@ -339,7 +356,7 @@ OCEANIA  (2 campionate · 1 țară)
   ID 189 — Australia Cup
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-AFRICA  (20 campionate · 9 țări)
+AFRICA  (23 campionate · 9 țări)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
  1. AFRICA DE SUD
@@ -354,6 +371,7 @@ AFRICA  (20 campionate · 9 țări)
 
  3. COASTA DE FILDEȘ
   ID 383 — Ligue 1
+  ID 385 — Coupe de Côte d'Ivoire
 
  4. EGIPT
   ID 233 — Premier League
@@ -362,6 +380,7 @@ AFRICA  (20 campionate · 9 țări)
 
  5. GHANA
   ID 289 — Premier League
+  ID 418 — Ghana FA Cup
 
  6. KENYA
   ID 357 — Premier League
@@ -374,6 +393,7 @@ AFRICA  (20 campionate · 9 țări)
 
  8. NIGERIA
   ID 399 — NPFL
+  ID 667 — Nigerian FA Cup
 
  9. TUNISIA
   ID 202 — Ligue 1
@@ -402,13 +422,13 @@ COMPETIȚII INTERNAȚIONALE  (16)
   ID 848 — UEFA Conference League
 
 =====================================
-Europa:            70 campionate · 29 țări
+Europa:            79 campionate · 29 țări
 America de Sud:    31 campionate · 10 țări
-America de Nord:   22 campionate ·  8 țări
-Asia:              53 campionate · 19 țări
+America de Nord:   24 campionate ·  9 țări
+Asia:              53 campionate · 21 țări
 Oceania:            2 campionate ·  1 țară
-Africa:            20 campionate ·  9 țări
+Africa:            23 campionate ·  9 țări
 Internaționale:    16 competiții
 ─────────────────────────────────────
-TOTAL:            214 campionate · 76 țări
+TOTAL:            228 campionate · 79 țări
 =====================================
