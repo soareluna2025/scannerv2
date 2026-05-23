@@ -67,7 +67,10 @@ body{padding-bottom:88px}
 .status-cell .val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:600;color:var(--tx);line-height:1.1}
 .status-cell .sub{font-size:9.5px;color:var(--ac);font-weight:600;letter-spacing:1.6px;margin-top:6px}
 
-.env-list{display:flex;flex-direction:column;gap:6px;list-style:none}
+.env-list{display:flex;flex-direction:column;gap:6px;list-style:none;flex:1;min-width:0}
+.env-wrap{display:flex;gap:14px;align-items:center}
+.env-art{width:140px;height:auto;flex:none;opacity:.9;filter:drop-shadow(0 0 12px rgba(0,232,150,.25))}
+@media (max-width:380px){.env-art{display:none}}
 .env-row{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--bg3);border:1px solid var(--bor);border-radius:9px}
 .env-key{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--tx)}
 .env-badge{padding:3px 10px;border-radius:6px;font-size:10.5px;font-weight:600;letter-spacing:.6px}
@@ -219,7 +222,10 @@ body{padding-bottom:88px}
       <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 4 H17 M6 4 L13 12 L6 20 H17"/><path d="M19 4 L13 20"/></svg></span>
       <h2>VARIABILE ENV</h2>
     </div>
-    <ul class="env-list" id="envList"><li class="empty">—</li></ul>
+    <div class="env-wrap">
+      <ul class="env-list" id="envList"><li class="empty">—</li></ul>
+      <img class="env-art" src="/poze-app/cloud-lock.png" width="140" alt="">
+    </div>
   </section>
 
   <section class="card">
