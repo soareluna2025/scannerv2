@@ -6,15 +6,15 @@ const matchCache = new Map();
 const MATCH_CACHE_TTL        =      60_000; // 1 min — live matches
 const MATCH_CACHE_TTL_STATIC = 10 * 60_000; // 10 min — NS / FT
 
-function calcPoisson(hGames, aGames, h2h, hId) {
+function calcPoisson(hGames, aGames, h2h, hId, aId) {
   const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
   const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
   const r2  = v => Math.round(v * 100) / 100;
 
-  const homeAvgScored   = avg(hGames, m => m.goals?.home ?? 0);
-  const homeAvgConceded = avg(hGames, m => m.goals?.away ?? 0);
-  const awayAvgScored   = avg(aGames, m => m.goals?.away ?? 0);
-  const awayAvgConceded = avg(aGames, m => m.goals?.home ?? 0);
+  const homeAvgScored   = avg(hGames, m => ((m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away) ?? 0));
+  const homeAvgConceded = avg(hGames, m => ((m.teams?.home?.id === hId ? m.goals?.away : m.goals?.home) ?? 0));
+  const awayAvgScored   = avg(aGames, m => ((m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0));
+  const awayAvgConceded = avg(aGames, m => ((m.teams?.away?.id === aId ? m.goals?.home : m.goals?.away) ?? 0));
   const lambdaHome  = (homeAvgScored + awayAvgConceded) / 2;
   const lambdaAway  = (awayAvgScored + homeAvgConceded) / 2;
   const lambdaTotal = lambdaHome + lambdaAway;
@@ -187,7 +187,7 @@ export default async function handler(req, res) {
       } catch (_) {}
     }
 
-    const poissonResult = calcPoisson(hGames, aGames, h2h, hId);
+    const poissonResult = calcPoisson(hGames, aGames, h2h, hId, aId);
     const evData        = calcEV(poissonResult, oddsRaw);
     const enrich        = { ...poissonResult, ...evData };
 
