@@ -1742,6 +1742,35 @@ NEXT STEPS (prioritizat):
   Commit: d9a643b
   Push: main (c6601fc..d9a643b) — declanseaza deploy GitHub Actions
 
+[23.05.2026] - Resize apple-touch-icon.png la 180x180 bg #0D1520 (Python/PIL)
+  CONTEXT:
+    Fisierul apple-touch-icon.png (commit d9a643b) era 1254x1254 RGB
+    cu 853KB — prea mare pentru un icon de home screen iOS si grele de
+    descarcat. Standardul Apple e 180x180.
+  OPERATII:
+    pip install Pillow numpy (PIL 12.2.0, numpy 2.4.6)
+    Script Python /tmp/resize_icon.py:
+      1) Open RGBA, conversie np.array
+      2) Detect content bbox: pixeli care NU sunt (R>=240 AND G>=240
+         AND B>=240) si NU sunt transparenti (a<10)
+      3) Crop la bbox de continut → 1254x1254 (n-a fost padding alb
+         de eliminat la threshold 240)
+      4) Resize cu Image.LANCZOS la fit 180x180 pastrand aspect ratio
+      5) Paste centered pe canvas 180x180 RGB cu bg (0x0D,0x15,0x20)
+         folosind mask alpha din crop
+      6) Save cu optimize=True
+  REZULTAT:
+    Inainte: 1254x1254 RGB, 872788 bytes (853KB)
+    Dupa:    180x180   RGB,  25419 bytes (25KB)
+    Reducere: 97% din dimensiune fisier.
+    Format: PNG 8-bit RGB non-interlaced.
+  NOTA:
+    Threshold 240 n-a detectat padding alb (bbox = full frame). Daca
+    logo-ul are halou luminos sub 240, se poate rerula scriptul cu
+    threshold mai mic (ex. 200) — utilizatorul nu a semnalat asta.
+  Commit: TBD
+  Push: main — declanseaza deploy GitHub Actions
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
