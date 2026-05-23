@@ -1714,6 +1714,34 @@ NEXT STEPS (prioritizat):
   Push: main (2fc488b..8c3304e) — declanseaza deploy GitHub Actions
   Push: claude/session-context-review-MNZ8Y (2fc488b..8c3304e)
 
+[23.05.2026] - PWA icon updated with new logo
+  CONTEXT:
+    Utilizatorul a uploadat prin GitHub web UI un PNG nou (872788 bytes,
+    fata de 20122 al icon-ului vechi) cu nume UUID
+    "867E4406-1ECE-4E47-AA15-14F2E9E91A6D.png", commit c6601fc
+    "apple-touch-icon.png" pe origin/main. Logo PWA nou care inlocuieste
+    iconul anterior.
+  OPERATII:
+    git pull origin main (fast-forward f359bab -> c6601fc)
+    mv -f 867E4406-...png apple-touch-icon.png (overwrite)
+      → vechiul apple-touch-icon.png 20KB sters de filesystem rename,
+        noul fisier 853KB ia locul lui.
+      → git status: D 867E4406-... + M apple-touch-icon.png (hash schimbat)
+  INDEX.HTML — adaugat in <head> dupa linia <meta theme-color>:
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png">
+    (linia 13-14, exact dupa comentariul "<!-- PWA Manifest -->" si
+    inainte de blocul <style>)
+  MANIFEST.JSON: NU EXISTA in repo (sters in sesiunea anterioara, vezi
+    intrarea cu commit 20d0d70 "sterge folderul icons/ si manifest.json
+    din root"). Task-ul a specificat "if exists" deci nu s-a creat.
+  EFFECT:
+    iOS Safari → home screen icon nou (apple-touch-icon)
+    Browsere desktop/mobile → favicon nou (rel=icon)
+    Resursa: /apple-touch-icon.png (servita static de Express din root)
+  Commit: TBD
+  Push: main (c6601fc..TBD) — declanseaza deploy GitHub Actions
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
