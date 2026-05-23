@@ -1920,6 +1920,47 @@ NEXT STEPS (prioritizat):
   Commit: 248b90b
   Push: main (60fa684..248b90b) — declanseaza deploy GitHub Actions
 
+[23.05.2026] - DB migration: 5 indexuri lipsa create (idempotent)
+  Fisier nou: scripts/migrations/add-indexes.sql (CREATE INDEX IF NOT EXISTS)
+    idx_fh_home_status_date            ON fixtures_history(home_team_id, status_short, match_date DESC)
+    idx_fh_away_status_date            ON fixtures_history(away_team_id, status_short, match_date DESC)
+    idx_fixtures_status_date           ON fixtures(status_short, match_date)
+    idx_predictions_outcome            ON predictions(outcome_ngp)
+    idx_match_snapshots_league_outcome ON match_snapshots(league_id, outcome, created_at DESC)
+  Tinta: getFormFromDB(), sfHistoryForm(), getFormGoals(), today.js, scanner.js
+  Aplicare pe VPS (manual): psql -U alohascan -d elefant -h 127.0.0.1 -f scripts/migrations/add-indexes.sql
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: 170c0cc
+
+[23.05.2026] - Fix coliziuni cron deploy.yml
+  C7 referee-stats: 0 4 → 30 4 (decuplat de league-stats)
+  C9 backup-db:     30 3 → 0 4 (decuplat de learning-analysis)
+  Orarul final: C6 04:00, C7 04:30, C8 03:30, C9 04:15 (mutat ulterior)
+  Branch: claude/alohascan-v2-audit-mV382
+  Commits: ceea0a6 (referee+backup shift), 1ebac6a (C9 04:00→04:15 fix coliziune cu C6)
+
+[23.05.2026] - Sprint Puritate Date — api/enrich.js
+  Modificari: routing status NS/LIVE/FT, score5 null cand lipsesc cotele, Kelly exclus din composite score
+  Detalii:
+    1) Adaugate 3 constante: PRE_MATCH_STATUSES={NS}, LIVE_STATUSES={1H,HT,2H,ET,BT,P,LIVE,INT},
+       FINISHED_STATUSES={FT,AET,PEN,SUSP,ABD,AWD,WO}
+    2) status_short adaugat la destructurare req.query (linia 433) — necesar pt routing nou
+    3) Linia 597 inlocuita: routing pre_match_snapshots bazat pe status_short, nu doar elapsed=0
+       NOTA: UI (index.html:1442) inca NU trimite status_short → routing nou e no-op pana la
+       update UI; fail-safe — comportament identic cu inainte cand status_short=undefined
+    4) score5 default 50 → null (elimina valoare fantoma 50% cand lipsesc cotele)
+    5) layers[] score5 w:0.08 → w:0 cu comentariu "// Kelly — exclus din predictie"
+       Adaugat filtru dublu: .filter(l => l.score !== null).filter(l => l.w > 0)
+  Greutati efective (toate datele): score1=23.91% score2=21.74% score3=10.87% score4=16.30%
+       score6=5.43% score7=21.74% (totalW=0.92)
+  Greutati efective (fara cote): IDENTIC cu mai sus (score5 oricum exclus prin w:0)
+  Greutati efective (fara team strengths): score1=30.56% score2=27.78% score3=13.89%
+       score4=20.83% score6=6.94% (totalW=0.72)
+  Sintaxa: node --check OK | Fisier modificat: api/enrich.js DOAR (zero alte fisiere)
+  Branch: claude/alohascan-v2-audit-mV382
+  Status: DONE
+  Commit: d003f94
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
