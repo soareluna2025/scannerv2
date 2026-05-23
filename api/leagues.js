@@ -191,6 +191,9 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   253,   // MLS
   255,   // USL Championship (Liga 2)
   257,   // US Open Cup
+  // EXCLUSE INTENȚIONAT (sub nivel 2):
+  //   USL League One (nivel 3), USL League Two (nivel 4),
+  //   NISA, MLS Next Pro (909) — filtrate și prin LOWER_DIV_TERMS
 
   // Canada
   321,   // Canadian Premier League
