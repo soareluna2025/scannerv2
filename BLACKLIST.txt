@@ -1,0 +1,260 @@
+=====================================
+ALOHASCAN — LISTE LIGI BLOCATE/NEFOLOSITE
+=====================================
+Generat: 23.05.2026
+Sursa:   api/leagues.js + api/utils/league-filter.js
+
+Categorii:
+  A) Blocate automat de league-filter.js (prin termeni în nume)
+  B) Excluse din ALLOWED_LEAGUE_IDS (27 ID-uri identificate din create-tables.sql)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A. BLOCATE DE FILTRU AUTOMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Filtrul isAllowedLeague() din api/utils/league-filter.js respinge
+orice ligă al cărei NUME conține unul din termenii de mai jos,
+chiar dacă ID-ul ar fi în whitelist.
+
+──────────────────────────────────────
+[FEMININE] — WOMEN_TERMS (34 termeni)
+──────────────────────────────────────
+Termeni: women, female, ladies, lady, girl,
+  féminin, feminin, femenino, femenina,
+  frauen, damen, dame, dames,
+  vrouwen, vrouw,
+  naiset, naisten,
+  kvinnor, kvinna,
+  mulheres, feminino,
+  mujer, mujeres,
+  ženy, ženský,
+  kobiety, kobiet,
+  donne, femminile,
+  nők, női,
+  kadın, bayanlar, kadin,
+  feminil, femení
+
+Exemple de ligi blocate:
+  — Women's Super League (WSL, Anglia)
+  — Frauen Bundesliga (Germania)
+  — D1 Arkema (Franța feminin)
+  — Serie A Femminile (Italia)
+  — Primera Iberdrola (Spania feminin)
+  — Division 1 Féminine (Franța)
+  — Eredivisie Vrouwen (Olanda)
+  — NWSL — National Women's Soccer League (SUA)
+  — UWCL — UEFA Women's Champions League
+  — Damallsvenskan (Suedia)
+  — Toppserien (Norvegia)
+  — Naisten Liiga (Finlanda)
+  — Primeira Liga feminina (Portugalia)
+  — Süper Lig Kadın (Turcia)
+  — + orice echipă cu sufix " W" în API-Football
+
+──────────────────────────────────────
+[TINERET] — YOUTH_TERMS (26 termeni)
+──────────────────────────────────────
+Termeni: under, u17, u18, u19, u20, u21, u22, u23,
+  youth, junior, juniors,
+  reserve, reserves,
+  juvenil, juveniles,
+  jugend, jeunes, jeunesse,
+  jovenes, jovens,
+  academy, academie,
+  b team, b-team, second team, development,
+  primavera, espoirs,
+  sub-17, sub-20, sub-23
+
+Exemple de ligi blocate:
+  — UEFA Youth League
+  — Premier League 2 (England U23)
+  — Bundesliga U19 (Germania)
+  — Primavera 1 (Italia U20)
+  — Division d'Honneur (Franța U19)
+  — UEFA U21 Championship
+  — UEFA U17 Championship
+  — Copa del Rey Sub-23 (Spania)
+  — Eredivisie U21 (Jong Eredivisie)
+  — J3 League (include echipe rezerve J1/J2)
+  — Academy League (Anglia)
+  — Reserve League (diverse țări)
+
+──────────────────────────────────────
+[LIGI INFERIOARE] — LOWER_DIV_TERMS (52 termeni)
+──────────────────────────────────────
+Termeni:
+  Germania:     oberliga, landesliga, kreisliga, bezirksliga,
+                regionalliga, verbandsliga, westfalenliga
+  Anglia:       isthmian, southern league, northern league,
+                national league north, national league south
+  Generic:      amateur, sunday league, district, county
+  Italia:       serie c, serie d
+  Generic num:  liga 3, liga 4, liga 5,
+                division 3, division 4, division 5
+  Spania:       tercera, cuarta, quinta
+  Franța:       ligue 3, ligue 4, national 2, national 3
+  Generic:      3. liga, 4. liga
+  Special:      futsal, beach soccer, beach football,
+                indoor, arena football, virtual
+  Amicale:      friendly, friendlies, friendl, amical, amicale, test match
+  SUA sub-2:    usl league one, usl league two, usl super league,
+                nisa, national independent soccer, mls next pro, usoc
+  Australia:    npl, npl queensland, npl victoria, npl nsw
+
+Exemple de ligi blocate:
+  Germania:
+    — 3. Liga Deutschland (nivel 3)
+    — Regionalliga Bayern/Nord/West/Südwest/Nordost (nivel 4)
+    — Oberliga (nivel 5+)
+    — Landesliga / Kreisliga / Bezirksliga (nivel 6+)
+  Anglia:
+    — National League North (nivel 6)
+    — National League South (nivel 6)
+    — Isthmian League (nivel 7)
+    — Southern League Premier / Central / South (nivel 7)
+    — Northern League (nivel 7)
+  Italia:
+    — Serie C (Lega Pro, nivel 3) — acoperit de 'serie c'
+    — Serie D (nivel 4) — acoperit de 'serie d'
+  Franța:
+    — Championnat National 2 (N2, nivel 4)
+    — Championnat National 3 (N3, nivel 5)
+    — Ligue 3 (regional, nivel 6)
+  Spania:
+    — Tercera Federación (nivel 4)
+    — Cuarta División (nivel 5)
+  Australia:
+    — NPL Queensland (nivel 2 statal)
+    — NPL Victoria (nivel 2 statal)
+    — NPL NSW (nivel 2 statal)
+    — (toate ligile NPL sub A-League)
+  SUA:
+    — USL League One (nivel 3 SUA)
+    — USL League Two (nivel 4 SUA)
+    — NISA — National Independent Soccer Association
+    — USL Super League (feminin — dublat de WOMEN_TERMS)
+    — USOC — US Open Cup amateur stages
+  Amicale/teste:
+    — FIFA International Friendlies
+    — Club Friendlies (pre-sezon)
+    — Test Matches (turnee de pregătire)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+B. EXCLUSE DIN ALLOWED_LEAGUE_IDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+27 ligi identificate în create-tables.sql dar absente din
+whitelist. Acestea NU sunt filtrate automat (numele nu conțin
+termenii blocați) — sunt excluse prin absența din ALLOWED_LEAGUE_IDS.
+
+──────────────────────────────────────
+EUROPA (18 ligi excluse)
+──────────────────────────────────────
+
+  Serbia — Liga 2 și Cupă (doar SuperLiga 392 e în whitelist):
+    ID 393 — Prva Liga          [Serbia, nivel 2]
+    ID 394 — Kup Srbije         [Serbia, Cupă]
+
+  Ungaria — Liga 2 și Cupă (doar NB I 271 e în whitelist):
+    ID 272 — Nemzeti Bajnokság II  [Ungaria, nivel 2]
+    ID 275 — Magyar Kupa           [Ungaria, Cupă]
+
+  Bulgaria — Liga 2 și Cupă (doar First Pro League 172 e în whitelist):
+    ID 173 — Second Professional League  [Bulgaria, nivel 2]
+    ID 174 — Bulgarian Cup               [Bulgaria, Cupă]
+
+  Slovacia — Liga 2 și Cupă (doar Super Liga 332 e în whitelist):
+    ID 506 — 2. liga    [Slovacia, nivel 2]
+    ID 680 — Slovak Cup [Slovacia, Cupă]
+
+  Finlanda — Liga 2 și Cupă (doar Veikkausliiga 244 e în whitelist):
+    ID 245 — Ykkonen     [Finlanda, nivel 2]
+    ID 246 — Finnish Cup [Finlanda, Cupă]
+
+  Ucraina — Liga 2 și Cupă (doar Premier League 333 e în whitelist):
+    ID 334 — Persha Liha    [Ucraina, nivel 2]
+    ID 336 — Ukrainian Cup  [Ucraina, Cupă]
+
+  Rusia — Liga 2 și Cupă (doar Premier League 235 e în whitelist):
+    ID 236 — First League  [Rusia, nivel 2]
+    ID 237 — Russian Cup   [Rusia, Cupă]
+
+  Belarus — Liga 2 și Cupă (doar Vysheyshaya Liga 116 e în whitelist):
+    ID 117 — 1. Division   [Belarus, nivel 2]
+    ID 486 — Belarusian Cup [Belarus, Cupă]
+
+  Kazahstan — Liga 2 și Cupă (doar Premier League 389 e în whitelist):
+    ID 388 — 1. Division   [Kazahstan, nivel 2]
+    ID 498 — Kazakhstan Cup [Kazahstan, Cupă]
+
+──────────────────────────────────────
+AMERICA (1 ligă exclusă)
+──────────────────────────────────────
+
+  SUA — (MLS 253 și USL Championship 255 sunt în whitelist):
+    ID 909 — MLS Next Pro  [SUA, nivel 3]
+    * Blocat și prin LOWER_DIV_TERMS: 'mls next pro'
+
+──────────────────────────────────────
+ASIA (2 ligi excluse)
+──────────────────────────────────────
+
+  Uzbekistan — Liga 2 și Cupă (doar Super League 335 e în whitelist):
+    ID 631 — Pro League  [Uzbekistan, nivel 2]
+    ID 632 — Uzbek Cup   [Uzbekistan, Cupă]
+
+──────────────────────────────────────
+AFRICA (6 ligi excluse)
+──────────────────────────────────────
+
+  Nigeria — Liga 2 și Cupă (doar NPFL 399 e în whitelist):
+    ID 666 — Nigeria National League  [Nigeria, nivel 2]
+    ID 667 — Nigerian FA Cup          [Nigeria, Cupă]
+
+  Ghana — Liga 2 și Cupă (doar Premier League 289 e în whitelist):
+    ID 417 — Division One  [Ghana, nivel 2]
+    ID 418 — Ghana FA Cup  [Ghana, Cupă]
+
+  Coasta de Fildeș — Liga 2 și Cupă (doar Ligue 1 383 e în whitelist):
+    ID 384 — Ligue 2               [Ivory Coast, nivel 2]
+    ID 385 — Coupe de Côte d'Ivoire [Ivory Coast, Cupă]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MOTIVE EXCLUDERE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MOTIV 1 — CALITATE SCĂZUTĂ A DATELOR
+  Ligi inferioare (nivel 3+) au date incomplete în API-Football:
+  statistici de jucători absente, cote lipsă, xG necompletat.
+  Predicțiile Poisson devin nesigure fără date de formă fiabile.
+
+MOTIV 2 — IRELEVANT PENTRU PARIURI
+  Meciurile amicale nu au mize reale → cotele sunt artificiale,
+  echipele rotesc lotul, rezultatele nu reflectă forma reală.
+  Turneele de tineret au motivații diferite (timp de joc > victorie).
+
+MOTIV 3 — DATE ISTORICE INSUFICIENTE
+  Ligile cu <10 meciuri în fixtures_history returnează form_stats
+  goale → Lambda Poisson cade pe valoarea default 1.2 → toți
+  jucătorii primesc același scor → Confidence Score nereprezentativ.
+
+MOTIV 4 — FILTRU AUTOMAT (league-filter.js)
+  Feminine, tineret, ligi inferioare sunt blocate automat prin
+  isAllowedLeague() înainte ca ID-ul să fie verificat în whitelist.
+  Dublu mecanism: ID whitelist + filtru pe nume.
+
+MOTIV 5 — POLITICA WHITELIST (maxim Liga 1 + Liga 2 + Cupă/țară)
+  Pentru fiecare țară se includ maximum:
+    - Liga 1 (prima ligă națională)
+    - Liga 2 (a doua ligă națională)
+    - Cupa națională principală
+  Excepție: țări mici (Serbia, Ungaria, Bulgaria etc.) — doar Liga 1.
+  Rațiune: date de calitate suficientă, volum de meciuri gestionabil,
+  cote disponibile la bookmakers principali.
+
+=====================================
+  Total ligi blocate prin filtru: nedefinit (orice nume cu termenii de mai sus)
+  Total ID-uri excluse identificate: 27
+  Total ID-uri în whitelist:        214
+  Total ID-uri în create-tables.sql: 241
+=====================================
