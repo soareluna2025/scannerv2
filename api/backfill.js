@@ -6,6 +6,7 @@ import { query } from './db.js';
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
 import { calcPlayerScore } from './calc-utils.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
+import { isAllowedLeague } from './utils/league-filter.js';
 
 const SEASONS    = [2026, 2025, 2024, 2023, 2022];
 const LEAGUE_IDS = [...ALLOWED_LEAGUE_IDS];
@@ -247,6 +248,16 @@ async function collectPlayers(fixtureId) {
 async function processLeagueSeason(leagueId, season, si, li, startFi) {
   const data     = await apiFetch(`/fixtures?league=${leagueId}&season=${season}&status=FT`);
   const fixtures = data.response || [];
+
+  // Validare nume ligă din API — skip dacă WOMEN_TERMS/YOUTH_TERMS/LOWER_DIV_TERMS
+  if (fixtures.length > 0) {
+    const leagueName = fixtures[0]?.league?.name;
+    if (!isAllowedLeague(leagueName, leagueId, ALLOWED_LEAGUE_IDS)) {
+      log(`SKIP: ligă neautorizată ${leagueId} ${leagueName || '(fără nume)'}`);
+      return;
+    }
+  }
+
   totalFixtures  = fixtures.length;
 
   log(`Season ${season} league ${leagueId}: ${fixtures.length} FT fixtures (from idx ${startFi})`);
