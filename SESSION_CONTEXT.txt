@@ -1068,19 +1068,35 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
         _lastBroadcastSnap per fixture; index.html handler LIVE_DELTA: patch ST.ms in-place
   OPT5: index.html — ws-indicator în header: dot verde/galben/roșu + label RT/.../OFF
         updateWSState('connected'|'connecting'|'disconnected') apelat din onopen/onclose/disconnect
+  Commit: 803f42d
 
-[22.05.2026] - Backup automat PostgreSQL configurat
+[23.05.2026] - Fix no-flicker la update live (renderMatches keyed DOM diff)
+  index.html: buildCardHtml() helper extras din renderMatches()
+  renderMatches() rescris cu keyed DOM diff:
+    - data-fid + data-snap per .card (snap = goals|elapsed|ngp|sot|forte|redCards)
+    - dacă snap identic → refolosește nod DOM existent (zero reflow)
+    - altfel → innerHTML rebuild + actualizare data-snap
+    - list.replaceChildren() atomic (fără flash)
+    - dacă matches goale + ST.ms gol → return early (eroare API, păstrează DOM)
+    - enrichData preserved în _ed map între update-uri WS
+  Commit: f8b21fd
+
+[23.05.2026] - Redenumit secret BACKUP_TOKEN (era GITHUB_BACKUP_TOKEN)
+  deploy.yml: înlocuite toate 4 apariții GITHUB_BACKUP_TOKEN → BACKUP_TOKEN
+  Commit: 593db71
+
+[23.05.2026] - Backup automat PostgreSQL configurat
   Script:    scripts/backup-db.sh — dump 19 tabele gzip per zi, push la GitHub
   Repo:      soareluna2025/scannerv2-backups (privat — creat manual de utilizator)
-  Token:     GITHUB_BACKUP_TOKEN secret GitHub → scris la deploy în /root/.github_backup_token
+  Token:     BACKUP_TOKEN secret GitHub → scris la deploy în /root/.github_backup_token
   Crontab:   30 3 * * * /root/scripts/backup-db.sh (C9 în deploy.yml)
   Retenție:  7 zile local + 7 zile în GitHub repo
   Securitate: parola DB extrasă din POSTGRES_URL (.env), NU hardcoded
   deploy.yml: +backup token write la /root/.github_backup_token
               +cp backup-db.sh → /root/scripts/ + chmod +x
-              +env GITHUB_BACKUP_TOKEN: ${{ secrets.GITHUB_BACKUP_TOKEN }}
+              +env BACKUP_TOKEN: ${{ secrets.BACKUP_TOKEN }}
   PREREQUISIT: utilizatorul trebuie să creeze manual repo soareluna2025/scannerv2-backups
-               și să adauge GITHUB_BACKUP_TOKEN în GitHub Secrets (PAT cu repo write scope)
+               și să adauge BACKUP_TOKEN în GitHub Secrets (PAT cu repo write scope)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 13. AUDIT COMPLET — 22.05.2026
@@ -1182,6 +1198,27 @@ NEXT STEPS (prioritizat):
    6. [MEDIU] Helper global fetchApiFootball() cu retry/backoff 429 pentru tot codul.
    7. [MIC] Curăță cod mort: scan.js, saveFormStats, runDailyBackfill, ecosystem.config.cjs.
    8. [DOC] Corectează „165 ligi" → 214 în acest fișier; adaugă C8 în sec. 7.
+
+[23.05.2026] - Audit DB PostgreSQL — script creat, audit blockat (VPS inaccesibil)
+  PROBLEMĂ: toate porturile VPS (22 SSH, 5432 PG, 3000 APP) sunt blocate din
+            sandbox-ul cloud Claude Code — niciun query SQL nu poate fi executat remote.
+  ACȚIUNE: creat scripts/db-audit.sh — script complet cu 6 pași de audit:
+    Pasul 1: INVENTAR — tabele, rânduri estimate, dimensiune (pg_class)
+    Pasul 2: CALITATEA DATELOR — fixtures, history, form_stats, standings, h2h,
+             player_stats, predictions, odds, prematch_data, league_stats, referee_stats,
+             alerts, cron_logs, backfill_progress
+    Pasul 3: DUPLICATE — player_stats, fixtures, predictions, form_stats, standings
+    Pasul 4: CE POATE FOLOSI APLICAȚIA ACUM — Poisson, H2H (≥3 meciuri), Layer7 (≥11 jucători),
+             league_stats (≥20 meciuri), referee_stats (≥5 meciuri), odds azi, prediction_log
+    Pasul 5: CE LIPSEȘTE — meciuri fără player_stats, fără form, fără h2h, fără cote,
+             ligi fără league_stats, arbitri fără referee_stats, tabele goale
+    Pasul 6: REZUMAT numeric rapid (12 contoare din variabile psql)
+  Scriptul extrage credențialele din POSTGRES_URL în .env (NU hardcodat).
+  Commit: (acest commit)
+
+  PENTRU RULAT AUDITUL PE VPS:
+    ssh root@192.248.183.230
+    bash /root/scannerv2/scripts/db-audit.sh | tee /tmp/audit-$(date +%Y%m%d).txt
 
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
