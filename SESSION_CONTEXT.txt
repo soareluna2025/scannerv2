@@ -1998,6 +1998,39 @@ NEXT STEPS (prioritizat):
   Zero modificari efectuate. Next step: curatare completa Kelly din toate fisierele.
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - KELLY CLEANUP Pasul 1/2 — backend
+  - Sters Kelly din calc-utils.js, enrich.js, match.js
+  - kellyOver15/kellyGG/bestKelly eliminate din payload
+  - index.html nemodificat — Pasul 2 urmeaza
+  Detalii tehnice:
+    calc-utils.js:
+      - calcEV(matrix, oddsRaw, bankroll) → calcEV(matrix, oddsRaw)
+      - Sters function kelly(edge, br)
+      - Sterse: ev.kellyOver15, ev.kellyGG, ev.bestKelly (assignments + rounding)
+      - Sters helper r2 (nu mai era folosit)
+    enrich.js:
+      - Sters const bankroll = parseFloat(br) || 10 (linia 438)
+      - calcEV(result, oddsRaw, bankroll) → calcEV(result, oddsRaw) (linia 550)
+      - Actualizat comentariu stale linia 222: "Kelly — exclus" → "EV — exclus"
+      - `br` ramas in destructurare req.query (UI inca-l trimite — curatat in Pasul 2)
+    match.js:
+      - Sters const bankroll = parseFloat(br) || 10 (linia 80)
+      - calcEV(poissonResult, oddsRaw, bankroll) → calcEV(poissonResult, oddsRaw) (linia 192)
+      - `br` ramas in destructurare req.query (UI inca-l trimite — curatat in Pasul 2)
+  Verificare:
+    node --check pe toate 3 fisiere: OK
+    grep kelly|bankroll in api/calc-utils.js api/enrich.js api/match.js: ZERO match-uri
+    Smoke test calcEV: returneaza 14 chei (hasOdds, cotaHome/Draw/Away/Over15/GG,
+       evHome/Draw/Away/Over15/GG, bestBet/bestEV/bestCota) — kellyOver15/kellyGG/
+       bestKelly absente confirm
+  Impact UI temporar (intre Pasul 1 si Pasul 2):
+    - index.html:1269 `if(ed.bestKelly)` → undefined → badge nu se randeaza (OK)
+    - index.html:1619 `enr.bestKelly?...:''` → undefined → empty (OK)
+    - index.html:2033 `row.kelly?...:'—'` → undefined → '—' afisat (OK)
+    - index.html:2041 `(en.bestKelly?...:'0')` → '0 LTC' afisat in sumar (ugly dar nu rupe)
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: 9200d53
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
