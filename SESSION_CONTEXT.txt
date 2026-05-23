@@ -1768,8 +1768,8 @@ NEXT STEPS (prioritizat):
     Threshold 240 n-a detectat padding alb (bbox = full frame). Daca
     logo-ul are halou luminos sub 240, se poate rerula scriptul cu
     threshold mai mic (ex. 200) — utilizatorul nu a semnalat asta.
-  Commit: TBD
-  Push: main — declanseaza deploy GitHub Actions
+  Commit: 9d4e332
+  Push: main (d9a643b..9d4e332) — declanseaza deploy GitHub Actions
 
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
