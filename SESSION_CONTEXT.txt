@@ -2107,6 +2107,45 @@ NEXT STEPS (prioritizat):
        psql -U alohascan -d elefant -h 127.0.0.1 -f scripts/migrations/add-indexes.sql
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX api/match.js calcPoisson — perspectiva home/away corecta
+  Bug detectat in audit Poisson (sesiunea anterioara):
+    Functia calcPoisson() folosea m.goals?.home / m.goals?.away direct fara
+    detectare. Presupunea ca in hGames echipa joaca mereu acasa. Fals — hGames
+    contine ultimele 20 meciuri FT (mix H/A). Lambdas biased pe meciuri unde
+    echipa juca aprox 50% H + 50% A.
+  Fix aplicat (api/match.js DOAR):
+    Linia 9: signature calcPoisson(hGames, aGames, h2h, hId, aId) — adaugat aId
+    Liniile 14-17: detectare perspectiva identica cu enrich.js liniile 24-27
+      homeAvgScored:   m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away
+      homeAvgConceded: m.teams?.home?.id === hId ? m.goals?.away : m.goals?.home
+      awayAvgScored:   m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home
+      awayAvgConceded: m.teams?.away?.id === aId ? m.goals?.home : m.goals?.away
+    Linia 190: caller actualizat — calcPoisson(hGames, aGames, h2h, hId, aId)
+  Test sintetic (5H + 5A pentru fiecare echipa, A vs B in meciul viitor):
+    Ground truth manual: A scored 1.20 conceded 1.30, B scored 1.70 conceded 1.40
+    OLD (bug):  homeAvgScored=1.7 (eronat), awayAvgScored=1.2 (eronat)
+                λH=1.80, λA=1.00 — homeWin 56% draw 23% awayWin 21%
+                Over1.5=76%, Over2.5=52%, GG=52%
+    NEW (fix):  homeAvgScored=1.2 ✅, awayAvgScored=1.7 ✅
+                λH=1.30, λA=1.50 — homeWin 33% draw 25% awayWin 42%
+                Over1.5=76%, Over2.5=52%, GG=56%
+    Impact:
+      λTotal CONSERVAT (2.80 in ambele) — bug-ul redistribuie golurile H↔A
+        fara sa schimbe suma. → Over1.5/2.5 erau aproximativ corecte chiar cu bug.
+      1X2 RUPT — homeWin shift -23 puncte procentuale, awayWin +21 puncte
+        procentuale. → predictiile 1X2 din /api/match erau dramatic biased
+        pentru echipele care joaca mixt H/A in ultimele 10.
+      GG +4 puncte procentuale (corelatie cu redistribuirea).
+  Bug-uri NEFIX (sesizate, lasate pentru sprint viitor):
+    1) match.js linia 38: awayForm foloseste formResult(m, false) — mereu false,
+       acelasi bug perspectiva. Recomandat: formResult(m, m.teams?.home?.id === aId)
+    2) match.js nu are fallback DB (form_stats, fixtures_history, teams_stats)
+       cum are enrich.js — depinde 100% de API live last 20 FT.
+    3) match.js nu are dynamic lambda live (enrich.js are calcDynamicLambda).
+  Verificare: node --check api/match.js OK | zero alte fisiere modificate
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: 0162197
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
