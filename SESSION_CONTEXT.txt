@@ -1220,6 +1220,49 @@ NEXT STEPS (prioritizat):
     ssh root@192.248.183.230
     bash /root/scannerv2/scripts/db-audit.sh | tee /tmp/audit-$(date +%Y%m%d).txt
 
+[23.05.2026 ~07:00-08:00] - AUDIT COMPLET VPS + DB LIVE VIA SSH (Termius)
+  SERVER: activ pe port 3000, uptime stabil, health check 18/18 PASS.
+  BACKFILL: activ 55.5% (633/1140 perechi), API azi 25.340/150.000.
+  DB — audit direct psql, valori reale:
+    player_stats    1.164.707 rânduri  (245 MB)
+    fixtures_history   75.515 rânduri  ( 16 MB)
+    match_stats        58.414 rânduri
+    odds              343.510 rânduri
+    form_stats          6.318 rânduri
+    league_stats          606 rânduri
+    referee_stats         198 rânduri
+    h2h                 1.369 rânduri
+    standings           2.405 rânduri
+    predictions           972 rânduri
+  .env: API_FOOTBALL_KEY SET, POSTGRES_URL SET,
+        ANTHROPIC_API_KEY GOL, XAI_API_KEY GOL, ADMIN_API_KEY SET.
+  CRONTAB: toate cronurile active, confirmate.
+  CRON_LOGS: collect-daily rulează cu succes.
+  API-Football expiră 27 Mai → reînnoire planificată luni/marți (plan 300k).
+  TODO: mutat conținut panel ⚙️ (backfill + health check) din index.html în /admin.
+
+[23.05.2026 ~08:00-10:00] - WHITELIST LIGI: filtre + liste .txt
+  league-filter.js: adăugat 'amicale', 'npl', 'npl queensland/victoria/nsw' în LOWER_DIV_TERMS
+  leagues.js: confirmat USL League Two/One/NISA NU sunt în whitelist (ID-urile nu coincid)
+             ID 240 = Colombia Primera B (corect în whitelist, nu USL)
+             ID 253 = MLS (nu MLS Next Pro — ID real = 909)
+  Creat LEAGUES.txt: lista completă 214 campionate / 76 țări, sortate alfabetic pe continente
+  Creat BLACKLIST.txt: 27 ID-uri excluse + filtru automat (feminine/tineret/inferioare/amicale)
+  Commits: 6882b8b, f3f5a3b, e9a261c, 2295d7a
+
+[23.05.2026 ~10:00-11:00] - WHITELIST UPDATE: +16 ligi, -2 HK → 228 campionate / 79 țări
+  ADĂUGATE (16):
+    Cupe europene (9): Kup Srbije 394, Magyar Kupa 275, Bulgarian Cup 174,
+      Slovak Cup 680, Finnish Cup 246, Ukrainian Cup 336, Russian Cup 237,
+      Belarusian Cup 486, Kazakhstan Cup 498
+    America (2): MLS Next Pro 909 (SUA), Panama Primera División 306
+    Asia noi (2): Bahrain Premier League 415, Philippines PFL 483
+    Cupe Africa (3): Nigerian FA Cup 667, Ghana FA Cup 418, Coupe Côte d'Ivoire 385
+  ȘTERSE (2): HK First Division 500, HK FA Cup 503
+  league-filter.js: eliminat 'mls next pro' din LOWER_DIV_TERMS (altfel ar bloca ID 909)
+  LEAGUES.txt + BLACKLIST.txt: actualizate (228/79, 17 ID-uri excluse rămase)
+  Commit: 4e6bc76
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
