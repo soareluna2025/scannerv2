@@ -2074,6 +2074,39 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382
   Commit: fbfb12b
 
+[24.05.2026] - MERGE claude/alohascan-v2-audit-mV382 → main (deploy declansat)
+  Metoda: fast-forward push direct (git push origin BRANCH:main)
+  Range: a33e1ec..9b85efd — 10 commits adaugate pe origin/main
+  Continutul deploy-ului (10 commits, ordinea cronologica):
+    170c0cc — db migration: add 5 missing indexes for frequent queries
+    ceea0a6 — cron: shift referee-stats to 04:30, move backup to 04:00
+    1ebac6a — cron: shift backup C9 to 04:15 to remove collision with league-stats
+    d003f94 — refactor: puritate date - status routing, score5 null fallback
+    49f87d2 — docs: SESSION_CONTEXT (db indexes, cron fixes, sprint puritate)
+    37dee89 — docs: SESSION_CONTEXT entry audit Kelly read-only
+    9200d53 — refactor: remove Kelly from backend - step 1/2
+    52800ce — docs: SESSION_CONTEXT KELLY CLEANUP Pasul 1/2
+    fbfb12b — refactor: remove Kelly from UI - step 2/2
+    9b85efd — docs: SESSION_CONTEXT KELLY CLEANUP Pasul 2/2
+  Observatie diagnostic:
+    Local `main` divergent de origin/main (61 vs 50 commits, fara stramos comun).
+    Local `main` este state stale dintr-o linie de istorie abandonata pe remote.
+    Branch-ul claude/... a fost corect creat din origin/main (a33e1ec), deci
+    fast-forward push pe origin/main: zero conflict, zero force-push, zero risc.
+    Verificat cu: git merge-base --is-ancestor origin/main BRANCH → YES
+  Deploy: GitHub Actions declansat automat (deploy.yml)
+    Etape: SSH VPS → git fetch + reset --hard + npm install + systemctl restart alohascan
+  Post-deploy verificari recomandate:
+    1) Header UI: butonul ⚙ disparut (Kelly settings sterse)
+    2) Card LIVE/PREMECI: ev-row fara badge "Kelly: X LTC"
+    3) Tabel EV: 4 coloane (Piata/Model/Cota/EV) in loc de 5
+    4) Best Bet box: doar "EV: +X%" — fara " · Kelly: X LTC"
+    5) URL /api/enrich si /api/match nu mai primesc &br= dar accepta legacy
+    6) Crontab nou: backup-db la 04:15 (era 03:30), referee-stats la 04:30 (era 04:00)
+    7) Indexuri DB: rulare manuala recomandata —
+       psql -U alohascan -d elefant -h 127.0.0.1 -f scripts/migrations/add-indexes.sql
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
