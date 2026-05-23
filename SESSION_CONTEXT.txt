@@ -1917,8 +1917,8 @@ NEXT STEPS (prioritizat):
     - Block <script> identic cu versiunea anterioara.
     - .sport-tab + data-k attrs prezente.
     - node --check pe JS extras a trecut.
-  Commit: TBD
-  Push: main TBD — declanseaza deploy GitHub Actions
+  Commit: 248b90b
+  Push: main (60fa684..248b90b) — declanseaza deploy GitHub Actions
 
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
