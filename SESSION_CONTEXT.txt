@@ -1528,6 +1528,192 @@ NEXT STEPS (prioritizat):
   Commit: 446c7ee
   Push: main (76e42d6..446c7ee) — declanseaza deploy GitHub Actions
 
+[23.05.2026] - REWRITE COMPLET admin.html — design system premium cyberpunk
+  SCOPE:
+    Rescriere completa de la zero a admin.html (584 inserari, 190 stergeri).
+    Inlocuirea design-ului anterior cu un design system unitar bazat pe
+    neon green #00FF88 + font Rajdhani + particles animate + neon glow
+    shadow pe toate cards.
+
+  DESIGN SYSTEM NOU (variabile CSS in :root):
+    Background:
+      --bg-body: #000000 (body)
+      --bg-wrap: #05070A (page wrapper)
+      --bg-card-1: #0D141D / --bg-card-2: #091018 (gradient cards)
+      --bg-mini: #0A1017 (mini cards)
+    Culori neon green:
+      --ac: #00FF88 (primary neon)
+      --ac2: #00E676 (secondary)
+      --ac3: #00C46A (deep, capat gradient)
+    Text:
+      --tx: #FFFFFF / --tx2: #A7B4C2 / --mu: #6E7B88
+    Status:
+      --red: #FF4D67 (LIPSA badge, erori, backfill active dot)
+      --yellow: #FFD23F
+    Borders:
+      --bd: rgba(0,255,136,0.18) (border principal cards)
+      --bd-2: rgba(0,255,136,0.10) (border subtle mini cards)
+      --bd-3: rgba(0,255,136,0.30) (caseta conexiune securizata)
+    Fonts:
+      Rajdhani 400/600/700 (numere mari, logo, headings) — import
+      Google Fonts cu preconnect
+      Inter (body text) — import Google Fonts
+      JetBrains Mono (cod, env keys, cron names)
+
+  CARDS — design unitar nou:
+    background: linear-gradient(180deg, #0D141D 0%, #091018 100%)
+    border: 1px solid rgba(0,255,136,0.18)
+    border-radius: 24px
+    backdrop-filter: blur(20px)
+    box-shadow neon green 4 layere:
+      0 0 5px rgba(0,255,136,0.5),
+      0 0 10px rgba(0,255,136,0.45),
+      0 0 20px rgba(0,255,136,0.35),
+      0 0 40px rgba(0,255,136,0.2)
+
+  HEADER COMPACT (1 linie, grid 3 coloane: auto 1fr auto):
+    Stanga (brand):
+      Rand 1: "ALOHA" (alb) + "SCAN" (#00FF88) Rajdhani 28px bold,
+        letter-spacing 1.5px, text-shadow glow pe SCAN.
+      Rand 2: "ADMIN PANEL" (gri muted 10px) + pill "ONLINE" cu
+        dot pulse animat (rgba(0,255,136,0.12) bg).
+    Centru (sec-box):
+      Caseta border rgba(0,255,136,0.3), bg rgba(0,255,136,0.04),
+      contine "CONEXIUNE SECURIZATA" Rajdhani 11px caps + rand de
+      20 puncte 5x5px cu animatie wave (scale 0.7->1, opacity .2->1,
+      box-shadow glow la apogeu), animation-delay scaonat 0-1.52s.
+      Pe ecrane <780px caseta se ascunde.
+    Dreapta (button):
+      "Conectare" — bg transparent, border 1px solid #00FF88, radius 8px,
+      padding 8px 18px. Hover: bg rgba(0,255,136,0.08) + glow shadow
+      0 0 14/28px.
+
+  META BAR (ultima actualizare):
+    Dot pulse verde + text muted "Ultima actualizare: HH:MM:SS
+    (auto-refresh 30s)" + icon refresh la dreapta clickable (rotire
+    180deg hover, schimba culoarea in verde).
+
+  CARDS — continut:
+    1) STATUS SISTEM
+       Grid 4 coloane egale. Fiecare mini-card (bg #0A1017, border
+       rgba(0,255,136,0.10), radius 12px, padding 12px) contine:
+       icon (20px verde) + label muted 10px + valoare Rajdhani 24px
+       bold alb + sub label verde 9.5px caps.
+       Coloane: Node.js | Uptime | Memorie Heap | Baza de date
+
+    2) VARIABILE ENV
+       flex row: list 58% (stanga) + imagine 42% (dreapta).
+       Stanga: ul cu rows bg #0A1017 border #15202B radius 8px,
+       fiecare row: var name muted + badge la dreapta:
+         SET → bg #00FF88, text #000, "✓ SET"
+         LIPSA → bg #FF4D67, text #FFF, "✗ LIPSA"
+       Dreapta: img src="/poze-app/cloud-lock.png" width 150px,
+       object-fit contain, drop-shadow neon green 14px.
+       Pe ecrane <780px: stack vertical (img sub list).
+
+    3) BAZA DE DATE
+       Rand 1: grid 5 coloane (fixtures_history | league_stats |
+         referee_stats | match_stats | h2h)
+       Rand 2: grid 4 coloane (standings | predictions | player_stats
+         | live_acum)
+       Fiecare mini-card: icon verde 24px + numar Rajdhani 20px bold
+       alb + label muted 10.5px, centered.
+       Footer link: "VEZI TOATE TABELELE >" #00FF88 caps cu hover opacity.
+
+    4) API FOOTBALL USAGE
+       flex row 55% (stanga) + 45% (dreapta).
+       Stanga: rows "Plan / Expira / Utilizate azi / Ramase" (label
+       muted + valoare alb/neon), progress bar gradient #00FF88->#00C46A
+       cu glow shadow + text "XX% utilizat >".
+       Dreapta: SVG circular 130x130 cu:
+         - <defs> linearGradient #greenGrad de la #00FF88 la #00C46A
+         - cerc bg stroke #15202B 8px
+         - cerc progress stroke url(#greenGrad) 8px linecap round
+         - drop-shadow filter pe SVG 0 0 8px rgba(0,255,136,0.3)
+         - transform rotate(-90deg) ca progress sa porneasca de sus
+       Centru SVG: procent Rajdhani 24px bold alb + "UTILIZARE" caps.
+
+    5) MECIURI LIVE
+       Header cu badge live-counter (bg rgba(0,255,136,0.15) verde
+       caps "• XX LIVE >").
+       Sport tabs pill style:
+         Active: bg rgba(0,255,136,0.12), border verde, text verde.
+         Inactive: text muted, no border.
+         4 tabs: Fotbal / Baschet / Tenis / Altele cu emoji-uri.
+       Live list: match-row grid 50px / 1fr / 60px / 60px (min /
+       teams / score / status).
+
+    6) CRON JOBS
+       Rows grid (job name JetBrains Mono + time muted + badge status
+       + buton RUN). Badge variants: OK verde, Eroare rosu, niciodata
+       gri, yellow.
+
+    7) ERORI RECENTE
+       Counter in header. Lista rows bg #0A1017 border rosu subtle,
+       job name rosu + time muted + msg JetBrains Mono.
+
+    8) BACKFILL DATE ISTORICE
+       Activ: dot rosu pulse + "ACTIV — Colectez date..." + info
+       sezon/liga + progress bar verde + API azi bar yellow.
+       Stopped: text info ultima rulare.
+       Butoane START (verde bg) / STOP (rosu bg) flex 1.
+
+    9) HEALTH CHECK
+       Buton RULEAZA TEST (border verde, hover bg + glow). Rezultate
+       expandate dinamic in #health-results.
+
+  BOTTOM NAV:
+    Fixed bottom, grid 5 coloane egale. Background rgba(5,7,10,0.95)
+    backdrop-filter blur(20px), border-top rgba(0,255,136,0.10).
+    Tab activ: text + icon #00FF88, text-shadow glow, drop-shadow
+    pe icon, plus bar underglow ::before deasupra cu box-shadow
+    0 -4px 15px rgba(0,255,136,0.3).
+    Tab-uri: Dashboard | Matches | Database | API | Settings.
+
+  PARTICLES BACKGROUND:
+    div.particles position:fixed inset:0 pointer-events:none z-index:0.
+    20 spans cu positionare orizontala distribuita (left 4%-97%),
+    sizes 2-4px, bg rgba(0,255,136,0.15) round.
+    Animatie @keyframes float: translateY 0 -> -110vh, opacity
+    fade-in 0-10%, fade-out 90-100%, durate 18-32s, delay-uri 0-13s.
+    Toate 20 spans au animation-duration + animation-delay individuale
+    pentru lookup natural.
+
+  JS PRESERVAT INTEGRAL:
+    - Fetch endpoints: /api/admin/status, /api/admin/db-stats,
+      /api/admin/api-usage, /api/admin/live-matches,
+      /api/admin/cron-status, /api/admin/errors,
+      /api/admin/trigger-cron, /api/backfill/start|stop|status,
+      /api/health-check.
+    - 36 ID-uri DOM critice pastrate (apiKeyInput, keyInputWrap, toast,
+      sysStatusBadge, envList, dbGrid, apiRows, circFg, circPct,
+      liveCount, cFotbal, liveList, cronList, errCount, errList,
+      toate bf-* (15 IDs), health-results, hc-btn, refreshInfo,
+      cardCron, cardAPI, cardHealth, plus data-k=node/uptime/mem/db).
+    - .sport-tab event delegation pastrata.
+    - Auto-refresh 30s + backfill polling 5s pastrate.
+    - DB grid rendering refactorizat in 2 randuri (renderDBRow helper)
+      pentru r5 + r4 conform spec, dar lista DB_ROW1/DB_ROW2 are
+      exact aceleasi 9 tabele ca inainte.
+
+  RESPONSIVE BREAKPOINT 780px:
+    Header → 2 coloane (caseta CONEXIUNE SECURIZATA hidden).
+    Status grid → 2x2.
+    Env wrap → vertical stack, img 120px.
+    API wrap → vertical stack.
+    DB grid r5 → 3 coloane, r4 → 2 coloane.
+    Match row → coloane mai inguste.
+    Logo → 24px.
+
+  VALIDARE:
+    node --check pe JS-ul extras a trecut fara erori.
+    Toate 36 ID-uri DOM verificate cu grep, toate prezente.
+    Imaginea /poze-app/cloud-lock.png exista din commit 446c7ee.
+
+  Commit: 8c3304e
+  Push: main (2fc488b..8c3304e) — declanseaza deploy GitHub Actions
+  Push: claude/session-context-review-MNZ8Y (2fc488b..8c3304e)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
