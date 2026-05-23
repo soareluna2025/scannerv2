@@ -1395,6 +1395,28 @@ NEXT STEPS (prioritizat):
   Commit: ce75a15
   Push: main (e5be473..ce75a15) — declanseaza deploy GitHub Actions
 
+[23.05.2026] - Sters 8 <link rel=apple-touch-icon> ramase catre /icons/
+  FISIER MODIFICAT: index.html (liniile 11-18 dupa cleanup-ul anterior)
+  ELIMINATE (8 linii):
+    <link rel="apple-touch-icon" sizes="120x120" href="/icons/icon-60@2x.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-60@3x.png">
+    <link rel="apple-touch-icon" sizes="80x80"   href="/icons/icon-40@2x.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="/icons/icon-40@3x.png">
+    <link rel="apple-touch-icon" sizes="58x58"   href="/icons/icon-29@2x.png">
+    <link rel="apple-touch-icon" sizes="87x87"   href="/icons/icon-29@3x.png">
+    <link rel="apple-touch-icon" sizes="40x40"   href="/icons/icon-20@2x.png">
+    <link rel="apple-touch-icon" sizes="60x60"   href="/icons/icon-20@3x.png">
+  PASTRATE:
+    Meta tag-urile apple-mobile-web-app-{capable,status-bar-style,title} —
+    nu refera fisiere, raman functionale daca PWA se reactiveaza vreodata.
+    Comentariile <!-- PWA iPhone --> si <!-- PWA Manifest --> — markere
+    de sectiune, ne-funcționale.
+  VERIFICARE FINALA: grep "apple-touch-icon\|/icons/\|manifest.json" pe
+    index.html + service-worker.js → ZERO rezultate. Toate referintele
+    catre fisierele sterse au fost eliminate (commit ce75a15 + 34b7259).
+  Commit: 34b7259
+  Push: main (b00180e..34b7259) — declanseaza deploy GitHub Actions
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
