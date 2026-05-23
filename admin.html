@@ -51,6 +51,19 @@ header{background:var(--bg2);border-bottom:1px solid var(--bor);padding:12px 20p
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{color:var(--mu);font-size:12px;text-align:center;padding:20px 0}
 #toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);border:1px solid var(--bor);color:var(--mu2);padding:10px 16px;border-radius:8px;font-size:12px;display:none;z-index:999}
+/* Backfill */
+.bf-start-btn{flex:1;padding:10px;background:#00e676;color:#001a0d;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer}
+.bf-start-btn:hover{background:#00c853}
+.bf-stop-btn{flex:1;padding:10px;background:#ff1744;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;animation:bfPulse 1.5s ease-in-out infinite}
+@keyframes bfPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,23,68,.4)}50%{box-shadow:0 0 0 8px rgba(255,23,68,0)}}
+.bf-dot{width:8px;height:8px;border-radius:50%;background:#ff4444;flex-shrink:0;animation:bfDot 1s ease-in-out infinite}
+@keyframes bfDot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.65)}}
+.bf-bar{background:var(--bg3);border-radius:4px;height:6px;overflow:hidden;margin:4px 0 8px}
+.bf-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--acc),#00b894);transition:width .4s}
+.bf-bar-fill.api{background:linear-gradient(90deg,#f59e0b,#ef4444)}
+.bf-label{font-size:11px;color:var(--mu);margin-bottom:2px}
+.hc-btn{padding:7px 14px;background:rgba(74,158,255,.15);color:var(--acc);border:1px solid rgba(74,158,255,.3);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer}
+.hc-btn:disabled{opacity:.5;cursor:default}
 </style>
 </head>
 <body>
@@ -105,6 +118,49 @@ header{background:var(--bg2);border-bottom:1px solid var(--bor);padding:12px 20p
   <div class="card" id="cardErrors">
     <div class="card-title">Erori Recente <span id="errCount"></span></div>
     <div class="empty">Neconectat</div>
+  </div>
+
+  <div class="grid" style="margin-top:0">
+    <!-- Backfill -->
+    <div class="card" id="cardBackfill">
+      <div class="card-title">🗄️ Backfill Date Istorice</div>
+      <!-- Active state -->
+      <div id="bf-active" style="display:none">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div class="bf-dot"></div>
+          <span style="color:#ff5555;font-size:12px;font-weight:700">ACTIV — Colectez date...</span>
+        </div>
+        <div class="bf-label" id="bf-current-info">Sezon — · Ligă —</div>
+        <div class="bf-label">Progres: <span id="bf-pct">0</span>% (<span id="bf-done">0</span>/<span id="bf-total">0</span> perechi)</div>
+        <div class="bf-bar"><div class="bf-bar-fill" id="bf-fill" style="width:0%"></div></div>
+        <div class="bf-label">API azi: <span id="bf-api-used">0</span> / 150,000 — rămase: <span id="bf-api-rem">150,000</span></div>
+        <div class="bf-bar" style="height:4px;margin-bottom:0">
+          <div class="bf-bar-fill api" id="bf-api-fill" style="width:0%"></div>
+        </div>
+      </div>
+      <!-- Stopped state -->
+      <div id="bf-stopped">
+        <div class="bf-label" id="bf-stopped-info">Nicio rulare anterioară</div>
+        <div class="bf-label" id="bf-stopped-api" style="display:none">API azi: <span id="bf-api-used2">0</span> / 150,000</div>
+      </div>
+      <!-- Buttons -->
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button id="bf-start-btn" class="bf-start-btn" onclick="startBF()">▶ START</button>
+        <button id="bf-stop-btn" class="bf-stop-btn" style="display:none" onclick="stopBF()">⏹ STOP</button>
+      </div>
+    </div>
+
+    <!-- Health Check -->
+    <div class="card" id="cardHealth">
+      <div class="card-title" style="justify-content:space-between">
+        <span>🔍 Health Check</span>
+        <button class="hc-btn" id="hc-btn" onclick="runHealthCheck()">TEST</button>
+      </div>
+      <div class="stat-row" style="border:none;padding:0">
+        <span class="stat-label">Verifică că toate sistemele funcționează</span>
+      </div>
+      <div id="health-results" style="display:none;margin-top:10px;font-size:12px"></div>
+    </div>
   </div>
 </div>
 
@@ -314,9 +370,107 @@ async function refresh() {
   await Promise.allSettled([
     loadStatus(), loadDB(), loadAPI(),
     loadLive(), loadCron(), loadErrors(),
+    refreshBFStatus(),
   ]);
   var now = new Date().toLocaleTimeString('ro-RO');
   document.getElementById('refreshInfo').textContent = 'Ultima actualizare: ' + now + ' (auto-refresh 30s)';
+}
+
+var _bfTimer = null;
+
+async function startBF() {
+  try {
+    var r = await fetch('/api/backfill/start', { method: 'POST', headers: { 'X-Api-Key': _key } });
+    var d = await r.json();
+    if (d.error) { toast('✗ ' + d.error, 'var(--red)'); return; }
+    toast('▶ Backfill pornit', 'var(--green)');
+    refreshBFStatus();
+    if (_bfTimer) clearInterval(_bfTimer);
+    _bfTimer = setInterval(refreshBFStatus, 5000);
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+}
+
+async function stopBF() {
+  try {
+    await fetch('/api/backfill/stop', { method: 'POST', headers: { 'X-Api-Key': _key } });
+    toast('⏹ Backfill oprit', 'var(--yellow)');
+    refreshBFStatus();
+    if (_bfTimer) { clearInterval(_bfTimer); _bfTimer = null; }
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+}
+
+async function refreshBFStatus() {
+  try {
+    var r = await fetch('/api/backfill/status', { headers: { 'X-Api-Key': _key } });
+    var d = await r.json();
+    var startBtn = document.getElementById('bf-start-btn');
+    var stopBtn  = document.getElementById('bf-stop-btn');
+    var activeDiv   = document.getElementById('bf-active');
+    var stoppedDiv  = document.getElementById('bf-stopped');
+    if (!startBtn) return;
+    if (d.running) {
+      startBtn.style.display = 'none'; stopBtn.style.display = 'flex';
+      activeDiv.style.display = 'block'; stoppedDiv.style.display = 'none';
+      var info = '';
+      if (d.currentSeason)  info += 'Sezon ' + d.currentSeason;
+      if (d.currentLeague)  info += ' · Ligă ' + d.currentLeague.id + (d.currentLeague.name ? ' (' + d.currentLeague.name + ')' : '');
+      if (d.totalFixtures)  info += ' · Fixture ' + d.currentFixtureIndex + '/' + d.totalFixtures;
+      document.getElementById('bf-current-info').textContent = info || 'Se procesează...';
+      document.getElementById('bf-pct').textContent  = d.progressPct || 0;
+      document.getElementById('bf-done').textContent = (d.completedLeagues || 0).toLocaleString();
+      document.getElementById('bf-total').textContent = (d.totalLeagues || 0).toLocaleString();
+      document.getElementById('bf-fill').style.width = (d.progressPct || 0) + '%';
+      var used = d.apiUsedToday || 0; var rem = d.apiRemainingToday || 150000;
+      document.getElementById('bf-api-used').textContent = used.toLocaleString();
+      document.getElementById('bf-api-rem').textContent  = rem.toLocaleString();
+      document.getElementById('bf-api-fill').style.width = Math.min(100, used / 1500) + '%';
+      if (!_bfTimer) _bfTimer = setInterval(refreshBFStatus, 5000);
+    } else {
+      startBtn.style.display = 'flex'; stopBtn.style.display = 'none';
+      activeDiv.style.display = 'none'; stoppedDiv.style.display = 'block';
+      var stInfo = document.getElementById('bf-stopped-info');
+      var stApi  = document.getElementById('bf-stopped-api');
+      if (d.completedLeagues > 0) {
+        stInfo.textContent = 'Progres: ' + d.progressPct + '% (' + d.completedLeagues.toLocaleString() + '/' + d.totalLeagues.toLocaleString() + ' perechi) · ETA: ' + d.estimatedTimeRemaining;
+        stApi.style.display = 'block';
+        document.getElementById('bf-api-used2').textContent = (d.apiUsedToday || 0).toLocaleString();
+      } else {
+        stInfo.textContent = 'Nicio rulare anterioară'; stApi.style.display = 'none';
+      }
+      if (_bfTimer) { clearInterval(_bfTimer); _bfTimer = null; }
+    }
+  } catch(e) { console.error('refreshBFStatus:', e.message); }
+}
+
+async function runHealthCheck() {
+  var el  = document.getElementById('health-results');
+  var btn = document.getElementById('hc-btn');
+  el.style.display = 'block';
+  el.innerHTML = '<div style="color:var(--mu)">⏳ Rulează teste...</div>';
+  btn.disabled = true; btn.textContent = '⏳...';
+  try {
+    var r = await fetch('/api/health-check', { headers: { 'X-Api-Key': _key } });
+    var d = await r.json();
+    var oc = d.overall.includes('✅') ? 'var(--green)' : d.overall.includes('⚠️') ? 'var(--yellow)' : 'var(--red)';
+    var html = '<div style="font-weight:800;color:' + oc + ';margin-bottom:8px">' + d.overall + '</div>';
+    Object.entries(d.tests).forEach(function(entry) {
+      var test = entry[1];
+      var c = test.status.startsWith('✅') ? 'var(--green)' : test.status.startsWith('⚠️') ? 'var(--yellow)' : 'var(--red)';
+      html += '<div class="stat-row">'
+        + '<span class="stat-label">' + test.message + '</span>'
+        + '<span style="color:' + c + ';font-weight:700;white-space:nowrap">' + test.status + '</span>'
+        + '</div>';
+    });
+    html += '<div style="margin-top:8px;font-size:11px;color:var(--mu)">✅ ' + d.summary.passed + ' trecut · ⚠️ ' + d.summary.warnings + ' avertismente · ❌ ' + d.summary.failed + ' eșuat</div>';
+    if (d.summary.critical_issues && d.summary.critical_issues.length) {
+      html += '<div style="margin-top:4px;font-size:11px;color:var(--red)">Critic: ' + d.summary.critical_issues.join(', ') + '</div>';
+    }
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--red)">❌ Eroare: ' + e.message + '</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = 'TEST';
+  }
 }
 
 function init() {

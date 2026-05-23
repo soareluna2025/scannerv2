@@ -238,23 +238,6 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .pi-na{font-size:11px;color:var(--mu);padding:6px 0;font-style:italic}
 .pi-str-bar{height:3px;background:var(--sur3);border-radius:2px;overflow:hidden;margin-top:4px}
 .pi-str-fill{height:100%;border-radius:2px;background:#818cf8}
-/* BACKFILL UI */
-.backfill-section{margin-top:16px;padding-top:16px;border-top:1px solid var(--bor)}
-.backfill-title{font-size:13px;font-weight:700;color:var(--tx);margin-bottom:8px}
-.backfill-progress{height:6px;background:var(--sur3);border-radius:3px;overflow:hidden;margin:3px 0 8px}
-.backfill-fill{height:100%;background:linear-gradient(90deg,var(--ac),#00b894);border-radius:3px;transition:width .4s ease}
-.bf-bar-label{font-size:10px;color:var(--mu2);margin-bottom:1px}
-.bf-status-info{font-size:11px;color:var(--mu);margin-bottom:8px;line-height:1.5}
-.bf-start-btn{flex:1;padding:11px;background:#00e676;color:#001a0d;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px}
-.bf-start-btn:hover{background:#00c853}
-.bf-stop-btn{flex:1;padding:11px;background:#ff1744;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;animation:bfStopPulse 1.5s ease-in-out infinite}
-@keyframes bfStopPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,23,68,.4)}50%{box-shadow:0 0 0 8px rgba(255,23,68,0)}}
-.bf-dot{width:8px;height:8px;border-radius:50%;background:#ff4444;flex-shrink:0;animation:bfDotAnim 1s ease-in-out infinite}
-@keyframes bfDotAnim{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.65)}}
-.bf-active-label{color:#ff5555;font-size:12px;font-weight:700}
-.bf-stopped-label{color:var(--mu);font-size:12px}
-.backfill-btn{width:100%;padding:10px;background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3);border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px}
-.backfill-btn:disabled{opacity:.5;cursor:default}
 
 /* AGENT */
 .agent-wrap{display:flex;flex-direction:column;height:100%}
@@ -720,46 +703,6 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
       </div>
       <input class="settings-input" type="number" id="bankroll-input" value="10" min="0.01" step="0.1">
     </div>
-    <div class="backfill-section">
-      <div class="backfill-title">🗄️ Backfill Date Istorice</div>
-
-      <!-- Active state -->
-      <div id="bf-active" style="display:none">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <div class="bf-dot"></div>
-          <span class="bf-active-label">ACTIV — Colectez date...</span>
-        </div>
-        <div class="bf-status-info" id="bf-current-info">Sezon — · Ligă —</div>
-        <div class="bf-bar-label">Progres: <span id="bf-pct">0</span>% (<span id="bf-done">0</span>/<span id="bf-total">0</span> perechi)</div>
-        <div class="backfill-progress"><div class="backfill-fill" id="bf-fill" style="width:0%"></div></div>
-        <div class="bf-bar-label" style="margin-top:4px">API azi: <span id="bf-api-used">0</span> / 150,000 — rămase: <span id="bf-api-rem">150,000</span></div>
-        <div class="backfill-progress" style="height:4px;margin-bottom:0">
-          <div id="bf-api-fill" style="height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:3px;transition:width .4s ease;width:0%"></div>
-        </div>
-      </div>
-
-      <!-- Stopped state -->
-      <div id="bf-stopped">
-        <div class="bf-status-info" id="bf-stopped-info">Nicio rulare anterioară</div>
-        <div class="bf-bar-label" id="bf-stopped-api" style="display:none">API azi: <span id="bf-api-used2">0</span> / 150,000</div>
-      </div>
-
-      <!-- Buttons -->
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="bf-start-btn" class="bf-start-btn" onclick="startBF()">▶ START</button>
-        <button id="bf-stop-btn" class="bf-stop-btn" style="display:none" onclick="stopBF()">⏹ STOP</button>
-      </div>
-    </div>
-    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:8px;border-bottom:none">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div class="settings-label">🔍 Health Check</div>
-          <div class="settings-sub">Verifică că toate sistemele funcționează</div>
-        </div>
-        <button class="backfill-btn" style="width:auto;padding:8px 16px;margin-top:0" onclick="runHealthCheck()">TEST</button>
-      </div>
-      <div id="health-results" style="display:none;font-size:12px;margin-top:4px"></div>
-    </div>
     <button class="settings-save" onclick="settingsClose()">Salvează</button>
   </div>
 </div>
@@ -1043,98 +986,9 @@ var CFG={MC:80,MD:20,RI:30000};
 var WR_KEY='alohascan_wr_v2';
 var BANKROLL_KEY='alohascan_bankroll';
 function getBankroll(){return parseFloat(localStorage.getItem(BANKROLL_KEY))||10;}
-function settingsOpen(){document.getElementById('bankroll-input').value=getBankroll();document.getElementById('settings-overlay').classList.add('open');refreshBFStatus();}
-function settingsClose(){var v=parseFloat(document.getElementById('bankroll-input').value);if(v>0)localStorage.setItem(BANKROLL_KEY,v);document.getElementById('settings-overlay').classList.remove('open');if(_bfTimer){clearInterval(_bfTimer);_bfTimer=null;}}
-var _bfTimer=null;
-async function startBF(){
-  try{
-    var r=await fetch('/api/backfill/start',{method:'POST'});
-    var d=await r.json();
-    if(d.error){alert('Eroare: '+d.error);return;}
-    refreshBFStatus();
-    if(_bfTimer)clearInterval(_bfTimer);
-    _bfTimer=setInterval(refreshBFStatus,5000);
-  }catch(e){alert('Eroare: '+e.message);}
-}
-async function stopBF(){
-  try{
-    await fetch('/api/backfill/stop',{method:'POST'});
-    refreshBFStatus();
-    if(_bfTimer){clearInterval(_bfTimer);_bfTimer=null;}
-  }catch(e){alert('Eroare: '+e.message);}
-}
-async function refreshBFStatus(){
-  try{
-    var r=await fetch('/api/backfill/status');
-    var d=await r.json();
-    var startBtn=document.getElementById('bf-start-btn');
-    var stopBtn=document.getElementById('bf-stop-btn');
-    var activeDiv=document.getElementById('bf-active');
-    var stoppedDiv=document.getElementById('bf-stopped');
-    if(!startBtn)return;
-    if(d.running){
-      startBtn.style.display='none';stopBtn.style.display='flex';
-      activeDiv.style.display='block';stoppedDiv.style.display='none';
-      var info='';
-      if(d.currentSeason)info+='Sezon '+d.currentSeason;
-      if(d.currentLeague)info+=' · Ligă '+d.currentLeague.id+(d.currentLeague.name?' ('+d.currentLeague.name+')':'');
-      if(d.totalFixtures)info+=' · Fixture '+d.currentFixtureIndex+'/'+d.totalFixtures;
-      document.getElementById('bf-current-info').textContent=info||'Se procesează...';
-      document.getElementById('bf-pct').textContent=d.progressPct||0;
-      document.getElementById('bf-done').textContent=(d.completedLeagues||0).toLocaleString();
-      document.getElementById('bf-total').textContent=(d.totalLeagues||0).toLocaleString();
-      document.getElementById('bf-fill').style.width=(d.progressPct||0)+'%';
-      var used=d.apiUsedToday||0;var rem=d.apiRemainingToday||150000;
-      document.getElementById('bf-api-used').textContent=used.toLocaleString();
-      document.getElementById('bf-api-rem').textContent=rem.toLocaleString();
-      document.getElementById('bf-api-fill').style.width=Math.min(100,used/1500)+'%';
-      if(!_bfTimer)_bfTimer=setInterval(refreshBFStatus,5000);
-    }else{
-      startBtn.style.display='flex';stopBtn.style.display='none';
-      activeDiv.style.display='none';stoppedDiv.style.display='block';
-      var stInfo=document.getElementById('bf-stopped-info');
-      var stApi=document.getElementById('bf-stopped-api');
-      if(d.completedLeagues>0){
-        stInfo.textContent='Progres: '+d.progressPct+'% ('+d.completedLeagues.toLocaleString()+'/'+d.totalLeagues.toLocaleString()+' perechi) · ETA: '+d.estimatedTimeRemaining;
-        stApi.style.display='block';
-        document.getElementById('bf-api-used2').textContent=(d.apiUsedToday||0).toLocaleString();
-      }else{
-        stInfo.textContent='Nicio rulare anterioară';stApi.style.display='none';
-      }
-      if(_bfTimer){clearInterval(_bfTimer);_bfTimer=null;}
-    }
-  }catch(e){console.error('refreshBFStatus:',e.message);}
-}
-async function runHealthCheck(){
-  var el=document.getElementById('health-results');
-  var btn=event.currentTarget||event.target;
-  el.style.display='block';
-  el.innerHTML='<div style="color:var(--mu);padding:6px 0">⏳ Rulează teste...</div>';
-  btn.disabled=true;btn.textContent='⏳...';
-  try{
-    var r=await fetch('/api/health-check');
-    var d=await r.json();
-    var overallColor=d.overall.includes('✅')?'#22c55e':d.overall.includes('⚠️')?'#f59e0b':'#ef4444';
-    var html='<div style="font-weight:800;color:'+overallColor+';margin-bottom:8px;font-size:13px">'+d.overall+'</div>';
-    Object.entries(d.tests).forEach(function(entry){
-      var key=entry[0];var test=entry[1];
-      var color=test.status.startsWith('✅')?'#22c55e':test.status.startsWith('⚠️')?'#f59e0b':'#ef4444';
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bor)">'
-        +'<span style="color:var(--mu2);flex:1;margin-right:8px">'+test.message+'</span>'
-        +'<span style="color:'+color+';font-weight:700;white-space:nowrap">'+test.status+'</span>'
-        +'</div>';
-    });
-    html+='<div style="margin-top:8px;font-size:11px;color:var(--mu)">✅ '+d.summary.passed+' trecut · ⚠️ '+d.summary.warnings+' avertismente · ❌ '+d.summary.failed+' eșuat</div>';
-    if(d.summary.critical_issues&&d.summary.critical_issues.length){
-      html+='<div style="margin-top:4px;font-size:11px;color:#ef4444">Critic: '+d.summary.critical_issues.join(', ')+'</div>';
-    }
-    el.innerHTML=html;
-  }catch(e){
-    el.innerHTML='<div style="color:#ef4444">❌ Eroare: '+e.message+'</div>';
-  }finally{
-    btn.disabled=false;btn.textContent='TEST';
-  }
-}
+function settingsOpen(){document.getElementById('bankroll-input').value=getBankroll();document.getElementById('settings-overlay').classList.add('open');}
+function settingsClose(){var v=parseFloat(document.getElementById('bankroll-input').value);if(v>0)localStorage.setItem(BANKROLL_KEY,v);document.getElementById('settings-overlay').classList.remove('open');}
+
 var ST={ms:[],connected:false,ws:null,score:'all'};
 
 // ── CLOCK ────────────────────────────────────────────────────
