@@ -121,24 +121,12 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .ev-row{margin-top:5px;padding:5px 8px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .ev-val{font-size:13px;font-weight:900;letter-spacing:-.3px;flex-shrink:0}
 .ev-bet{font-size:10px;color:var(--mu2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ev-kelly{font-size:10px;font-weight:700;color:var(--ac);flex-shrink:0}
 .ev-pos{color:#22c55e;font-weight:700}
 .ev-neg{color:#ef4444;font-weight:700}
 .ev-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
 .ev-table th{color:var(--mu);font-size:10px;font-weight:600;padding:5px 4px;text-align:left;border-bottom:1px solid var(--bor)}
 .ev-table td{padding:7px 4px;border-bottom:1px solid rgba(255,255,255,0.04)}
 .ev-best-box{margin-top:10px;padding:10px;background:rgba(34,197,94,.08);border-radius:8px;border:1px solid rgba(34,197,94,.2)}
-.settings-btn{background:none;border:none;color:var(--mu);font-size:16px;cursor:pointer;padding:5px;border-radius:6px;line-height:1;margin-left:6px}
-.settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;display:none;align-items:flex-end;justify-content:center}
-.settings-overlay.open{display:flex}
-.settings-modal{background:var(--sur);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:500px;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
-.settings-modal h3{margin:0 0 16px;font-size:16px;font-weight:700;color:var(--tx)}
-.settings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--bor)}
-.settings-row:last-of-type{border-bottom:none}
-.settings-label{font-size:14px;font-weight:600;color:var(--tx)}
-.settings-sub{font-size:11px;color:var(--mu);margin-top:2px}
-.settings-input{background:var(--sur2);border:1px solid var(--bor);color:var(--tx);padding:7px 10px;border-radius:8px;font-size:14px;width:90px;text-align:right}
-.settings-save{width:100%;margin-top:16px;padding:12px;background:var(--ac2);color:var(--ac);border:1px solid var(--ac3);border-radius:10px;font-size:14px;font-weight:700;cursor:pointer}
 .badge-conf{padding:2px 7px;border-radius:5px;font-size:9px;font-weight:800;letter-spacing:.5px}
 .badge-conf.HIGH{background:rgba(34,197,94,.15);color:#22c55e}
 .badge-conf.MED{background:rgba(245,158,11,.15);color:#f59e0b}
@@ -680,24 +668,8 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
       <span id="ws-label">WS</span>
     </div>
     <div class="clock" id="clock">--:--:--</div>
-    <button class="settings-btn" onclick="settingsOpen()" title="Setări">⚙</button>
   </div>
 </header>
-
-<!-- SETTINGS OVERLAY -->
-<div class="settings-overlay" id="settings-overlay" onclick="if(event.target===this)settingsClose()">
-  <div class="settings-modal">
-    <h3>⚙ Setări</h3>
-    <div class="settings-row">
-      <div>
-        <div class="settings-label">Bankroll (LTC)</div>
-        <div class="settings-sub">Folosit pentru calculele Kelly</div>
-      </div>
-      <input class="settings-input" type="number" id="bankroll-input" value="10" min="0.01" step="0.1">
-    </div>
-    <button class="settings-save" onclick="settingsClose()">Salvează</button>
-  </div>
-</div>
 
 <!-- STATS BAR -->
 <div class="stats" id="stats-bar" style="display:none">
@@ -976,10 +948,6 @@ function tLogo(team,sz){if(!team||!team.logo)return '';return '<img src="'+team.
 // ── CONFIG ──────────────────────────────────────────────────
 var CFG={MC:80,MD:20,RI:30000};
 var WR_KEY='alohascan_wr_v2';
-var BANKROLL_KEY='alohascan_bankroll';
-function getBankroll(){return parseFloat(localStorage.getItem(BANKROLL_KEY))||10;}
-function settingsOpen(){document.getElementById('bankroll-input').value=getBankroll();document.getElementById('settings-overlay').classList.add('open');}
-function settingsClose(){var v=parseFloat(document.getElementById('bankroll-input').value);if(v>0)localStorage.setItem(BANKROLL_KEY,v);document.getElementById('settings-overlay').classList.remove('open');}
 
 var ST={ms:[],connected:false,ws:null,score:'all'};
 
@@ -1266,7 +1234,6 @@ function buildCardHtml(m,lgName){
       if(ed.bestEV>0){
         o+='<div class="ev-row"><span class="ev-val ev-pos">EV: +'+Math.round(ed.bestEV*100)+'%</span>';
         o+='<span class="ev-bet">'+(ed.bestBet||'')+' @ '+(ed.bestCota?ed.bestCota.toFixed(2):'—')+'</span>';
-        if(ed.bestKelly)o+='<span class="ev-kelly">Kelly: '+ed.bestKelly.toFixed(2)+' LTC</span>';
         o+='</div>';
       }else{
         o+='<div class="ev-row"><span class="ev-val ev-neg" style="font-size:10px">EV: NO VALUE</span></div>';
@@ -1439,7 +1406,7 @@ var _pmMatches=[];
 var _pmEnrich={};
 
 function enrichUrl(hid,aid,m){
-  var u='/api/enrich?h='+hid+'&a='+aid+'&br='+getBankroll();
+  var u='/api/enrich?h='+hid+'&a='+aid;
   if(m&&m.fixture&&m.fixture.id){
     u+='&fid='+m.fixture.id;
     u+='&hn='+encodeURIComponent((m.teams&&m.teams.home&&m.teams.home.name)||'');
@@ -1616,7 +1583,7 @@ function renderPM(){
       if(enr.homeWin!=null)html+='<div class="enrich-row hda-row"><span style="color:'+ec(enr.homeWin)+'">H:'+enr.homeWin+'%</span><span style="color:'+ec(enr.draw)+'">D:'+enr.draw+'%</span><span style="color:'+ec(enr.awayWin)+'">A:'+enr.awayWin+'%</span></div>';
       if(enr.hasOdds){
         if(enr.bestEV>0){
-          html+='<div class="ev-row"><span class="ev-val ev-pos">EV: +'+Math.round(enr.bestEV*100)+'%</span><span class="ev-bet">'+(enr.bestBet||'')+' @ '+(enr.bestCota?enr.bestCota.toFixed(2):'—')+'</span>'+(enr.bestKelly?'<span class="ev-kelly">Kelly: '+enr.bestKelly.toFixed(2)+' LTC</span>':'')+'</div>';
+          html+='<div class="ev-row"><span class="ev-val ev-pos">EV: +'+Math.round(enr.bestEV*100)+'%</span><span class="ev-bet">'+(enr.bestBet||'')+' @ '+(enr.bestCota?enr.bestCota.toFixed(2):'—')+'</span></div>';
         }else{
           html+='<div class="ev-row"><span class="ev-val ev-neg" style="font-size:10px">EV: NO VALUE</span></div>';
         }
@@ -1763,7 +1730,7 @@ function mdClose(){
 async function mdFetch(silent){
   try{
     var fid=_md.fixtureId;
-    var url='/api/match?id='+fid+'&h='+_md.homeId+'&a='+_md.awayId+'&br='+getBankroll();
+    var url='/api/match?id='+fid+'&h='+_md.homeId+'&a='+_md.awayId;
     var r=await fetch(url);
     var d=await r.json();
     if(d.error)throw new Error(d.error);
@@ -2018,27 +1985,26 @@ function mdRenderSumar(d){
   // EV Analysis
   if(en.hasOdds){
     out+='<div class="md-section"><div class="md-section-title">EV Analysis (Bet365)</div>';
-    out+='<table class="ev-table"><thead><tr><th>Piata</th><th>Model</th><th>Cota</th><th>EV</th><th>Kelly</th></tr></thead><tbody>';
+    out+='<table class="ev-table"><thead><tr><th>Piata</th><th>Model</th><th>Cota</th><th>EV</th></tr></thead><tbody>';
     var evRows=[
-      {n:'Over 1.5',prob:en.over15Prob,cota:en.cotaOver15,ev:en.evOver15,kelly:en.kellyOver15},
-      {n:'GG',      prob:en.ggProb,    cota:en.cotaGG,    ev:en.evGG,    kelly:en.kellyGG},
-      {n:'1 Gazde', prob:en.homeWin,   cota:en.cotaHome,  ev:en.evHome,  kelly:null},
-      {n:'X Egal',  prob:en.draw,      cota:en.cotaDraw,  ev:en.evDraw,  kelly:null},
-      {n:'2 Oasp.', prob:en.awayWin,   cota:en.cotaAway,  ev:en.evAway,  kelly:null},
+      {n:'Over 1.5',prob:en.over15Prob,cota:en.cotaOver15,ev:en.evOver15},
+      {n:'GG',      prob:en.ggProb,    cota:en.cotaGG,    ev:en.evGG},
+      {n:'1 Gazde', prob:en.homeWin,   cota:en.cotaHome,  ev:en.evHome},
+      {n:'X Egal',  prob:en.draw,      cota:en.cotaDraw,  ev:en.evDraw},
+      {n:'2 Oasp.', prob:en.awayWin,   cota:en.cotaAway,  ev:en.evAway},
     ];
     evRows.forEach(function(row){
       if(row.prob==null)return;
       var evStr=row.ev!=null?((row.ev>0?'+':'')+Math.round(row.ev*100)+'%'):'—';
       var evCls=row.ev>0?'ev-pos':'ev-neg';
-      var kellyStr=row.kelly?row.kelly.toFixed(2)+' LTC':'—';
-      out+='<tr><td>'+row.n+'</td><td>'+(row.prob||'—')+'%</td><td>'+(row.cota?row.cota.toFixed(2):'—')+'</td><td class="'+evCls+'">'+evStr+'</td><td>'+kellyStr+'</td></tr>';
+      out+='<tr><td>'+row.n+'</td><td>'+(row.prob||'—')+'%</td><td>'+(row.cota?row.cota.toFixed(2):'—')+'</td><td class="'+evCls+'">'+evStr+'</td></tr>';
     });
     out+='</tbody></table>';
     if(en.bestBet&&en.bestEV>0){
       out+='<div class="ev-best-box">';
       out+='<div style="font-size:10px;color:var(--mu);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Best Bet</div>';
       out+='<div style="font-weight:700;font-size:14px">'+en.bestBet+' @ '+(en.bestCota?en.bestCota.toFixed(2):'—')+'</div>';
-      out+='<div style="color:#22c55e;font-size:12px;margin-top:3px">EV: +'+Math.round(en.bestEV*100)+'% · Kelly: '+(en.bestKelly?en.bestKelly.toFixed(2):'0')+' LTC</div>';
+      out+='<div style="color:#22c55e;font-size:12px;margin-top:3px">EV: +'+Math.round(en.bestEV*100)+'%</div>';
       out+='</div>';
     }
     out+='</div>';
