@@ -1369,6 +1369,32 @@ NEXT STEPS (prioritizat):
   Commit: 20d0d70
   Push: main (87c75b1..20d0d70) — declanseaza deploy GitHub Actions
 
+[23.05.2026] - Curatare 3 referinte suspendate dupa stergerea icons/ + manifest.json
+  FISIERE MODIFICATE:
+    service-worker.js:16
+      ANTERIOR: cache.addAll(['/', '/index.html', '/manifest.json'])
+      ACUM:     cache.addAll(['/', '/index.html'])
+      RATIUNE: addAll() e atomic — daca un singur URL 404, intregul cache esueaza
+        la install. Eliminarea manifest.json din lista permite SW-ului sa se
+        instaleze corect si sa cache-uiasca / + /index.html.
+    index.html:21 — sters <link rel="manifest" href="/manifest.json">
+      Comentariul "<!-- PWA Manifest -->" pastrat (acum gol, doar marker).
+    index.html:11 — sters <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+      Era deja rupt (file inexistent) — eliminat pentru curatare.
+  DESCOPERIRE NOUA (NU CURATATA):
+    index.html liniile 12-19 contin 8 <link rel="apple-touch-icon"> catre
+    fisiere din /icons/ deja sterse:
+      icon-60@2x.png (120x120), icon-60@3x.png (180x180),
+      icon-40@2x.png (80x80),   icon-40@3x.png (120x120),
+      icon-29@2x.png (58x58),   icon-29@3x.png (87x87),
+      icon-20@2x.png (40x40),   icon-20@3x.png (60x60)
+    Toate vor 404 in productie. Auditul initial le-a ratat fiindca grep-ul
+    excludea /icons/ pentru dedupe. De decis separat: ori cleanup acestor
+    8 linii, ori restaurare folder icons/.
+  VERIFICARE: node --check service-worker.js → SYNTAX OK.
+  Commit: ce75a15
+  Push: main (e5be473..ce75a15) — declanseaza deploy GitHub Actions
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
