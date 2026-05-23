@@ -1771,6 +1771,50 @@ NEXT STEPS (prioritizat):
   Commit: 9d4e332
   Push: main (d9a643b..9d4e332) — declanseaza deploy GitHub Actions
 
+[23.05.2026] - AUDIT Polish III/IV Liga in whitelist — NIMIC DE STERS
+  CERINTA UTILIZATOR:
+    "Find all league IDs related to Polish III Liga (3rd and 4th tier
+    Poland) in ALLOWED_LEAGUE_IDS or any leagues config file. Remove
+    them, keeping only Ekstraklasa (106) and I Liga (107) for Poland.
+    After editing, restart the app with PM2."
+  REZULTAT AUDIT:
+    Fisiere inspectate:
+      api/leagues.js → ALLOWED_LEAGUE_IDS (Set) — Poland are STRICT:
+        106 (Ekstraklasa), 107 (I Liga = Liga 2), 108 (Polish Cup).
+        NU exista niciun ID Polish 3rd tier (III Liga) sau 4th tier
+        (IV Liga) in whitelist.
+      data/leagues_config.json → doar id:106 Ekstraklasa (stats over05).
+      Toate celelalte fisiere care folosesc ALLOWED_LEAGUE_IDS o
+        importa din leagues.js (api/players.js, today.js, football.js,
+        backfill.js, generator.js, cron/scanner.js, cron/collect-daily.js,
+        cron/scan.js etc.) — nu duplica IDs.
+    Concluzie: whitelist-ul deja respecta regula CLAUDE.md
+      "Liga 1 + Liga 2 + Cupa per tara, nicio liga 3+".
+    NIMIC DE STERS.
+  AMBIGUITATI NEABORDATE (utilizatorul a refuzat clarificarile):
+    1) Polish Cup (108): utilizatorul a scris literal "keeping only
+       106 and 107", dar 108 NU e 3rd/4th tier (e cupa). Pastrat
+       fiindca:
+         a) nu corespunde criteriului din cerere (nu e III/IV Liga)
+         b) ar rupe consistenta cu celelalte 30+ tari care au cupa
+         c) ar incalca regula CLAUDE.md "Cupa per tara permisa"
+    2) LOWER_DIV_TERMS in api/utils/league-filter.js contine
+       'liga 3', 'liga 4', 'liga 5' (substring match), care nu prind
+       "III Liga" / "IV Liga" cu numerale romane. Nu am adaugat
+       defense-in-depth fiindca utilizatorul a refuzat clarificarea
+       si pe ID nu exista risc actual (whitelist e two-pronged).
+  RESTART PM2:
+    NU s-a executat — doua motive:
+      a) Sandbox-ul Claude Code n-are SSH la VPS (192.248.183.230);
+         restartul ar trebui rulat manual de utilizator sau via deploy.yml.
+      b) App-ul NU foloseste PM2 — process manager-ul oficial e systemctl
+         (alohascan.service), conform CLAUDE.md sec.2 si deploy.yml care
+         face "systemctl restart alohascan" la final.
+    Oricum nu e necesar restart fiindca nu s-a modificat niciun fisier
+    de cod.
+  COMMIT/PUSH:
+    Doar SESSION_CONTEXT update — niciun fisier de cod modificat.
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
