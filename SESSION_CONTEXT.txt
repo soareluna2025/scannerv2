@@ -2146,6 +2146,43 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382
   Commit: 0162197
 
+[24.05.2026] - MERGE claude/alohascan-v2-audit-mV382 → main + deploy (Poisson fix)
+  Metoda: fast-forward push direct (git push origin BRANCH:main)
+  Range: 0cd61c5..0db0bb2 — 2 commits pe origin/main
+    0162197 — fix(match): calcPoisson home/away perspective
+    0db0bb2 — docs: SESSION_CONTEXT log fix
+  Pre-merge safety:
+    git merge-base --is-ancestor origin/main BRANCH → YES (ancestor confirmat)
+  Verificari post-push:
+    GitHub remote (origin/main):
+      HEAD = 0db0bb2 ✅
+      api/match.js SHA = 20a84e3f8737e4fe60180d3379d462eaca74038a ✅
+      Continut verificat via mcp__github__get_file_contents:
+        - calcPoisson(hGames, aGames, h2h, hId, aId) — signature cu aId ✅
+        - homeAvgScored cu ternary m.teams?.home?.id === hId ✅
+        - awayAvgScored cu ternary m.teams?.away?.id === aId ✅
+      Local match.js identic cu remote (SHA 20a84e3f match) ✅
+    Deploy GitHub Actions:
+      Workflow deploy.yml configurat: trigger pe push main ✅ (verificat)
+      Workflow executa SSH → VPS: git fetch + reset --hard origin/main +
+        npm install + restart systemctl alohascan + curl /health
+      ⚠️ VERIFICARE LIVE NU A FOST POSIBILA din container ephemeral:
+        - Egress HTTP restrictionat (curl http://192.248.183.230:3000/health
+          → connection timeout; chiar si github.com → 403)
+        - MCP github tools NU includ workflow_runs API (doar get_commit,
+          list_commits, get_file_contents — fara CI status)
+        - Fara SSH/PAT pentru a interoga direct VPS-ul
+      Status deploy: PRESUPUS reusit (push a declansat workflow; workflow
+        e idempotent, are restart systemd + verificare /health).
+  Pentru utilizator: rulati manual una din urmatoarele pentru confirmare:
+    1) Browser: http://192.248.183.230:3000/health (sau domeniul propriu)
+    2) GitHub: https://github.com/soareluna2025/scannerv2/actions
+       — verificati ultimul run "Deploy AlohaScan to VPS" = green
+    3) SSH la VPS: systemctl status alohascan + git -C /root/scannerv2 log -1
+       — ar trebui sa arate commit 0db0bb2
+  Branch: claude/alohascan-v2-audit-mV382 pastrat (nu sters, in caz de rollback)
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
