@@ -42,11 +42,13 @@ export const LOWER_DIV_TERMS = [
   'futsal', 'beach soccer', 'beach football',
   'indoor', 'arena football', 'virtual',
   // Meciuri amicale
-  'friendly', 'friendlies', 'friendl', 'amical', 'test match',
+  'friendly', 'friendlies', 'friendl', 'amical', 'amicale', 'test match',
   // Ligi americane sub USL Championship (nivel 2 SUA)
   'usl league one', 'usl league two', 'usl super league',
   'nisa', 'national independent soccer',
   'mls next pro', 'usoc',
+  // Ligi regionale Australia/NZ (sub A-League)
+  'npl queensland', 'npl victoria', 'npl nsw', 'npl',
 ];
 
 /**
