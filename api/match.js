@@ -36,7 +36,7 @@ function calcPoisson(hGames, aGames, h2h, hId, aId) {
     date: m.fixture?.date?.slice(0, 10) || ''
   }));
   const awayForm = aGames.slice(0, 5).map(m => ({
-    result: formResult(m, false),
+    result: formResult(m, m.teams?.home?.id === aId),
     score: `${m.goals?.home ?? 0}-${m.goals?.away ?? 0}`,
     opponent: m.teams?.home?.name || '?',
     date: m.fixture?.date?.slice(0, 10) || ''
