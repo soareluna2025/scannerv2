@@ -1815,6 +1815,111 @@ NEXT STEPS (prioritizat):
   COMMIT/PUSH:
     Doar SESSION_CONTEXT update — niciun fisier de cod modificat.
 
+[23.05.2026] - REWRITE admin.html — Glassmorphism + 3D depth (profesional)
+  SCOPE:
+    Rescriere completa admin.html (al treilea redesign in sesiunea asta).
+    Inlocuieste design-ul cyberpunk neon green agresiv cu un look
+    profesional/curat, glassmorphism + 3D depth, paletă charcoal +
+    verde temperat #00D67D pe fundal negru pur #000000.
+  CHOICE UTILIZATOR (din 3 intrebari):
+    1) Direcție: combinație Opțiunea 1 (glassmorphism + layered depth)
+       + Opțiunea 2 (tilt 3D + gradient orbs)
+    2) Paletă: Opțiunea 4 (charcoal + verde temperat #00D67D),
+       fundal negru pur #000000, polish maxim
+    3) Scope: doar CSS + HTML (JS intact)
+  TEHNICI 3D APLICATE (toate pure CSS, fara JS):
+    a) GLASSMORPHISM:
+       Carduri cu backdrop-filter blur(40px) saturate(140%),
+       background semi-transparent rgba(15,20,28,0.7→0.55) gradient.
+       Border 1px solid rgba(255,255,255,0.06) (white inner border subtil).
+       Suprafata "frosted glass" care lasa orbs-urile sa se vada vag.
+    b) LAYERED SHADOWS pentru depth:
+       Multi-layer box-shadow:
+         inset 0 1px 0 rgba(255,255,255,0.06)  (top highlight - "light from above")
+         inset 0 -1px 0 rgba(0,0,0,0.3)         (bottom inner shadow)
+         0 1px 2px rgba(0,0,0,0.5)              (contact shadow)
+         0 8px 24px rgba(0,0,0,0.4)             (mid depth)
+         0 24px 60px rgba(0,0,0,0.35)           (far depth)
+       Carduri par sa "pluteasca" deasupra fundalului.
+    c) TILT 3D pe HOVER (pure CSS, fara mouse tracking):
+       transform: translateY(-3px) + shadow boost cu accent verde.
+       Tranziție cubic-bezier(0.2, 0.7, 0.2, 1) — easing premium.
+       Senzație de "ridicare" 3D fara JS de mouse.
+    d) GRADIENT ORBS BACKGROUND (atmosfera 3D):
+       3 div absolute poziționate, fiecare cu radial-gradient blur(120px):
+         orb-1: 620px verde top-left, drift 42s
+         orb-2: 780px navy top-right, drift 52s
+         orb-3: 520px verde bottom-center, drift 48s
+       Animatie @keyframes drift cu translate organic (33% / 66% / 100%).
+       Creeaza profunzime ambient color in spatele cardurilor.
+    e) ACCENT CORNER BORDER pe carduri (subtle 3D edge):
+       ::before cu mask trick pentru border-image gradient ce arata doar
+       in coltul stanga-sus (lumina venind din NW), opacity 0.7→1.0 hover.
+  DESIGN SYSTEM:
+    Background:
+      #000000 (body, pure black)
+      #06080C (surface-0, used in header bg)
+    Cards (glass):
+      rgba(15,20,28,0.55-0.70) (surface-1)
+      rgba(20,26,36,0.6) (mini cards inside)
+    Borders:
+      rgba(255,255,255,0.06) (subtile)
+      rgba(255,255,255,0.10) (hover)
+      rgba(0,214,125,0.22) (accent border on focus)
+    Accent (verde temperat):
+      #00D67D (primary)
+      #00B868 (secondary)
+      #009654 (deep, capat gradient)
+    Text:
+      #F2F4F7 (primary - off-white, nu pure white pentru reading comfort)
+      #A0AABA (secondary)
+      #6A7382 (muted)
+    Status:
+      #FF5C72 (red, soft fara neon)
+      #FFCB47 (yellow)
+    Fonts:
+      Inter 400/500/600/700 (body, headings, labels)
+      Rajdhani 500/600/700 (numere mari, logo)
+      JetBrains Mono 400/500 (cod, env keys, cron names)
+      Activat font-feature-settings 'cv02','cv03','cv04','cv11' pentru
+      Inter — variante OpenType pentru forme mai curate ale literelor.
+  HEADER (1 linie, grid 3 col):
+    Brand: ALOHA(text alb) + SCAN(gradient verde 135deg) Rajdhani 26px,
+    weight 600/700, kerning 1px. Sub: "Admin Panel" muted + pill
+    "Online" cu dot pulse soft.
+    Caseta centru: "Conexiune Securizată" + 12 puncte 4px wave.
+    Glassmorphism cu inset shadow.
+    Buton Conectare: gradient verde subtil + border accent, hover
+    translateY(-1px) + glow.
+  CARDS — toate cele 9 secțiuni (Status Sistem, ENV, Baza Date,
+    API Usage, Live, Cron, Erori, Backfill, Health Check) folosesc
+    acelasi design system glass+depth. Hover lift translateY(-3px).
+  POLISH ADAUGAT:
+    - ::selection custom (background accent soft)
+    - Custom scrollbar (8px, slate semi-transparent)
+    - Smooth transitions everywhere (cubic-bezier ease premium)
+    - font-variant-numeric: tabular-nums pe toate numerele (stats,
+      counters, percentages) — alignare verticala consistenta
+    - Drop-shadow pe iconite verzi (subtle 6px glow)
+    - Image env-art (cloud-lock) cu drop-shadow dublu (verde + black)
+      si hover lift 1.02 scale
+    - Toast cu animation toastIn slide-up + fade
+    - Bottom nav cu underglow gradient liniar (40px lat) pe tab activ
+    - Reduced motion blur pe orbs in mobile (80px in loc de 120px)
+  RESPONSIVE 780px + 380px:
+    Status grid 4→2col, env-wrap stack vertical, api-wrap stack,
+    db rows 5→3 si 4→2, match-row coloane mai inguste, caseta
+    Conexiune Securizată hidden, brand mai mic.
+    La 380px: status 2col mai stranse cu val 20px.
+  JS PRESERVAT INTEGRAL:
+    - Toate 37 ID-uri DOM critice verificate cu grep (zero missing).
+    - Toate fetch endpoints intacte.
+    - Block <script> identic cu versiunea anterioara.
+    - .sport-tab + data-k attrs prezente.
+    - node --check pe JS extras a trecut.
+  Commit: TBD
+  Push: main TBD — declanseaza deploy GitHub Actions
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
