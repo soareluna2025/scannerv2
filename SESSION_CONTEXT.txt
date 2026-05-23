@@ -1492,6 +1492,42 @@ NEXT STEPS (prioritizat):
   Commit: d6d730a
   Push: main (3a820b9..d6d730a) — declanseaza deploy GitHub Actions
 
+[23.05.2026] - Integrare imagine cloud-lock in card VARIABILE ENV (admin.html)
+  CONTEXT:
+    Utilizatorul a uploadat manual prin GitHub web UI un PNG (1.97 MB) cu
+    nume UUID "995A4741-3C37-4C34-880C-50A258FE3932.png" in radacina repo,
+    commit 76e42d6 "Add files via upload" pe origin/main. Local main era
+    behind 1 commit pana cand am pull-uit. Initial am raspuns gresit ca
+    "fisierul nu exista" pana cand am verificat origin/main.
+  OPERATII GIT:
+    git pull origin main (fast-forward 2500c63 -> 76e42d6)
+    mkdir -p poze-app
+    git mv 995A4741-3C37-4C34-880C-50A258FE3932.png poze-app/cloud-lock.png
+  ADMIN.HTML — adaugat in card "VARIABILE ENV":
+    Wrapper nou .env-wrap (display:flex, gap:14px, align-items:center)
+    contine pe stanga ul.env-list (flex:1, min-width:0) si pe dreapta
+    img.env-art (width:140, drop-shadow filter pentru glow verde).
+    Pe ecrane <380px imaginea se ascunde via @media query (env list devine
+    full-width pe mobile mic).
+  CSS NOU:
+    .env-wrap{display:flex;gap:14px;align-items:center}
+    .env-art{width:140px;height:auto;flex:none;opacity:.9;
+             filter:drop-shadow(0 0 12px rgba(0,232,150,.25))}
+    @media (max-width:380px){.env-art{display:none}}
+  SERVING:
+    Path-ul /poze-app/cloud-lock.png e servit static din root (server.js
+    serveste tot ce e in radacina repo). Pe VPS dupa deploy ajunge la
+    /root/scannerv2/poze-app/cloud-lock.png si e accesibil prin URL la
+    http://192.248.183.230:3000/poze-app/cloud-lock.png.
+  NOTA LIMITARI:
+    Utilizatorul a cerut initial "Run on VPS: mkdir + mv" — am explicat
+    ca sandbox-ul cloud nu are SSH la VPS si ca operatiile pe VPS nu
+    persista prin deploy (git reset --hard sterge orice nu e in repo).
+    Solutia corecta: operatiile se fac in git (mkdir + git mv), apoi
+    deploy.yml propaga la VPS. Asta s-a si facut.
+  Commit: 446c7ee
+  Push: main (76e42d6..446c7ee) — declanseaza deploy GitHub Actions
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
