@@ -219,7 +219,7 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData) {
     { score: score2, w: 0.20 },
     { score: score3, w: 0.10 },
     { score: score4, w: 0.15 },
-    { score: score5, w: 0 }, // Kelly — exclus din predicție, calculat separat
+    { score: score5, w: 0 }, // EV — exclus din scor (informativ in breakdown)
     { score: score6, w: 0.05 },
     { score: score7, w: 0.20 },
   ].filter(l => l.score !== null).filter(l => l.w > 0);
@@ -435,7 +435,6 @@ export default async function handler(req, res) {
 
   const hId      = Number(h);
   const aId      = Number(a);
-  const bankroll = parseFloat(br) || 10;
   const hdr      = { 'x-apisports-key': key };
 
   try {
@@ -547,7 +546,7 @@ export default async function handler(req, res) {
         result.over25Prob = Math.max(0, result.over25Prob - 5);
     }
 
-    const evData = calcEV(result, oddsRaw, bankroll);
+    const evData = calcEV(result, oddsRaw);
 
     // --- Resolve xG ---
     let xgSource = 'estimated';

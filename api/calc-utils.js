@@ -63,7 +63,7 @@ export function parseOddsItem(item) {
   return (result.cotaHome || result.cotaOver15) ? result : null;
 }
 
-export function calcEV(matrix, oddsRaw, bankroll) {
+export function calcEV(matrix, oddsRaw) {
   const ev = { hasOdds: false };
   if (!oddsRaw) return ev;
 
@@ -89,13 +89,6 @@ export function calcEV(matrix, oddsRaw, bankroll) {
   if (cotaOver15) ev.evOver15 = (matrix.over15Prob / 100) - (1 / cotaOver15);
   if (cotaGG)     ev.evGG     = (matrix.ggProb     / 100) - (1 / cotaGG);
 
-  function kelly(edge, br) {
-    if (edge == null || edge < 0.04) return 0;
-    return Math.min(br * edge * 0.5, br * 0.04);
-  }
-  ev.kellyOver15 = kelly(ev.evOver15, bankroll);
-  ev.kellyGG     = kelly(ev.evGG, bankroll);
-
   const candidates = [
     { name: 'Over 1.5',    ev: ev.evOver15, cota: cotaOver15 },
     { name: 'GG',          ev: ev.evGG,     cota: cotaGG     },
@@ -108,20 +101,15 @@ export function calcEV(matrix, oddsRaw, bankroll) {
     ev.bestBet   = candidates[0].name;
     ev.bestEV    = candidates[0].ev;
     ev.bestCota  = candidates[0].cota;
-    ev.bestKelly = kelly(candidates[0].ev, bankroll);
   }
 
   const r3 = v => v != null ? Math.round(v * 1000) / 1000 : null;
-  const r2 = v => v != null ? Math.round(v * 100)  / 100  : null;
   ev.evHome      = r3(ev.evHome);
   ev.evDraw      = r3(ev.evDraw);
   ev.evAway      = r3(ev.evAway);
   ev.evOver15    = r3(ev.evOver15);
   ev.evGG        = r3(ev.evGG);
   ev.bestEV      = r3(ev.bestEV);
-  ev.kellyOver15 = r2(ev.kellyOver15);
-  ev.kellyGG     = r2(ev.kellyGG);
-  ev.bestKelly   = r2(ev.bestKelly);
 
   return ev;
 }

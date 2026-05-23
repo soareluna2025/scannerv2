@@ -77,7 +77,6 @@ export default async function handler(req, res) {
 
   const hId      = Number(h);
   const aId      = Number(a);
-  const bankroll = parseFloat(br) || 10;
 
   // ── Cache check ───────────────────────────────────────────────
   const cachedEntry = matchCache.get(id);
@@ -189,7 +188,7 @@ export default async function handler(req, res) {
     }
 
     const poissonResult = calcPoisson(hGames, aGames, h2h, hId);
-    const evData        = calcEV(poissonResult, oddsRaw, bankroll);
+    const evData        = calcEV(poissonResult, oddsRaw);
     const enrich        = { ...poissonResult, ...evData };
 
     // Fire-and-forget prediction save
