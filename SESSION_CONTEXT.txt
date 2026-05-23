@@ -1961,6 +1961,43 @@ NEXT STEPS (prioritizat):
   Status: DONE
   Commit: d003f94
 
+[24.05.2026] - AUDIT KELLY — read-only
+  Cautat: kelly/Kelly/KELLY/bankroll/kelly_stake in toate fisierele (.js .html .sql .json
+          .md .cjs .mjs .yml .txt .css .sh .env .conf .toml)
+  Rezultat:
+    COD ACTIV:
+      api/calc-utils.js:66       export function calcEV(matrix, oddsRaw, bankroll)
+      api/calc-utils.js:92-95    function kelly(edge, br) — FORMULA: min(br*edge*0.5, br*0.04) daca edge>=4%
+      api/calc-utils.js:96-97    ev.kellyOver15, ev.kellyGG
+      api/calc-utils.js:111      ev.bestKelly = kelly(candidates[0].ev, bankroll)
+      api/calc-utils.js:122-124  rotunjire kellyOver15/kellyGG/bestKelly
+      api/enrich.js:222          // Kelly — exclus din predictie (comentariu pe score5 layer)
+      api/enrich.js:438          const bankroll = parseFloat(br) || 10
+      api/enrich.js:550          const evData = calcEV(result, oddsRaw, bankroll)
+      api/match.js:80            const bankroll = parseFloat(br) || 10
+      api/match.js:192           const evData = calcEV(poissonResult, oddsRaw, bankroll)
+      index.html:124             .ev-kelly{} CSS
+      index.html:693-696         Settings UI: label Bankroll, input #bankroll-input default 10
+      index.html:979-982         BANKROLL_KEY localStorage, getBankroll(), settingsOpen/Close
+      index.html:1269            Render Kelly badge in card LIVE
+      index.html:1442            URL /api/enrich?...&br=+getBankroll()
+      index.html:1619            Render Kelly badge in card PRE-MECI
+      index.html:1766            URL /api/match?...&br=+getBankroll()
+      index.html:2021,2023-2027  Tabel piete cu coloana Kelly (kellyOver15, kellyGG, restul null)
+      index.html:2033-2034       Formatare celula Kelly cu .toFixed(2) + LTC
+      index.html:2041            Sumar Best Bet: EV + Kelly
+    DOCUMENTATIE/ISTORIC (nu cod executabil):
+      CLAUDE.md:143,152,154      Doc apel calcEV + formula Kelly
+      SESSION_CONTEXT.txt:80,529-531,1943,1952  Logging Kelly in audit anterior
+      audit_aplicatie.txt:16,56,93,146,244,248,422  Audit istoric
+      docs/AUDIT_LOGICA.txt:628  Mentiune EV + Kelly
+      docs/AUDIT_FUNCTII.txt:371,373-374,670  Doc functie calcEV
+    DB:
+      Zero coloane SQL cu numele "kelly" sau "kelly_stake" (verificat in toate .sql)
+    Identificator `kelly_stake`: ZERO aparitii in toata baza de cod
+  Zero modificari efectuate. Next step: curatare completa Kelly din toate fisierele.
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
