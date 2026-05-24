@@ -406,4 +406,174 @@ router.get('/learning-stats', async (req, res) => {
   }
 });
 
+// ── GET /api/admin/win-rate-patterns ─────────────────────────────────────────
+// Distributia win rate-ului real (din prediction_log) pe mai multe dimensiuni:
+// bucket NGP, minut, scor curent, liga. Util pentru:
+// - validarea calibration table (NGP_CAL_REST)
+// - identificarea contextelor cu performanta superioara
+// - tuning manual al threshold-urilor
+//
+// Query params:
+//   days=30 (default), maxim 365
+//   module=NGP|OVER15 (default NGP)
+//   minSamples=5 (default), elimina bucket-uri sub acest prag
+//   league_id=NNN (optional) restrange la o singura liga
+router.get('/win-rate-patterns', async (req, res) => {
+  const days       = Math.min(parseInt(req.query?.days       || '30',  10), 365);
+  const minSamples = Math.max(parseInt(req.query?.minSamples || '5',   10), 1);
+  const moduleQ    = (req.query?.module || 'NGP').toUpperCase();
+  const leagueId   = req.query?.league_id ? parseInt(req.query.league_id, 10) : null;
+
+  if (!['NGP', 'OVER15'].includes(moduleQ)) {
+    return res.status(400).json({ ok: false, error: 'module must be NGP or OVER15' });
+  }
+
+  try {
+    const baseWhere = `
+      module = $1
+      AND created_at > NOW() - INTERVAL '${days} days'
+      AND outcome IN ('WIN','LOSS')
+      ${leagueId ? 'AND league_id = $2' : ''}
+    `;
+    const baseWhereAll = `
+      module = $1
+      AND created_at > NOW() - INTERVAL '${days} days'
+      ${leagueId ? 'AND league_id = $2' : ''}
+    `;
+    const params = leagueId ? [moduleQ, leagueId] : [moduleQ];
+
+    // 1. Overall counters
+    const { rows: ovRows } = await query(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE outcome = 'WIN')     AS wins,
+        COUNT(*) FILTER (WHERE outcome = 'LOSS')    AS losses,
+        COUNT(*) FILTER (WHERE outcome = 'PENDING') AS pending
+      FROM prediction_log
+      WHERE ${baseWhereAll}
+    `, params);
+    const ov = ovRows[0] || {};
+    const ovResolved = Number(ov.wins || 0) + Number(ov.losses || 0);
+    const overall = {
+      total:    Number(ov.total || 0),
+      wins:     Number(ov.wins || 0),
+      losses:   Number(ov.losses || 0),
+      pending:  Number(ov.pending || 0),
+      resolved: ovResolved,
+      winRate:  ovResolved > 0 ? +(Number(ov.wins) / ovResolved * 100).toFixed(1) : null,
+    };
+
+    // 2. Per bucket NGP
+    const { rows: ngpRows } = await query(`
+      SELECT
+        CASE
+          WHEN COALESCE(ngp_value, predicted_value) < 60 THEN '50-60'
+          WHEN COALESCE(ngp_value, predicted_value) < 70 THEN '60-70'
+          WHEN COALESCE(ngp_value, predicted_value) < 80 THEN '70-80'
+          WHEN COALESCE(ngp_value, predicted_value) < 90 THEN '80-90'
+          ELSE '90-100'
+        END AS bucket,
+        COUNT(*) AS n,
+        COUNT(*) FILTER (WHERE outcome = 'WIN') AS wins
+      FROM prediction_log
+      WHERE ${baseWhere}
+      GROUP BY bucket
+      ORDER BY bucket
+    `, params);
+    const byNgpBucket = ngpRows
+      .filter(r => Number(r.n) >= minSamples)
+      .map(r => ({
+        range:   r.bucket,
+        n:       Number(r.n),
+        wins:    Number(r.wins),
+        winRate: +(Number(r.wins) / Number(r.n) * 100).toFixed(1),
+      }));
+
+    // 3. Per minute range
+    const { rows: minRows } = await query(`
+      SELECT
+        CASE
+          WHEN minute <= 15 THEN '5-15'
+          WHEN minute <= 30 THEN '16-30'
+          WHEN minute <= 45 THEN '31-45'
+          WHEN minute <= 60 THEN '46-60'
+          WHEN minute <= 75 THEN '61-75'
+          ELSE '76-85'
+        END AS bucket,
+        MIN(minute) AS sort_key,
+        COUNT(*) AS n,
+        COUNT(*) FILTER (WHERE outcome = 'WIN') AS wins
+      FROM prediction_log
+      WHERE ${baseWhere} AND minute IS NOT NULL
+      GROUP BY bucket
+      ORDER BY sort_key
+    `, params);
+    const byMinuteRange = minRows
+      .filter(r => Number(r.n) >= minSamples)
+      .map(r => ({
+        range:   r.bucket,
+        n:       Number(r.n),
+        wins:    Number(r.wins),
+        winRate: +(Number(r.wins) / Number(r.n) * 100).toFixed(1),
+      }));
+
+    // 4. Per score state (top 12 cele mai frecvente)
+    const { rows: scoreRows } = await query(`
+      SELECT
+        score_at_prediction AS state,
+        COUNT(*) AS n,
+        COUNT(*) FILTER (WHERE outcome = 'WIN') AS wins
+      FROM prediction_log
+      WHERE ${baseWhere} AND score_at_prediction IS NOT NULL
+      GROUP BY score_at_prediction
+      HAVING COUNT(*) >= ${minSamples}
+      ORDER BY COUNT(*) DESC
+      LIMIT 12
+    `, params);
+    const byScoreState = scoreRows.map(r => ({
+      state:   r.state,
+      n:       Number(r.n),
+      wins:    Number(r.wins),
+      winRate: +(Number(r.wins) / Number(r.n) * 100).toFixed(1),
+    }));
+
+    // 5. Per league (top 25, doar daca nu e filtru pe league_id)
+    let byLeague = null;
+    if (!leagueId) {
+      const { rows: lgRows } = await query(`
+        SELECT
+          league_name AS league,
+          league_id,
+          COUNT(*) AS n,
+          COUNT(*) FILTER (WHERE outcome = 'WIN') AS wins
+        FROM prediction_log
+        WHERE ${baseWhere} AND league_name IS NOT NULL
+        GROUP BY league_name, league_id
+        HAVING COUNT(*) >= ${minSamples}
+        ORDER BY COUNT(*) FILTER (WHERE outcome = 'WIN')::float / NULLIF(COUNT(*), 0) DESC
+        LIMIT 25
+      `, params);
+      byLeague = lgRows.map(r => ({
+        league:    r.league,
+        league_id: r.league_id,
+        n:         Number(r.n),
+        wins:      Number(r.wins),
+        winRate:   +(Number(r.wins) / Number(r.n) * 100).toFixed(1),
+      }));
+    }
+
+    res.json({
+      ok: true,
+      meta: { days, module: moduleQ, minSamples, leagueId, asOf: new Date().toISOString() },
+      overall,
+      byNgpBucket,
+      byMinuteRange,
+      byScoreState,
+      ...(byLeague ? { byLeague } : {}),
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 export default router;
