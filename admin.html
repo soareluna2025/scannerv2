@@ -1002,10 +1002,6 @@ body{
         <option value="60">60 zile</option>
         <option value="90">90 zile</option>
       </select>
-      <select id="wr-module" onchange="loadWinRatePatterns()" style="background:rgba(255,255,255,.05);border:1px solid var(--bor);color:var(--tx);padding:5px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-right:6px">
-        <option value="NGP" selected>NGP</option>
-        <option value="OVER15">Over 1.5</option>
-      </select>
       <button class="hc-btn" id="wr-btn" onclick="loadWinRatePatterns()">Reîncarcă</button>
     </div>
     <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">Performanță reală pe dimensiuni multiple — din <code>prediction_log</code> tabel</div>
@@ -1380,9 +1376,8 @@ async function loadWinRatePatterns(){
   if (btn) btn.disabled = true;
   out.innerHTML = '<div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">⏳ Se încarcă…</div>';
   try {
-    var days   = document.getElementById('wr-days').value;
-    var module = document.getElementById('wr-module').value;
-    var d      = await apiFetch('/api/admin/win-rate-patterns?days=' + days + '&module=' + module + '&minSamples=5');
+    var days = document.getElementById('wr-days').value;
+    var d    = await apiFetch('/api/admin/win-rate-patterns?days=' + days + '&minSamples=5');
     if (!d.ok) { out.innerHTML = '<div style="color:#ef4444;padding:12px">Eroare: ' + (d.error||'unknown') + '</div>'; return; }
     out.innerHTML = renderWinRatePatterns(d);
   } catch (e) {
@@ -1419,7 +1414,7 @@ function renderWinRatePatterns(d){
   var h = '';
   // Overall
   h += '<div style="background:rgba(255,255,255,.03);border-radius:8px;padding:12px;margin-bottom:14px">';
-  h += '<div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Overall ' + d.meta.days + ' zile · ' + d.meta.module + '</div>';
+  h += '<div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Overall ' + d.meta.days + ' zile · alerte NGP &gt; 70</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center">';
   h += '<div><div style="font-size:18px;font-weight:800;color:var(--tx)">' + o.total + '</div><div style="font-size:9px;color:var(--mu);text-transform:uppercase">Total alerte</div></div>';
   h += '<div><div style="font-size:18px;font-weight:800;color:#22c55e">' + o.wins + '</div><div style="font-size:9px;color:var(--mu);text-transform:uppercase">Wins</div></div>';
@@ -1428,16 +1423,10 @@ function renderWinRatePatterns(d){
   h += '<div><div style="font-size:22px;font-weight:800;color:' + wrColor(o.winRate) + '">' + (o.winRate === null ? '—' : o.winRate.toFixed(1) + '%') + '</div><div style="font-size:9px;color:var(--mu);text-transform:uppercase">Win Rate</div></div>';
   h += '</div></div>';
 
-  // Per bucket NGP
+  // Per bucket over15_prob (predictia modelului)
   if (d.byNgpBucket && d.byNgpBucket.length){
-    h += '<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📊 Per bucket NGP</div>';
+    h += '<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📊 Per Over 1.5 prob bucket</div>';
     d.byNgpBucket.forEach(function(b){ h += renderBucketRow(b.range + '%', b.n, b.winRate, b.wins); });
-    h += '</div>';
-  }
-  // Per minute range
-  if (d.byMinuteRange && d.byMinuteRange.length){
-    h += '<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⏱️ Per minut</div>';
-    d.byMinuteRange.forEach(function(b){ h += renderBucketRow('min ' + b.range, b.n, b.winRate, b.wins); });
     h += '</div>';
   }
   // Per score state
