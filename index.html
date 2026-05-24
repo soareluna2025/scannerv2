@@ -4027,7 +4027,7 @@ function simRender(d){
     setTimeout(animateBall, 1800);
   });
 })();
-// Ajustez page.top in functie de wr-bar (eliminam gap)
+// Ajustez page.top in functie de wr-bar (eliminam gap intre banner si content)
 function adjustPageTop(){
   var wr=document.getElementById('wr-bar');
   var page=document.getElementById('page');
@@ -4042,7 +4042,22 @@ function adjustPageTop(){
 }
 document.addEventListener('DOMContentLoaded',adjustPageTop);
 window.addEventListener('load',adjustPageTop);
-setTimeout(adjustPageTop,500);  // safety after dynamic content
+// Resize listener: la orice schimbare (rotatie telefon, keyboard show/hide,
+// fereastra resize pe desktop), recalculez gap-ul.
+window.addEventListener('resize',adjustPageTop);
+window.addEventListener('orientationchange',adjustPageTop);
+// MutationObserver pe wr-bar: daca isi schimba continutul (ex: numere update),
+// re-masuram inaltimea reala.
+(function(){
+  var wr=document.getElementById('wr-bar');
+  if(!wr||!window.MutationObserver)return;
+  var obs=new MutationObserver(function(){adjustPageTop();});
+  obs.observe(wr,{childList:true,subtree:true,attributes:true,attributeFilter:['style']});
+})();
+// Safety timeouts pentru render dinamic / late content
+setTimeout(adjustPageTop,300);
+setTimeout(adjustPageTop,1000);
+setTimeout(adjustPageTop,3000);
 </script>
 <script>
 if ('serviceWorker' in navigator) {
