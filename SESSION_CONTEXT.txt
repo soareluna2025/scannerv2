@@ -2634,6 +2634,10 @@ NEXT STEPS (prioritizat):
                    (elimină fixture.date <= Date.now() după dedup window)
   Commit: 2ff5158
 
+[24.05 ~prezent] - api/today.js: filtru future-only aplicat și pe ramura DB
+                   (folosit m.kickoff_time, alias SQL pt match_date)
+  Commit: 9ba87f6
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
