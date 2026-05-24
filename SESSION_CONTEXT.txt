@@ -2622,6 +2622,10 @@ NEXT STEPS (prioritizat):
                    Zero suprascrieri (toate erau lipsă în origin/main).
   Commit: 21ca7d7
 
+[24.05 ~prezent] - Cherry-pick pe main: renderMatches() listă plată
+                   (eliminat grupare campionate, sortare desc fixture.date)
+  Commit: 13a875e
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
