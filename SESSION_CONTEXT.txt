@@ -2682,6 +2682,22 @@ NEXT STEPS (prioritizat):
                  - Schimbari max 5pp intre scan-uri (era 70pp)
                  - REST si WS = aceeasi valoare (sursa unica scanner.js)
 
+[24.05 ~prezent] - FIX modal: NGP sincronizat cu card + Poisson stale
+                   detection (lambda<0.5 + isLive&mn>15 = pre-meci stale)
+  Commit: 2110045, e5cc583
+
+[24.05 ~prezent] - FIX card snap: include lgName + teamNames pentru rebuild
+                   cand datele se populeaza dupa primul render (header lipsa)
+  Commit: 66361b2
+
+[24.05 ~prezent] - UI: 'Win Rate' rebranded 'Alerte NGP' cu disclaimer
+                   onest (NU profit), info modal pe tap
+  Commit: ef3d328
+
+[24.05 ~prezent] - backtest: suport --window MIN pentru 'gol in next N min'
+                   in loc de 'rest of match' (calibrare mai relevanta live)
+  Commit: 1b4e728
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
