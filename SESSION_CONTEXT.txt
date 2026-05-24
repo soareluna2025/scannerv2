@@ -2729,7 +2729,52 @@ NEXT STEPS (prioritizat):
                    - Cota minima auto-calculata, input cota personala,
                      EV recalc live cu verdict colorat (verde/galben/rosu)
                    - Persistence localStorage per (fixture_id, piata)
-  Commit: 303e065
+  Commit: 303e065 + 8c96588 (anti-typing-zboara fix)
+
+[24.05 ~10:45] - GENERATOR BACKTEST (1000 meciuri, PRE-MATCH):
+                 Brier scores (industria=0.20 bun):
+                   Over 0.5 total    0.1149  ✓✓ EXCELENT (top)
+                   Over 0.5 gazde    0.1780  ✓✓
+                   Over 1.5 total    0.1789  ✓✓
+                   Gazde marcheaza   0.1803  ✓
+                   Cards Over 4.5    0.1809  ✓ (n=7 doar - nefiabil)
+                   Over 1.5 oaspeti  0.1992  ✓
+                   Corners Over 6.5  0.2070  ✓ (n=7)
+                   Oaspeti marcheaza 0.2081  ✓
+                   Over 2.5 total    0.2101  ✓
+                   Over 0.5 oaspeti  0.2139  ✓
+                   Over 1.5 gazde    0.2161  ✓
+                   GG                0.2251  ⚡ MEDIU
+                   Corners Over 8.5  0.2707  ⚠
+                   Cards Over 2.5    0.3860  ⚠
+                 PROBLEMA INFRA: doar 7/1000 meciuri au match_stats,
+                 si h2h DB e gol. Cron-urile collect-finished + h2h
+                 backfill nu populeaza corect.
+  Commit: f2cc529 (scripts/generator-backtest.js)
+
+[24.05 ~prezent] - CALIBRATION LAYER GENERATOR:
+                 - api/utils/generator-calibration.js: tabel CALIBRATION
+                   per piata, functie calibrateGenerator(cat, sub, thr, raw)
+                 - index.html: G2_CALIBRATION inline (MIRROR), g2Calibrate
+                   functie, g2Score returneaza {score: CALIBRAT, rawScore}
+                 - g2RenderTop10 afiseaza valoarea calibrata + indicator
+                   raw cand difera. Header colorat per categorie:
+                   verde '✓ Calibrat' pt validated, galben '⚠ Necalibrat'
+                   pt cards/corners (sample insuficient)
+                 Descoperiri majore:
+                 - Gazde marcheaza 80%+: real 96%! (formula subestimeaza)
+                 - Over 0.5 oaspeti mid: formula spune 50%, real 10% (DISC!)
+                 - GG 80%+: degenereaza, real 60% (CAP aplicat)
+                 - Over 1.5 total 80%+: real 95% (BOOST)
+  Commit: d95334f
+
+[24.05 ~prezent] - GENERATOR DEBUG TOOL (script per meci specific):
+                 node scripts/generator-debug.js --fixture <ID>
+                 Output: date colectate (JOIN status), intermediare per
+                 categorie (lamH, lamA, poisS, h2hS, formula), scoruri
+                 raw vs calibrate, outcome real pentru meciuri FT.
+                 Util pentru 'de ce scorul e X?' sau 'lipseste vreun JOIN?'
+  Commit: 92d8a24
 
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
