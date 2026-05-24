@@ -2581,6 +2581,8 @@ var G2={
   scrn:1,hist:[1],
   matches:[],top10:[],
   loading:false,
+  minScore:0,         // filtru: ascunde scoruri < minScore
+  sortBy:'score',     // 'score' | 'ev' (necesită cote introduse)
 };
 
 var G2_CATS={
@@ -2917,6 +2919,24 @@ function g2Calibrate(cat,sub,thr,raw){
 function g2CalibrationTested(cat){
   return cat==='home'||cat==='away'||cat==='gg'||cat==='goals';
 }
+// EV recalc pentru Generator (similar cu evRecalc din modal)
+function g2EvRecalc(inputId, realProb, displayId){
+  var el=document.getElementById(inputId);
+  var disp=document.getElementById(displayId);
+  if(!el||!disp)return;
+  var raw=(el.value||'').toString().replace(',','.');
+  var cota=parseFloat(raw);
+  if(!cota||cota<1.01){disp.innerHTML='&mdash;';disp.style.color='var(--mu)';return;}
+  try{localStorage.setItem(inputId, cota.toString());}catch(e){}
+  var ev=realProb*cota-1;
+  var evPct=Math.round(ev*100);
+  var sign=ev>=0?'+':'';
+  var color, icon, label;
+  if(ev>=0.08){color='#22c55e';icon='✅';label='profitabil';}
+  else if(ev>=0){color='#f59e0b';icon='⚠️';label='marginal';}
+  else{color='#ef4444';icon='❌';label='NU paria';}
+  disp.innerHTML='<span style="color:'+color+'">EV: '+sign+evPct+'% '+icon+' '+label+'</span>';
+}
 
 function g2RenderTop10(){
   var el=document.getElementById('g2top10');
@@ -2927,6 +2947,10 @@ function g2RenderTop10(){
   var scored=G2.matches.map(function(m){
     var r=g2Score(m);return{m:m,score:r.calibrated,raw:r.rawScore,confirmed:r.confirmed};
   });
+  // Filtru prag minim
+  if(G2.minScore>0){
+    scored=scored.filter(function(item){return item.confirmed||item.score>=G2.minScore;});
+  }
   scored.sort(function(a,b){
     if(a.confirmed!==b.confirmed)return a.confirmed?1:-1;
     return b.score-a.score;
@@ -2959,7 +2983,18 @@ function g2RenderTop10(){
   }else{
     header='<div style="font-size:10px;color:var(--mu);padding:6px 12px;background:rgba(245,158,11,.05);border-left:3px solid #f59e0b;margin-bottom:8px">⚠ <b>Necalibrat</b> (date insuficiente pentru cards/corners). Procentele sunt scoruri brute, NU probabilități măsurate.</div>';
   }
-  el.innerHTML=header+html;
+  // Filtru prag minim încredere
+  var filterUI='<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,255,255,.03);border-radius:8px;margin-bottom:8px;font-size:11px">';
+  filterUI+='<span style="color:var(--mu);font-weight:600">FILTRU:</span>';
+  filterUI+='<span style="color:var(--mu)">prag minim</span>';
+  filterUI+='<select onchange="G2.minScore=parseInt(this.value);g2RenderTop10()" style="background:rgba(255,255,255,.05);border:1px solid var(--bor);color:var(--tx);padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600">';
+  [0,50,60,70,75,80,85,90].forEach(function(v){
+    filterUI+='<option value="'+v+'"'+(G2.minScore===v?' selected':'')+'>'+(v===0?'Toate':v+'%+')+'</option>';
+  });
+  filterUI+='</select>';
+  filterUI+='<span style="color:var(--mu);margin-left:auto">'+G2.top10.length+'/'+G2.matches.length+'</span>';
+  filterUI+='</div>';
+  el.innerHTML=header+filterUI+html;
 }
 
 function g2Detail(idx){
@@ -2980,6 +3015,22 @@ function g2Detail(idx){
   h+='<div class="g2hero-match">'+dHLogo+(m.home_team||'?')+hInjTxt+' <span style="opacity:.5">vs</span> '+dALogo+(m.away_team||'?')+aInjTxt+'</div>';
   h+='<div class="g2hero-mkt">'+meta.icon+' '+mktLbl+'</div>';
   h+='<div class="g2hero-pct" style="color:'+clr+'">'+Math.round(pct)+'%</div>';
+  h+='</div>';
+  // ── CALCULATOR EV pentru aceasta recomandare ──────────────────
+  var fid=m.fixture_id;
+  var evKey='g2ev_'+fid+'_'+G2.cat+'_'+(G2.sub||'')+'_'+(G2.thr||0);
+  var savedCota='';
+  try{savedCota=localStorage.getItem(evKey)||'';}catch(e){}
+  var minCota=pct>0?(100/pct).toFixed(2):'—';
+  h+='<div class="g2section" style="background:rgba(59,130,246,.05);border-left:3px solid #3b82f6;border-radius:8px;padding:12px;margin:12px 0">';
+  h+='<div class="g2sec-title">🧮 Calculator EV (Bet365 / Superbet)</div>';
+  h+='<div style="font-size:11px;color:var(--mu);margin-bottom:10px">Probabilitate calibrată: <b style="color:var(--tx)">'+Math.round(pct)+'%</b> · Cota minimă pentru profit: <b style="color:var(--tx)">'+minCota+'</b></div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
+  h+='<label style="font-size:12px;color:var(--mu)">Cota ta:</label>';
+  h+='<input type="text" inputmode="decimal" pattern="[0-9.,]*" id="'+evKey+'" value="'+savedCota+'" placeholder="ex: 1.40" oninput="g2EvRecalc(\''+evKey+'\','+(pct/100)+',\''+evKey+'_v\')" style="background:rgba(255,255,255,.06);border:1px solid var(--bor);color:var(--tx);padding:7px 10px;border-radius:7px;font-size:14px;font-weight:600;width:90px">';
+  h+='<div id="'+evKey+'_v" style="font-size:14px;font-weight:700">&mdash;</div>';
+  h+='</div>';
+  h+='<div style="font-size:10px;color:var(--mu);margin-top:8px;line-height:1.4">💡 EV = (Probabilitate × Cota) − 1. Verde = profit. Roșu = pierdere.</div>';
   h+='</div>';
   // formă
   h+='<div class="g2section"><div class="g2sec-title">📊 Formă recentă</div>';
