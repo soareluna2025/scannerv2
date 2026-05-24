@@ -2332,6 +2332,53 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX index.html calcScore — magic 1.4 inlocuit cu enrichData.lambdaTotal
+  Bug sesizat in audit Poisson (sectiunea 8a):
+    index.html linia 1027: var lb = lxg>0 ? lxg*.55 + 1.4*.45 : 1.6;
+    Constanta 1.4 era o aproximare hardcodata pentru "full-match expected
+    goals" — pierdea complet personalizarea per echipa.
+  Fix (1 linie, linia 1027):
+    1.4 → (m.enrichData?.lambdaTotal ?? 1.4)
+    Forma completa noua:
+      var lb = lxg>0 ? lxg*.55 + (m.enrichData?.lambdaTotal??1.4)*.45 : 1.6;
+  Semantica corecta:
+    enrichData.lambdaTotal = lambdaHome + lambdaAway din /api/enrich
+    (calculate cu form_stats reale, cross-product corect dupa fix calcPoisson)
+    Tipic 2.0-3.5 in functie de echipe → mult mai informativ decat 1.4 magic
+  Impact predictii live:
+    - Meciuri high-scoring (λT~3.0): lb crescut → markete Over X.X live
+      predictii mai inalte (corect pentru echipe ofensive)
+    - Meciuri low-scoring (λT~2.0): lb mai mic → markete Over X.X live
+      predictii mai scazute (corect pentru echipe defensive)
+    - Fara enrichData (meci nou, enrich nu a rulat): fallback 1.4 →
+      comportament IDENTIC cu vechi
+  Verificare: JS syntax OK (3 blocuri inline validate cu new Function())
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: dd3cf3e
+
+[24.05.2026] - MERGE → main (calcScore real lambda) + deploy
+  Metoda: fast-forward push direct
+  Range: 2fa87bd..dd3cf3e — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Verificari post-push:
+    origin/main HEAD: dd3cf3e ✅
+    index.html linia 1028 verificat via mcp__github__get_file_contents:
+      var lb=lxg>0?lxg*.55+(m.enrichData?.lambdaTotal??1.4)*.45:1.6;  ✅
+  Deploy: GitHub Actions declansat automat
+  Status sprint Audit Poisson: 5 fix-uri aplicate (era 4, acum 5)
+    1) match.js calcPoisson H/A perspective    ✅ (commit 0162197)
+    2) match.js awayForm formResult            ✅ (commit 971d3fa)
+    3) cron live-score DRY extraction          ✅ (commit f99eb1d)
+    4) calc-utils poissonProb guard λ<=0       ✅ (commit e571cad)
+    5) index.html calcScore real lambda        ✅ (commit dd3cf3e)
+  Bug-uri Poisson NEFIX (sprint viitor):
+    - match.js fara fallback DB form_stats/teams_stats
+    - match.js fara dynamic lambda live
+    - scan.js/scanner.js xG-weighted×3 vs enrich.js cross-product
+    - Truncare matrice 6×6 vs Monte Carlo full
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
