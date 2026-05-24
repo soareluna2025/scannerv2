@@ -1961,8 +1961,12 @@ function mdRenderSumar(d){
   if(statsHTML){
     out+='<div class="md-section"><div class="md-section-title">Statistici meci</div>'+statsHTML+'</div>';
   }
-  // NGP for live matches (FIX 9)
+  // NGP for live matches — sincronizat cu card-ul (ST.ms = sursa unica)
   if(isLive){
+    // Caut _ng pentru acest fixture in ST.ms (calibrat + smoothed de scanner)
+    var _fidM=fix&&fix.fixture&&fix.fixture.id;
+    var _stMatch=_fidM&&ST.ms.find(function(x){return x.fixture&&x.fixture.id===_fidM;});
+    if(_stMatch&&typeof _stMatch._ng==='number')fix._ng=_stMatch._ng;
     var ngpData=calcScore(fix);
     var ngpClr=ngpData.ng>=80?'#00d4a8':ngpData.ng>=60?'#ffd166':'#ff6b6b';
     out+='<div class="md-section"><div class="md-section-title">Probabilitate gol următor (NGP)</div>';
@@ -1973,25 +1977,32 @@ function mdRenderSumar(d){
     out+='</div>';
   }
 
-  // Poisson probs
+  // Poisson probs — detectez date stale/broken si afisez transparent
   if(en.over15Prob!=null){
+    var _lambdaStale=Number(en.lambdaTotal||0)<0.5;
     out+='<div class="md-section"><div class="md-section-title">Predicții Poisson</div>';
-    out+='<div class="md-prob-row">';
-    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over15Prob)+'">'+Math.round(en.over15Prob)+'%</div><div class="md-prob-lbl">Over 1.5</div></div>';
-    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over25Prob)+'">'+Math.round(en.over25Prob)+'%</div><div class="md-prob-lbl">Over 2.5</div></div>';
-    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.ggProb)+'">'+Math.round(en.ggProb)+'%</div><div class="md-prob-lbl">GG</div></div>';
-    out+='</div>';
-    out+='<div class="md-prob-row">';
-    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeScoreRate)+'">'+en.homeScoreRate+'%</div><div class="md-prob-lbl">Gazde marcheaza</div></div>';
-    out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2)">'+Number(en.lambdaTotal||0).toFixed(2)+'</div><div class="md-prob-lbl">λ Total</div></div>';
-    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.awayScoreRate)+'">'+en.awayScoreRate+'%</div><div class="md-prob-lbl">Oaspeti marcheaza</div></div>';
-    out+='</div>';
-    if(en.confidence)out+='<div style="text-align:center;margin-top:6px"><span class="badge-conf '+en.confidence+'">Incredere: '+en.confidence+'</span></div>';
+    if(_lambdaStale){
+      out+='<div style="padding:12px;background:rgba(245,158,11,0.1);border-left:3px solid #f59e0b;border-radius:6px;font-size:12px;color:#fbbf24;">';
+      out+='⚠ Predicțiile Poisson nu sunt fiabile pentru acest meci (λ='+Number(en.lambdaTotal||0).toFixed(2)+' indică date pre-meci incomplete sau corupte). Folosește NGP de mai sus pentru deciziile live.';
+      out+='</div>';
+    } else {
+      out+='<div class="md-prob-row">';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over15Prob)+'">'+Math.round(en.over15Prob)+'%</div><div class="md-prob-lbl">Over 1.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over25Prob)+'">'+Math.round(en.over25Prob)+'%</div><div class="md-prob-lbl">Over 2.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.ggProb)+'">'+Math.round(en.ggProb)+'%</div><div class="md-prob-lbl">GG</div></div>';
+      out+='</div>';
+      out+='<div class="md-prob-row">';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeScoreRate)+'">'+en.homeScoreRate+'%</div><div class="md-prob-lbl">Gazde marcheaza</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2)">'+Number(en.lambdaTotal||0).toFixed(2)+'</div><div class="md-prob-lbl">λ Total</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.awayScoreRate)+'">'+en.awayScoreRate+'%</div><div class="md-prob-lbl">Oaspeti marcheaza</div></div>';
+      out+='</div>';
+      if(en.confidence)out+='<div style="text-align:center;margin-top:6px"><span class="badge-conf '+en.confidence+'">Incredere: '+en.confidence+'</span></div>';
+    }
     out+='</div>';
   }
 
-  // EV Analysis
-  if(en.hasOdds){
+  // EV Analysis — ascund cand Poisson e stale (EV calculat din model rupt nu e fiabil)
+  if(en.hasOdds && Number(en.lambdaTotal||0) >= 0.5){
     out+='<div class="md-section"><div class="md-section-title">EV Analysis (Bet365)</div>';
     out+='<table class="ev-table"><thead><tr><th>Piata</th><th>Model</th><th>Cota</th><th>EV</th></tr></thead><tbody>';
     var evRows=[
