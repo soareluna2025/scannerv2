@@ -3771,10 +3771,13 @@ function simRender(d){
   }
 
   // ── Markets — RAW (Poisson) + CALIBRAT (din backtest 1000 meciuri post h2h-fix)
+  // Calibrarea V2 e antrenata pe meciuri PRE-MECI la final. Pe LIVE matches
+  // (lambda dynamic, scor curent != 0-0), aplicarea directa STRICA predictiile
+  // (under 40% raw -> 0% cal, peste 70% -> 100%). Pentru LIVE pastram raw.
   if(sim.markets){
-    html+='<div class="sim-section"><div class="sim-section-title">PIEȚE — calibrat la istoric real</div>';
+    var isLiveSim=!!sim.isLive;
+    html+='<div class="sim-section"><div class="sim-section-title">PIEȚE '+(isLiveSim?'— LIVE (Poisson dinamic)':'— calibrat la istoric real')+'</div>';
     var ci=sim.confidenceIntervals||{};
-    // Map: market key → [label, raw, calCategory, calSub, calThr]
     var calMkts=[
       ['Over 0.5 total', sim.markets.over05, 'goals','total',0.5],
       ['Over 1.5 total', sim.markets.over15, 'goals','total',1.5],
@@ -3784,22 +3787,26 @@ function simRender(d){
     calMkts.forEach(function(row){
       var lbl=row[0],raw=row[1],cat=row[2],sub=row[3],thr=row[4];
       if(typeof raw!=='number')return;
-      var cal=g2Calibrate(cat,sub,thr,Math.round(raw));
-      var minCota=cal>0?(100/cal).toFixed(2):'—';
+      // Pe LIVE: folosim raw (Poisson dinamic e deja calibrat per minute ramase)
+      // Pe PRE-MECI: aplicam G2_CALIBRATION (validat pe backtest)
+      var displayProb = isLiveSim ? Math.round(raw) : g2Calibrate(cat,sub,thr,Math.round(raw));
+      var minCota=displayProb>0?(100/displayProb).toFixed(2):'—';
       html+='<div style="margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px">';
       html+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">';
       html+='<span style="font-size:12px;color:var(--tx);font-weight:600">'+lbl+'</span>';
-      html+='<span style="font-weight:800;font-size:16px;color:'+ec(cal)+'">'+cal+'%</span>';
+      html+='<span style="font-weight:800;font-size:16px;color:'+ec(displayProb)+'">'+displayProb+'%</span>';
       html+='</div>';
-      // Bar calibrata
       html+='<div style="position:relative;height:6px;background:var(--bor);border-radius:3px;overflow:hidden;margin-bottom:4px">';
-      html+='<div style="position:absolute;left:0;width:'+cal+'%;height:100%;background:'+ec(cal)+';border-radius:3px"></div></div>';
+      html+='<div style="position:absolute;left:0;width:'+displayProb+'%;height:100%;background:'+ec(displayProb)+';border-radius:3px"></div></div>';
       html+='<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mu)">';
-      html+='<span>raw MC: '+Math.round(raw)+'%'+(Math.abs(cal-Math.round(raw))>3?' <span style="color:var(--ac)">→ '+(cal>raw?'+':'')+(cal-Math.round(raw))+'pp</span>':'')+'</span>';
+      if(isLiveSim){
+        html+='<span>Poisson live (lambda redus dupa min '+sim.elapsed+')</span>';
+      }else{
+        html+='<span>raw MC: '+Math.round(raw)+'%'+(Math.abs(displayProb-Math.round(raw))>3?' <span style="color:var(--ac)">→ '+(displayProb>raw?'+':'')+(displayProb-Math.round(raw))+'pp</span>':'')+'</span>';
+      }
       html+='<span>cot&#259; min &ge; <b style="color:var(--tx)">'+minCota+'</b></span>';
       html+='</div></div>';
     });
-    // Piete simple compact (Over 3.5, BTTS No)
     var mkts2=[
       ['Over 3.5',sim.markets.over35],
       ['BTTS No', sim.markets.bttsNo],
@@ -3810,7 +3817,11 @@ function simRender(d){
       html+='<div class="sim-market-val" style="color:'+ec(m[1])+'">'+m[1]+'%</div></div>';
     });
     html+='</div>';
-    html+='<div style="font-size:10px;color:var(--mu);margin-top:8px;line-height:1.4;padding:6px 8px;background:rgba(59,130,246,.05);border-left:2px solid #3b82f6;border-radius:4px">📐 Probabilit&#259;&#539;ile sunt <b>calibrate empiric</b> pe 1000 meciuri istorice post-h2h backfill (Brier 0.08-0.13). Cota minim&#259; = 100 / probabilitate. Pariu profitabil dac&#259; cota Bet365 &ge; cota minim&#259;.</div>';
+    if(isLiveSim){
+      html+='<div style="font-size:10px;color:var(--mu);margin-top:8px;line-height:1.4;padding:6px 8px;background:rgba(239,68,68,.06);border-left:2px solid #ef4444;border-radius:4px">🔴 <b>Mod LIVE</b>: probabilit&#259;&#539;ile sunt Poisson direct (lambda redus dupa minute r&#259;mase). Calibrarea V2 din backtest e antrenat&#259; doar pe pre-meci la final, nu pe momente LIVE.</div>';
+    }else{
+      html+='<div style="font-size:10px;color:var(--mu);margin-top:8px;line-height:1.4;padding:6px 8px;background:rgba(59,130,246,.05);border-left:2px solid #3b82f6;border-radius:4px">📐 Probabilit&#259;&#539;ile sunt <b>calibrate empiric</b> pe 1000 meciuri istorice post-h2h backfill (Brier 0.08-0.13). Cota minim&#259; = 100 / probabilitate. Pariu profitabil dac&#259; cota Bet365 &ge; cota minim&#259;.</div>';
+    }
     html+='</div>';
   }
 
