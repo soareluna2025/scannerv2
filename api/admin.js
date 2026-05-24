@@ -408,16 +408,7 @@ router.get('/learning-stats', async (req, res) => {
 
 // ── GET /api/admin/win-rate-patterns ─────────────────────────────────────────
 // Distributia win rate-ului real (din prediction_log) pe mai multe dimensiuni:
-// bucket NGP, minut, scor curent, liga. Util pentru:
-// - validarea calibration table (NGP_CAL_REST)
-// - identificarea contextelor cu performanta superioara
-// - tuning manual al threshold-urilor
-//
-// Query params:
-//   days=30 (default), maxim 365
-//   module=NGP|OVER15 (default NGP)
-//   minSamples=5 (default), elimina bucket-uri sub acest prag
-//   league_id=NNN (optional) restrange la o singura liga
+// bucket NGP, minut, scor curent, liga.
 router.get('/win-rate-patterns', async (req, res) => {
   const days       = Math.min(parseInt(req.query?.days       || '30',  10), 365);
   const minSamples = Math.max(parseInt(req.query?.minSamples || '5',   10), 1);
@@ -428,43 +419,38 @@ router.get('/win-rate-patterns', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'module must be NGP or OVER15' });
   }
 
-  try {
-    const baseWhere = `
-      module = $1
-      AND created_at > NOW() - INTERVAL '${days} days'
-      AND outcome IN ('WIN','LOSS')
-      ${leagueId ? 'AND league_id = $2' : ''}
-    `;
-    const baseWhereAll = `
-      module = $1
-      AND created_at > NOW() - INTERVAL '${days} days'
-      ${leagueId ? 'AND league_id = $2' : ''}
-    `;
-    const params = leagueId ? [moduleQ, leagueId] : [moduleQ];
+  // Use CAST INTERVAL with parameterized days (safer than string interpolation)
+  // Construim WHERE-ul cu placeholders pentru module si optional league_id.
+  const lgClause = leagueId ? ' AND league_id = $3' : '';
+  const paramsBase = leagueId ? [moduleQ, days, leagueId] : [moduleQ, days];
 
+  try {
     // 1. Overall counters
-    const { rows: ovRows } = await query(`
+    const ovSQL = `
       SELECT
-        COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE outcome = 'WIN')     AS wins,
-        COUNT(*) FILTER (WHERE outcome = 'LOSS')    AS losses,
-        COUNT(*) FILTER (WHERE outcome = 'PENDING') AS pending
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE outcome = 'WIN')::int     AS wins,
+        COUNT(*) FILTER (WHERE outcome = 'LOSS')::int    AS losses,
+        COUNT(*) FILTER (WHERE outcome = 'PENDING')::int AS pending
       FROM prediction_log
-      WHERE ${baseWhereAll}
-    `, params);
-    const ov = ovRows[0] || {};
-    const ovResolved = Number(ov.wins || 0) + Number(ov.losses || 0);
+      WHERE module = $1
+        AND created_at > NOW() - ($2 || ' days')::interval
+        ${lgClause}
+    `;
+    const { rows: ovRows } = await query(ovSQL, paramsBase);
+    const ov = ovRows[0] || { total: 0, wins: 0, losses: 0, pending: 0 };
+    const ovResolved = Number(ov.wins) + Number(ov.losses);
     const overall = {
-      total:    Number(ov.total || 0),
-      wins:     Number(ov.wins || 0),
-      losses:   Number(ov.losses || 0),
-      pending:  Number(ov.pending || 0),
+      total:    Number(ov.total),
+      wins:     Number(ov.wins),
+      losses:   Number(ov.losses),
+      pending:  Number(ov.pending),
       resolved: ovResolved,
       winRate:  ovResolved > 0 ? +(Number(ov.wins) / ovResolved * 100).toFixed(1) : null,
     };
 
-    // 2. Per bucket NGP
-    const { rows: ngpRows } = await query(`
+    // 2. Per bucket NGP (doar resolved)
+    const ngpSQL = `
       SELECT
         CASE
           WHEN COALESCE(ngp_value, predicted_value) < 60 THEN '50-60'
@@ -473,13 +459,17 @@ router.get('/win-rate-patterns', async (req, res) => {
           WHEN COALESCE(ngp_value, predicted_value) < 90 THEN '80-90'
           ELSE '90-100'
         END AS bucket,
-        COUNT(*) AS n,
-        COUNT(*) FILTER (WHERE outcome = 'WIN') AS wins
+        COUNT(*)::int AS n,
+        COUNT(*) FILTER (WHERE outcome = 'WIN')::int AS wins
       FROM prediction_log
-      WHERE ${baseWhere}
-      GROUP BY bucket
-      ORDER BY bucket
-    `, params);
+      WHERE module = $1
+        AND created_at > NOW() - ($2 || ' days')::interval
+        AND outcome IN ('WIN','LOSS')
+        ${lgClause}
+      GROUP BY 1
+      ORDER BY 1
+    `;
+    const { rows: ngpRows } = await query(ngpSQL, paramsBase);
     const byNgpBucket = ngpRows
       .filter(r => Number(r.n) >= minSamples)
       .map(r => ({
@@ -490,24 +480,38 @@ router.get('/win-rate-patterns', async (req, res) => {
       }));
 
     // 3. Per minute range
-    const { rows: minRows } = await query(`
-      SELECT
-        CASE
-          WHEN minute <= 15 THEN '5-15'
-          WHEN minute <= 30 THEN '16-30'
-          WHEN minute <= 45 THEN '31-45'
-          WHEN minute <= 60 THEN '46-60'
-          WHEN minute <= 75 THEN '61-75'
-          ELSE '76-85'
-        END AS bucket,
-        MIN(minute) AS sort_key,
-        COUNT(*) AS n,
-        COUNT(*) FILTER (WHERE outcome = 'WIN') AS wins
-      FROM prediction_log
-      WHERE ${baseWhere} AND minute IS NOT NULL
-      GROUP BY bucket
+    const minSQL = `
+      SELECT bucket, n::int AS n, wins::int AS wins, sort_key FROM (
+        SELECT
+          CASE
+            WHEN minute <= 15 THEN '5-15'
+            WHEN minute <= 30 THEN '16-30'
+            WHEN minute <= 45 THEN '31-45'
+            WHEN minute <= 60 THEN '46-60'
+            WHEN minute <= 75 THEN '61-75'
+            ELSE '76-85'
+          END AS bucket,
+          CASE
+            WHEN minute <= 15 THEN 1
+            WHEN minute <= 30 THEN 2
+            WHEN minute <= 45 THEN 3
+            WHEN minute <= 60 THEN 4
+            WHEN minute <= 75 THEN 5
+            ELSE 6
+          END AS sort_key,
+          COUNT(*) AS n,
+          COUNT(*) FILTER (WHERE outcome = 'WIN') AS wins
+        FROM prediction_log
+        WHERE module = $1
+          AND created_at > NOW() - ($2 || ' days')::interval
+          AND outcome IN ('WIN','LOSS')
+          AND minute IS NOT NULL
+          ${lgClause}
+        GROUP BY 1, 2
+      ) t
       ORDER BY sort_key
-    `, params);
+    `;
+    const { rows: minRows } = await query(minSQL, paramsBase);
     const byMinuteRange = minRows
       .filter(r => Number(r.n) >= minSamples)
       .map(r => ({
@@ -517,19 +521,24 @@ router.get('/win-rate-patterns', async (req, res) => {
         winRate: +(Number(r.wins) / Number(r.n) * 100).toFixed(1),
       }));
 
-    // 4. Per score state (top 12 cele mai frecvente)
-    const { rows: scoreRows } = await query(`
+    // 4. Per score state
+    const scoreSQL = `
       SELECT
         score_at_prediction AS state,
-        COUNT(*) AS n,
-        COUNT(*) FILTER (WHERE outcome = 'WIN') AS wins
+        COUNT(*)::int AS n,
+        COUNT(*) FILTER (WHERE outcome = 'WIN')::int AS wins
       FROM prediction_log
-      WHERE ${baseWhere} AND score_at_prediction IS NOT NULL
+      WHERE module = $1
+        AND created_at > NOW() - ($2 || ' days')::interval
+        AND outcome IN ('WIN','LOSS')
+        AND score_at_prediction IS NOT NULL
+        ${lgClause}
       GROUP BY score_at_prediction
       HAVING COUNT(*) >= ${minSamples}
       ORDER BY COUNT(*) DESC
       LIMIT 12
-    `, params);
+    `;
+    const { rows: scoreRows } = await query(scoreSQL, paramsBase);
     const byScoreState = scoreRows.map(r => ({
       state:   r.state,
       n:       Number(r.n),
@@ -537,28 +546,33 @@ router.get('/win-rate-patterns', async (req, res) => {
       winRate: +(Number(r.wins) / Number(r.n) * 100).toFixed(1),
     }));
 
-    // 5. Per league (top 25, doar daca nu e filtru pe league_id)
+    // 5. Per league
     let byLeague = null;
     if (!leagueId) {
-      const { rows: lgRows } = await query(`
+      const lgSQL = `
         SELECT
           league_name AS league,
           league_id,
-          COUNT(*) AS n,
-          COUNT(*) FILTER (WHERE outcome = 'WIN') AS wins
+          COUNT(*)::int AS n,
+          COUNT(*) FILTER (WHERE outcome = 'WIN')::int AS wins,
+          ROUND(100.0 * COUNT(*) FILTER (WHERE outcome = 'WIN') / NULLIF(COUNT(*), 0), 1) AS wr
         FROM prediction_log
-        WHERE ${baseWhere} AND league_name IS NOT NULL
+        WHERE module = $1
+          AND created_at > NOW() - ($2 || ' days')::interval
+          AND outcome IN ('WIN','LOSS')
+          AND league_name IS NOT NULL
         GROUP BY league_name, league_id
         HAVING COUNT(*) >= ${minSamples}
-        ORDER BY COUNT(*) FILTER (WHERE outcome = 'WIN')::float / NULLIF(COUNT(*), 0) DESC
+        ORDER BY wr DESC NULLS LAST
         LIMIT 25
-      `, params);
+      `;
+      const { rows: lgRows } = await query(lgSQL, [moduleQ, days]);
       byLeague = lgRows.map(r => ({
         league:    r.league,
         league_id: r.league_id,
         n:         Number(r.n),
         wins:      Number(r.wins),
-        winRate:   +(Number(r.wins) / Number(r.n) * 100).toFixed(1),
+        winRate:   r.wr === null ? 0 : Number(r.wr),
       }));
     }
 
@@ -572,6 +586,7 @@ router.get('/win-rate-patterns', async (req, res) => {
       ...(byLeague ? { byLeague } : {}),
     });
   } catch (e) {
+    console.error('[win-rate-patterns]', e.message, e.stack);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
