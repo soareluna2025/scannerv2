@@ -2784,6 +2784,61 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX DEFINITIV NGP — injectie _ng in /api/football REST endpoint
+  Cauza radacina (in sfarsit identificata complet):
+    /api/football (loadLive REST la ~30s) returneaza meciuri FARA proprietatea
+    _ng setata. Doar scanner WS populeaza _ng pe obj din ST.ms direct prin
+    broadcast. La fiecare REST refresh, _ng pierdut din objects raw → calcScore
+    cade pe fallback local → NGP divergent / 0% in fereastra dintre WS push-uri.
+    Fix-uri anterioare (preserve _ng in loadLive, sync modal cu ST.ms) atacau
+    simptome — radacina era endpoint-ul REST care nu trimitea NGP-ul de la inceput.
+  Fix in api/football.js dupa enrichment, inainte de return:
+    const ids = filtered.map(m => m.fixture?.id).filter(Boolean);
+    if (ids.length > 0) {
+      const snap = await pool.query(
+        'SELECT fixture_id, ng FROM match_snapshots
+         WHERE fixture_id = ANY($1) AND outcome != $2',
+        [ids, 'STALE']
+      );
+      const ngMap = {};
+      snap.rows.forEach(r => ngMap[r.fixture_id] = r.ng);
+      filtered.forEach(m => { if (ngMap[m.fixture?.id]) m._ng = ngMap[m.fixture.id]; });
+    }
+  Arhitectura sursei truth NGP (acum unificata):
+    scanner.js calcNextGoal → match_snapshots.ng (upsertSnapshot la 10s)
+    ├─ WS broadcast → m._ng pe obj direct (cale rapida, sub-secunda)
+    └─ /api/football query batch → m._ng (cale REST, ~30s refresh)
+    Frontend ST.ms primeste m._ng prin ambele cai → calcScore foloseste m._ng
+    Modal cauta in ST.ms → afiseaza acelasi NGP ca card
+  Devieri minore vs user instructiune literala:
+    1) Adaugat: import pool from './db.js'
+       (user a folosit pool.query dar pool nu era importat)
+    2) Variabila redenumita: matches → filtered (numele local in football.js)
+    3) Adaugat try/catch defensiv:
+       DB outage nu trebuie sa rupa /api/football endpoint
+       Log "ng inject failed" — endpoint returneaza obj fara _ng (degradare
+       grațioasă)
+       Pattern prezent in match.js, enrich.js cu .catch()
+  Verificare: node --check api/football.js OK
+  Zero modificari la alte fisiere.
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: 18dbadc
+
+[24.05.2026] - MERGE → main (fix _ng REST injection) + deploy
+  Metoda: fast-forward push direct
+  Range: 5d72d97..18dbadc — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Deploy: GitHub Actions declansat automat
+  Test recomandat post-deploy:
+    1) Hard refresh UI (Ctrl+F5) — primul fetch e /api/football
+    2) Imediat dupa load: NGP afisat in carduri (cu _ng deja injectat din DB)
+    3) Aștept 30+ secunde, urmaresc daca NGP-ul ramane stabil intre refresh-uri
+    4) Click card → modal: NGP identic cu card
+    5) Status WS in header: poate fi orice (verde/galben/rosu) — REST e
+       suficient pentru NGP corect
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
