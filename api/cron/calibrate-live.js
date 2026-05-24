@@ -54,13 +54,13 @@ export default async function handler(req, res) {
     // Pentru fiecare meci FT din ultimele 365 zile, reconstruim snapshot-uri
     // la fiecare 15 min minute pe baza match_events.
     const { rows: matches } = await query(`
-      SELECT fh.fixture_id, fh.goals_home, fh.goals_away, fh.status_short
+      SELECT fh.fixture_id, fh.home_goals, fh.away_goals, fh.status_short
       FROM fixtures_history fh
       WHERE fh.match_date > NOW() - INTERVAL '365 days'
         AND fh.status_short IN ('FT','AET','PEN')
-        AND fh.goals_home IS NOT NULL
+        AND fh.home_goals IS NOT NULL
       LIMIT 5000
-    `).catch(() => ({ rows: [] }));
+    `).catch((e) => { console.error('[calibrate-live] fixtures query failed:', e.message); return { rows: [] }; });
 
     if (!matches.length) {
       return res.status(200).json({ ok: true, message: 'no resolved matches', count: 0 });
@@ -70,14 +70,14 @@ export default async function handler(req, res) {
     const stats = {};
 
     for (const fx of matches) {
-      const finalH = Number(fx.goals_home || 0);
-      const finalA = Number(fx.goals_away || 0);
+      const finalH = Number(fx.home_goals || 0);
+      const finalA = Number(fx.away_goals || 0);
       // Fetch goal events ordered by minute
       const { rows: evs } = await query(`
-        SELECT minute, team_id, type
+        SELECT elapsed AS minute, team_id, type
         FROM match_events
         WHERE fixture_id = $1 AND type = 'Goal'
-        ORDER BY minute ASC
+        ORDER BY elapsed ASC
       `, [fx.fixture_id]).catch(() => ({ rows: [] }));
 
       // Reconstruct score timeline at each min mark
@@ -85,19 +85,8 @@ export default async function handler(req, res) {
       const snapshots = [15, 30, 45, 60, 75];
       for (const m of snapshots) {
         let hAt = 0, aAt = 0;
-        for (const ev of evs) {
-          if (ev.minute <= m) {
-            // Determine if home or away
-            // We don't know team alignment from event alone; use heuristic
-            // by checking final score progression (this is approximate)
-            // Simpler: use ev.team_id vs match home_team_id from fixtures_history
-            // Need to fetch home_team_id...
-            // For simplicity skip team_id check, increment total goals
-            // (Note: this means we track total goals, not home/away separately)
-          }
-        }
         // Simpler approach: count goals up to minute m
-        const goalsAtMin = evs.filter(e => e.minute <= m).length;
+        const goalsAtMin = evs.filter(e => Number(e.minute || 0) <= m).length;
         // Distribute approximately (assume final ratio)
         const finalTotal = finalH + finalA;
         if (finalTotal === 0) {
