@@ -1616,6 +1616,17 @@ async function loadTopOpps(){
       var sumBelow=0;for(var i=0;i<needed;i++)sumBelow+=p(i);
       return Math.round(100*Math.max(0,Math.min(1,1-sumBelow)));
     }
+    // Threshold dinamic: pentru o lambda data, gaseste cel mai mare X.5 care
+    // are inca P(>= X+1) >= minProb. Returneaza {thr, prob}.
+    function bestThreshold(lambda, thresholds, minProb){
+      var best=null;
+      for(var i=thresholds.length-1;i>=0;i--){
+        var t=thresholds[i];
+        var p=pPoisAtLeast(t+1, lambda);
+        if(p>=minProb){best={thr:t+0.5,prob:p};break;}
+      }
+      return best;
+    }
 
     // Construiesc TOATE (meci, piata) candidatii pentru toate piețele.
     // Categorii grupate la output pentru variete in bilet:
@@ -1630,8 +1641,8 @@ async function loadTopOpps(){
       'gg':     {label:'GG (ambele marc.)',icon:'🤝', picks:[]},
       'home':   {label:'Gazde marcheaza',   icon:'🏠', picks:[]},
       'away':   {label:'Oaspeti marcheaza', icon:'✈️', picks:[]},
-      'corn':   {label:'Cornere Over 8.5',  icon:'⛳', picks:[]},
-      'cards':  {label:'Cartonase Over 3.5',icon:'🟨', picks:[]},
+      'corn':   {label:'Cornere total',     icon:'⛳', picks:[]},
+      'cards':  {label:'Cartonase total',   icon:'🟨', picks:[]},
     };
     _pmMatches.forEach(function(m){
       var fid=m.fixture&&m.fixture.id;
@@ -1671,14 +1682,18 @@ async function loadTopOpps(){
         var cal4=g2Calibrate('away','total',0,Math.round(enr.awayScoreRate));
         addPick('away','Oaspeti marcheaza',enr.awayScoreRate,cal4);
       }
-      // 5. Cornere Over 8.5 — Poisson cu lg.avg_corners (fallback 9)
-      var lgCorn=enr.league_avg_corners||9;
-      var probCorn=pPoisAtLeast(9, lgCorn);
-      addPick('corn','Cornere Over 8.5',probCorn,probCorn);
-      // 6. Cartonase Over 3.5 — Poisson cu lg.avg_yellow (fallback 3.5)
-      var lgCards=enr.league_avg_yellow||3.5;
-      var probCards=pPoisAtLeast(4, lgCards);
-      addPick('cards','Cartonase Over 3.5',probCards,probCards);
+      // 5. Cornere — scalez lg avg cu intensitatea meciului (lambdaTotal)
+      // matches cu mai multe goluri asteptate au probabil mai multe cornere
+      var lambdaTot=enr.lambdaTotal||2.5;
+      var lgCornBase=enr.league_avg_corners||9.5;
+      var lambdaCorn=lgCornBase*Math.max(0.7,Math.min(1.4,lambdaTot/2.5));  // scaling factor
+      var bestCorn=bestThreshold(lambdaCorn,[4,5,6,7,8,9,10,11,12,13],70);
+      if(bestCorn)addPick('corn','Cornere Over '+bestCorn.thr,bestCorn.prob,bestCorn.prob);
+      // 6. Cartonase — scalez similar
+      var lgCardsBase=enr.league_avg_yellow||4;
+      var lambdaCards=lgCardsBase*Math.max(0.7,Math.min(1.4,lambdaTot/2.5));
+      var bestCards=bestThreshold(lambdaCards,[1,2,3,4,5,6],70);
+      if(bestCards)addPick('cards','Cartonase Over '+bestCards.thr,bestCards.prob,bestCards.prob);
     });
 
     // Sort fiecare grup DESC dupa finalScore, ia top 3
