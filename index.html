@@ -1172,8 +1172,19 @@ async function loadLive(cb){
     if(!r.ok)throw new Error('HTTP '+r.status);
     var d=await r.json();
     var raw=Array.isArray(d.response)?d.response:(Array.isArray(d)?d:[]);
-    var _ed={};ST.ms.forEach(function(m){if(m.enrichData)_ed[m.fixture&&m.fixture.id]=m.enrichData;});
-    ST.ms=raw.map(function(m){m._s=calcScore(m);var e=_ed[m.fixture&&m.fixture.id];if(e)m.enrichData=e;return m;});
+    var _ed={};var _eng={};
+    ST.ms.forEach(function(m){
+     var fid=m.fixture&&m.fixture.id;
+     if(m.enrichData)_ed[fid]=m.enrichData;
+     if(typeof m._ng==='number'&&m._ng>0)_eng[fid]=m._ng;
+    });
+    ST.ms=raw.map(function(m){
+     var fid=m.fixture&&m.fixture.id;
+     if(_ed[fid])m.enrichData=_ed[fid];
+     if(_eng[fid])m._ng=_eng[fid];
+     m._s=calcScore(m);
+     return m;
+    });
     renderMatches();
     updateStats();
     trackWR();
