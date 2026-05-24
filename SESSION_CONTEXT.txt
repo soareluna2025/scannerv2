@@ -2626,6 +2626,10 @@ NEXT STEPS (prioritizat):
                    (eliminat grupare campionate, sortare desc fixture.date)
   Commit: 13a875e
 
+[24.05 ~prezent] - api/today.js: timezone=UTC → timezone=Europe%2FBerlin
+                   (liniile 140-141, ambele fetch-uri spre API-Football)
+  Commit: c560dac
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
