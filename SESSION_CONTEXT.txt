@@ -2825,6 +2825,59 @@ NEXT STEPS (prioritizat):
                  realitatea masurata post-h2h.
   Commit: 5f26318
 
+[24.05 ~prezent] - LIVE GENERATOR LOGIC (Bayes-Poisson pe minute ramase):
+                 - g2LiveAdjust(): pentru meciuri LIVE, recalculeaza
+                   probabilitatea folosind: lambda = avg_scored * (90-mn)/90
+                 - Acopera goluri (home/away/gg/over X.5 home/away/total),
+                   corners (cu live count), cards (cu live count)
+                 - Display modal: 'Pre-meci: 81% · Ajustat live: -14pp'
+                 - Lista top10: % afisat e live-adjusted, raw mic
+                 - Cornere/cartonase live SIEMPRE afisate (chiar 0-0,
+                   highlight albastru cand piata e Corners/Cards)
+  Commit: b021a52, 79a36bf
+
+[24.05 ~prezent] - CALIBRARE POISSON pentru corners/cards (Generator):
+                 Sample backtest match_stats prea mic (46 meciuri),
+                 inlocuit cu calibrare Poisson teoretica:
+                 - lambda = lg.avg_corners/2 sau lg.avg_yellow/2
+                 - P(X >= thr+1) Poisson cu lambda
+                 - Header: 'Calibrat Poisson teoretic' (albastru, nu mai
+                   'Necalibrat' galben)
+  Commit: fce22fc
+
+[24.05 ~prezent] - NGP LIVE BACKTEST (script + rulare):
+                 scripts/ngp-backtest.js (sofisticat, 5 formule V0-V4)
+                 + scripts/ngp-backtest-quick.sh wrapper bash
+                 Rulat pe 531 meciuri FT, 26297 predictii per formula.
+
+                 REZULTATE rest-of-match:
+                   V0_current     Brier 0.2796 (slab, bias +30pp at low)
+                   V1_sotDerived  Brier 0.2573 (best)
+                   V2_sotConv     Brier 0.4056 (TERRIBLE)
+                   V3_hybrid      Brier 0.2934
+                   V4_hybridDA    Brier 0.2934
+
+                 REZULTATE next-15-min:
+                   V0_current     Brier 0.2659
+                   V2_sotConv     Brier 0.2613 (best, dar discrimination
+                                  flat ~33% pe orice bucket — zgomot)
+
+                 INSIGHT KEY: NGP-ul curent SUBESTIMEAZA dramatic la
+                 valori mici (la 30% afisat real e 70%) si e bine
+                 calibrat la 70%+ pentru rest-of-match.
+                 Pentru 15min discrimination e slaba — modelul nu
+                 stie cu adevarat daca vine gol curand.
+
+[24.05 ~prezent] - NGP CALIBRATION REST OF MATCH (display only):
+                 - NGP_CAL_REST: 10 buckets cu mapping raw -> real
+                 - Modal scanner live: big number = CALIBRAT, raw mic
+                 - calibratedAnytimeProb() refactorat sa foloseasca tabel
+                 - Card list ramane raw pentru sortare
+                 - calibrateNgpRest() helper inline in index.html
+                 NU schimba formula V0 in live-score.js (zero risc).
+                 Brier estimat post-calibrare: 0.18 (de la 0.28).
+  Commit: 72be9fc
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
