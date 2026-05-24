@@ -13,6 +13,7 @@ import { logPrediction } from '../log-prediction.js';
 import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 import { isAllowedMatch } from '../utils/league-filter.js';
 import { calcFeatures, calcNextGoal, calcGG, calcMarkets } from '../utils/live-score.js';
+import { calibrateNgp } from '../utils/ngp-calibration.js';
 
 const FOOTBALL_KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
@@ -447,7 +448,9 @@ async function scanLive10s() {
       const f  = calcFeatures(m, matchFd[id] || {});
       if (f.mn > 0 && f.hSOT > 0) f.homeFormGoals = (f.hSOT / f.mn) * 9;
       if (f.mn > 0 && f.aSOT > 0) f.awayFormGoals = (f.aSOT / f.mn) * 9;
-      const ng = calcNextGoal(f);
+      const ngRaw = calcNextGoal(f);
+      // Hide NGP în primele 10 min (date insuficiente pentru încredere)
+      const ng = f.mn < 10 ? 0 : calibrateNgp(ngRaw);
       const mk = calcMarkets(f);
 
       upsertSnapshot({

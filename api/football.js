@@ -1,6 +1,7 @@
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
 import { isAllowedMatch } from './utils/league-filter.js';
 import { calcNextGoal } from './utils/live-score.js';
+import { calibrateNgp } from './utils/ngp-calibration.js';
 
 function log(msg) {
   console.log(`[football] ${new Date().toISOString()} ${msg}`);
@@ -131,7 +132,9 @@ export default async function handler(req, res) {
     const txg  = hxg + axg;
     const homeFormGoals = (mn > 0 && hSOT > 0) ? (hSOT / mn) * 9 : 0.35;
     const awayFormGoals = (mn > 0 && aSOT > 0) ? (aSOT / mn) * 9 : 0.35;
-    m._ng = calcNextGoal({ mn, txg, homeFormGoals, awayFormGoals });
+    const ngRaw = calcNextGoal({ mn, txg, homeFormGoals, awayFormGoals });
+    // Hide NGP în primele 10 min (date insuficiente) + calibrare pe backtest
+    m._ng = mn < 10 ? 0 : calibrateNgp(ngRaw);
   }
 
   // ── Optional enrichment ────────────────────────────────────────
