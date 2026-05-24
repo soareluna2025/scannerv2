@@ -1086,28 +1086,32 @@ function connectWS(){
     try{
       var msg=JSON.parse(ev.data);
       if(msg.type==='LIVE_UPDATE'&&msg.payload&&Array.isArray(msg.payload.matches)){
-        var _ed={};var _ngPrev={};ST.ms.forEach(function(m){
+        var _ed={};var _ngPrev={};var _ng15Prev={};ST.ms.forEach(function(m){
           var fid=m.fixture&&m.fixture.id;
           if(m.enrichData)_ed[fid]=m.enrichData;
           if(typeof m._ng==='number')_ngPrev[fid]=m._ng;
+          if(typeof m._ng15==='number')_ng15Prev[fid]=m._ng15;
         });
         ST.ms=msg.payload.matches.map(function(m){
           var fid=m.fixture&&m.fixture.id;
           if(m._ng===undefined && _ngPrev[fid]!==undefined) m._ng=_ngPrev[fid];
+          if(m._ng15===undefined && _ng15Prev[fid]!==undefined) m._ng15=_ng15Prev[fid];
           m._s=calcScore(m);
           var e=_ed[fid];if(e)m.enrichData=e;
           return m;
         });
         renderMatches();updateStats();trackWR();genUpdateBadge();
       } else if(msg.type==='LIVE_DELTA'&&msg.payload&&Array.isArray(msg.payload.changed)){
-        var _ed={};var _ngPrev={};ST.ms.forEach(function(m){
+        var _ed={};var _ngPrev={};var _ng15Prev={};ST.ms.forEach(function(m){
           var fid=m.fixture&&m.fixture.id;
           if(m.enrichData)_ed[fid]=m.enrichData;
           if(typeof m._ng==='number')_ngPrev[fid]=m._ng;
+          if(typeof m._ng15==='number')_ng15Prev[fid]=m._ng15;
         });
         msg.payload.changed.forEach(function(m){
           var fid=m.fixture&&m.fixture.id;
           if(m._ng===undefined && _ngPrev[fid]!==undefined) m._ng=_ngPrev[fid];
+          if(m._ng15===undefined && _ng15Prev[fid]!==undefined) m._ng15=_ng15Prev[fid];
           m._s=calcScore(m);
           var ed=_ed[fid];if(ed)m.enrichData=ed;
           var idx=ST.ms.findIndex(function(x){return x.fixture&&x.fixture.id===fid;});
@@ -1981,19 +1985,41 @@ function mdRenderSumar(d){
   if(statsHTML){
     out+='<div class="md-section"><div class="md-section-title">Statistici meci</div>'+statsHTML+'</div>';
   }
-  // NGP for live matches — sincronizat cu card-ul (ST.ms = sursa unica)
+  // NGP for live matches — DUAL: gol anytime in meci + gol in urmatoarele 15 min
   if(isLive){
-    // Caut _ng pentru acest fixture in ST.ms (calibrat + smoothed de scanner)
+    // Caut _ng + _ng15 pentru acest fixture in ST.ms (calibrat + smoothed de scanner)
     var _fidM=fix&&fix.fixture&&fix.fixture.id;
     var _stMatch=_fidM&&ST.ms.find(function(x){return x.fixture&&x.fixture.id===_fidM;});
-    if(_stMatch&&typeof _stMatch._ng==='number')fix._ng=_stMatch._ng;
+    if(_stMatch){
+      if(typeof _stMatch._ng==='number')fix._ng=_stMatch._ng;
+      if(typeof _stMatch._ng15==='number')fix._ng15=_stMatch._ng15;
+    }
     var ngpData=calcScore(fix);
+    var ng15=(typeof fix._ng15==='number')?fix._ng15:null;
     var ngpClr=ngpData.ng>=80?'#00d4a8':ngpData.ng>=60?'#ffd166':'#ff6b6b';
-    out+='<div class="md-section"><div class="md-section-title">Probabilitate gol următor (NGP)</div>';
-    out+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
-    if(ngpData.forte)out+='<div class="badge-forte">⚡ FORTE</div>';
-    out+='<div class="ngp-pct" style="color:'+ngpClr+'">'+ngpData.ng+'%</div></div>';
-    out+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+ngpData.ng+'%;background:'+ngpClr+'"></div></div>';
+    var ng15Clr=ng15===null?'#888':ng15>=40?'#00d4a8':ng15>=25?'#ffd166':'#ff6b6b';
+    out+='<div class="md-section"><div class="md-section-title">Probabilitate Gol</div>';
+    // Two columns: anytime in match vs next 15 min
+    out+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+    // Column 1: anytime in match
+    out+='<div style="padding:12px;background:rgba(0,212,168,.06);border-radius:8px;text-align:center">';
+    out+='<div style="font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Gol oric&acirc;nd &icirc;n meci</div>';
+    out+='<div style="font-size:24px;font-weight:800;color:'+ngpClr+'">'+ngpData.ng+'%</div>';
+    out+='<div style="font-size:9px;color:var(--mu);margin-top:3px">pentru Over 0.5/1.5</div>';
+    if(ngpData.forte)out+='<div class="badge-forte" style="margin-top:6px;display:inline-block">⚡ FORTE</div>';
+    out+='</div>';
+    // Column 2: next 15 min
+    out+='<div style="padding:12px;background:rgba(245,158,11,.06);border-radius:8px;text-align:center">';
+    out+='<div style="font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Gol &icirc;n urm. 15 min</div>';
+    out+='<div style="font-size:24px;font-weight:800;color:'+ng15Clr+'">'+(ng15===null?'—':ng15+'%')+'</div>';
+    out+='<div style="font-size:9px;color:var(--mu);margin-top:3px">pentru bet rapid</div>';
+    out+='</div>';
+    out+='</div>';  // end grid
+    // Disclaimer common
+    out+='<div style="font-size:10px;color:var(--mu);margin-top:8px;line-height:1.4">';
+    out+='ℹ️ <b>St&acirc;nga</b> e calibrat pentru pariuri pe tot meciul (Over 0.5/1.5). ';
+    out+='<b>Dreapta</b> reflect&acirc; şansa real&#259; de gol &icirc;n 15 min — mult mai mic&#259; (max ~50%).';
+    out+='</div>';
     out+='</div>';
   }
 

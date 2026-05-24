@@ -85,6 +85,26 @@ export function calcNextGoal(f) {
   return Math.round(Math.max(3, Math.min(97, prob * 100)));
 }
 
+// Variant pentru fereastra de N minute (default 15).
+// Diferenta de calcNextGoal: foloseste min(N, 90-mn) ca fereastra de proiectie.
+// Validat de backtest 'next 15 min' (24.05.2026): rate-uri reale 27-45%
+// pentru toate range-urile, deci max afisat realist e ~40-45%.
+export function calcNextGoalWindow(f, windowMin = 15) {
+  const mn = f.mn || 0;
+  const remTime = Math.min(windowMin, Math.max(0, 90 - mn));
+  if (remTime <= 0) return 3;
+  let remXg = (f.txg / Math.max(mn, 1)) * remTime;
+  if (f.txg === 0) {
+    // Form fallback: scaleaza la fereastra (nu la 90 min)
+    const remFracWindow = remTime / 90;
+    remXg = ((f.homeFormGoals + f.awayFormGoals) / 2 * 2.5) * remFracWindow;
+  }
+  if (mn >= 70) remXg *= 1.2;
+  if (mn >= 80) remXg *= 1.15;
+  const prob = 1 - Math.exp(-Math.max(remXg, 0.03));
+  return Math.round(Math.max(3, Math.min(60, prob * 100)));
+}
+
 export function calcGG(f) {
   const mn = f.mn || 0;
   const remFrac = Math.max(0, Math.min(1, (90 - mn) / 90));

@@ -12,7 +12,7 @@ import { query } from '../db.js';
 import { logPrediction } from '../log-prediction.js';
 import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 import { isAllowedMatch } from '../utils/league-filter.js';
-import { calcFeatures, calcNextGoal, calcGG, calcMarkets } from '../utils/live-score.js';
+import { calcFeatures, calcNextGoal, calcNextGoalWindow, calcGG, calcMarkets } from '../utils/live-score.js';
 import { calibrateNgp } from '../utils/ngp-calibration.js';
 
 const FOOTBALL_KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
@@ -133,13 +133,26 @@ async function apiFetch(path) {
 
 // ── DB helpers — copiate verbatim din cron/scan.js ────────────────────────────
 
+// Asigura coloana ng_15min exista (idempotent, ruleaza o singura data la boot)
+let _ng15ColumnEnsured = false;
+async function ensureNg15Column() {
+  if (_ng15ColumnEnsured) return;
+  try {
+    await query(`ALTER TABLE match_snapshots ADD COLUMN IF NOT EXISTS ng_15min INTEGER`);
+    _ng15ColumnEnsured = true;
+  } catch (e) {
+    log(`ALTER TABLE ng_15min skipped: ${e.message}`);
+  }
+}
+
 async function upsertSnapshot(row) {
+  await ensureNg15Column();
   await query(
     `INSERT INTO match_snapshots
        (fixture_id, league_id, home_team, away_team,
         status_short, minute, home_goals, away_goals,
-        ng, over15, outcome)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ng, over15, outcome, ng_15min)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      ON CONFLICT (fixture_id) DO UPDATE SET
        status_short=EXCLUDED.status_short,
        minute=EXCLUDED.minute,
@@ -147,11 +160,12 @@ async function upsertSnapshot(row) {
        away_goals=EXCLUDED.away_goals,
        ng=EXCLUDED.ng,
        over15=EXCLUDED.over15,
-       outcome=EXCLUDED.outcome`,
+       outcome=EXCLUDED.outcome,
+       ng_15min=EXCLUDED.ng_15min`,
     [
       row.fixture_id, row.league_id, row.home_team, row.away_team,
       row.status_short, row.minute, row.home_goals, row.away_goals,
-      row.ng, row.over15, row.outcome || 'LIVE',
+      row.ng, row.over15, row.outcome || 'LIVE', row.ng_15min ?? null,
     ]
   );
 }
@@ -449,17 +463,24 @@ async function scanLive10s() {
       if (f.mn > 0 && f.hSOT > 0) f.homeFormGoals = (f.hSOT / f.mn) * 9;
       if (f.mn > 0 && f.aSOT > 0) f.awayFormGoals = (f.aSOT / f.mn) * 9;
       const ngRaw = calcNextGoal(f);
+      const ng15Raw = calcNextGoalWindow(f, 15);
       // Hide NGP în primele 10 min (date insuficiente pentru încredere)
       let ng = f.mn < 10 ? 0 : calibrateNgp(ngRaw);
+      let ng15 = f.mn < 10 ? 0 : ng15Raw;  // ng15 e deja calibrat prin formula (cap 60)
       // Smoothing anti-oscilație: max ±5pp change per scan cycle
-      // Elimină salturile 95→25 cauzate de stats incomplete în unele cicluri
       if (liveCache[id]?.ngLast !== undefined && ng > 0) {
         const MAX_DELTA = 5;
         const prev = liveCache[id].ngLast;
         ng = Math.max(prev - MAX_DELTA, Math.min(prev + MAX_DELTA, ng));
       }
+      if (liveCache[id]?.ng15Last !== undefined && ng15 > 0) {
+        const MAX_DELTA = 5;
+        const prev = liveCache[id].ng15Last;
+        ng15 = Math.max(prev - MAX_DELTA, Math.min(prev + MAX_DELTA, ng15));
+      }
       if (!liveCache[id]) liveCache[id] = {};
       liveCache[id].ngLast = ng;
+      liveCache[id].ng15Last = ng15;
       const mk = calcMarkets(f);
 
       upsertSnapshot({
@@ -468,9 +489,10 @@ async function scanLive10s() {
         status_short: sh,            minute:     currMin,
         home_goals:   currHome,      away_goals: currAway,
         ng,           over15: mk.over15,         outcome: 'LIVE',
+        ng_15min:     ng15,
       }).catch(e => log(`upsertSnapshot ${id}: ${e.message}`));
 
-      processedMatches.push({ ...m, _ng: ng, _mk: mk });
+      processedMatches.push({ ...m, _ng: ng, _ng15: ng15, _mk: mk });
 
       // Alerte — o singura data per meci cand NGP trece de 70%
       if (ng > 70 || mk.over15 > 70) {

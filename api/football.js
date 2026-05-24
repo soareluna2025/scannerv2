@@ -125,10 +125,10 @@ export default async function handler(req, res) {
   if (fixIds.length > 0) {
     try {
       const { rows } = await query(
-        `SELECT fixture_id, ng FROM match_snapshots WHERE fixture_id = ANY($1)`,
+        `SELECT fixture_id, ng, ng_15min FROM match_snapshots WHERE fixture_id = ANY($1)`,
         [fixIds]
       );
-      for (const r of rows) snapMap[r.fixture_id] = r.ng;
+      for (const r of rows) snapMap[r.fixture_id] = { ng: r.ng, ng15: r.ng_15min };
     } catch (e) {
       log(`match_snapshots read err: ${e.message}`);
     }
@@ -137,8 +137,9 @@ export default async function handler(req, res) {
   for (const m of filtered) {
     const fid = m.fixture?.id;
     // Prefer NGP din DB (scanner.js = singura sursa autoritara)
-    if (fid && typeof snapMap[fid] === 'number') {
-      m._ng = snapMap[fid];
+    if (fid && snapMap[fid] && typeof snapMap[fid].ng === 'number') {
+      m._ng = snapMap[fid].ng;
+      if (typeof snapMap[fid].ng15 === 'number') m._ng15 = snapMap[fid].ng15;
       continue;
     }
     // Fallback: calc local cand snapshot lipseste (rar, doar la meciuri noi)
