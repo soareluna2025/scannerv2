@@ -13,6 +13,25 @@
 //
 // Output: tabele pe stdout + optional JSON
 
+// ── Auto-load .env din root-ul proiectului (POSTGRES_URL etc.) ───
+import { readFileSync, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname_ = dirname(fileURLToPath(import.meta.url));
+const envPath = join(__dirname_, '..', '.env');
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/i);
+    if (m && !process.env[m[1]]) {
+      let v = m[2];
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+        v = v.slice(1, -1);
+      }
+      process.env[m[1]] = v;
+    }
+  }
+}
+
 import { query } from '../api/db.js';
 import pool from '../api/db.js';
 
