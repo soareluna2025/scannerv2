@@ -2513,6 +2513,93 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - AUDIT NGP — read-only complet
+  Cautat: calcNextGoal, NGP, ngp, next_goal, ngp_value in toate fisierele
+  Rezultat — 3 implementari NGP distincte:
+
+  [A] BACKEND (sursa truth) — api/utils/live-score.js:75-87
+      Formula: remXg = (txg/mn)*(90-mn) cu form fallback la txg=0
+        if(mn>=70) remXg *= 1.2; if(mn>=80) remXg *= 1.15;
+        prob = 1 - exp(-max(remXg, 0.05)); ng = round(min(97, max(3, prob*100)))
+      Folosita de: scan.js + scanner.js (import live-score.js)
+
+  [B] FRONTEND (calcScore) — index.html:1006-1042
+      Formula divergenta:
+        remFrac = (95-mn)/90    ← BACKEND foloseste (90-mn)/90
+        if(txg=0) remXg = 0.7 * remFrac   ← BACKEND foloseste form goals * 2.5
+      ⚠️ UI NU foloseste m._ng din backend — recalculeaza local cu formula divergenta
+      Asta inseamna: NGP afisat (UI) != NGP salvat in DB (backend) != alerta
+
+  [C] LEGACY (CLAUDE.md liniile 209-221) — DOCUMENTATIE DEPASITA
+      "ngp = SOT*4.5 + ShotsOff*1.5 + DA*0.3 + Corners*2.0 + Goals*8 - elapsed/90*15"
+      Aceasta formula NU MAI EXISTA in cod. CLAUDE.md trebuie actualizat.
+
+  INPUT-uri folosite efectiv (formula curenta):
+    f.mn (elapsed), f.txg (total xG), f.homeFormGoals + f.awayFormGoals (fallback txg=0)
+    xgSpike + prsAcc — declarati dar mereu 0 (dead inputs)
+    SOT, DA, Corners, Shots — colectati de calcFeatures dar NU folositi in NGP
+    (folositi doar in calcMarkets si calcGG)
+
+  SURSE DE DATE:
+    BACKEND:
+      API-Football /fixtures?live=all → la 10s in scanner.scanLive10s
+      API-Football /fixtures/statistics?fixture={id} → la 60s in scanLiveStats
+      DB fixtures_history → getFormGoals(teamId, isHome) cu cache 1h
+      DB player_stats → fallback secundar
+      DB live_stats → SCRIS la 60s (saveLiveStats); NU CITIT de NGP
+    FRONTEND:
+      WebSocket LIVE_UPDATE / LIVE_DELTA push din scanner.js
+      REST /api/match?id=X la click card (cache 60s)
+
+  TIMING:
+    setInterval(scanLive10s,    10_000)     — calcNextGoal + alerta + WS broadcast
+    setInterval(scanLiveStats,  60_000)     — fetch statistics + INSERT live_stats
+    setInterval(scanPreMatch,   3_600_000)  — sync prematch_data
+    Frontend: recalculeaza la fiecare LIVE_UPDATE / LIVE_DELTA primit
+
+  FLUX UI:
+    scanner → calcNextGoal → upsertSnapshot match_snapshots
+            → if(ng>70): saveAlert + INSERT predictions cu score_at_alert
+            → wsBroadcast LIVE_UPDATE/LIVE_DELTA
+    index.html: _ws.onmessage → calcScore(m) [recalcul local!] → m._s.ng
+                renderMatches → buildCardHtml:
+                  - .ngp-fill width = ng%, culoare verde/galben/rosu (ngpColor)
+                  - badge "FORTE" daca ng>=70
+                  - header s-ngp = "Top NGP X%" (max din toate)
+                  - watch room ag-ngp = top NGP filtrat
+                mdRenderSumar: sectiunea "Probabilitate gol urmator (NGP)"
+
+  EDGE CASE MIN 1-10 (zero stats live):
+    BACKEND (formula reala):
+      Echipe noi (form fallback 0.35): NGP ~56%
+      Echipe medii (form 1.2 + 1.0):    NGP ~92%
+      Echipe ofensive (form 2.0 + 1.8): NGP capped 97%
+      → Alerta NGP>70 SE DECLANSEAZA la min 1-2 pentru echipe medii/ofensive
+        chiar fara goluri/suturi (doar din istoricul echipelor)
+    FRONTEND (calcScore):
+      Constant ~50% indiferent de echipe (0.7 hardcodat fara form)
+    → DISCREPANTA: UI arata 50%, backend salveaza 92%, alerta declansata silentios
+
+  PROBLEME IDENTIFICATE (7 inconsistente):
+    1) 🔴 HIGH — Formula frontend ≠ backend (remFrac si fallback divergente)
+       Locatie: index.html:1020-1027 vs live-score.js:77-80
+    2) 🔴 HIGH — CLAUDE.md documenteaza formula veche, codul foloseste alta
+       Locatie: CLAUDE.md:209-221
+    3) 🟡 MED — SOT/DA/Corners colectate dar NU folosite in NGP
+       Locatie: live-score.js calcNextGoal
+    4) 🟡 MED — xgSpike si prsAcc mereu 0 (dead inputs)
+       Locatie: live-score.js:82
+    5) 🟡 MED — Echipe ofensive primesc alerta NGP la min 1-2 din form fallback
+       Locatie: scanner.js:459
+    6) 🟡 MED — Ramura dead code 0.025*(90-mn) (intra doar mn=0, prematch nu trece aici)
+       Locatie: live-score.js:78
+    7) 🟢 LOW — live_stats tabel scris dar nu citit de NGP (citit doar de
+                match.js dynamic lambda adaugat in sprint curent)
+       Locatie: scanner.js:268-297
+
+  Zero modificari efectuate. Audit complet.
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
