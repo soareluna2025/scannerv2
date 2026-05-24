@@ -1657,18 +1657,20 @@ async function loadTopOpps(){
     // Construiesc TOATE (meci, piata) candidatii pentru toate piețele.
     // Categorii grupate la output pentru variete in bilet:
     //   1. Over 1.5 total
-    //   2. GG (ambele marcheaza)
-    //   3. Gazde marcheaza
-    //   4. Oaspeti marcheaza
-    //   5. Total Cornere Over 8.5
-    //   6. Total Cartonase Over 3.5
+    //   2. Over 2.5 total
+    //   3. GG (ambele marcheaza)
+    //   4. Gazde marcheaza
+    //   5. Oaspeti marcheaza
+    //   6. Total Cornere
+    //   7. Total Cartonase
     var groups={
-      'over15': {label:'Over 1.5 goluri',  icon:'⚽', picks:[]},
-      'gg':     {label:'GG (ambele marc.)',icon:'🤝', picks:[]},
-      'home':   {label:'Gazde marcheaza',   icon:'🏠', picks:[]},
-      'away':   {label:'Oaspeti marcheaza', icon:'✈️', picks:[]},
-      'corn':   {label:'Cornere total',     icon:'⛳', picks:[]},
-      'cards':  {label:'Cartonase total',   icon:'🟨', picks:[]},
+      'over15': {label:'Over 1.5 goluri',  icon:'⚽', picks:[], minProb:70},
+      'over25': {label:'Over 2.5 goluri',  icon:'⚽', picks:[], minProb:55},
+      'gg':     {label:'GG (ambele marc.)',icon:'🤝', picks:[], minProb:55},
+      'home':   {label:'Gazde marcheaza',   icon:'🏠', picks:[], minProb:70},
+      'away':   {label:'Oaspeti marcheaza', icon:'✈️', picks:[], minProb:70},
+      'corn':   {label:'Cornere total',     icon:'⛳', picks:[], minProb:70},
+      'cards':  {label:'Cartonase total',   icon:'🟨', picks:[], minProb:70},
     };
     _pmMatches.forEach(function(m){
       var fid=m.fixture&&m.fixture.id;
@@ -1680,7 +1682,8 @@ async function loadTopOpps(){
       function addPick(groupKey, label, raw, cal){
         if(typeof cal!=='number'||isNaN(cal))return;
         var final=cal+lgBonus;
-        if(cal<70)return;  // prag minim 70%
+        var minProb=groups[groupKey]&&groups[groupKey].minProb||70;
+        if(cal<minProb)return;
         groups[groupKey].picks.push({
           fid:fid, m:m, label:label, raw:raw, cal:cal, finalScore:final,
           minCota:cal>0?(100/cal).toFixed(2):'—',
@@ -1693,22 +1696,27 @@ async function loadTopOpps(){
         var cal=g2Calibrate('goals','total',1.5,Math.round(enr.over15Prob));
         addPick('over15','Over 1.5 total',enr.over15Prob,cal);
       }
-      // 2. GG
+      // 2. Over 2.5
+      if(typeof enr.over25Prob==='number'){
+        var cal25=g2Calibrate('goals','total',2.5,Math.round(enr.over25Prob));
+        addPick('over25','Over 2.5 total',enr.over25Prob,cal25);
+      }
+      // 3. GG
       if(typeof enr.ggProb==='number'){
         var cal2=g2Calibrate('gg','total',0,Math.round(enr.ggProb));
         addPick('gg','GG ambele marcheaza',enr.ggProb,cal2);
       }
-      // 3. Gazde marcheaza (homeScoreRate)
+      // 4. Gazde marcheaza (homeScoreRate)
       if(typeof enr.homeScoreRate==='number'){
         var cal3=g2Calibrate('home','total',0,Math.round(enr.homeScoreRate));
         addPick('home','Gazde marcheaza',enr.homeScoreRate,cal3);
       }
-      // 4. Oaspeti marcheaza
+      // 5. Oaspeti marcheaza
       if(typeof enr.awayScoreRate==='number'){
         var cal4=g2Calibrate('away','total',0,Math.round(enr.awayScoreRate));
         addPick('away','Oaspeti marcheaza',enr.awayScoreRate,cal4);
       }
-      // 5. Cornere — scalez lg avg cu intensitatea meciului (lambdaTotal)
+      // 6. Cornere — scalez lg avg cu intensitatea meciului (lambdaTotal)
       // matches cu mai multe goluri asteptate au probabil mai multe cornere
       var lambdaTot=enr.lambdaTotal||2.5;
       var lgCornBase=enr.league_avg_corners||9.5;
@@ -1737,7 +1745,7 @@ async function loadTopOpps(){
 
     var html='<div style="padding:4px 0 8px">';
     html+='<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:4px">📊 Bilet Calibrat — top 3 per categorie</div>';
-    html+='<div style="font-size:10px;color:var(--mu);margin-bottom:12px;line-height:1.4">Prob &gt;= 70% calibrat. Bonus +5pp ligi WR&gt;75%, penalty -15pp ligi WR&lt;50%. Click pe pick = detalii meci.</div>';
+    html+='<div style="font-size:10px;color:var(--mu);margin-bottom:12px;line-height:1.4">Prag: 70% Over1.5/Gazde/Oaspe&#539;i/Cornere/Cartona&#537;e &middot; 55% Over2.5/GG (piete inerent mai joase). Bonus +5pp ligi WR&gt;75%, penalty -15pp ligi WR&lt;50%. Click pe pick = detalii meci.</div>';
 
     function renderPick(o,i){
       var clr=o.cal>=85?'#22c55e':o.cal>=75?'#10b981':'#f59e0b';
