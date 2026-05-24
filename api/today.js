@@ -137,8 +137,8 @@ export default async function handler(req, res) {
     const base = 'https://v3.football.api-sports.io/fixtures';
 
     const [r0, r1] = await Promise.all([
-      fetch(`${base}?date=${d0}&status=NS&timezone=UTC`, { headers: hdr }),
-      fetch(`${base}?date=${d1}&status=NS&timezone=UTC`, { headers: hdr }),
+      fetch(`${base}?date=${d0}&status=NS&timezone=Europe%2FBerlin`, { headers: hdr }),
+      fetch(`${base}?date=${d1}&status=NS&timezone=Europe%2FBerlin`, { headers: hdr }),
     ]);
 
     const [j0, j1] = await Promise.all([r0.json(), r1.json()]);
