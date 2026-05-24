@@ -208,15 +208,14 @@ playerScore = ratingNorm*0.35 + goalsScore*0.20
 
 ### F. NGP — Next Goal Probability (LIVE)
 
-Calculat în `api/cron/scan.js` și `api/cron/scanner.js`.
+Calculat în `api/utils/live-score.js` → `calcNextGoal(f)`, folosit de
+`api/cron/scan.js` și `api/cron/scanner.js`. Frontend `index.html`
+afișează direct `m._ng` din WebSocket (zero recalcul local).
 
 ```
-ngp = SOT * 4.5
-    + (Shots off Goal) * 1.5
-    + (Dangerous Attacks) * 0.3
-    + (Corners) * 2.0
-    + (Goals scored) * 8
-    - (elapsed / 90) * 15   ← penalizare timp scurs
+NGP: remXg = (txg/mn)*(90-mn); fallback txg=0: formGoals*2.5*remFrac;
+     mn>=70: *1.2; mn>=80: *1.15; prob=1-exp(-max(remXg,0.05));
+     ng=round(min(97,max(3,prob*100)))
 ```
 Normalizat 0-100%. Alertă Telegram când NGP > pragul setat de utilizator.
 

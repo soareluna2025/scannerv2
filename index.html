@@ -1018,10 +1018,9 @@ function calcScore(m){
   var aDA=getStat(st,1,'Dangerous Attacks');
   var txg=hxg+axg;
   var remFrac=Math.max(0,Math.min(1,(95-mn)/90));
-  var remXg=mn>0?(txg/mn)*(90-mn):0.025*(90-mn);
-  if(txg===0)remXg=0.7*remFrac;
-  if(mn>=70)remXg*=1.2;if(mn>=80)remXg*=1.15;
-  var ng=Math.round(Math.max(3,Math.min(97,(1-Math.exp(-Math.max(remXg,0.05)))*100)));
+  // NGP: foloseste valoarea backend (m._ng din WebSocket LIVE_UPDATE/LIVE_DELTA)
+  // Fallback 0 daca lipseste (meci nou inainte de primul broadcast scanner).
+  var ng=(typeof m._ng==='number')?m._ng:0;
   var totalG=hg+ag;
   var lxg=txg>0?txg*3:0;
   var lb=lxg>0?lxg*.55+(m.enrichData?.lambdaTotal??1.4)*.45:1.6;

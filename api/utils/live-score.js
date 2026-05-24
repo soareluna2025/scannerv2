@@ -75,11 +75,10 @@ export function calcFeatures(m, fd = {}) {
 export function calcNextGoal(f) {
   const mn = f.mn || 0;
   const remFrac = Math.max(0, Math.min(1, (90 - mn) / 90));
-  let remXg = mn > 0 ? (f.txg / mn) * (90 - mn) : 0.025 * (90 - mn);
+  let remXg = (f.txg / Math.max(mn, 1)) * (90 - mn);
   if (f.txg === 0) {
     remXg = ((f.homeFormGoals + f.awayFormGoals) / 2 * 2.5) * remFrac;
   }
-  remXg += f.xgSpike * 0.3 + f.prsAcc * 0.2;
   if (mn >= 70) remXg *= 1.2;
   if (mn >= 80) remXg *= 1.15;
   const prob = 1 - Math.exp(-Math.max(remXg, 0.05));
