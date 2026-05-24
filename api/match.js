@@ -6,7 +6,55 @@ const matchCache = new Map();
 const MATCH_CACHE_TTL        =      60_000; // 1 min — live matches
 const MATCH_CACHE_TTL_STATIC = 10 * 60_000; // 10 min — NS / FT
 
-function calcPoisson(hGames, aGames, h2h, hId, aId) {
+// ── DB helpers — fallback chain pentru lambda Poisson ─────────────────────────
+// Pattern identic cu enrich.js: form_stats → teams_stats → league_stats → 1.2
+async function getFormFromDB(teamId) {
+  try {
+    const r = await query(
+      `SELECT home_team_id, away_team_id, home_goals, away_goals
+       FROM fixtures_history
+       WHERE (home_team_id = $1 OR away_team_id = $1)
+         AND status_short = 'FT'
+         AND home_goals IS NOT NULL
+       ORDER BY match_date DESC
+       LIMIT 10`,
+      [teamId]
+    );
+    return r.rows.map(row => ({
+      teams: { home: { id: row.home_team_id }, away: { id: row.away_team_id } },
+      goals: { home: row.home_goals ?? 0, away: row.away_goals ?? 0 },
+    }));
+  } catch (_) { return []; }
+}
+
+async function getTeamStatsFromDB(teamId, leagueId) {
+  try {
+    const r = leagueId
+      ? await query(
+          `SELECT avg_goals_for, avg_goals_against
+           FROM teams_stats WHERE team_id = $1 AND league_id = $2
+           ORDER BY season DESC LIMIT 1`,
+          [teamId, Number(leagueId)]
+        )
+      : await query(
+          `SELECT avg_goals_for, avg_goals_against
+           FROM teams_stats WHERE team_id = $1
+           ORDER BY season DESC LIMIT 1`,
+          [teamId]
+        );
+    return r.rows[0] || null;
+  } catch (_) { return null; }
+}
+
+async function getLeagueStats(lgid) {
+  if (!lgid) return null;
+  try {
+    const r = await query('SELECT * FROM league_stats WHERE league_id = $1', [Number(lgid)]);
+    return r.rows[0] || null;
+  } catch (_) { return null; }
+}
+
+function calcPoisson(hGames, aGames, h2h, hId, aId, lgHome = 1.2, lgAway = 1.2) {
   const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
   const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
   const r2  = v => Math.round(v * 100) / 100;
@@ -15,8 +63,14 @@ function calcPoisson(hGames, aGames, h2h, hId, aId) {
   const homeAvgConceded = avg(hGames, m => ((m.teams?.home?.id === hId ? m.goals?.away : m.goals?.home) ?? 0));
   const awayAvgScored   = avg(aGames, m => ((m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0));
   const awayAvgConceded = avg(aGames, m => ((m.teams?.away?.id === aId ? m.goals?.home : m.goals?.away) ?? 0));
-  const lambdaHome  = (homeAvgScored + awayAvgConceded) / 2;
-  const lambdaAway  = (awayAvgScored + homeAvgConceded) / 2;
+
+  // Fallback la league avg cand form insuficient (<3 meciuri per echipa)
+  const lambdaHome  = (hGames.length >= 3 && aGames.length >= 3)
+    ? (homeAvgScored + awayAvgConceded) / 2
+    : lgHome;
+  const lambdaAway  = (hGames.length >= 3 && aGames.length >= 3)
+    ? (awayAvgScored + homeAvgConceded) / 2
+    : lgAway;
   const lambdaTotal = lambdaHome + lambdaAway;
 
   const matrix = calcPoisson6x6(lambdaHome, lambdaAway);
@@ -96,18 +150,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ── DB fallback: h2h, form, standings ─────────────────────
-    const [dbH2H, dbHForm, dbAForm, dbOddsRows, dbLogos] = await Promise.all([
+    // ── DB fallback: form_stats → teams_stats, plus h2h/odds/logos ─────
+    const [dbH2H, sbHForm, sbAForm, dbOddsRows, dbLogos, tsH, tsA] = await Promise.all([
       query('SELECT home_team_id, away_team_id, home_goals, away_goals, match_date FROM h2h WHERE (home_team_id=$1 AND away_team_id=$2) OR (home_team_id=$2 AND away_team_id=$1) ORDER BY match_date DESC LIMIT 10', [hId, aId]).catch(() => ({ rows: [] })),
-      query('SELECT home_team_id, away_team_id, home_goals, away_goals FROM fixtures_history WHERE (home_team_id=$1 OR away_team_id=$1) AND status_short=\'FT\' ORDER BY match_date DESC LIMIT 20', [hId]).catch(() => ({ rows: [] })),
-      query('SELECT home_team_id, away_team_id, home_goals, away_goals FROM fixtures_history WHERE (home_team_id=$1 OR away_team_id=$1) AND status_short=\'FT\' ORDER BY match_date DESC LIMIT 20', [aId]).catch(() => ({ rows: [] })),
+      getFormFromDB(hId),
+      getFormFromDB(aId),
       query('SELECT *, bet_name AS market, value_name AS label, value_odd AS odd_value FROM odds WHERE fixture_id=$1 AND bookmaker_id=8', [Number(id)]).catch(() => ({ rows: [] })),
       query('SELECT team_id, logo FROM teams WHERE team_id = ANY($1)', [[hId, aId]]).catch(() => ({ rows: [] })),
+      getTeamStatsFromDB(hId, null),
+      getTeamStatsFromDB(aId, null),
     ]);
 
     const needH2H   = dbH2H.rows.length   < 3;
-    const needHForm = dbHForm.rows.length  < 3;
-    const needAForm = dbAForm.rows.length  < 3;
+    const needHForm = sbHForm.length      < 3;
+    const needAForm = sbAForm.length      < 3;
     const needOdds  = dbOddsRows.rows.length === 0;
 
     // ── Always fetch fixture details, lineups, players, events ─
@@ -151,17 +207,13 @@ export default async function handler(req, res) {
       ? (dH2H?.response || []).slice(0, 10)
       : h2hFromDB;
 
-    // Resolve form
-    const toFormMatch = r => ({
-      teams: { home: { id: r.home_team_id }, away: { id: r.away_team_id } },
-      goals: { home: r.home_goals ?? 0, away: r.away_goals ?? 0 },
-    });
+    // Resolve form: form_stats DB (sbXForm) → API fallback (dXForm)
     const hGames = needHForm
-      ? (dHForm?.response || []).filter(m => m.teams?.home?.id === hId).slice(0, 10)
-      : dbHForm.rows.map(toFormMatch).slice(0, 10);
+      ? (dHForm?.response || []).slice(0, 10)
+      : sbHForm;
     const aGames = needAForm
-      ? (dAForm?.response || []).filter(m => m.teams?.away?.id === aId).slice(0, 10)
-      : dbAForm.rows.map(toFormMatch).slice(0, 10);
+      ? (dAForm?.response || []).slice(0, 10)
+      : sbAForm;
 
     // Resolve odds
     let oddsRaw = null;
@@ -187,7 +239,37 @@ export default async function handler(req, res) {
       } catch (_) {}
     }
 
-    const poissonResult = calcPoisson(hGames, aGames, h2h, hId, aId);
+    // ── League stats fallback (priority 3) — necesita lgid din fixture ─
+    const lgid = fixture?.league?.id || null;
+    const leagueStats = lgid ? await getLeagueStats(lgid) : null;
+    const lgHome = parseFloat(leagueStats?.avg_home_goals) || 1.2;
+    const lgAway = parseFloat(leagueStats?.avg_away_goals) || 1.2;
+
+    const poissonResult = calcPoisson(hGames, aGames, h2h, hId, aId, lgHome, lgAway);
+
+    // ── teams_stats lambda override — priority 2 (intre form si league_stats) ─
+    // Aplicat doar cand form-ul ramane insuficient dupa form_stats DB + API
+    const formInsufficient = hGames.length < 3 || aGames.length < 3;
+    if (formInsufficient && (tsH || tsA)) {
+      const r2 = v => Math.round(v * 100) / 100;
+      const tsHScored   = tsH ? +(tsH.avg_goals_for)     : null;
+      const tsHConceded = tsH ? +(tsH.avg_goals_against) : null;
+      const tsAScored   = tsA ? +(tsA.avg_goals_for)     : null;
+      const tsAConceded = tsA ? +(tsA.avg_goals_against) : null;
+      if (tsHScored != null && tsAConceded != null)
+        poissonResult.lambdaHome = r2((tsHScored + tsAConceded) / 2);
+      if (tsAScored != null && tsHConceded != null)
+        poissonResult.lambdaAway = r2((tsAScored + tsHConceded) / 2);
+      poissonResult.lambdaTotal = r2(poissonResult.lambdaHome + poissonResult.lambdaAway);
+      // Recalculate matrix with improved lambdas
+      const mx2 = calcPoisson6x6(poissonResult.lambdaHome, poissonResult.lambdaAway);
+      Object.assign(poissonResult, {
+        over15Prob: mx2.over15Prob, over25Prob: mx2.over25Prob,
+        ggProb: mx2.ggProb, homeWin: mx2.homeWin,
+        draw: mx2.draw, awayWin: mx2.awayWin,
+      });
+    }
+
     const evData        = calcEV(poissonResult, oddsRaw);
     const enrich        = { ...poissonResult, ...evData };
 
