@@ -1563,10 +1563,28 @@ async function loadPM(){
     _pmMatches=raw.sort(function(a,b){return new Date(a.fixture.date)-new Date(b.fixture.date);});
     renderPM();
     btn.textContent='Reîncarcă';btn.disabled=false;
-    // Lazy enrich: batches of 5, max 100 matches
+    // Lazy enrich: batches of 5, max 100 matches.
+    // PERFORMANCE: renderPM() rebuilds DOM pentru ~120 cards — costisitor.
+    // Apelat dupa fiecare batch (20 ori) blocheaza UI cand se acumuleaza date.
+    // Fix: throttle prin requestAnimationFrame + skip render daca alta cerere e pending.
     var toEnrich=_pmMatches.filter(function(m){
       return m.teams&&m.teams.home&&m.teams.home.id&&m.teams.away&&m.teams.away.id;
     }).slice(0,100);
+    var pendingRender=false;
+    var lastRenderTs=Date.now();
+    function scheduleRender(force){
+      var now=Date.now();
+      // Daca rendered acum <1500ms si nu e force, skip
+      if(!force && now-lastRenderTs<1500){return;}
+      if(pendingRender)return;
+      pendingRender=true;
+      requestAnimationFrame(function(){
+        pendingRender=false;
+        lastRenderTs=Date.now();
+        renderPM();
+        if(typeof genUpdateBadge==='function')genUpdateBadge();
+      });
+    }
     for(var i=0;i<toEnrich.length;i+=5){
       var batch=toEnrich.slice(i,i+5);
       await Promise.all(batch.map(async function(m){
@@ -1576,9 +1594,12 @@ async function loadPM(){
           if(!ed.error)_pmEnrich[m.fixture.id]=ed;
         }catch(e){}
       }));
-      renderPM();
-      genUpdateBadge();
+      scheduleRender(false);
+      // Yield la event loop dupa fiecare batch (permite UI sa raspunda)
+      await new Promise(function(r){setTimeout(r,0);});
     }
+    // Final render garantat (force) dupa ce toate batch-urile s-au terminat
+    scheduleRender(true);
   }catch(e){
     console.error('[loadPM] error:', e);
     body.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+e.message+'</div></div>';
