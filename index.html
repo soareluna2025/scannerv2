@@ -2966,7 +2966,45 @@ function g2LiveAdjust(m, cat, sub, thr){
       prob=nd2<=0?1:pAtLeast(nd2,totLam);
     }
   }
-  else return null;  // cards/corners — fara model live
+  else if(cat==='corners'&&m.live){
+    var hcv=(typeof m.live.home_corners==='number')?m.live.home_corners:null;
+    var acv=(typeof m.live.away_corners==='number')?m.live.away_corners:null;
+    if(hcv===null&&acv===null)return null;  // fara date live → pre-meci pass-through
+    var lgCorn=(m.league&&m.league.avg_corners)||9;
+    var perSideCorn=lgCorn/2;
+    var remCornH=perSideCorn*remFrac, remCornA=perSideCorn*remFrac;
+    if(sub==='home'){
+      var nd3=Math.ceil((thr||0.5)+0.5-(hcv||0));
+      prob=nd3<=0?1:pAtLeast(nd3,remCornH);
+    }else if(sub==='away'){
+      var nd4=Math.ceil((thr||0.5)+0.5-(acv||0));
+      prob=nd4<=0?1:pAtLeast(nd4,remCornA);
+    }else{
+      var totC=(hcv||0)+(acv||0);
+      var nd5=Math.ceil((thr||0.5)+0.5-totC);
+      prob=nd5<=0?1:pAtLeast(nd5,remCornH+remCornA);
+    }
+  }
+  else if(cat==='cards'&&m.live){
+    var hcdv=(typeof m.live.home_cards==='number')?m.live.home_cards:null;
+    var acdv=(typeof m.live.away_cards==='number')?m.live.away_cards:null;
+    if(hcdv===null&&acdv===null)return null;
+    var lgCards=(m.league&&m.league.avg_yellow)||3.5;
+    var perSideCard=lgCards/2;
+    var remCardH=perSideCard*remFrac, remCardA=perSideCard*remFrac;
+    if(sub==='home'){
+      var nd6=Math.ceil((thr||0.5)+0.5-(hcdv||0));
+      prob=nd6<=0?1:pAtLeast(nd6,remCardH);
+    }else if(sub==='away'){
+      var nd7=Math.ceil((thr||0.5)+0.5-(acdv||0));
+      prob=nd7<=0?1:pAtLeast(nd7,remCardA);
+    }else{
+      var totCd=(hcdv||0)+(acdv||0);
+      var nd8=Math.ceil((thr||0.5)+0.5-totCd);
+      prob=nd8<=0?1:pAtLeast(nd8,remCardH+remCardA);
+    }
+  }
+  else return null;
   return Math.round(100*prob);
 }
 // EV recalc pentru Generator (similar cu evRecalc din modal)
@@ -3142,11 +3180,27 @@ function g2Detail(idx){
   }
   // live context
   if(m.is_live&&m.live){
+    var hc=m.live.home_corners, ac=m.live.away_corners;
+    var hcd=m.live.home_cards, acd=m.live.away_cards;
+    var hcOK=(typeof hc==='number'), acOK=(typeof ac==='number');
+    var hcdOK=(typeof hcd==='number'), acdOK=(typeof acd==='number');
     h+='<div class="g2section"><div class="g2sec-title">📊 Context live · '+m.minute+'\'</div>';
     h+='<div class="g2srow"><span class="g2srow-l">Scor</span><span class="g2srow-v">'+m.home_goals+' - '+m.away_goals+'</span></div>';
     if(m.live.home_xg||m.live.away_xg)h+='<div class="g2srow"><span class="g2srow-l">xG total</span><span class="g2srow-v">'+Number(m.live.home_xg+m.live.away_xg).toFixed(2)+'</span></div>';
-    if(m.live.home_corners||m.live.away_corners)h+='<div class="g2srow"><span class="g2srow-l">Cornere</span><span class="g2srow-v">'+m.live.home_corners+' - '+m.live.away_corners+'</span></div>';
-    if(m.live.home_cards||m.live.away_cards)h+='<div class="g2srow"><span class="g2srow-l">Cartonașe</span><span class="g2srow-v">'+m.live.home_cards+' - '+m.live.away_cards+'</span></div>';
+    // Cornere: afisez intotdeauna daca am date (chiar si 0-0). Highlight daca piata e corners.
+    var isCornersMkt=(G2.cat==='corners');
+    if(hcOK||acOK){
+      var cornStyle=isCornersMkt?' style="background:rgba(59,130,246,.1);padding:6px 8px;border-radius:6px;border-left:2px solid #3b82f6"':'';
+      h+='<div class="g2srow"'+cornStyle+'><span class="g2srow-l">⚽ Cornere'+(isCornersMkt?' <b style="color:#3b82f6">(piața ta)</b>':'')+'</span><span class="g2srow-v">'+(hc||0)+' - '+(ac||0)+(isCornersMkt?' (total '+((hc||0)+(ac||0))+')':'')+'</span></div>';
+    }else if(isCornersMkt){
+      h+='<div class="g2srow" style="background:rgba(245,158,11,.1);padding:6px 8px;border-radius:6px"><span class="g2srow-l" style="color:#f59e0b">⚠ Cornere live indisponibile</span><span class="g2srow-v" style="color:var(--mu);font-size:10px">(statistics nepreluat)</span></div>';
+    }
+    // Cartonase: la fel
+    var isCardsMkt=(G2.cat==='cards');
+    if(hcdOK||acdOK){
+      var cardStyle=isCardsMkt?' style="background:rgba(59,130,246,.1);padding:6px 8px;border-radius:6px;border-left:2px solid #3b82f6"':'';
+      h+='<div class="g2srow"'+cardStyle+'><span class="g2srow-l">🟨 Cartonașe'+(isCardsMkt?' <b style="color:#3b82f6">(piața ta)</b>':'')+'</span><span class="g2srow-v">'+(hcd||0)+' - '+(acd||0)+(isCardsMkt?' (total '+((hcd||0)+(acd||0))+')':'')+'</span></div>';
+    }
     h+='</div>';
   }
   // AI concluzie
