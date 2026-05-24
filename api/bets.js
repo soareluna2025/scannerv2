@@ -35,6 +35,9 @@ async function ensureTable() {
       resolved_at   TIMESTAMP
     )
   `);
+  // Migratie pentru bilete combinate
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS is_multi BOOLEAN DEFAULT FALSE`).catch(() => {});
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS legs JSONB`).catch(() => {});
   await query(`CREATE INDEX IF NOT EXISTS idx_bets_outcome ON bets(outcome)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_bets_placed ON bets(placed_at DESC)`);
 }
@@ -98,7 +101,7 @@ export default async function handler(req, res) {
       const { rows } = await query(`
         SELECT id, fixture_id, home_team, away_team, league_name, league_id,
                market, selection, cota, stake, expected_prob, outcome,
-               payout, profit, notes, placed_at, resolved_at
+               payout, profit, notes, placed_at, resolved_at, is_multi, legs
         FROM bets
         ${wh}
         ORDER BY placed_at DESC
@@ -119,15 +122,19 @@ export default async function handler(req, res) {
       if (cota <= 1 || stake <= 0) {
         return res.status(400).json({ ok: false, error: 'cota > 1, stake > 0' });
       }
+      const isMulti = !!b.is_multi;
+      const legs = b.legs ? JSON.stringify(b.legs) : null;
       const { rows } = await query(`
         INSERT INTO bets (fixture_id, home_team, away_team, league_name, league_id,
-                          market, selection, cota, stake, expected_prob, outcome, notes)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'PENDING',$11)
+                          market, selection, cota, stake, expected_prob, outcome, notes,
+                          is_multi, legs)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'PENDING',$11,$12,$13)
         RETURNING id
       `, [
         b.fixture_id || null, b.home_team || null, b.away_team || null,
         b.league_name || null, b.league_id || null,
         b.market, b.selection || null, cota, stake, expProb, b.notes || null,
+        isMulti, legs,
       ]);
       return res.status(200).json({ ok: true, id: rows[0].id });
     }

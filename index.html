@@ -4154,61 +4154,59 @@ function simRender(d){
 function adjustPageTop(){}
 
 // ── BILETE / ROI TRACKING ─────────────────────────────────────────
-// Cache fids/markets adaugate (sync cu DB la incarcare bilete + load init)
+// SELECTII = picks bifate dar inca neformate ca bilet. Stocate in localStorage.
+// Cand utilizatorul creeaza bilet single sau combinat din ele, se trimit la /api/bets.
 window.BETS_ADDED=window.BETS_ADDED||{};
+function getSelections(){
+  try{return JSON.parse(localStorage.getItem('aloha_selections')||'[]');}catch(e){return [];}
+}
+function setSelections(s){
+  localStorage.setItem('aloha_selections',JSON.stringify(s));
+  // Reflect in cache pentru render checkbox bifate
+  window.BETS_ADDED={};
+  s.forEach(function(sel){window.BETS_ADDED[sel.pickKey]=true;});
+  // Re-render bilete daca tab e deschis
+  var betsBody=document.getElementById('bets-body');
+  if(betsBody&&betsBody.style.display!=='none')loadBets();
+  // Update badge count (opt)
+  var badge=document.getElementById('selections-count');
+  if(badge)badge.textContent=s.length;
+}
 async function loadBetsAddedCache(){
-  try{
-    var r=await fetch('/api/bets?limit=200');
-    var d=await r.json();
-    if(d.ok&&Array.isArray(d.bets)){
-      window.BETS_ADDED={};
-      d.bets.forEach(function(b){
-        if(b.fixture_id&&b.market){window.BETS_ADDED[b.fixture_id+'|'+b.market]=b.id;}
-      });
-    }
-  }catch(e){}
+  // Citeste selections din localStorage (sursa principala) + nu mai face fetch DB pt bifate
+  var sels=getSelections();
+  window.BETS_ADDED={};
+  sels.forEach(function(s){window.BETS_ADDED[s.pickKey]=true;});
 }
 loadBetsAddedCache();
 
-// Toggle add/remove pariu din Top Oportunitati
-async function toggleBetFromPick(pickKey, btn){
+// Toggle: adauga/scoate pick din selectii (FARA prompt, FARA insert in DB)
+function toggleBetFromPick(pickKey, btn){
   var p=window.PICK_DATA&&window.PICK_DATA[pickKey];
   if(!p){alert('Pick data lipsa');return;}
-  var existingId=window.BETS_ADDED[pickKey];
-  if(existingId){
-    // Already added -> remove
-    if(!confirm('Stergi pariul din bilete?'))return;
-    try{
-      await fetch('/api/bets?id='+existingId,{method:'DELETE'});
-      delete window.BETS_ADDED[pickKey];
-      btn.style.background='rgba(255,255,255,.05)';
-      btn.style.borderColor='#475569';
-      btn.textContent='';
-    }catch(e){alert('Eroare: '+e.message);}
-    return;
-  }
-  // Adauga — cere miza in LTC (prompt simplu sau modal mic)
-  var stake=prompt('Miz&#259; (LTC) pentru\\n'+p.home+' vs '+p.away+'\\n'+p.market+' @ cot&#259; min '+p.minCota+'\\n\\nIntrodu valoare (ex: 0.05):','0.05');
-  if(stake===null)return;
-  stake=parseFloat(stake);
-  if(!stake||stake<=0){alert('Miz&#259; invalid&#259;');return;}
-  var cota=prompt('Cota la care pariezi (Bet365/Superbet):',p.minCota);
-  if(cota===null)return;
-  cota=parseFloat(cota);
-  if(!cota||cota<=1){alert('Cot&#259; trebuie > 1');return;}
-  try{
-    var r=await fetch('/api/bets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      fixture_id:p.fid, home_team:p.home, away_team:p.away,
-      league_name:p.league, league_id:p.leagueId,
-      market:p.market, cota:cota, stake:stake, expected_prob:p.cal,
-    })});
-    var d=await r.json();
-    if(!d.ok){alert('Eroare: '+d.error);return;}
-    window.BETS_ADDED[pickKey]=d.id;
+  var sels=getSelections();
+  var idx=sels.findIndex(function(s){return s.pickKey===pickKey;});
+  if(idx>=0){
+    // Scoate
+    sels.splice(idx,1);
+    setSelections(sels);
+    btn.style.background='rgba(255,255,255,.05)';
+    btn.style.borderColor='#475569';
+    btn.textContent='';
+  }else{
+    // Adauga in selectii (cota se completeaza in tab Bilete)
+    sels.push({
+      pickKey:pickKey, fid:p.fid, home:p.home, away:p.away,
+      league:p.league, leagueId:p.leagueId,
+      market:p.market, cal:p.cal, minCota:p.minCota,
+      cota:p.minCota, // suggested default cota
+      addedAt:Date.now(),
+    });
+    setSelections(sels);
     btn.style.background='#22c55e';
     btn.style.borderColor='#22c55e';
     btn.textContent='✓';
-  }catch(e){alert('Eroare: '+e.message);}
+  }
 }
 
 function switchFavSub(which){
@@ -4230,6 +4228,142 @@ function switchFavSub(which){
   }
 }
 
+// Render sectiunea Selectii (picks bifate dar inca neformate ca bilete)
+function renderSelectionsSection(sels){
+  if(!sels.length){
+    return '<div style="background:rgba(99,102,241,.06);border:1px dashed rgba(99,102,241,.3);border-radius:8px;padding:12px;margin-bottom:14px;text-align:center"><div style="font-size:11px;color:#a5b4fc;font-weight:700;margin-bottom:4px">📌 Niciun pick selectat</div><div style="font-size:10px;color:var(--mu)">Bifeaz&#259; in Pre-meci &rarr; Top Oportunit&#259;&#539;i</div></div>';
+  }
+  // Suma cota daca combinat
+  var totalCotaCombinat=sels.reduce(function(p,s){return p*(parseFloat(s.cota)||1);},1);
+  var stake=getStoredStake();
+  var h='';
+  h+='<div style="background:rgba(99,102,241,.05);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:10px;margin-bottom:12px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+  h+='<div style="font-size:12px;font-weight:800;color:#a5b4fc;text-transform:uppercase;letter-spacing:.5px">📌 Selec&#539;ii curente (<span id="selections-count">'+sels.length+'</span>)</div>';
+  h+='<button onclick="clearSelections()" style="background:rgba(255,255,255,.05);color:var(--mu);border:none;padding:4px 8px;border-radius:5px;font-size:10px;cursor:pointer">✕ &Scaron;terge tot</button>';
+  h+='</div>';
+  // List per pick
+  sels.forEach(function(s,i){
+    h+='<div style="background:#1e2530;border-radius:6px;padding:8px;margin-bottom:6px;border-left:2px solid #6366f1">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:start;gap:6px">';
+    h+='<div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+htmlEsc(s.home)+' vs '+htmlEsc(s.away)+'</div>';
+    h+='<div style="font-size:10px;color:var(--ac);font-weight:600;margin-top:2px">'+htmlEsc(s.market)+'</div>';
+    h+='<div style="font-size:9px;color:var(--mu);margin-top:1px">'+htmlEsc(s.league||'')+' &middot; calc '+s.cal+'% (cot&#259; min '+s.minCota+')</div></div>';
+    h+='<button onclick="removeSelection(\''+s.pickKey.replace(/\'/g,"\\'")+'\')" style="background:rgba(239,68,68,.1);color:#ef4444;border:none;width:24px;height:24px;border-radius:5px;font-size:14px;cursor:pointer;flex-shrink:0">×</button>';
+    h+='</div>';
+    h+='<div style="margin-top:6px;display:flex;align-items:center;gap:6px">';
+    h+='<span style="font-size:10px;color:var(--mu)">Cota ta:</span>';
+    h+='<input type="number" step="0.01" min="1.01" value="'+(s.cota||s.minCota)+'" onchange="updateSelectionCota('+i+',this.value)" style="flex:1;background:rgba(255,255,255,.05);border:1px solid var(--bor);color:var(--tx);padding:5px 8px;border-radius:5px;font-size:12px;font-weight:700">';
+    h+='</div></div>';
+  });
+  // Footer cu actiuni
+  h+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(99,102,241,.3)">';
+  h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+  h+='<span style="font-size:11px;color:var(--mu);flex-shrink:0">Miz&#259; LTC:</span>';
+  h+='<input id="bilet-stake" type="number" step="0.0001" min="0.0001" value="'+stake+'" oninput="setStoredStake(this.value);updateMultiPreview()" style="flex:1;background:rgba(255,255,255,.05);border:1px solid var(--bor);color:var(--tx);padding:6px 8px;border-radius:6px;font-size:13px;font-weight:800">';
+  h+='</div>';
+  // Preview combinat (visible only if >=2 picks)
+  if(sels.length>=2){
+    h+='<div id="multi-preview" style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:8px;margin-bottom:8px;font-size:11px">';
+    h+='<div style="display:flex;justify-content:space-between"><span style="color:var(--mu)">Cot&#259; combinat&#259; ('+sels.length+'x):</span><b style="color:#22c55e" id="multi-cota">'+totalCotaCombinat.toFixed(2)+'</b></div>';
+    h+='<div style="display:flex;justify-content:space-between"><span style="color:var(--mu)">C&acirc;&scaron;tig poten&#539;ial:</span><b style="color:#22c55e" id="multi-payout">'+(totalCotaCombinat*parseFloat(stake)).toFixed(4)+' LTC</b></div>';
+    h+='</div>';
+  }
+  // Butoane
+  h+='<div style="display:flex;gap:6px">';
+  h+='<button onclick="createSingles()" style="flex:1;background:#22c55e;color:#000;border:none;padding:10px;border-radius:6px;font-weight:800;font-size:12px;cursor:pointer">💾 SINGLE ('+sels.length+' bilete)</button>';
+  if(sels.length>=2){
+    h+='<button onclick="createCombinat()" style="flex:1;background:#6366f1;color:#fff;border:none;padding:10px;border-radius:6px;font-weight:800;font-size:12px;cursor:pointer">🔗 COMBINAT</button>';
+  }
+  h+='</div></div></div>';
+  return h;
+}
+
+function getStoredStake(){
+  return localStorage.getItem('aloha_stake')||'0.05';
+}
+function setStoredStake(v){
+  localStorage.setItem('aloha_stake',v);
+}
+function updateSelectionCota(idx,val){
+  var sels=getSelections();
+  var v=parseFloat(val);
+  if(v>1)sels[idx].cota=v;
+  setSelections(sels);
+}
+function removeSelection(pickKey){
+  var sels=getSelections().filter(function(s){return s.pickKey!==pickKey;});
+  setSelections(sels);
+}
+function clearSelections(){
+  if(!confirm('&Scaron;tergi toate selec&#539;iile?'))return;
+  setSelections([]);
+}
+function updateMultiPreview(){
+  var sels=getSelections();
+  if(sels.length<2)return;
+  var totalCota=sels.reduce(function(p,s){return p*(parseFloat(s.cota)||1);},1);
+  var stake=parseFloat(getStoredStake())||0;
+  var elC=document.getElementById('multi-cota');
+  var elP=document.getElementById('multi-payout');
+  if(elC)elC.textContent=totalCota.toFixed(2);
+  if(elP)elP.textContent=(totalCota*stake).toFixed(4)+' LTC';
+}
+
+// Creeaza pariuri SINGLE — cate unul per selectie
+async function createSingles(){
+  var sels=getSelections();
+  if(!sels.length)return;
+  var stake=parseFloat(getStoredStake());
+  if(!stake||stake<=0){alert('Miz&#259; invalid&#259;');return;}
+  // Valideaza cotele
+  for(var i=0;i<sels.length;i++){
+    var c=parseFloat(sels[i].cota);
+    if(!c||c<=1){alert('Cot&#259; invalid&#259; pentru '+sels[i].home+' vs '+sels[i].away);return;}
+  }
+  if(!confirm('Creezi '+sels.length+' bilete single, '+stake+' LTC fiecare?'))return;
+  try{
+    for(var j=0;j<sels.length;j++){
+      var s=sels[j];
+      await fetch('/api/bets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        fixture_id:s.fid, home_team:s.home, away_team:s.away,
+        league_name:s.league, league_id:s.leagueId,
+        market:s.market, cota:parseFloat(s.cota), stake:stake, expected_prob:s.cal,
+      })});
+    }
+    setSelections([]);
+    loadBets();
+  }catch(e){alert('Eroare: '+e.message);}
+}
+
+// Creeaza bilet COMBINAT — 1 pariu cu N legs
+async function createCombinat(){
+  var sels=getSelections();
+  if(sels.length<2)return;
+  var stake=parseFloat(getStoredStake());
+  if(!stake||stake<=0){alert('Miz&#259; invalid&#259;');return;}
+  var totalCota=sels.reduce(function(p,s){return p*(parseFloat(s.cota)||1);},1);
+  if(!confirm('Creezi bilet combinat din '+sels.length+' pick-uri, cot&#259; total&#259; '+totalCota.toFixed(2)+', miz&#259; '+stake+' LTC?\\nC&acirc;&scaron;tig poten&#539;ial: '+(totalCota*stake).toFixed(4)+' LTC'))return;
+  // Legs JSON
+  var legs=sels.map(function(s){return {
+    fid:s.fid, home:s.home, away:s.away, league:s.league,
+    market:s.market, cota:parseFloat(s.cota), expected_prob:s.cal,
+  };});
+  // Prob combinata = produs probabilitati individuale (presupunand independenta)
+  var prob=sels.reduce(function(p,s){return p*((s.cal||50)/100);},1)*100;
+  try{
+    var r=await fetch('/api/bets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      market:'Combinat '+sels.length+'x',
+      cota:totalCota, stake:stake, expected_prob:prob,
+      is_multi:true, legs:legs,
+    })});
+    var d=await r.json();
+    if(!d.ok){alert('Eroare: '+d.error);return;}
+    setSelections([]);
+    loadBets();
+  }catch(e){alert('Eroare: '+e.message);}
+}
+
 async function loadBets(){
   var body=document.getElementById('bets-body');
   body.innerHTML='<div class="spinner"><div class="spin"></div></div>';
@@ -4240,7 +4374,10 @@ async function loadBets(){
     var listData=await listRes.json();
     var s=(statsData.ok&&statsData.stats)||{};
     var bets=(listData.ok&&listData.bets)||[];
+    var selections=getSelections();
     var h='';
+    // ─── SECTIUNEA SELECTII (picks bifate, in lucru) ─────────────
+    h+=renderSelectionsSection(selections);
     // Stats card
     var roiClr=s.roi==null?'var(--mu)':s.roi>5?'#22c55e':s.roi>=-5?'#f59e0b':'#ef4444';
     var profitClr=(s.netProfit||0)>0?'#22c55e':(s.netProfit||0)<0?'#ef4444':'var(--mu)';
@@ -4257,23 +4394,44 @@ async function loadBets(){
     h+='<div><div style="font-size:10px;color:var(--mu);margin-bottom:2px">Profit net</div><div style="font-weight:800;color:'+profitClr+';font-size:16px">'+((s.netProfit||0)>=0?'+':'')+(s.netProfit||0).toFixed(4)+' LTC</div></div>';
     h+='<div><div style="font-size:10px;color:var(--mu);margin-bottom:2px">ROI</div><div style="font-weight:800;color:'+roiClr+';font-size:16px">'+(s.roi==null?'—':((s.roi>=0?'+':'')+s.roi+'%'))+'</div></div>';
     h+='</div></div>';
-    h+='<div style="font-size:11px;color:var(--mu);background:rgba(99,102,241,.06);border-left:2px solid #6366f1;border-radius:4px;padding:8px;margin-bottom:12px;line-height:1.5">💡 Pariurile se adaug&#259; <b>doar din Top Oportunit&#259;&#539;i</b>. Mergi in tab-ul Pre-meci, apas&#259; Top Oportunit&#259;&#539;i si bifeaz&#259; meciurile dorite.</div>';
+    // Header "Bilete create"
+    h+='<div style="margin:14px 0 8px;font-size:11px;font-weight:800;color:var(--mu);text-transform:uppercase;letter-spacing:.5px">💾 Bilete create</div>';
     // List bets
     if(!bets.length){
-      h+='<div class="empty" style="padding:24px"><div class="empty-icon">📋</div><div class="empty-t">Niciun pariu salvat</div><div class="empty-s">Mergi in Pre-meci &rarr; Top Oportunit&#259;&#539;i &rarr; bifeaz&#259; pick-urile dorite</div></div>';
+      h+='<div class="empty" style="padding:16px"><div class="empty-icon">📋</div><div class="empty-t">Niciun bilet creat</div><div class="empty-s">Bifeaz&#259; pick-uri in Top Oportunit&#259;&#539;i, apoi creeaz&#259; single/combinat</div></div>';
     }else{
       bets.forEach(function(b){
         var oClr=b.outcome==='WIN'?'#22c55e':b.outcome==='LOSS'?'#ef4444':b.outcome==='VOID'?'#f59e0b':'#94a3b8';
         var oLbl=b.outcome==='WIN'?'✓ WIN':b.outcome==='LOSS'?'✗ LOSS':b.outcome==='VOID'?'⊘ VOID':'⏳ PEND';
         var profitTxt=b.profit!=null?(b.profit>0?'+':'')+Number(b.profit).toFixed(4)+' LTC':'';
+        var isMulti=!!b.is_multi;
+        var legs=b.legs||[];
         h+='<div style="background:#1e2530;border-radius:8px;padding:10px;margin-bottom:8px;border-left:3px solid '+oClr+'">';
         h+='<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px">';
-        h+='<div style="flex:1"><div style="font-weight:700;font-size:12px">'+htmlEsc(b.home_team||'?')+' vs '+htmlEsc(b.away_team||'?')+'</div>';
-        if(b.league_name)h+='<div style="font-size:10px;color:var(--mu);margin-top:2px">'+htmlEsc(b.league_name)+'</div>';
-        h+='</div><div style="font-size:11px;font-weight:800;color:'+oClr+'">'+oLbl+'</div></div>';
+        if(isMulti){
+          h+='<div style="flex:1"><div style="font-weight:700;font-size:12px"><span style="background:rgba(99,102,241,.2);color:#a5b4fc;padding:2px 6px;border-radius:4px;font-size:10px;margin-right:6px">COMBINAT '+legs.length+'x</span></div></div>';
+        }else{
+          h+='<div style="flex:1"><div style="font-weight:700;font-size:12px">'+htmlEsc(b.home_team||'?')+' vs '+htmlEsc(b.away_team||'?')+'</div>';
+          if(b.league_name)h+='<div style="font-size:10px;color:var(--mu);margin-top:2px">'+htmlEsc(b.league_name)+'</div></div>';
+        }
+        h+='<div style="font-size:11px;font-weight:800;color:'+oClr+'">'+oLbl+'</div></div>';
+        if(isMulti&&legs.length){
+          h+='<div style="margin:6px 0;padding:6px;background:rgba(0,0,0,.2);border-radius:6px">';
+          legs.forEach(function(leg,li){
+            h+='<div style="font-size:10px;padding:3px 0;border-bottom:'+(li<legs.length-1?'1px solid var(--bor)':'none')+'">';
+            h+='<div style="color:#fff">'+htmlEsc(leg.home||'?')+' vs '+htmlEsc(leg.away||'?')+'</div>';
+            h+='<div style="color:var(--mu)">'+htmlEsc(leg.market||'')+' @ <b style="color:var(--tx)">'+leg.cota+'</b></div>';
+            h+='</div>';
+          });
+          h+='</div>';
+        }
         h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;font-size:11px">';
-        h+='<div><b>'+htmlEsc(b.market)+'</b>'+(b.selection?' &middot; '+htmlEsc(b.selection):'')+'</div>';
-        h+='<div>cot&#259; <b>'+b.cota+'</b> &middot; '+Number(b.stake).toFixed(4)+' LTC</div></div>';
+        if(isMulti){
+          h+='<div>cot&#259; total&#259;: <b>'+b.cota+'</b></div>';
+        }else{
+          h+='<div><b>'+htmlEsc(b.market)+'</b>'+(b.selection?' &middot; '+htmlEsc(b.selection):'')+'</div>';
+        }
+        h+='<div>'+(isMulti?'':'cot&#259; <b>'+b.cota+'</b> &middot; ')+Number(b.stake).toFixed(4)+' LTC</div></div>';
         if(b.outcome!=='PENDING'){
           h+='<div style="font-size:11px;margin-top:4px"><span style="color:'+oClr+';font-weight:800">'+profitTxt+'</span></div>';
         }else{
