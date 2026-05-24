@@ -1326,7 +1326,10 @@ function renderMatches(){
   var newNodes=[];
   leagueOrder.forEach(function(lid){
     var lg=leagues[lid];
-    lg.ms.sort(function(a,b){return((b._s&&b._s.ng)||0)-((a._s&&a._s.ng)||0);});
+    lg.ms.sort(function(a,b){
+      return ((b.fixture&&b.fixture.status&&b.fixture.status.elapsed)||0) -
+             ((a.fixture&&a.fixture.status&&a.fixture.status.elapsed)||0);
+    });
     lg.ms.forEach(function(m){
       var s=m._s||{};
       var fid=String(m.fixture&&m.fixture.id||0);
