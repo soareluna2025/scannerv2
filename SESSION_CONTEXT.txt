@@ -2600,6 +2600,10 @@ NEXT STEPS (prioritizat):
   Zero modificari efectuate. Audit complet.
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05 ~prezent] - UI: renderMatches() listă plată, fără grupare pe campionate,
+                   sortare desc după fixture.date (numele ligii rămâne în card)
+  Commit: 14da852
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
