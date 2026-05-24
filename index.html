@@ -2883,7 +2883,39 @@ function g2Score(m){
     if(csA>0.35) s=Math.max(0,s*(1-(csA-0.35)));
   }
 
-  return{score:Math.round(Math.max(0,Math.min(100,s))),confirmed:confirmed};
+  var rawScore=Math.round(Math.max(0,Math.min(100,s)));
+  return{score:rawScore,rawScore:rawScore,calibrated:g2Calibrate(cat,sub,thr,rawScore),confirmed:confirmed};
+}
+
+// Calibrare scor brut → probabilitate reală (din backtest 1000 meciuri)
+// MIRROR al CALIBRATION din api/utils/generator-calibration.js — keep in sync.
+var G2_CALIBRATION={
+  home:[[0,20,5],[20,30,5],[30,40,8],[40,50,26],[50,60,58],[60,70,78],[70,80,81],[80,90,96],[90,101,100]],
+  away:[[0,30,15],[30,40,16],[40,50,43],[50,60,58],[60,70,70],[70,80,77],[80,90,87],[90,101,100]],
+  gg:[[0,20,5],[20,30,5],[30,40,22],[40,50,40],[50,60,54],[60,70,61],[70,80,80],[80,101,70]],
+  'goals_total_0.5':[[0,50,30],[50,60,40],[60,70,52],[70,80,81],[80,90,90],[90,101,87]],
+  'goals_total_1.5':[[0,30,10],[30,40,15],[40,50,49],[50,60,64],[60,70,73],[70,80,81],[80,90,95],[90,101,100]],
+  'goals_total_2.5':[[0,30,18],[30,40,29],[40,50,40],[50,60,61],[60,70,76],[70,80,73],[80,90,89],[90,101,87]],
+  'goals_home_0.5':[[0,40,5],[40,50,8],[50,60,27],[60,70,58],[70,80,75],[80,90,81],[90,101,96]],
+  'goals_home_1.5':[[0,20,5],[20,30,8],[30,40,26],[40,50,43]],
+  'goals_away_0.5':[[0,30,10],[30,40,10],[40,50,10],[50,60,42],[60,70,57],[70,80,70],[80,90,75],[90,101,87]],
+  'goals_away_1.5':[[0,10,3],[10,20,5],[20,30,10]],
+};
+function g2Calibrate(cat,sub,thr,raw){
+  if(typeof raw!=='number'||isNaN(raw))return 0;
+  var key;
+  if(cat==='home'||cat==='away'||cat==='gg')key=cat;
+  else if(cat==='goals')key='goals_'+(sub||'total')+'_'+(thr||0.5);
+  else return raw;  // cards/corners pass-through (sample insuficient)
+  var tbl=G2_CALIBRATION[key];
+  if(!tbl)return raw;
+  for(var i=0;i<tbl.length;i++){
+    if(raw>=tbl[i][0]&&raw<tbl[i][1])return tbl[i][2];
+  }
+  return raw;
+}
+function g2CalibrationTested(cat){
+  return cat==='home'||cat==='away'||cat==='gg'||cat==='goals';
 }
 
 function g2RenderTop10(){
@@ -2893,16 +2925,17 @@ function g2RenderTop10(){
     return;
   }
   var scored=G2.matches.map(function(m){
-    var r=g2Score(m);return{m:m,score:r.score,confirmed:r.confirmed};
+    var r=g2Score(m);return{m:m,score:r.calibrated,raw:r.rawScore,confirmed:r.confirmed};
   });
   scored.sort(function(a,b){
     if(a.confirmed!==b.confirmed)return a.confirmed?1:-1;
     return b.score-a.score;
   });
   G2.top10=scored.slice(0,10);
+  var isTested=g2CalibrationTested(G2.cat);
   var html='';
   G2.top10.forEach(function(item,idx){
-    var m=item.m,pct=item.score,done=item.confirmed;
+    var m=item.m,pct=item.score,raw=item.raw,done=item.confirmed;
     var clr=pct>=75?'#22c55e':pct>=55?'#f59e0b':'#ef4444';
     var sub='';
     if(m.is_live)sub='<span class="gen-live-dot"></span>'+m.minute+'\' · '+m.home_goals+'-'+m.away_goals;
@@ -2916,9 +2949,17 @@ function g2RenderTop10(){
     html+='<div class="g2row-sub">'+sub+'</div>';
     html+='</div>';
     html+='<div class="g2row-pct" style="color:'+clr+'">'+Math.round(pct)+'%</div>';
+    if(isTested&&Math.abs(raw-pct)>3)html+='<div style="font-size:9px;color:var(--mu);margin-left:4px">brut:'+raw+'%</div>';
     html+='</div>';
   });
-  el.innerHTML=html;
+  // Header cu disclaimer per categorie
+  var header='';
+  if(isTested){
+    header='<div style="font-size:10px;color:var(--mu);padding:6px 12px;background:rgba(34,197,94,.05);border-left:3px solid #22c55e;margin-bottom:8px">✓ <b>Calibrat</b> pe backtest 1000 meciuri. Procentele afișate reflectă probabilitatea reală măsurată.</div>';
+  }else{
+    header='<div style="font-size:10px;color:var(--mu);padding:6px 12px;background:rgba(245,158,11,.05);border-left:3px solid #f59e0b;margin-bottom:8px">⚠ <b>Necalibrat</b> (date insuficiente pentru cards/corners). Procentele sunt scoruri brute, NU probabilități măsurate.</div>';
+  }
+  el.innerHTML=header+html;
 }
 
 function g2Detail(idx){
