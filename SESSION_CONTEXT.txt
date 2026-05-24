@@ -2285,6 +2285,53 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX api/calc-utils.js poissonProb — guard lambda <= 0
+  Inconsistenta sesizata in audit Poisson (sectiunea POISSON PMF table):
+    calc-utils.js:poissonProb era singura din 5 implementari fara guard
+    pentru lambda <= 0. Celelalte (scan.js, scanner.js, index.html
+    poissonCDF, g2Poi) toate aveau: if (lambda <= 0) return k === 0 ? 1 : 0
+  Fix (1 linie adaugata la inceputul functiei):
+    function poissonProb(lambda, k) {
+      if (lambda <= 0) return k === 0 ? 1 : 0;   // <-- NOU
+      let result = Math.exp(-lambda);
+      ...
+  Smoke test:
+    λH=0,    λA=0   → draw 100% (corect: scor 0-0 sigur)
+    λH=1.5,  λA=1.2 → distributie normala (homeWin 44%, draw 26%, awayWin 30%)
+    λH=-0.5, λA=1.0 → guard activeaza home (homeWin 0%, awayWin 63%)
+                      Inainte: Math.exp(-(-0.5))=1.65 → "probabilitati" >1
+                      ducand la calcule incorecte in calcPoisson6x6.
+  Edge case rar (lambdas reale ≥ 0.2 in practica) dar protejat acum
+  impotriva date corupte/inconsistente din DB sau API.
+  Verificare: node --check api/calc-utils.js OK | doar 1 fisier modificat
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: e571cad
+
+[24.05.2026] - MERGE → main (poissonProb guard) + deploy
+  Metoda: fast-forward push direct
+  Range: d6b3e8a..e571cad — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Verificari post-push:
+    origin/main HEAD: e571cad ✅
+    api/calc-utils.js SHA: 7891f4d198c1137ac575796ed972e6fea280c3ee ✅
+    Continut verificat via mcp__github__get_file_contents:
+      Linia 12: if (lambda <= 0) return k === 0 ? 1 : 0;   ✅
+  Deploy: GitHub Actions declansat automat (workflow deploy.yml)
+    Verificare live: NU posibila din container (egress restrictionat)
+  Status sprint Audit Poisson: TOATE 5 fix-uri aplicate
+    1) match.js calcPoisson home/away perspective  ✅ (commit 0162197)
+    2) match.js awayForm formResult perspective    ✅ (commit 971d3fa)
+    3) cron live-score DRY extraction              ✅ (commit f99eb1d)
+    4) calc-utils poissonProb guard λ<=0           ✅ (commit e571cad)
+  Bug-uri Poisson NEFIX (lasate pentru sprint viitor, vezi audit anterior):
+    - match.js fara fallback DB form_stats/teams_stats (depinde de API)
+    - match.js fara dynamic lambda live (enrich.js are calcDynamicLambda)
+    - index.html calcScore hardcoded form 1.4 (linia 1027)
+    - scan.js/scanner.js model xG-weighted×3 diferit de enrich.js cross-product
+    - Truncarea matrice 6×6 vs distributie completa monte-carlo
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
