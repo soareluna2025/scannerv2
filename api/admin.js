@@ -611,7 +611,17 @@ router.get('/bets-aggregate', async (req, res) => {
       SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='bets') AS exists
     `);
     if (!tableCheck[0]?.exists) {
-      return res.json({ ok: true, empty: true, message: 'Tabela bets nu exista inca' });
+      return res.json({ ok: true, empty: true, message: 'Tabela bets nu exista inca. Adauga primul pariu in app.' });
+    }
+
+    // Asigura coloanele necesare (migrare lazy)
+    await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS is_multi BOOLEAN DEFAULT FALSE`).catch(() => {});
+    await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS legs JSONB`).catch(() => {});
+
+    // Verifica daca exista cel putin un rand
+    const { rows: countRows } = await query(`SELECT COUNT(*)::int AS n FROM bets`);
+    if (!countRows[0]?.n) {
+      return res.json({ ok: true, empty: true, message: 'Tabela bets goala. Adauga primul pariu in app.' });
     }
 
     // Sumar global
@@ -622,7 +632,7 @@ router.get('/bets-aggregate', async (req, res) => {
         COUNT(*) FILTER (WHERE outcome = 'LOSS')::int                       AS losses,
         COUNT(*) FILTER (WHERE outcome = 'VOID')::int                       AS voids,
         COUNT(*) FILTER (WHERE outcome = 'PENDING')::int                    AS pending,
-        COUNT(*) FILTER (WHERE is_multi = TRUE)::int                        AS multi_count,
+        COUNT(*) FILTER (WHERE COALESCE(is_multi,FALSE) = TRUE)::int         AS multi_count,
         COALESCE(SUM(stake) FILTER (WHERE outcome IN ('WIN','LOSS')), 0)    AS staked,
         COALESCE(SUM(profit) FILTER (WHERE outcome IN ('WIN','LOSS')), 0)   AS net_profit,
         COALESCE(AVG(cota), 0)                                              AS avg_cota,
@@ -641,12 +651,12 @@ router.get('/bets-aggregate', async (req, res) => {
         COALESCE(SUM(stake) FILTER (WHERE outcome IN ('WIN','LOSS')), 0)     AS staked,
         COALESCE(SUM(profit) FILTER (WHERE outcome IN ('WIN','LOSS')), 0)    AS profit
       FROM bets
-      WHERE is_multi IS NOT TRUE
+      WHERE COALESCE(is_multi,FALSE) = FALSE
       GROUP BY market
       HAVING COUNT(*) >= 1
       ORDER BY COUNT(*) DESC
       LIMIT 20
-    `);
+    `).catch(() => ({ rows: [] }));
 
     // Per liga
     const { rows: byLeague } = await query(`
@@ -657,12 +667,12 @@ router.get('/bets-aggregate', async (req, res) => {
         COUNT(*) FILTER (WHERE outcome = 'LOSS')::int                        AS losses,
         COALESCE(SUM(profit) FILTER (WHERE outcome IN ('WIN','LOSS')), 0)    AS profit
       FROM bets
-      WHERE league_name IS NOT NULL AND is_multi IS NOT TRUE
+      WHERE league_name IS NOT NULL AND COALESCE(is_multi,FALSE) = FALSE
       GROUP BY league_name
       HAVING COUNT(*) >= 1
       ORDER BY COUNT(*) DESC
       LIMIT 15
-    `);
+    `).catch(() => ({ rows: [] }));
 
     // Distributie cota (buckets)
     const { rows: byCotaBucket } = await query(`
@@ -680,10 +690,10 @@ router.get('/bets-aggregate', async (req, res) => {
         COUNT(*) FILTER (WHERE outcome = 'LOSS')::int                        AS losses,
         COALESCE(SUM(profit) FILTER (WHERE outcome IN ('WIN','LOSS')), 0)    AS profit
       FROM bets
-      WHERE is_multi IS NOT TRUE
+      WHERE COALESCE(is_multi,FALSE) = FALSE
       GROUP BY bucket
       ORDER BY MIN(cota)
-    `);
+    `).catch(() => ({ rows: [] }));
 
     res.json({
       ok: true,
@@ -736,25 +746,42 @@ router.get('/bets-aggregate', async (req, res) => {
 router.get('/leagues-insights', async (req, res) => {
   try {
     const baseline = 70;  // baseline expected WR
-    const { rows } = await query(`
-      SELECT
-        p.league_id,
-        l.name AS league_name,
-        l.country,
-        COUNT(*)::int                                                         AS total,
-        COUNT(*) FILTER (WHERE p.result_over15 = TRUE)::int                    AS wins,
-        COUNT(*) FILTER (WHERE p.result_over15 = FALSE)::int                   AS losses,
-        AVG(p.over15_prob)                                                     AS avg_predicted
-      FROM predictions p
-      LEFT JOIN leagues l ON l.league_id = p.league_id
-      WHERE p.result_over15 IS NOT NULL
-        AND p.over15_prob >= 70
-        AND p.created_at > NOW() - INTERVAL '180 days'
-      GROUP BY p.league_id, l.name, l.country
-      HAVING COUNT(*) >= 10
-      ORDER BY COUNT(*) DESC
-      LIMIT 50
-    `).catch(() => ({ rows: [] }));
+    // Folosim COALESCE(l.name, p.league_name) pentru leagues lipsa
+    let rows = [];
+    try {
+      const r = await query(`
+        SELECT
+          p.league_id,
+          COALESCE(l.name, p.league_name) AS league_name,
+          COALESCE(l.country, '—')        AS country,
+          COUNT(*)::int                                                         AS total,
+          COUNT(*) FILTER (WHERE p.result_over15 = TRUE)::int                    AS wins,
+          COUNT(*) FILTER (WHERE p.result_over15 = FALSE)::int                   AS losses,
+          AVG(p.over15_prob)                                                     AS avg_predicted
+        FROM predictions p
+        LEFT JOIN leagues l ON l.league_id = p.league_id
+        WHERE p.result_over15 IS NOT NULL
+          AND p.over15_prob >= 70
+          AND p.created_at > NOW() - INTERVAL '180 days'
+        GROUP BY p.league_id, COALESCE(l.name, p.league_name), COALESCE(l.country, '—')
+        HAVING COUNT(*) >= 10
+        ORDER BY COUNT(*) DESC
+        LIMIT 50
+      `);
+      rows = r.rows;
+    } catch (e) {
+      console.warn('[leagues-insights] query failed:', e.message);
+    }
+    if (!rows.length) {
+      return res.json({
+        ok: true,
+        baseline,
+        total_leagues: 0,
+        counts: { overperformers: 0, on_target: 0, underperformers: 0 },
+        leagues: [],
+        message: 'Niciun rezultat — predictions cu result_over15 populat lipsesc sau sample <10 per liga.',
+      });
+    }
 
     const insights = rows.map(r => {
       const total = Number(r.total);

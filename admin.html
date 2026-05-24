@@ -1672,6 +1672,9 @@ async function loadLeaguesInsights() {
     h += '</div>';
     // Table
     h += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+    if (d.message) {
+      h += '<div style="color:#f59e0b;padding:12px;background:rgba(245,158,11,.05);border-left:3px solid #f59e0b;border-radius:4px;font-size:12px;margin-bottom:12px">⚠ ' + d.message + '</div>';
+    }
     h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:5px">Ligă</th><th style="padding:5px">Țară</th><th style="padding:5px;text-align:right">N</th><th style="padding:5px;text-align:right">WR%</th><th style="padding:5px;text-align:right">vs Baseline</th><th style="padding:5px">Sugestie</th></tr></thead><tbody>';
     d.leagues.forEach(function(r) {
       var wrClr = r.winRate === null ? 'var(--mu)' : r.winRate >= 80 ? '#22c55e' : r.winRate >= 60 ? '#f59e0b' : '#ef4444';
