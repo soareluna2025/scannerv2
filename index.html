@@ -2920,6 +2920,55 @@ function g2Calibrate(cat,sub,thr,raw){
 function g2CalibrationTested(cat){
   return cat==='home'||cat==='away'||cat==='gg'||cat==='goals';
 }
+// Live-adjusted probability bazat pe Bayes simplu cu Poisson rates.
+// Returneaza null daca meciul nu este live, altfel % ajustat la minutul curent.
+function g2LiveAdjust(m, cat, sub, thr){
+  var liveSet={'1H':1,'HT':1,'2H':1,'ET':1};
+  if(!liveSet[m.status_short])return null;
+  var elapsed=Math.max(0, Math.min(90, m.minute||0));
+  var minLeft=Math.max(1, 90-elapsed);
+  var remFrac=minLeft/90;
+  var hg=m.home_goals||0, ag=m.away_goals||0;
+  // Lambda per side (per 90min) — fallback la liga daca form lipseste
+  var lgAvg=(m.league&&m.league.avg_goals)||2.5;
+  var lamH=Math.max(0.3, (m.form&&m.form.home_avg_scored)||lgAvg*0.55);
+  var lamA=Math.max(0.3, (m.form&&m.form.away_avg_scored)||lgAvg*0.45);
+  var remLamH=lamH*remFrac, remLamA=lamA*remFrac;
+  function p1OrMore(lam){return 1-Math.exp(-lam);}
+  function pPois(k,lam){
+    if(lam<=0)return k===0?1:0;
+    var lp=-lam+k*Math.log(lam);
+    for(var i=1;i<=k;i++)lp-=Math.log(i);
+    return Math.exp(lp);
+  }
+  function pAtLeast(k,lam){
+    var p=0;for(var i=0;i<k;i++)p+=pPois(i,lam);
+    return Math.max(0,Math.min(1,1-p));
+  }
+  var prob=null;
+  if(cat==='home'){prob=hg>0?1:p1OrMore(remLamH);}
+  else if(cat==='away'){prob=ag>0?1:p1OrMore(remLamA);}
+  else if(cat==='gg'){
+    if(hg>0&&ag>0)prob=1;
+    else if(hg>0)prob=p1OrMore(remLamA);
+    else if(ag>0)prob=p1OrMore(remLamH);
+    else prob=p1OrMore(remLamH)*p1OrMore(remLamA);
+  }
+  else if(cat==='goals'){
+    if(sub==='home'||sub==='away'){
+      var tg=sub==='home'?hg:ag;
+      var tl=sub==='home'?remLamH:remLamA;
+      var nd=Math.ceil((thr||0.5)+0.5-tg);
+      prob=nd<=0?1:pAtLeast(nd,tl);
+    }else{
+      var totG=hg+ag, totLam=remLamH+remLamA;
+      var nd2=Math.ceil((thr||0.5)+0.5-totG);
+      prob=nd2<=0?1:pAtLeast(nd2,totLam);
+    }
+  }
+  else return null;  // cards/corners — fara model live
+  return Math.round(100*prob);
+}
 // EV recalc pentru Generator (similar cu evRecalc din modal)
 function g2EvRecalc(inputId, realProb, displayId){
   var el=document.getElementById(inputId);
@@ -2961,7 +3010,10 @@ function g2RenderTop10(){
   var html='';
   G2.top10.forEach(function(item,idx){
     var m=item.m,pct=item.score,raw=item.raw,done=item.confirmed;
-    var clr=pct>=75?'#22c55e':pct>=55?'#f59e0b':'#ef4444';
+    // Live-adjust pentru lista (afisat ca % principal)
+    var pLive=g2LiveAdjust(m, G2.cat, G2.sub, G2.thr);
+    var displayPct=(pLive!==null)?pLive:pct;
+    var clr=displayPct>=75?'#22c55e':displayPct>=55?'#f59e0b':'#ef4444';
     var sub='';
     if(m.is_live)sub='<span class="gen-live-dot"></span>'+m.minute+'\' · '+m.home_goals+'-'+m.away_goals;
     else if(m.match_date)sub=new Date(m.match_date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' · '+(m.league_name||'');
@@ -2973,8 +3025,9 @@ function g2RenderTop10(){
     html+='<div class="g2row-teams">'+hLogo+(m.home_team||'?')+' <span style="color:var(--mu)">vs</span> '+aLogo+(m.away_team||'?')+(done?'<span class="g2conf-badge">✓</span>':'')+'</div>';
     html+='<div class="g2row-sub">'+sub+'</div>';
     html+='</div>';
-    html+='<div class="g2row-pct" style="color:'+clr+'">'+Math.round(pct)+'%</div>';
-    if(isTested&&Math.abs(raw-pct)>3)html+='<div style="font-size:9px;color:var(--mu);margin-left:4px">brut:'+raw+'%</div>';
+    html+='<div class="g2row-pct" style="color:'+clr+'">'+Math.round(displayPct)+'%</div>';
+    if(pLive!==null&&Math.abs(pLive-pct)>3)html+='<div style="font-size:9px;color:var(--mu);margin-left:4px">pre:'+Math.round(pct)+'%</div>';
+    else if(isTested&&Math.abs(raw-pct)>3)html+='<div style="font-size:9px;color:var(--mu);margin-left:4px">brut:'+raw+'%</div>';
     html+='</div>';
   });
   // Header cu disclaimer per categorie
@@ -3012,16 +3065,28 @@ function g2Detail(idx){
   var dALogo=m.away_logo?'<img src="'+m.away_logo+'" width="28" height="28" style="border-radius:4px;object-fit:contain;vertical-align:middle;margin-right:6px" onerror="this.style.display=\'none\'">':'';
   var hInjTxt=(m.injuries&&m.injuries.home>=2)?' <span style="color:#f59e0b;font-size:11px;vertical-align:middle">⚠️ '+m.injuries.home+'</span>':'';
   var aInjTxt=(m.injuries&&m.injuries.away>=2)?' <span style="color:#f59e0b;font-size:11px;vertical-align:middle">⚠️ '+m.injuries.away+'</span>':'';
+  // Live-adjusted probability (Bayes Poisson pe minutele ramase)
+  var pLive=g2LiveAdjust(m, G2.cat, G2.sub, G2.thr);
+  var displayPct=pct, isLiveMatch=(pLive!==null);
+  if(isLiveMatch){displayPct=pLive;clr=pLive>=75?'#22c55e':pLive>=55?'#f59e0b':'#ef4444';}
   h+='<div class="g2hero">';
   h+='<div class="g2hero-match">'+dHLogo+(m.home_team||'?')+hInjTxt+' <span style="opacity:.5">vs</span> '+dALogo+(m.away_team||'?')+aInjTxt+'</div>';
-  h+='<div class="g2hero-mkt">'+meta.icon+' '+mktLbl+'</div>';
-  h+='<div class="g2hero-pct" style="color:'+clr+'">'+Math.round(pct)+'%</div>';
+  h+='<div class="g2hero-mkt">'+meta.icon+' '+mktLbl+(isLiveMatch?' <span style="color:#ef4444;font-size:10px;font-weight:700;background:rgba(239,68,68,.15);padding:2px 6px;border-radius:4px;margin-left:6px">🔴 LIVE '+(m.minute||0)+"'</span>":'')+'</div>';
+  h+='<div class="g2hero-pct" style="color:'+clr+'">'+Math.round(displayPct)+'%</div>';
+  if(isLiveMatch){
+    var diff=Math.round(pLive-pct);
+    var diffSign=diff>=0?'+':'';
+    var diffColor=diff>=0?'#22c55e':'#ef4444';
+    h+='<div style="font-size:11px;color:var(--mu);margin-top:6px">Pre-meci: <b style="color:var(--tx)">'+Math.round(pct)+'%</b> &middot; Ajustat live: <b style="color:'+diffColor+'">'+diffSign+diff+'pp</b></div>';
+  }
   h+='</div>';
   // ── CALCULATOR EV pentru aceasta recomandare ──────────────────
   var fid=m.fixture_id;
   var evKey='g2ev_'+fid+'_'+G2.cat+'_'+(G2.sub||'')+'_'+(G2.thr||0);
   var savedCota='';
   try{savedCota=localStorage.getItem(evKey)||'';}catch(e){}
+  // pct folosit in calculator EV = displayPct (live daca live, pre-match daca nu)
+  pct=displayPct;
   var minCota=pct>0?(100/pct).toFixed(2):'—';
   h+='<div class="g2section" style="background:rgba(59,130,246,.05);border-left:3px solid #3b82f6;border-radius:8px;padding:12px;margin:12px 0">';
   h+='<div class="g2sec-title">🧮 Calculator EV (Bet365 / Superbet)</div>';
