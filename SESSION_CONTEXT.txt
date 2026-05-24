@@ -2653,6 +2653,35 @@ NEXT STEPS (prioritizat):
                    5 formule, Brier/LogLoss/CalibErr, curba calibrare 10pp.
   Commit: e27efcc
 
+[24.05 ~prezent] - backtest fix-uri rulare standalone:
+                   - auto-load .env din /root/scannerv2/.env (c379510)
+                   - diagnostic detaliat + multi-path (f967ac3)
+                   - pool propriu cu parsare URL manuala (2bbc862)
+  Commits: c379510, f967ac3, 2bbc862
+
+[24.05 ~08:30] - BACKTEST RULAT pe VPS: 531 meciuri x 95.658 snapshot-uri
+                 Rezultate Brier (lower = better):
+                   V0_current      0.2796 (vechi)
+                   V1_sotDerived   0.2573 *** CASTIGATOR ***
+                   V2_sotConv      0.4056 (invalid)
+                   V3_hybrid       0.2934
+                   V4_hybridDA     0.2934
+                 PROBLEMA: toate formulele predica 95% la NGP 90-100%
+                 dar realitatea e doar 80.8% (supraestimare 14pp).
+                 Sweet spot calibrat: 80-90% (real ~83.9%).
+
+[24.05 ~prezent] - FAZA 3 COMPLETA: NGP CALIBRATION LAYER
+                   1) scanner.js V1 formula (c5883fe)
+                   2) api/utils/ngp-calibration.js: cap 83% (985bbdb)
+                   3) calibrare + hide first 10min (f3f269d)
+                   4) smoothing anti-oscilatie +/-5pp/scan (fe7fd36)
+                   5) REST citeste din match_snapshots single source (1c94868)
+                 Efecte:
+                 - Niciun NGP afisat > 83% (era 95-97% inainte)
+                 - NGP=0 in primele 10 min ale meciului
+                 - Schimbari max 5pp intre scan-uri (era 70pp)
+                 - REST si WS = aceeasi valoare (sursa unica scanner.js)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
