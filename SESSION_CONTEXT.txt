@@ -2226,6 +2226,65 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - REFACTOR DRY — extras live scoring helpers in api/utils/live-score.js
+  Inconsistenta detectata in audit Poisson:
+    api/cron/scan.js si api/cron/scanner.js aveau 6 functii duplicate verbatim:
+    poissonProb, mkt, getStat, calcFeatures, calcNextGoal, calcGG, calcMarkets.
+    O modificare intr-un fisier nu se propaga in celalalt.
+  Modificari:
+    NOU: api/utils/live-score.js (+136 linii, modul comun)
+      Exporta toate cele 7 functii (varianta scanner.js cu fd={}).
+    api/cron/scan.js (-132 linii):
+      Adaugat import { calcFeatures, calcNextGoal, calcGG, calcMarkets } from
+        '../utils/live-score.js'
+      Sterse definitiile locale (poissonProb/mkt/getStat sunt apelate doar
+        intern din calcMarkets/calcGG, deci nu sunt importate explicit)
+    api/cron/scanner.js (-138 linii):
+      Idem import + sters bloc "copiate verbatim din cron/scan.js"
+  Diferenta tehnica intre versiunile vechi (rezolvata in superset):
+    scan.js: calcFeatures(m) — hardcoded 0.35/0.45 defaults
+    scanner.js: calcFeatures(m, fd = {}) — fd.homeFormGoals ?? 0.35 etc.
+    Live-score.js foloseste versiunea cu fd={}: scan.js cheama calcFeatures(m)
+      → fd={} → toate `??` activate → comportament IDENTIC cu vechi hardcoded.
+  Test echivalenta (test-live-score.mjs):
+    5 scenarii live (min 25 / 50 / 75 / 85 / empty stats):
+      - calcFeatures: OLD vs NEW deep-equal ✅
+      - calcNextGoal: OLD === NEW (97/33/57/11/54) ✅
+      - calcGG:       OLD === NEW (57/20/78/9/26) ✅
+      - calcMarkets:  OLD vs NEW deep-equal ✅
+      - poissonProb:  abs diff < 1e-12 ✅
+      - mkt:          OLD === NEW ✅
+    Test scanner.js cu fd populat: override functioneaza ✅
+    REZULTAT: 100% ECHIVALENT functional
+  Net: -134 linii cod (1341 → 1217) + DRY restaurat
+  Verificare: node --check pe cele 3 fisiere OK
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: f99eb1d
+
+[24.05.2026] - MERGE → main (DRY live-score) + deploy
+  Metoda: fast-forward push direct
+  Range: f97add0..f99eb1d — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Verificari post-push:
+    origin/main HEAD: f99eb1d ✅
+    api/utils/live-score.js SHA: 75924599b023cca3c091c787513658c36c71b0db ✅
+    Continut verificat via mcp__github__get_file_contents — toate 7 functii
+      exportate corect, incluzand calcFeatures(m, fd = {}) cu optional fd.
+  Deploy: GitHub Actions declansat automat (workflow deploy.yml)
+    Workflow va: git reset --hard origin/main + npm install + restart alohascan
+    + curl /health
+    Verificare live: NU posibila din container ephemeral (egress restrictionat)
+    ⚠️ ATENTIE: fisier NOU api/utils/live-score.js — primul deploy de modul
+      shared. Daca npm install nu reincarca module-ul, se cere restart manual.
+      Workflow deploy.yml restarteaza alohascan systemd → modul nou va fi
+      incarcat din /root/scannerv2/api/utils/live-score.js la pornire.
+  Pentru utilizator: verificare manuala recomandata:
+    1) GitHub Actions: ultimul run "Deploy AlohaScan to VPS" = green
+    2) SSH VPS: ls /root/scannerv2/api/utils/live-score.js (sa existe)
+    3) SSH VPS: journalctl -u alohascan -n 30 (fara erori "Cannot find module")
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
