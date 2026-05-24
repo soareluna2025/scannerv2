@@ -2638,6 +2638,11 @@ NEXT STEPS (prioritizat):
                    (folosit m.kickoff_time, alias SQL pt match_date)
   Commit: 9ba87f6
 
+[24.05 ~prezent] - api/football.js: injectie _ng per meci LIVE (fix NGP 0%)
+                   calcNextGoal cu txg + homeFormGoals/awayFormGoals derivat
+                   din SOT/mn*9 (fallback 0.35). ESM import corect.
+  Commit: cfcb3b9
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
