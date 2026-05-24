@@ -421,18 +421,14 @@ router.get('/win-rate-patterns', async (req, res) => {
   const paramsBase = leagueId ? [days, leagueId] : [days];
 
   try {
-    // Self-heal: asigura ca coloanele necesare exista (idempotent).
-    // Necesare pentru ca migrarea originala nu a rulat in toate deploy-urile.
-    await query(`ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score_at_alert TEXT`);
-    await query(`ALTER TABLE predictions ADD COLUMN IF NOT EXISTS outcome_ngp    TEXT DEFAULT NULL`);
-
-    // 1. Overall counters
+    // 1. Overall counters folosind result_over15 (populat zilnic de /api/update-results)
+    // WIN = result_over15 TRUE (Over 1.5 hit), LOSS = FALSE, PENDING = NULL (meci necont. inca)
     const ovSQL = `
       SELECT
         COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE outcome_ngp = 'WIN')::int     AS wins,
-        COUNT(*) FILTER (WHERE outcome_ngp = 'LOSS')::int    AS losses,
-        COUNT(*) FILTER (WHERE outcome_ngp = 'PENDING')::int AS pending
+        COUNT(*) FILTER (WHERE result_over15 = TRUE)::int  AS wins,
+        COUNT(*) FILTER (WHERE result_over15 = FALSE)::int AS losses,
+        COUNT(*) FILTER (WHERE result_over15 IS NULL)::int AS pending
       FROM predictions
       WHERE created_at > NOW() - (INTERVAL '1 day' * $1)
         ${lgClause}
@@ -449,46 +445,22 @@ router.get('/win-rate-patterns', async (req, res) => {
       winRate:  ovResolved > 0 ? +(Number(ov.wins) / ovResolved * 100).toFixed(1) : null,
     };
 
-    // 2. Per score_at_alert (cele mai frecvente scoruri cand alerta a fost trigger-uita)
-    const scoreSQL = `
-      SELECT
-        score_at_alert AS state,
-        COUNT(*)::int AS n,
-        COUNT(*) FILTER (WHERE outcome_ngp = 'WIN')::int AS wins
-      FROM predictions
-      WHERE created_at > NOW() - (INTERVAL '1 day' * $1)
-        AND outcome_ngp IN ('WIN','LOSS')
-        AND score_at_alert IS NOT NULL
-        ${lgClause}
-      GROUP BY score_at_alert
-      HAVING COUNT(*) >= ${minSamples}
-      ORDER BY COUNT(*) DESC
-      LIMIT 12
-    `;
-    const { rows: scoreRows } = await query(scoreSQL, paramsBase);
-    const byScoreState = scoreRows.map(r => ({
-      state:   r.state,
-      n:       Number(r.n),
-      wins:    Number(r.wins),
-      winRate: +(Number(r.wins) / Number(r.n) * 100).toFixed(1),
-    }));
-
-    // 3. Per over15_prob bucket (bonus: vedem performanta dupa cat prezicea modelul)
+    // 2. Per over15_prob bucket
     const probSQL = `
       SELECT
         CASE
-          WHEN over15_prob < 70 THEN '<70'
-          WHEN over15_prob < 75 THEN '70-75'
-          WHEN over15_prob < 80 THEN '75-80'
-          WHEN over15_prob < 85 THEN '80-85'
-          WHEN over15_prob < 90 THEN '85-90'
+          WHEN over15_prob < 50 THEN '<50'
+          WHEN over15_prob < 60 THEN '50-60'
+          WHEN over15_prob < 70 THEN '60-70'
+          WHEN over15_prob < 80 THEN '70-80'
+          WHEN over15_prob < 90 THEN '80-90'
           ELSE '90+'
         END AS bucket,
         COUNT(*)::int AS n,
-        COUNT(*) FILTER (WHERE outcome_ngp = 'WIN')::int AS wins
+        COUNT(*) FILTER (WHERE result_over15 = TRUE)::int AS wins
       FROM predictions
       WHERE created_at > NOW() - (INTERVAL '1 day' * $1)
-        AND outcome_ngp IN ('WIN','LOSS')
+        AND result_over15 IS NOT NULL
         AND over15_prob IS NOT NULL
         ${lgClause}
       GROUP BY 1
@@ -504,6 +476,37 @@ router.get('/win-rate-patterns', async (req, res) => {
         winRate: +(Number(r.wins) / Number(r.n) * 100).toFixed(1),
       }));
 
+    // 3. Per confidence bucket
+    const confSQL = `
+      SELECT
+        CASE
+          WHEN confidence < 50 THEN '<50'
+          WHEN confidence < 60 THEN '50-60'
+          WHEN confidence < 70 THEN '60-70'
+          WHEN confidence < 80 THEN '70-80'
+          WHEN confidence < 90 THEN '80-90'
+          ELSE '90+'
+        END AS bucket,
+        COUNT(*)::int AS n,
+        COUNT(*) FILTER (WHERE result_over15 = TRUE)::int AS wins
+      FROM predictions
+      WHERE created_at > NOW() - (INTERVAL '1 day' * $1)
+        AND result_over15 IS NOT NULL
+        AND confidence IS NOT NULL
+        ${lgClause}
+      GROUP BY 1
+      ORDER BY 1
+    `;
+    const { rows: confRows } = await query(confSQL, paramsBase);
+    const byScoreState = confRows
+      .filter(r => Number(r.n) >= minSamples)
+      .map(r => ({
+        state:   'confidence ' + r.bucket,
+        n:       Number(r.n),
+        wins:    Number(r.wins),
+        winRate: +(Number(r.wins) / Number(r.n) * 100).toFixed(1),
+      }));
+
     // 4. Per league
     let byLeague = null;
     if (!leagueId) {
@@ -512,11 +515,11 @@ router.get('/win-rate-patterns', async (req, res) => {
           league_name AS league,
           league_id,
           COUNT(*)::int AS n,
-          COUNT(*) FILTER (WHERE outcome_ngp = 'WIN')::int AS wins,
-          ROUND(100.0 * COUNT(*) FILTER (WHERE outcome_ngp = 'WIN') / NULLIF(COUNT(*), 0), 1) AS wr
+          COUNT(*) FILTER (WHERE result_over15 = TRUE)::int AS wins,
+          ROUND(100.0 * COUNT(*) FILTER (WHERE result_over15 = TRUE) / NULLIF(COUNT(*), 0), 1) AS wr
         FROM predictions
         WHERE created_at > NOW() - (INTERVAL '1 day' * $1)
-          AND outcome_ngp IN ('WIN','LOSS')
+          AND result_over15 IS NOT NULL
           AND league_name IS NOT NULL
         GROUP BY league_name, league_id
         HAVING COUNT(*) >= ${minSamples}
@@ -535,7 +538,7 @@ router.get('/win-rate-patterns', async (req, res) => {
 
     res.json({
       ok: true,
-      meta: { days, source: 'predictions', minSamples, leagueId, asOf: new Date().toISOString() },
+      meta: { days, source: 'predictions.result_over15', minSamples, leagueId, asOf: new Date().toISOString() },
       overall,
       byNgpBucket,
       byScoreState,

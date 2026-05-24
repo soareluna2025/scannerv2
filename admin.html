@@ -1414,7 +1414,7 @@ function renderWinRatePatterns(d){
   var h = '';
   // Overall
   h += '<div style="background:rgba(255,255,255,.03);border-radius:8px;padding:12px;margin-bottom:14px">';
-  h += '<div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Overall ' + d.meta.days + ' zile · alerte NGP &gt; 70</div>';
+  h += '<div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Overall ' + d.meta.days + ' zile · result_over15 (Over 1.5 hit)</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center">';
   h += '<div><div style="font-size:18px;font-weight:800;color:var(--tx)">' + o.total + '</div><div style="font-size:9px;color:var(--mu);text-transform:uppercase">Total alerte</div></div>';
   h += '<div><div style="font-size:18px;font-weight:800;color:#22c55e">' + o.wins + '</div><div style="font-size:9px;color:var(--mu);text-transform:uppercase">Wins</div></div>';
@@ -1423,16 +1423,16 @@ function renderWinRatePatterns(d){
   h += '<div><div style="font-size:22px;font-weight:800;color:' + wrColor(o.winRate) + '">' + (o.winRate === null ? '—' : o.winRate.toFixed(1) + '%') + '</div><div style="font-size:9px;color:var(--mu);text-transform:uppercase">Win Rate</div></div>';
   h += '</div></div>';
 
-  // Per bucket over15_prob (predictia modelului)
+  // Per bucket over15_prob (predictia modelului) — calibrare empirica
   if (d.byNgpBucket && d.byNgpBucket.length){
-    h += '<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📊 Per Over 1.5 prob bucket</div>';
+    h += '<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📊 Calibrare Over 1.5 prediction</div>';
     d.byNgpBucket.forEach(function(b){ h += renderBucketRow(b.range + '%', b.n, b.winRate, b.wins); });
     h += '</div>';
   }
-  // Per score state
+  // Per confidence bucket
   if (d.byScoreState && d.byScoreState.length){
-    h += '<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⚽ Per scor la alertă</div>';
-    d.byScoreState.forEach(function(b){ h += renderBucketRow(b.state, b.n, b.winRate, b.wins); });
+    h += '<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🎯 Per confidence score</div>';
+    d.byScoreState.forEach(function(b){ h += renderBucketRow(b.state.replace('confidence ', ''), b.n, b.winRate, b.wins); });
     h += '</div>';
   }
   // Per league
