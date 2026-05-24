@@ -86,6 +86,9 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 .card{background:var(--sur);border:1px solid var(--bor);border-radius:16px;
   margin-bottom:8px;overflow:hidden;transition:border-color .2s}
 .card:active{border-color:var(--bor)}
+.card-good-lg{border-color:rgba(34,197,94,.35);box-shadow:0 0 0 1px rgba(34,197,94,.12), 0 0 12px -2px rgba(34,197,94,.15)}
+.card-good-lg .league-name{color:#22c55e}
+.good-lg-badge{display:inline-block;background:rgba(34,197,94,.15);color:#22c55e;font-size:9px;font-weight:800;padding:2px 6px;border-radius:8px;margin-left:6px;letter-spacing:.3px;border:1px solid rgba(34,197,94,.25)}
 .card-league{display:flex;align-items:center;justify-content:space-between;
   padding:10px 14px 8px;border-bottom:1px solid var(--bor)}
 .league-name{font-size:10px;font-weight:700;color:var(--mu2);text-transform:uppercase;letter-spacing:.5px}
@@ -953,6 +956,18 @@ var CFG={MC:80,MD:20,RI:30000};
 var WR_KEY='alohascan_wr_v2';
 
 var ST={ms:[],connected:false,ws:null,score:'all'};
+// Lista de ligi cu win rate dovedit pe Over 1.5 (din /api/learning-leagues)
+// Folosita pentru badge-uri 'good league' pe cardurile live.
+var GOOD_LEAGUES={};  // {league_id: {name, wr, n}}
+(function loadGoodLeagues(){
+  try{
+    fetch('/api/learning-leagues').then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok&&Array.isArray(d.leagues)){
+        d.leagues.forEach(function(lg){GOOD_LEAGUES[lg.id]={name:lg.name,wr:lg.wr,n:lg.n};});
+      }
+    }).catch(function(){});
+  }catch(e){}
+})();
 
 // ── CLOCK ────────────────────────────────────────────────────
 function tickClock(){
@@ -1260,14 +1275,17 @@ function buildCardHtml(m,lgName){
   var fid2=m.fixture&&m.fixture.id||0;
   var hid2=m.teams&&m.teams.home&&m.teams.home.id||0;
   var aid2=m.teams&&m.teams.away&&m.teams.away.id||0;
+  var lgId2=m.league&&m.league.id||0;
+  var goodLg=GOOD_LEAGUES[lgId2];  // proven win rate >=75% pe Over 1.5
+  var goodBadge=goodLg?'<span class="good-lg-badge" title="Liga cu '+goodLg.wr+'% win rate pe Over 1.5 (n='+goodLg.n+')">⚡'+goodLg.wr+'%</span>':'';
   var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.home&&m.teams.home.id);});
   var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.away&&m.teams.away.id);});
   var _sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
   var _b=matchTimeBadge(_sh,mn);
   var o='';
-  o+='<div class="card" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer">';
+  o+='<div class="card'+(goodLg?' card-good-lg':'')+'" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer">';
   o+='<div class="card-league">';
-  o+='<div class="league-name"><button class="star-btn'+(isFav(fid2)?' active':'')+'" onclick="event.stopPropagation();toggleFav('+fid2+',this)">'+(isFav(fid2)?'⭐':'☆')+'</button>'+flag+(lgName||'')+'</div>';
+  o+='<div class="league-name"><button class="star-btn'+(isFav(fid2)?' active':'')+'" onclick="event.stopPropagation();toggleFav('+fid2+',this)">'+(isFav(fid2)?'⭐':'☆')+'</button>'+flag+(lgName||'')+goodBadge+'</div>';
   o+='<div class="card-minute">'+(_b.dot?'<div class="min-dot" style="background:'+_b.c+'"></div>':'')+'<div class="min-val" style="color:'+_b.c+'">'+_b.t+'</div></div>';
   o+='</div>';
   o+='<div class="card-teams">';
