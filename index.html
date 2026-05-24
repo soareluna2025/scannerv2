@@ -1975,13 +1975,16 @@ function mdRenderSumar(d){
   }
   // NGP for live matches (FIX 9)
   if(isLive){
-    var ngpData=calcScore(fix);
-    var ngpClr=ngpData.ng>=80?'#00d4a8':ngpData.ng>=60?'#ffd166':'#ff6b6b';
+    var liveM=ST.ms.find(function(x){
+      return x.fixture&&x.fixture.id===_md.fixtureId;
+    });
+    var ngVal=(liveM&&liveM._s&&liveM._s.ng)||0;
+    var ngpClr=ngVal>=80?'#00d4a8':ngVal>=60?'#ffd166':'#ff6b6b';
     out+='<div class="md-section"><div class="md-section-title">Probabilitate gol următor (NGP)</div>';
     out+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
-    if(ngpData.forte)out+='<div class="badge-forte">⚡ FORTE</div>';
-    out+='<div class="ngp-pct" style="color:'+ngpClr+'">'+ngpData.ng+'%</div></div>';
-    out+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+ngpData.ng+'%;background:'+ngpClr+'"></div></div>';
+    if(ngVal>=70)out+='<div class="badge-forte">⚡ FORTE</div>';
+    out+='<div class="ngp-pct" style="color:'+ngpClr+'">'+ngVal+'%</div></div>';
+    out+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+ngVal+'%;background:'+ngpClr+'"></div></div>';
     out+='</div>';
   }
 
