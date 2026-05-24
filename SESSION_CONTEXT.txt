@@ -2600,6 +2600,28 @@ NEXT STEPS (prioritizat):
   Zero modificari efectuate. Audit complet.
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05 ~prezent] - UI: renderMatches() listă plată, fără grupare pe campionate,
+                   sortare desc după fixture.date (push pe claude/salut-NtDnu)
+  Commit: 14da852
+
+[24.05 ~prezent] - Investigat divergență main local vs origin/main: două istorii
+                   complet independente (0 strămoș comun, 0 mesaje commit comune,
+                   53 fișiere diferite). Local: 61 commits, remote: 50 commits.
+  Commit: (zero modificări)
+
+[24.05 ~prezent] - Backup main local (61 commits) salvat pe remote ca
+                   backup/local-main-22mai (HEAD c8e6ea7)
+  Commit: (doar push branch nou)
+
+[24.05 ~prezent] - Reset main local la origin/main (5060874) + force push
+                   (aliniat cu remote authoritative)
+  Commit: 5060874 (origin/main HEAD)
+
+[24.05 ~prezent] - Recuperat 14 fișiere unice din backup în main:
+                   ecosystem.config.cjs, manifest.json, 12 icoane PWA.
+                   Zero suprascrieri (toate erau lipsă în origin/main).
+  Commit: 21ca7d7
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
