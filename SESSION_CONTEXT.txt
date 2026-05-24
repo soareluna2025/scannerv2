@@ -2981,6 +2981,51 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX SORTARE CARDURI — dupa elapsed in loc de NGP (index.html)
+  Schimbat sortarea per liga in renderMatches() linia 1329:
+    INAINTE: sort by ng descrescator
+      lg.ms.sort((a,b) => ((b._s&&b._s.ng)||0) - ((a._s&&a._s.ng)||0))
+    DUPA: sort by fixture.status.elapsed descrescator
+      lg.ms.sort((a,b) =>
+        ((b.fixture&&b.fixture.status&&b.fixture.status.elapsed)||0) -
+        ((a.fixture&&a.fixture.status&&a.fixture.status.elapsed)||0)
+      )
+  Justificare:
+    NGP era nestabil (sare la fiecare 10s prin smoothing/extrapolare).
+    Sortarea dupa NGP cauza rebalansare vizuala continua → carduri sar
+    sus-jos chiar daca scorul nu se schimba.
+    Sortarea dupa elapsed este MONOTON CRESCATOARE pentru fiecare meci
+    (mn creste, niciodata scade) → pozitia cardurilor STABILA.
+  Comportament nou:
+    Meciuri mai avansate (min 87) afisate SUS in liga
+    Meciuri mai noi (min 5) afisate JOS
+    Trecere intre meciuri doar cand mn-urile se incruciseaza (rar)
+  Trade-off:
+    Pierderea criteriului "interes" pentru top (NGP era proxy
+    pentru "cel mai posibil sa marcheze acum"). User decision:
+    stabilitate vizuala > NGP-based ranking.
+    NGP afisat ramane pe card (badge color-coded), doar pozitia
+    nu mai depinde de el.
+  Verificare: 3 blocuri JS inline validate cu new Function() OK
+  Zero modificari la alte fisiere (NOTA: top10 in watch room la linia
+  1687 inca sorteaza dupa NGP — out of scope, vezi viitor sprint).
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: e408a78
+
+[24.05.2026] - MERGE → main (sortare carduri elapsed) + deploy
+  Metoda: fast-forward push direct
+  Range: 4ab30fc..e408a78 — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Deploy: GitHub Actions declansat automat
+  Test recomandat post-deploy:
+    1) Deschide UI cu meciuri live in diferite minute
+    2) Cardurile sortate descrescator dupa min in fiecare liga
+    3) Asteapta 1-2 minute: pozitia cardurilor NU se schimba
+       (doar cand mn-urile a 2 meciuri se incruciseaza)
+    4) Vs comportament vechi: cardurile sarea sus-jos la fiecare 10s
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
