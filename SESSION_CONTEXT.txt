@@ -3026,6 +3026,23 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX SORTARE CARDURI — dupa fixture.date in loc de elapsed
+  Schimbat sortarea per liga in renderMatches() linia 1329:
+    INAINTE (commit anterior e408a78): sort by elapsed descrescator
+    DUPA: sort by fixture.date descrescator
+      lg.ms.sort((a,b) =>
+        new Date(b.fixture?.date || 0) - new Date(a.fixture?.date || 0))
+  Avantaj fata de elapsed:
+    fixture.date e IMUTABIL — sortarea NU se schimba niciodata in timp
+    Cu elapsed: cand 2 meciuri au minute identice (rar dar posibil), pot
+    face swap intre cicluri WS → flicker rezidual
+    Cu date: ordine stabilizata PERMANENT
+  Meciul cel mai RECENT INCEPUT apare SUS in lista per liga.
+  Verificare: 4 linii schimbate intr-un singur bloc sort
+  Zero modificari la alte fisiere.
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: 95adf23 (+ merge main range 78ecc0c..95adf23)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
