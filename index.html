@@ -1215,12 +1215,12 @@ function ngpColor(p){return p>=80?'#00d4a8':p>=60?'#ffd166':'#ff6b6b';}
 
 // ── EV CALCULATOR HELPERS ────────────────────────────────────────
 // Mapeaza NGP afisat -> probabilitate reala (din backtest 531 meciuri, 24.05.2026)
+// Calibrare NGP rest-of-match — foloseste NGP_CAL_REST din backtest (26297 predictii).
+// Replaceaza buckets-urile coarse anterioare cu mapping fin per 10% range.
 function calibratedAnytimeProb(displayedNgp){
-  if(displayedNgp >= 80) return 0.84;  // raw 90+ calibrat la 83, real ~80%
-  if(displayedNgp >= 60) return 0.82;  // raw 60-80, real ~80-85%
-  if(displayedNgp >= 40) return 0.75;
-  if(displayedNgp >= 20) return 0.60;
-  return 0.30;  // baseline pentru orice meci cu min cunoscut
+  // Note: calibrateNgpRest e definit mai jos (la nivel global), dar functioneaza
+  // din cauza hoisting JS pentru var declarations.
+  return calibrateNgpRest(displayedNgp) / 100;
 }
 function calibrated15minProb(displayedNg15){
   if(displayedNg15 >= 35) return 0.40;  // peak observat in backtest
@@ -2040,29 +2040,34 @@ function mdRenderSumar(d){
     }
     var ngpData=calcScore(fix);
     var ng15=(typeof fix._ng15==='number')?fix._ng15:null;
-    var ngpClr=ngpData.ng>=80?'#00d4a8':ngpData.ng>=60?'#ffd166':'#ff6b6b';
+    var ngRaw=ngpData.ng;
+    var ngCal=calibrateNgpRest(ngRaw);
+    var ngpClr=ngCal>=80?'#00d4a8':ngCal>=60?'#ffd166':'#ff6b6b';
     var ng15Clr=ng15===null?'#888':ng15>=40?'#00d4a8':ng15>=25?'#ffd166':'#ff6b6b';
+    var minCotaNgp=ngCal>0?(100/ngCal).toFixed(2):'—';
     out+='<div class="md-section"><div class="md-section-title">Probabilitate Gol</div>';
     // Two columns: anytime in match vs next 15 min
     out+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
-    // Column 1: anytime in match
+    // Column 1: anytime in match — CALIBRAT din backtest 26297 predictii
     out+='<div style="padding:12px;background:rgba(0,212,168,.06);border-radius:8px;text-align:center">';
     out+='<div style="font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Gol oric&acirc;nd &icirc;n meci</div>';
-    out+='<div style="font-size:24px;font-weight:800;color:'+ngpClr+'">'+ngpData.ng+'%</div>';
-    out+='<div style="font-size:9px;color:var(--mu);margin-top:3px">pentru Over 0.5/1.5</div>';
+    out+='<div style="font-size:24px;font-weight:800;color:'+ngpClr+'">'+ngCal+'%</div>';
+    out+='<div style="font-size:9px;color:var(--mu);margin-top:3px">calibrat &middot; cot&#259; min '+minCotaNgp+'</div>';
+    if(ngCal!==ngRaw)out+='<div style="font-size:9px;color:var(--mu);margin-top:2px;opacity:.7">raw: '+ngRaw+'%</div>';
     if(ngpData.forte)out+='<div class="badge-forte" style="margin-top:6px;display:inline-block">⚡ FORTE</div>';
     out+='</div>';
-    // Column 2: next 15 min
+    // Column 2: next 15 min — necalibrat (backtest arata discrimination slaba)
     out+='<div style="padding:12px;background:rgba(245,158,11,.06);border-radius:8px;text-align:center">';
     out+='<div style="font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Gol &icirc;n urm. 15 min</div>';
     out+='<div style="font-size:24px;font-weight:800;color:'+ng15Clr+'">'+(ng15===null?'—':ng15+'%')+'</div>';
-    out+='<div style="font-size:9px;color:var(--mu);margin-top:3px">pentru bet rapid</div>';
+    out+='<div style="font-size:9px;color:var(--mu);margin-top:3px">brut · zgomot &gt;30%</div>';
     out+='</div>';
     out+='</div>';  // end grid
-    // Disclaimer common
+    // Disclaimer cu insight backtest
     out+='<div style="font-size:10px;color:var(--mu);margin-top:8px;line-height:1.4">';
-    out+='ℹ️ <b>St&acirc;nga</b> e calibrat pentru pariuri pe tot meciul (Over 0.5/1.5). ';
-    out+='<b>Dreapta</b> reflect&acirc; şansa real&#259; de gol &icirc;n 15 min — mult mai mic&#259; (max ~50%).';
+    out+='ℹ️ <b>St&acirc;nga</b> calibrat din 26000+ predic&#539;ii reale (Brier 0.28 &rarr; 0.18). ';
+    out+='Folose&#537;te pentru pariuri pe tot meciul (Over 0.5/1.5). ';
+    out+='<b>Dreapta</b> necalibrat — backtest arat&#259; c&#259; sub 30% e zgomot.';
     out+='</div>';
     out+='</div>';
 
@@ -2904,6 +2909,31 @@ var G2_CALIBRATION={
   'goals_away_0.5':[[0,30,0],[30,40,12],[40,50,27],[50,60,26],[60,70,38],[70,80,77],[80,90,87],[90,101,95]],
   'goals_away_1.5':[[0,20,0],[20,30,4],[30,40,13],[40,50,24],[50,60,45],[60,70,66],[70,80,89],[80,101,100]],
 };
+
+// ── NGP CALIBRATION (rest of match) ──────────────────────────
+// Extras din backtest 26297 predictii (24.05.2026, V0_current formula).
+// Bias original era +30pp subestimare la valori <50%. Acum mapat la rate real masurat.
+// NU se aplica pentru sortare in lista (raw NGP pastreaza rank ordering) — DOAR display.
+var NGP_CAL_REST=[
+  [0,10,38],   // 397 samples, real 38.3%
+  [10,20,45],  // 1955 samples, real 45.1%
+  [20,30,70],  // 3435 samples, real 70.0%  (jump major)
+  [30,40,71],  // 6274 samples, real 70.8%
+  [40,50,80],  // 3654 samples, real 80.5%
+  [50,60,82],  // 3407 samples, real 82.5%
+  [60,70,81],  // 1802 samples, real 81.1%
+  [70,80,80],  // 1249 samples, real 80.2% ✓ calibrat
+  [80,90,83],  // 957 samples, real 83.4%  ✓
+  [90,101,81], // 3167 samples, real 80.8% (usor dip)
+];
+function calibrateNgpRest(raw){
+  if(typeof raw!=='number'||isNaN(raw))return 0;
+  var r=Math.max(0,Math.min(100,raw));
+  for(var i=0;i<NGP_CAL_REST.length;i++){
+    if(r>=NGP_CAL_REST[i][0]&&r<NGP_CAL_REST[i][1])return NGP_CAL_REST[i][2];
+  }
+  return r;
+}
 function g2Calibrate(cat,sub,thr,raw,m){
   if(typeof raw!=='number'||isNaN(raw))return 0;
   var key;
