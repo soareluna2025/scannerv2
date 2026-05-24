@@ -441,7 +441,13 @@ async function scanLive10s() {
       }
 
       // Calcul scoring + upsert snapshot
-      const f  = calcFeatures(m, matchFd[id] || {});
+      // Foloseste statistics cached din scanLiveStats (endpoint dedicat cu xG real)
+      // pentru a evita NGP instabil cand /fixtures?live=all nu returneaza xG.
+      const mWithStats = {
+        ...m,
+        statistics: liveCache[id]?.cachedStats || m.statistics || []
+      };
+      const f  = calcFeatures(mWithStats, matchFd[id] || {});
       const ng = calcNextGoal(f);
       const mk = calcMarkets(f);
 
@@ -575,6 +581,7 @@ async function scanLiveStats() {
   for (const id of activeIds) {
     try {
       const stats = await fetchWithRetry(`/fixtures/statistics?fixture=${id}`);
+      if (liveCache[id]) liveCache[id].cachedStats = stats;
       if (!stats.length || !liveCache[id]) continue;
 
       const cached = liveCache[id];
