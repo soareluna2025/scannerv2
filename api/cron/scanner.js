@@ -450,7 +450,16 @@ async function scanLive10s() {
       if (f.mn > 0 && f.aSOT > 0) f.awayFormGoals = (f.aSOT / f.mn) * 9;
       const ngRaw = calcNextGoal(f);
       // Hide NGP în primele 10 min (date insuficiente pentru încredere)
-      const ng = f.mn < 10 ? 0 : calibrateNgp(ngRaw);
+      let ng = f.mn < 10 ? 0 : calibrateNgp(ngRaw);
+      // Smoothing anti-oscilație: max ±5pp change per scan cycle
+      // Elimină salturile 95→25 cauzate de stats incomplete în unele cicluri
+      if (liveCache[id]?.ngLast !== undefined && ng > 0) {
+        const MAX_DELTA = 5;
+        const prev = liveCache[id].ngLast;
+        ng = Math.max(prev - MAX_DELTA, Math.min(prev + MAX_DELTA, ng));
+      }
+      if (!liveCache[id]) liveCache[id] = {};
+      liveCache[id].ngLast = ng;
       const mk = calcMarkets(f);
 
       upsertSnapshot({
