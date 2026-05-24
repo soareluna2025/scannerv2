@@ -2,6 +2,7 @@ import { ALLOWED_LEAGUE_IDS } from './leagues.js';
 import { isAllowedMatch } from './utils/league-filter.js';
 import { calcNextGoal } from './utils/live-score.js';
 import { calibrateNgp } from './utils/ngp-calibration.js';
+import { query } from './db.js';
 
 function log(msg) {
   console.log(`[football] ${new Date().toISOString()} ${msg}`);
@@ -116,10 +117,31 @@ export default async function handler(req, res) {
   const filtered = passedStatus.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
   log(`[Filter] ${passedStatus.length} meciuri → ${filtered.length} după filtrare`);
 
-  // ── Injectie _ng per meci (heuristica derivata din SOT cand xG lipseste) ──
-  // homeFormGoals/awayFormGoals = SOT/mn * 9 → rata estimata goluri/meci din SOT actual,
-  // fallback 0.35 daca lipsesc datele. Fix temporar pentru NGP 0% pe carduri LIVE.
+  // ── Injectie _ng per meci ────────────────────────────────────
+  // Sursa primara: match_snapshots.ng (calibrat + smoothed de scanner.js).
+  // Fallback: calc local din SOT/xG cand snapshot lipseste (meci nou).
+  const fixIds = filtered.map(m => m.fixture?.id).filter(Boolean);
+  let snapMap = {};
+  if (fixIds.length > 0) {
+    try {
+      const { rows } = await query(
+        `SELECT fixture_id, ng FROM match_snapshots WHERE fixture_id = ANY($1)`,
+        [fixIds]
+      );
+      for (const r of rows) snapMap[r.fixture_id] = r.ng;
+    } catch (e) {
+      log(`match_snapshots read err: ${e.message}`);
+    }
+  }
+
   for (const m of filtered) {
+    const fid = m.fixture?.id;
+    // Prefer NGP din DB (scanner.js = singura sursa autoritara)
+    if (fid && typeof snapMap[fid] === 'number') {
+      m._ng = snapMap[fid];
+      continue;
+    }
+    // Fallback: calc local cand snapshot lipseste (rar, doar la meciuri noi)
     const mn    = m.fixture?.status?.elapsed || 0;
     const stats = Array.isArray(m.statistics) ? m.statistics : [];
     const hStat = stats[0]?.statistics || [];
@@ -133,7 +155,6 @@ export default async function handler(req, res) {
     const homeFormGoals = (mn > 0 && hSOT > 0) ? (hSOT / mn) * 9 : 0.35;
     const awayFormGoals = (mn > 0 && aSOT > 0) ? (aSOT / mn) * 9 : 0.35;
     const ngRaw = calcNextGoal({ mn, txg, homeFormGoals, awayFormGoals });
-    // Hide NGP în primele 10 min (date insuficiente) + calibrare pe backtest
     m._ng = mn < 10 ? 0 : calibrateNgp(ngRaw);
   }
 
