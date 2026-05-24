@@ -2698,6 +2698,29 @@ NEXT STEPS (prioritizat):
                    in loc de 'rest of match' (calibrare mai relevanta live)
   Commit: 1b4e728
 
+[24.05 ~9:30] - BACKTEST 'goal in next 15 min' (531 meciuri x 95k snapshots):
+                V0 Brier 0.2659, V1 0.2765, V2 0.2613 *** BEST 15min ***,
+                V3/V4 0.2702.
+                DESCOPERIRE: Bias enorm pentru toate formulele la NGP>50.
+                Predict 95% -> real 30%, predict 85% -> real 45%.
+                Concluzie: 'next 15 min' nu poate fi servit de aceeasi
+                formula calibrata pentru 'rest of match'.
+
+[24.05 ~prezent] - PostgreSQL backup automat:
+                   - scripts/backup-db.sh chmod +x persistent (92d779b)
+                   - crontab: '30 3 * * * /root/scannerv2/scripts/backup-db.sh'
+                   - Primul run manual: 19 tabele dumped, push GitHub OK
+                   - Next: zilnic la 03:30 automat
+
+[24.05 ~prezent] - DUAL DISPLAY NGP - anytime + next 15 min:
+                   - live-score.js: calcNextGoalWindow(f, 15) cu cap 60
+                   - scanner.js: calculeaza ambele, smoothing aplicat
+                   - DB: ALTER TABLE match_snapshots ADD COLUMN ng_15min
+                   - REST + WS: propaga _ng15 alaturi de _ng
+                   - Modal: grid 2 coloane (anytime verde / next15 orange)
+                   + disclaimer explicit pentru user
+  Commit: e6c630c
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
