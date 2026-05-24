@@ -9,6 +9,7 @@ export function calcPlayerScore(rating, goals, assists, passAcc, sot) {
 }
 
 function poissonProb(lambda, k) {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
   let result = Math.exp(-lambda);
   for (let i = 1; i <= k; i++) result *= lambda / i;
   return result;
