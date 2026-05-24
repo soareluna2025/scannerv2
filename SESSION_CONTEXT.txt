@@ -2839,6 +2839,69 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX NGP instabil — scanner foloseste cachedStats din /fixtures/statistics
+  CAUZA EXACTA:
+    scanLive10s() (10s) calcula NGP din m.statistics primit prin
+    /fixtures?live=all. Acest endpoint INCONSISTENT returneaza
+    expected_goals (xG). Cand xG lipsea: txg=0 → calcNextGoal cadea pe
+    form fallback (homeFormGoals*2.5*remFrac) → NGP fals 86%+ pentru
+    echipe medii/ofensive.
+
+    scanLiveStats() (60s) fetcheaza /fixtures/statistics?fixture={id}
+    — endpoint dedicat cu xG real intotdeauna prezent. DAR nu salva
+    statisticile in liveCache pentru reutilizare in scanLive10s.
+
+    Rezultat: NGP sare intre 86% (la 10s, fara xG) si 35% (la 60s, cu xG
+    real) la fiecare ciclu — instabilitate vizuala continua.
+
+  FIX 1 — api/cron/scanner.js scanLiveStats() linia 577:
+    Dupa fetchWithRetry, salveaza stats in cache:
+      if (liveCache[id]) liveCache[id].cachedStats = stats;
+
+  FIX 2 — api/cron/scanner.js scanLive10s() linia 444:
+    Inainte de calcFeatures, foloseste cachedStats prioritar:
+      const mWithStats = {
+        ...m,
+        statistics: liveCache[id]?.cachedStats || m.statistics || []
+      };
+      const f = calcFeatures(mWithStats, matchFd[id] || {});
+
+  EFECT:
+    scanLive10s foloseste intotdeauna cel mai recent xG real disponibil
+    (cache din scanLiveStats, refreshat la 60s).
+    Primul ciclu dupa pornirea unui meci: cachedStats lipsa → fallback la
+    m.statistics → posibil instabil pentru 60s pana la primul scanLiveStats.
+    Dupa primele 60s: NGP stabil si corect.
+
+  Arhitectura completa NGP (post-fix):
+    1) scanLiveStats /fixtures/statistics → liveCache[id].cachedStats
+    2) scanLive10s foloseste cachedStats → calcFeatures(mWithStats)
+                   → calcNextGoal → ng stabil
+                   → match_snapshots.ng (upsertSnapshot DB)
+                   → m._ng (WS broadcast)
+    3) /api/football query batch match_snapshots → m._ng pe filtered
+    4) ST.ms in UI primeste m._ng prin WS + REST (loadLive preserva)
+    5) Card si modal afiseaza acelasi NGP via ST.ms (sursa unica truth)
+
+  Verificare: node --check api/cron/scanner.js OK
+  Zero modificari la alte fisiere.
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: 177268b
+
+[24.05.2026] - MERGE → main (scanner cachedStats) + deploy
+  Metoda: fast-forward push direct
+  Range: cf8110c..177268b — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Deploy: GitHub Actions declansat automat
+  Test recomandat post-deploy (necesita ≥60s pentru primul scanLiveStats):
+    1) Astept 2+ minute dupa deploy pentru scanner sa cycle 2× scanLiveStats
+    2) Deschid meci live in UI
+    3) NGP afisat trebuie sa fie STABIL la fiecare 10s ciclu WS
+    4) Nu mai trebuie sa sara 86% → 35% → 86%
+    5) Card si modal: NGP identic (confirmare arhitectura unificata)
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
