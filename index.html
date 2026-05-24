@@ -1977,14 +1977,31 @@ function mdRenderSumar(d){
     out+='</div>';
   }
 
-  // Poisson probs — detectez date stale/broken si afisez transparent
+  // Poisson probs — date PRE-MECI, periculoase la pariere live cand meciul a evoluat
   if(en.over15Prob!=null){
     var _lambdaStale=Number(en.lambdaTotal||0)<0.5;
-    out+='<div class="md-section"><div class="md-section-title">Predicții Poisson</div>';
+    // Live + meciul a progresat = Poisson pre-meci nu mai e relevant
+    var _liveProgressed = isLive && (mn > 15 || (hg + ag) > 0);
+    out+='<div class="md-section"><div class="md-section-title">Predicții Poisson <span style="font-size:10px;color:var(--mu);font-weight:400">(pre-meci)</span></div>';
     if(_lambdaStale){
       out+='<div style="padding:12px;background:rgba(245,158,11,0.1);border-left:3px solid #f59e0b;border-radius:6px;font-size:12px;color:#fbbf24;">';
       out+='⚠ Predicțiile Poisson nu sunt fiabile pentru acest meci (λ='+Number(en.lambdaTotal||0).toFixed(2)+' indică date pre-meci incomplete sau corupte). Folosește NGP de mai sus pentru deciziile live.';
       out+='</div>';
+    } else if(_liveProgressed){
+      out+='<div style="padding:12px;background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;border-radius:6px;font-size:12px;color:#fca5a5;">';
+      out+='⛔ <b>NU folosi pentru pariere live.</b> Aceste predicții sunt calculate <b>înainte de începutul meciului</b> (estimare 90 min total). Meciul a evoluat — scor '+hg+'-'+ag+' la min '+mn+'. Folosește <b>NGP de mai sus</b> care reflectă starea actuală.';
+      out+='</div>';
+      out+='<details style="margin-top:8px"><summary style="cursor:pointer;font-size:11px;color:var(--mu);padding:4px 0">Vezi totuși predicțiile pre-meci →</summary>';
+      out+='<div class="md-prob-row" style="margin-top:8px;opacity:0.6">';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over15Prob)+'">'+Math.round(en.over15Prob)+'%</div><div class="md-prob-lbl">Over 1.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over25Prob)+'">'+Math.round(en.over25Prob)+'%</div><div class="md-prob-lbl">Over 2.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.ggProb)+'">'+Math.round(en.ggProb)+'%</div><div class="md-prob-lbl">GG</div></div>';
+      out+='</div>';
+      out+='<div class="md-prob-row" style="opacity:0.6">';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeScoreRate)+'">'+en.homeScoreRate+'%</div><div class="md-prob-lbl">Gazde marcheaza</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2)">'+Number(en.lambdaTotal||0).toFixed(2)+'</div><div class="md-prob-lbl">λ Total</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.awayScoreRate)+'">'+en.awayScoreRate+'%</div><div class="md-prob-lbl">Oaspeti marcheaza</div></div>';
+      out+='</div></details>';
     } else {
       out+='<div class="md-prob-row">';
       out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over15Prob)+'">'+Math.round(en.over15Prob)+'%</div><div class="md-prob-lbl">Over 1.5</div></div>';
@@ -2001,8 +2018,10 @@ function mdRenderSumar(d){
     out+='</div>';
   }
 
-  // EV Analysis — ascund cand Poisson e stale (EV calculat din model rupt nu e fiabil)
-  if(en.hasOdds && Number(en.lambdaTotal||0) >= 0.5){
+  // EV Analysis — ascund cand Poisson stale SAU cand meciul live a evoluat
+  // (best bet pre-meci nu se aplica la min 60 cu 3-3)
+  var _evHide = Number(en.lambdaTotal||0) < 0.5 || (isLive && (mn > 15 || (hg + ag) > 0));
+  if(en.hasOdds && !_evHide){
     out+='<div class="md-section"><div class="md-section-title">EV Analysis (Bet365)</div>';
     out+='<table class="ev-table"><thead><tr><th>Piata</th><th>Model</th><th>Cota</th><th>EV</th></tr></thead><tbody>';
     var evRows=[
