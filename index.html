@@ -1600,6 +1600,8 @@ async function loadTopOpps(){
   panel.innerHTML='<div class="spinner"><div class="spin"></div></div>';
 
   try{
+    // Refresh cache BETS_ADDED ca sa vad bifele actualizate
+    await loadBetsAddedCache();
     // Asigura ca avem meciuri si enrich incarcat (fara await pe loadPM care e long-running)
     if(!_pmMatches.length){
       panel.innerHTML='<div style="padding:14px;text-align:center;color:var(--mu);font-size:12px">📥 Apas&#259; mai &icirc;nt&#226;i „&Icirc;ncarc&#259; Pre-meci" sus pentru a popula datele, apoi reia.</div>';
@@ -1724,7 +1726,24 @@ async function loadTopOpps(){
       else if(o.lgBad)lgBadge=' <span style="background:rgba(239,68,68,.12);color:#ef4444;font-size:8px;font-weight:800;padding:1px 4px;border-radius:5px">⚠'+o.lgBad.wr+'%</span>';
       var hid=o.m.teams&&o.m.teams.home&&o.m.teams.home.id||0;
       var aid=o.m.teams&&o.m.teams.away&&o.m.teams.away.id||0;
-      var r='<div style="background:#1e2530;border-radius:8px;padding:9px 11px;margin-bottom:6px;border-left:2px solid '+clr+';cursor:pointer" onclick="mdOpen('+o.fid+','+hid+','+aid+',this)">';
+      var pickKey=o.fid+'|'+o.label;
+      var isAdded=window.BETS_ADDED&&window.BETS_ADDED[pickKey];
+      var checkboxBg=isAdded?'#22c55e':'rgba(255,255,255,.05)';
+      var checkboxIcon=isAdded?'✓':'';
+      // Stocheaza pick data global pentru toggleBet
+      window.PICK_DATA=window.PICK_DATA||{};
+      window.PICK_DATA[pickKey]={
+        fid:o.fid,home:o.m.teams&&o.m.teams.home&&o.m.teams.home.name||'',
+        away:o.m.teams&&o.m.teams.away&&o.m.teams.away.name||'',
+        league:o.m.league&&o.m.league.name||'',
+        leagueId:o.m.league&&o.m.league.id||null,
+        market:o.label,cal:o.cal,minCota:o.minCota
+      };
+      var r='<div style="background:#1e2530;border-radius:8px;padding:9px 11px;margin-bottom:6px;border-left:2px solid '+clr+';display:flex;gap:8px;align-items:flex-start">';
+      // Checkbox
+      r+='<button onclick="event.stopPropagation();toggleBetFromPick(\''+pickKey.replace(/\'/g,"\\'")+'\',this)" style="background:'+checkboxBg+';color:#000;border:2px solid '+(isAdded?'#22c55e':'#475569')+';width:24px;height:24px;border-radius:6px;font-weight:900;font-size:14px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0;margin-top:2px">'+checkboxIcon+'</button>';
+      // Card content (click separat pe corp = open modal)
+      r+='<div style="flex:1;cursor:pointer" onclick="mdOpen('+o.fid+','+hid+','+aid+',this)">';
       r+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">';
       r+='<div style="font-size:9px;font-weight:800;color:'+clr+';letter-spacing:.4px">#'+(i+1)+' &middot; '+kick+'</div>';
       r+='<div style="font-size:10px;color:var(--mu);max-width:160px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+htmlEsc(o.m.league&&o.m.league.name||'')+lgBadge+'</div></div>';
@@ -1733,7 +1752,7 @@ async function loadTopOpps(){
       r+='<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">';
       r+='<b style="font-size:15px;color:'+clr+'">'+o.cal+'%</b>';
       r+='<span style="font-size:10px;color:var(--mu)">cot&#259; min &ge; <b style="color:#fff">'+o.minCota+'</b></span>';
-      r+='</div></div>';
+      r+='</div></div></div>';
       return r;
     }
 
@@ -4114,6 +4133,63 @@ function simRender(d){
 function adjustPageTop(){}
 
 // ── BILETE / ROI TRACKING ─────────────────────────────────────────
+// Cache fids/markets adaugate (sync cu DB la incarcare bilete + load init)
+window.BETS_ADDED=window.BETS_ADDED||{};
+async function loadBetsAddedCache(){
+  try{
+    var r=await fetch('/api/bets?limit=200');
+    var d=await r.json();
+    if(d.ok&&Array.isArray(d.bets)){
+      window.BETS_ADDED={};
+      d.bets.forEach(function(b){
+        if(b.fixture_id&&b.market){window.BETS_ADDED[b.fixture_id+'|'+b.market]=b.id;}
+      });
+    }
+  }catch(e){}
+}
+loadBetsAddedCache();
+
+// Toggle add/remove pariu din Top Oportunitati
+async function toggleBetFromPick(pickKey, btn){
+  var p=window.PICK_DATA&&window.PICK_DATA[pickKey];
+  if(!p){alert('Pick data lipsa');return;}
+  var existingId=window.BETS_ADDED[pickKey];
+  if(existingId){
+    // Already added -> remove
+    if(!confirm('Stergi pariul din bilete?'))return;
+    try{
+      await fetch('/api/bets?id='+existingId,{method:'DELETE'});
+      delete window.BETS_ADDED[pickKey];
+      btn.style.background='rgba(255,255,255,.05)';
+      btn.style.borderColor='#475569';
+      btn.textContent='';
+    }catch(e){alert('Eroare: '+e.message);}
+    return;
+  }
+  // Adauga — cere miza in LTC (prompt simplu sau modal mic)
+  var stake=prompt('Miz&#259; (LTC) pentru\\n'+p.home+' vs '+p.away+'\\n'+p.market+' @ cot&#259; min '+p.minCota+'\\n\\nIntrodu valoare (ex: 0.05):','0.05');
+  if(stake===null)return;
+  stake=parseFloat(stake);
+  if(!stake||stake<=0){alert('Miz&#259; invalid&#259;');return;}
+  var cota=prompt('Cota la care pariezi (Bet365/Superbet):',p.minCota);
+  if(cota===null)return;
+  cota=parseFloat(cota);
+  if(!cota||cota<=1){alert('Cot&#259; trebuie > 1');return;}
+  try{
+    var r=await fetch('/api/bets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      fixture_id:p.fid, home_team:p.home, away_team:p.away,
+      league_name:p.league, league_id:p.leagueId,
+      market:p.market, cota:cota, stake:stake, expected_prob:p.cal,
+    })});
+    var d=await r.json();
+    if(!d.ok){alert('Eroare: '+d.error);return;}
+    window.BETS_ADDED[pickKey]=d.id;
+    btn.style.background='#22c55e';
+    btn.style.borderColor='#22c55e';
+    btn.textContent='✓';
+  }catch(e){alert('Eroare: '+e.message);}
+}
+
 function switchFavSub(which){
   var favsBody=document.getElementById('fav-body');
   var betsBody=document.getElementById('bets-body');
@@ -4156,21 +4232,19 @@ async function loadBets(){
     h+='<div><div style="font-size:18px;font-weight:800;color:var(--tx)">'+(s.winRate==null?'—':s.winRate+'%')+'</div><div style="font-size:9px;color:var(--mu)">WR</div></div>';
     h+='</div>';
     h+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bor);display:flex;justify-content:space-between;align-items:baseline">';
-    h+='<div><div style="font-size:10px;color:var(--mu);margin-bottom:2px">Miza total&#259;</div><div style="font-weight:700">'+(s.staked||0).toFixed(2)+' lei</div></div>';
-    h+='<div><div style="font-size:10px;color:var(--mu);margin-bottom:2px">Profit net</div><div style="font-weight:800;color:'+profitClr+';font-size:16px">'+((s.netProfit||0)>=0?'+':'')+(s.netProfit||0).toFixed(2)+' lei</div></div>';
+    h+='<div><div style="font-size:10px;color:var(--mu);margin-bottom:2px">Miza total&#259;</div><div style="font-weight:700">'+(s.staked||0).toFixed(4)+' LTC</div></div>';
+    h+='<div><div style="font-size:10px;color:var(--mu);margin-bottom:2px">Profit net</div><div style="font-weight:800;color:'+profitClr+';font-size:16px">'+((s.netProfit||0)>=0?'+':'')+(s.netProfit||0).toFixed(4)+' LTC</div></div>';
     h+='<div><div style="font-size:10px;color:var(--mu);margin-bottom:2px">ROI</div><div style="font-weight:800;color:'+roiClr+';font-size:16px">'+(s.roi==null?'—':((s.roi>=0?'+':'')+s.roi+'%'))+'</div></div>';
     h+='</div></div>';
-    // Add new bet button
-    h+='<button onclick="showAddBetForm()" style="width:100%;background:#22c55e;color:#000;border:none;padding:10px;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;margin-bottom:12px">+ ADAUG&#258; PARIU NOU</button>';
-    h+='<div id="add-bet-form" style="display:none"></div>';
+    h+='<div style="font-size:11px;color:var(--mu);background:rgba(99,102,241,.06);border-left:2px solid #6366f1;border-radius:4px;padding:8px;margin-bottom:12px;line-height:1.5">💡 Pariurile se adaug&#259; <b>doar din Top Oportunit&#259;&#539;i</b>. Mergi in tab-ul Pre-meci, apas&#259; Top Oportunit&#259;&#539;i si bifeaz&#259; meciurile dorite.</div>';
     // List bets
     if(!bets.length){
-      h+='<div class="empty" style="padding:24px"><div class="empty-icon">📋</div><div class="empty-t">Niciun pariu salvat</div><div class="empty-s">Adaug&#259; primul pariu pentru a tracking ROI</div></div>';
+      h+='<div class="empty" style="padding:24px"><div class="empty-icon">📋</div><div class="empty-t">Niciun pariu salvat</div><div class="empty-s">Mergi in Pre-meci &rarr; Top Oportunit&#259;&#539;i &rarr; bifeaz&#259; pick-urile dorite</div></div>';
     }else{
       bets.forEach(function(b){
         var oClr=b.outcome==='WIN'?'#22c55e':b.outcome==='LOSS'?'#ef4444':b.outcome==='VOID'?'#f59e0b':'#94a3b8';
         var oLbl=b.outcome==='WIN'?'✓ WIN':b.outcome==='LOSS'?'✗ LOSS':b.outcome==='VOID'?'⊘ VOID':'⏳ PEND';
-        var profitTxt=b.profit!=null?(b.profit>0?'+':'')+Number(b.profit).toFixed(2)+' lei':'';
+        var profitTxt=b.profit!=null?(b.profit>0?'+':'')+Number(b.profit).toFixed(4)+' LTC':'';
         h+='<div style="background:#1e2530;border-radius:8px;padding:10px;margin-bottom:8px;border-left:3px solid '+oClr+'">';
         h+='<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px">';
         h+='<div style="flex:1"><div style="font-weight:700;font-size:12px">'+htmlEsc(b.home_team||'?')+' vs '+htmlEsc(b.away_team||'?')+'</div>';
@@ -4178,7 +4252,7 @@ async function loadBets(){
         h+='</div><div style="font-size:11px;font-weight:800;color:'+oClr+'">'+oLbl+'</div></div>';
         h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;font-size:11px">';
         h+='<div><b>'+htmlEsc(b.market)+'</b>'+(b.selection?' &middot; '+htmlEsc(b.selection):'')+'</div>';
-        h+='<div>cot&#259; <b>'+b.cota+'</b> &middot; '+Number(b.stake).toFixed(2)+' lei</div></div>';
+        h+='<div>cot&#259; <b>'+b.cota+'</b> &middot; '+Number(b.stake).toFixed(4)+' LTC</div></div>';
         if(b.outcome!=='PENDING'){
           h+='<div style="font-size:11px;margin-top:4px"><span style="color:'+oClr+';font-weight:800">'+profitTxt+'</span></div>';
         }else{
