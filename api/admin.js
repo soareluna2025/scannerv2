@@ -421,6 +421,11 @@ router.get('/win-rate-patterns', async (req, res) => {
   const paramsBase = leagueId ? [days, leagueId] : [days];
 
   try {
+    // Self-heal: asigura ca coloanele necesare exista (idempotent).
+    // Necesare pentru ca migrarea originala nu a rulat in toate deploy-urile.
+    await query(`ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score_at_alert TEXT`);
+    await query(`ALTER TABLE predictions ADD COLUMN IF NOT EXISTS outcome_ngp    TEXT DEFAULT NULL`);
+
     // 1. Overall counters
     const ovSQL = `
       SELECT
