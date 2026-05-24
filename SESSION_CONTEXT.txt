@@ -2600,6 +2600,57 @@ NEXT STEPS (prioritizat):
   Zero modificari efectuate. Audit complet.
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX 8 — NGP divergenta frontend vs backend (3 fisiere)
+  Problema: Charlotte vs NER arata NGP 28% in card, 60% in modal — card-ul
+  recalcula NGP local cu formula divergenta de backend (audit anterior #1
+  inconsistenta HIGH severity).
+  Modificari:
+    [1] index.html — calcScore():
+        Sters: var remXg, if(txg=0)remXg=0.7*remFrac, bonusuri mn>=70/80,
+               var ng = Math.round(... prob ...)
+        Inlocuit cu: var ng = (typeof m._ng === 'number') ? m._ng : 0;
+        m._ng vine din WebSocket scanner.js:456 (processedMatches cu _ng
+        setat de calcNextGoal backend cu date reale fixtures_history + xG)
+        Fallback 0 daca m._ng lipseste (meci nou inainte de broadcast)
+        Pastrat remFrac (folosit si de calcul markete lr = lb*remFrac)
+        Deviere minora: user a cerut literal "m._s.ng = ..." dar asta era
+          eroare sintactica (m._s nu exista in calcScore, function returneaza
+          obiectul). Aplicat interpretarea logica: var ng = m._ng + fallback.
+    [2] api/utils/live-score.js — calcNextGoal():
+        Sters ramura dead code: mn>0 ? (txg/mn)*(90-mn) : 0.025*(90-mn)
+        Inlocuit cu: remXg = (f.txg / Math.max(mn, 1)) * (90 - mn)
+          (Math.max(mn,1) protejeaza diviziune; mn=0 nu intra in functie
+          practic, dar safety)
+        Sters: remXg += f.xgSpike * 0.3 + f.prsAcc * 0.2
+          (dead inputs — xgSpike si prsAcc mereu 0 in calcFeatures)
+    [3] CLAUDE.md — sectiunea F. NGP:
+        Sters formula veche (SOT*4.5 + ShotsOff*1.5 + DA*0.3 + Corners*2.0
+        + Goals*8 - elapsed/90*15) — nu mai exista in cod
+        Inlocuit cu formula reala din live-score.js + nota despre arhitectura
+        (frontend foloseste m._ng din WebSocket, zero recalcul local)
+  Verificare:
+    node --check live-score.js OK
+    index.html: 3 blocuri JS inline validate cu new Function() OK
+    Zero modificari la alte fisiere
+  Rezultat asteptat:
+    Card si modal afiseaza ACELASI NGP (sursa unica: backend calcNextGoal)
+    Inconsistenta audit NGP #1 (HIGH severity): REZOLVATA
+    Inconsistenta audit NGP #2 (CLAUDE.md depasit): REZOLVATA
+    Inconsistenta audit NGP #4 (xgSpike/prsAcc dead inputs): REZOLVATA
+    Inconsistenta audit NGP #6 (ramura dead code 0.025*(90-mn)): REZOLVATA
+  Rezolvate 4/7 inconsistente NGP intr-un singur sprint.
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: 1c5413f
+
+[24.05.2026] - MERGE → main (FIX 8 NGP unificare) + deploy
+  Metoda: fast-forward push direct
+  Range: d98596d..1c5413f — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Deploy: GitHub Actions declansat automat
+  Verificare live: GitHub Actions UI sau /health pe VPS
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
