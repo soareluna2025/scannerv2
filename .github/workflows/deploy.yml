@@ -67,6 +67,7 @@ jobs:
             C7="30 4 * * * curl -sf http://localhost:3000/api/cron/referee-stats >> $LOG 2>&1"
             C8="30 3 * * * curl -s -X POST http://localhost:3000/api/cron/learning-analysis >> /root/scannerv2/logs/learning.log 2>&1"
             C9="15 4 * * * /root/scripts/backup-db.sh >> /var/log/alohascan-backup.log 2>&1"
+            C10="0 5 * * 0 curl -sf http://localhost:3000/api/cron/recalibrate-tables >> /root/scannerv2/logs/recalibrate.log 2>&1"
 
             (
               crontab -l 2>/dev/null \
@@ -79,6 +80,7 @@ jobs:
                 | grep -v 'api/cron/league-stats' \
                 | grep -v 'api/cron/referee-stats' \
                 | grep -v 'api/cron/learning-analysis' \
+                | grep -v 'api/cron/recalibrate-tables' \
                 | grep -v 'backup-db.sh'
               echo "$C0"
               echo "$C2"
@@ -89,6 +91,7 @@ jobs:
               echo "$C7"
               echo "$C8"
               echo "$C9"
+              echo "$C10"
             ) | crontab -
 
             echo "CRONTAB ACTIV:"

@@ -3060,6 +3060,25 @@ var G2_CALIBRATION={
   'goals_away_0.5':[[0,30,0],[30,40,12],[40,50,27],[50,60,26],[60,70,38],[70,80,77],[80,90,87],[90,101,95]],
   'goals_away_1.5':[[0,20,0],[20,30,4],[30,40,13],[40,50,24],[50,60,45],[60,70,66],[70,80,89],[80,101,100]],
 };
+// Stocheaza ultima Brier per modul (din /api/calibration). Afisat opt in UI.
+var CALIBRATION_META={};
+// Auto-update G2_CALIBRATION din DB (recalibrate-tables cron). Inlocuieste
+// hardcoded buckets cu cele dinamice cand disponibile.
+(function loadDynamicCalibration(){
+  try{
+    fetch('/api/calibration').then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok||!d.modules)return;
+      Object.keys(d.modules).forEach(function(moduleKey){
+        var mod=d.modules[moduleKey];
+        if(!mod||!Array.isArray(mod.buckets)||!mod.buckets.length)return;
+        // Convert from {min,max,pct,n} format to [min,max,pct] format
+        G2_CALIBRATION[moduleKey]=mod.buckets.map(function(b){return [b.min,b.max,b.pct];});
+        CALIBRATION_META[moduleKey]={n:mod.n,brier:mod.brier,updated:mod.updated};
+      });
+      console.log('[calibration] Loaded dynamic from DB:',Object.keys(d.modules).join(', '));
+    }).catch(function(){});
+  }catch(e){}
+})();
 
 // ── NGP CALIBRATION (rest of match) ──────────────────────────
 // Extras din backtest 26297 predictii (24.05.2026, V0_current formula).

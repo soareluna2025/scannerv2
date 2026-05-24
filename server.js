@@ -31,7 +31,8 @@ const apiFiles = [
   'football', 'today', 'enrich', 'match', 'players',
   'agent', 'update-results', 'health-check', 'simulate',
   'elo', 'monte-carlo', 'match-momentum', 'db-stats', 'generator',
-  'standings-data', 'venue-weather', 'backfill-stats', 'learning-leagues'
+  'standings-data', 'venue-weather', 'backfill-stats', 'learning-leagues',
+  'calibration'
 ];
 
 for (const name of apiFiles) {
@@ -47,7 +48,7 @@ for (const name of apiFiles) {
 }
 
 // Cron routes
-const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'learning-analysis'];
+const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'learning-analysis', 'recalibrate-tables'];
 for (const name of cronFiles) {
   app.all(`/api/cron/${name}`, async (req, res) => {
     try {
