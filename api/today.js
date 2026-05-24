@@ -170,8 +170,12 @@ export default async function handler(req, res) {
     });
     log(`raw total (deduped, 24h window): ${raw.length}`);
 
-    const afterAll = raw.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
-    log(`[Filter] ${raw.length} meciuri → ${afterAll.length} după filtrare (api)`);
+    // Filtru suplimentar: elimină meciuri al căror kickoff este în trecut
+    const future = raw.filter(m => new Date(m.fixture.date).getTime() > Date.now());
+    log(`future-only filter: ${raw.length} → ${future.length}`);
+
+    const afterAll = future.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
+    log(`[Filter] ${future.length} meciuri → ${afterAll.length} după filtrare (api)`);
 
     const result = afterAll
       .map(m => ({
