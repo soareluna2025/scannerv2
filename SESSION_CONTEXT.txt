@@ -2379,6 +2379,73 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX api/match.js — fallback chain DB pentru lambda Poisson
+  Bug sesizat in audit Poisson (BUG NEFIX #1):
+    match.js calcPoisson nu avea fallback DB cand API-Football lipsea date.
+    Daca echipa era noua/cu putine meciuri, lambdas = 0 → predictii inutile
+    (draw 100%, over15/over25 = 0%).
+  Fix: implementat fallback chain IDENTIC cu enrich.js (pattern lines 20-77):
+    Priority 1: form_stats (fixtures_history, ultimele 10 meciuri)
+                → via getFormFromDB(teamId)
+    Priority 2: API-Football /fixtures?team=X&last=20&status=FT (existent)
+                → cand sbXForm.length < 3
+    Priority 3: teams_stats (avg_goals_for/against per sezon)
+                → override lambdas via teams_stats cand form ramane <3
+    Priority 4: league_stats (avg_home_goals/avg_away_goals)
+                → pass la calcPoisson ca lgHome/lgAway
+    Priority 5: 1.2/1.2 default → hardcoded in calcPoisson signature
+  Modificari api/match.js:
+    Adaugati 3 helperi DB (copiate verbatim din enrich.js):
+      - getFormFromDB(teamId) — fixtures_history recent 10
+      - getTeamStatsFromDB(teamId, leagueId) — teams_stats cu fallback fara liga
+      - getLeagueStats(lgid) — league_stats SELECT *
+    calcPoisson signature: + (lgHome = 1.2, lgAway = 1.2) ca enrich.js
+    Lambda fallback: hGames.length >= 3 && aGames.length >= 3
+      ? cross-product real
+      : lgHome / lgAway
+    Promise.all DB include getFormFromDB(hId/aId) + getTeamStatsFromDB(hId/aId)
+      cu leagueId=null initial (resolved la fixture)
+    Eliminat queries duplicate fixtures_history + helper redundant toFormMatch
+    Adaugat fetch league_stats DUPA fixture (necesita lgid din response API)
+    Adaugat teams_stats override cu recalcul calcPoisson6x6 cand form<3
+  Test fallback chain (test-match-fallback.mjs):
+    A: 5 games / 5 games → cross-product real (λH=1.5, λA=1.1)        ✅
+    B: 0 games + lgH=1.45, lgA=1.05 → fallback league               ✅
+    C: 2 games / 2 games + league → fallback (sub prag 3)             ✅
+    D: 3 games / 3 games (exact la prag) → cross-product (NU fallback)✅
+    E: zero games + defaults absent → 1.2 / 1.2                       ✅
+  Linii: 241 → 323 (+82 — 3 helpers + override + restructurare handler)
+  Verificare: node --check api/match.js OK | doar match.js modificat
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: 9c35b2c
+
+[24.05.2026] - MERGE → main (match.js fallback DB) + deploy
+  Metoda: fast-forward push direct
+  Range: 1071b7f..9c35b2c — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Verificari post-push:
+    origin/main HEAD: 9c35b2c ✅
+    api/match.js SHA: b24813b0131122eeab4ee07de43a89d2383311d4 ✅
+    Continut verificat via mcp__github__get_file_contents:
+      Helperi prezenti (getFormFromDB, getTeamStatsFromDB, getLeagueStats) ✅
+      calcPoisson signature cu lgHome/lgAway defaults ✅
+      Lambda fallback conditional `>= 3` ✅
+      teams_stats override block ✅
+  Deploy: GitHub Actions declansat automat
+  Status sprint Audit Poisson: 6/9 fix-uri aplicate
+    1) match.js calcPoisson H/A perspective    ✅ 0162197
+    2) match.js awayForm formResult            ✅ 971d3fa
+    3) cron live-score DRY extraction          ✅ f99eb1d
+    4) calc-utils poissonProb guard λ<=0       ✅ e571cad
+    5) index.html calcScore real lambda        ✅ dd3cf3e
+    6) match.js fallback DB chain              ✅ 9c35b2c
+  Bug-uri Poisson NEFIX (sprint viitor):
+    - match.js fara dynamic lambda live (enrich.js are calcDynamicLambda)
+    - scan.js/scanner.js xG-weighted×3 vs enrich.js cross-product (arhitectural)
+    - Truncare matrice 6×6 vs Monte Carlo full distribution
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
