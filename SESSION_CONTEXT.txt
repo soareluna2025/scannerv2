@@ -2868,6 +2868,49 @@ NEXT STEPS (prioritizat):
                  Pentru 15min discrimination e slaba — modelul nu
                  stie cu adevarat daca vine gol curand.
 
+[24.05 14:00-15:30] - SELF-LEARNING SYSTEM COMPLET:
+
+  ┌── #1: Auto-recalibrare G2_CALIBRATION ───────────────────────
+  │  - api/cron/recalibrate-tables.js (cron weekly dum 05:00)
+  │  - Tabela noua calibration_tables (JSONB buckets)
+  │  - Recalculeaza bucket-uri din predictions.result_over15 (180z)
+  │  - Brier score calculat per modul
+  │  - api/calibration.js endpoint public (cache 10min)
+  │  - Frontend loadDynamicCalibration() la pageload
+  │  - G2_CALIBRATION suprascris dinamic din DB cand disponibil
+  │  Commit: b775e97
+
+  ┌── #2: Bilet manager + ROI tracking ─────────────────────────
+  │  - api/bets.js CRUD (POST/GET/PUT/DELETE) cu auto-create table
+  │  - GET /api/bets?stats=1 returneaza ROI/winRate/profit pe 30z
+  │  - Sub-tab in Preferate: '⭐ Meciuri' / '📋 Bilete + ROI'
+  │  - Card stats: WIN/LOSS/PEND/WR + Miza/Profit/ROI%
+  │  - Form add bet inline (home/away/league/market/cota/stake/prob)
+  │  - Lista pariuri cu butoane WIN/LOSS/VOID/delete per pending
+  │  - Calc automat payout + profit la resolve
+  │  Commit: aadd549
+
+  ┌── #3: Calibrare LIVE din match_events istorice ─────────────
+  │  - api/cron/calibrate-live.js (cron weekly dum 05:30)
+  │  - Tabela calibration_live (minute_bucket, score_state, market)
+  │  - Backfit ~5000 meciuri FT din fixtures_history (365z)
+  │  - Snapshot la min 15,30,45,60,75 cu score reconstituit din events
+  │  - 6 minute_buckets x 7 score_states x 3 markets = max 126 buckets
+  │  - Filtru min 10 samples per bucket
+  │  - api/calibration.js extins cu camp 'live'
+  │  - Frontend liveCalibrate() helper + aplicare automata in sim
+  │  - Badge '🎯 LIVE-CAL' afisat in UI cand calibrare LIVE folosita
+  │  - Fallback Poisson raw daca sample insuficient
+  │  Commit: 674503b
+
+  CICLU AUTOMAT COMPLET:
+  - Zilnic 02:00: update-results -> result_over15 populat
+  - Zilnic 23:00: collect-finished -> match_events salvate
+  - Dum  05:00: recalibrate-tables -> bucket-uri pre-meci updated
+  - Dum  05:30: calibrate-live -> bucket-uri LIVE updated
+  - Frontend la fiecare refresh -> fetcheaza calibrari curente
+  - Cu mai mult timp -> mai multe date -> calibrari mai precise
+
 [24.05 ~prezent] - NGP CALIBRATION REST OF MATCH (display only):
                  - NGP_CAL_REST: 10 buckets cu mapping raw -> real
                  - Modal scanner live: big number = CALIBRAT, raw mic
