@@ -1582,6 +1582,11 @@ async function loadPM(){
   }
 }
 
+// Top Oportunitati — ranking calibrat al meciurilor pre-meci pe baza:
+// - over15Prob (din _pmEnrich) trecut prin G2_CALIBRATION
+// - bonus pentru ligi GOOD_LEAGUES, penalty pentru BAD_LEAGUES
+// - filtru EV (probabilitate calibrata >= 70%)
+// - cota minima afisata per pariu
 async function loadTopOpps(){
   var btn=document.getElementById('btn-topopps');
   var panel=document.getElementById('top-opps-panel');
@@ -1589,30 +1594,87 @@ async function loadTopOpps(){
   btn.textContent='Se încarcă...';btn.disabled=true;
   panel.style.display='block';
   panel.innerHTML='<div class="spinner"><div class="spin"></div></div>';
+
   try{
-    var r=await fetch('/api/today?action=snapshots');
-    var d=await r.json();
-    var snaps=Array.isArray(d.snapshots)?d.snapshots:[];
-    if(!snaps.length){
-      panel.innerHTML='<div class="empty" style="padding:12px"><div class="empty-icon">📊</div><div class="empty-t">Nicio oportunitate</div><div class="empty-s">'+(d.error||'Nu există snapshot-uri PENDING')+'</div></div>';
+    // Asigura ca avem meciuri si enrich incarcat (fara await pe loadPM care e long-running)
+    if(!_pmMatches.length){
+      panel.innerHTML='<div style="padding:14px;text-align:center;color:var(--mu);font-size:12px">📥 Apas&#259; mai &icirc;nt&#226;i „&Icirc;ncarc&#259; Pre-meci" sus pentru a popula datele, apoi reia.</div>';
       btn.textContent='📊 Top Oportunități';btn.disabled=false;return;
     }
-    var html='<div style="padding:4px 0 8px"><div style="font-weight:700;font-size:13px;color:#a3e635;margin-bottom:8px">📊 Top '+ snaps.length +' Oportunități</div>';
-    snaps.forEach(function(s){
-      var cs=Math.round(s.composite_score||0);
-      var gg=Math.round(s.gg_score||0);
-      var o15=Math.round(s.over15_score||0);
-      var isTop=cs>70;
-      var barColor=cs>70?'#22c55e':cs>50?'#eab308':'#f97316';
-      var kick=s.kickoff_time?new Date(s.kickoff_time).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}):'';
-      html+='<div style="background:#1e2530;border-radius:8px;padding:10px 12px;margin-bottom:8px;border-left:3px solid '+barColor+'">';
-      if(isTop)html+='<span style="background:#22c55e;color:#000;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-right:6px">TOP</span>';
-      html+='<span style="font-weight:600;font-size:13px">'+htmlEsc(s.home_team||'')+' vs '+htmlEsc(s.away_team||'')+'</span>';
-      if(kick)html+=' <span style="color:#94a3b8;font-size:11px">'+kick+'</span>';
-      if(s.league_name)html+='<div style="color:#64748b;font-size:11px;margin-top:2px">'+htmlEsc(s.league_name)+'</div>';
-      html+='<div style="margin-top:8px">';
-      html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:11px;color:#94a3b8;width:100px">Composite</span><div style="flex:1;background:#374151;border-radius:4px;height:8px"><div style="width:'+cs+'%;background:'+barColor+';border-radius:4px;height:8px;transition:width .3s"></div></div><span style="font-size:12px;font-weight:700;color:'+barColor+';margin-left:6px">'+cs+'</span></div>';
-      html+='<div style="display:flex;gap:12px;font-size:11px;color:#94a3b8"><span>GG: <b style="color:#cbd5e1">'+gg+'</b></span><span>Over1.5: <b style="color:#cbd5e1">'+o15+'</b></span></div>';
+    // Asteapta ca enrich-ul sa acumuleze cel putin 10 meciuri analizate (max 6s)
+    var t0=Date.now();
+    while(Object.keys(_pmEnrich).length<10 && Date.now()-t0<6000){
+      panel.innerHTML='<div style="padding:14px;text-align:center;color:var(--mu);font-size:12px">⏳ Analizez meciuri... '+Object.keys(_pmEnrich).length+' din '+_pmMatches.length+' procesate</div>';
+      await new Promise(function(r){setTimeout(r,800);});
+    }
+
+    // Construiesc oportunitati pentru fiecare meci cu enrich data
+    var opps=[];
+    _pmMatches.forEach(function(m){
+      var fid=m.fixture&&m.fixture.id;
+      if(!fid)return;
+      var enr=_pmEnrich[fid];
+      if(!enr||typeof enr.over15Prob!=='number')return;
+      // 4 piete principale candidate
+      var lgId=m.league&&m.league.id;
+      var lgBonus=GOOD_LEAGUES[lgId]?5:(BAD_LEAGUES[lgId]?-15:0);
+      var markets=[];
+      // Over 1.5
+      var o15Cal=g2Calibrate('goals','total',1.5,Math.round(enr.over15Prob||0));
+      markets.push({label:'Over 1.5 total',cat:'goals_total_1.5',raw:enr.over15Prob,cal:o15Cal});
+      // Over 2.5
+      if(typeof enr.over25Prob==='number'){
+        var o25Cal=g2Calibrate('goals','total',2.5,Math.round(enr.over25Prob));
+        markets.push({label:'Over 2.5 total',cat:'goals_total_2.5',raw:enr.over25Prob,cal:o25Cal});
+      }
+      // GG
+      if(typeof enr.ggProb==='number'){
+        var ggCal=g2Calibrate('gg','total',0,Math.round(enr.ggProb));
+        markets.push({label:'GG (ambele marcheaza)',cat:'gg',raw:enr.ggProb,cal:ggCal});
+      }
+      // Best market pentru meci = cel cu cea mai mare prob calibrata
+      var best=markets.reduce(function(a,b){return (b.cal+lgBonus)>(a.cal+lgBonus)?b:a;},markets[0]);
+      if(!best||best.cal<70)return;  // filtru: doar prob >= 70%
+      var finalScore=best.cal+lgBonus;
+      var minCota=best.cal>0?(100/best.cal).toFixed(2):'—';
+      opps.push({
+        fid:fid, m:m,
+        market:best.label, raw:best.raw, cal:best.cal,
+        finalScore:finalScore, minCota:minCota,
+        kickoff:m.fixture&&m.fixture.date,
+        lgGood:GOOD_LEAGUES[lgId], lgBad:BAD_LEAGUES[lgId],
+        confidence:enr.confidenceScore||enr.confidence||0,
+      });
+    });
+    opps.sort(function(a,b){return b.finalScore-a.finalScore;});
+    opps=opps.slice(0,15);
+
+    if(!opps.length){
+      panel.innerHTML='<div class="empty" style="padding:12px"><div class="empty-icon">📊</div><div class="empty-t">Nicio oportunitate &gt; 70%</div><div class="empty-s">Niciun meci nu indeplineste pragul calibrat. Apasa „Incarca Pre-meci" pentru a actualiza.</div></div>';
+      btn.textContent='📊 Top Oportunități';btn.disabled=false;return;
+    }
+
+    var html='<div style="padding:4px 0 8px">';
+    html+='<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:4px">📊 Top '+opps.length+' Oportunitati Calibrate</div>';
+    html+='<div style="font-size:10px;color:var(--mu);margin-bottom:10px;line-height:1.4">Prob &gt;= 70% (calibrat din backtest). Cota min = 100/prob. Bonus +5pp pentru ligi cu WR &gt;75%, penalty -15pp pentru ligi cu WR &lt;50%.</div>';
+    opps.forEach(function(o,i){
+      var m=o.m;
+      var clr=o.cal>=85?'#22c55e':o.cal>=75?'#10b981':'#f59e0b';
+      var kick=o.kickoff?new Date(o.kickoff).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}):'';
+      var lgBadge='';
+      if(o.lgGood)lgBadge=' <span style="background:rgba(34,197,94,.15);color:#22c55e;font-size:9px;font-weight:800;padding:1px 5px;border-radius:6px;border:1px solid rgba(34,197,94,.25)">⚡'+o.lgGood.wr+'%</span>';
+      else if(o.lgBad)lgBadge=' <span style="background:rgba(239,68,68,.12);color:#ef4444;font-size:9px;font-weight:800;padding:1px 5px;border-radius:6px">⚠'+o.lgBad.wr+'%</span>';
+      var hid=m.teams&&m.teams.home&&m.teams.home.id||0;
+      var aid=m.teams&&m.teams.away&&m.teams.away.id||0;
+      html+='<div style="background:#1e2530;border-radius:10px;padding:12px;margin-bottom:8px;border-left:3px solid '+clr+';cursor:pointer" onclick="mdOpen('+o.fid+','+hid+','+aid+',this)">';
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+      html+='<div style="font-size:10px;font-weight:800;color:'+clr+';letter-spacing:.5px">#'+(i+1)+' &middot; '+kick+'</div>';
+      html+='<div style="font-size:11px;color:var(--mu)">'+htmlEsc(m.league&&m.league.name||'')+lgBadge+'</div></div>';
+      html+='<div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:6px">'+htmlEsc(m.teams&&m.teams.home&&m.teams.home.name||'')+' vs '+htmlEsc(m.teams&&m.teams.away&&m.teams.away.name||'')+'</div>';
+      html+='<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">';
+      html+='<div style="background:rgba(34,197,94,.1);padding:4px 8px;border-radius:6px"><span style="font-size:10px;color:var(--mu);margin-right:4px">'+htmlEsc(o.market)+'</span><b style="font-size:14px;color:'+clr+'">'+o.cal+'%</b></div>';
+      html+='<div style="font-size:11px;color:var(--mu)">cot&#259; min &ge; <b style="color:#fff">'+o.minCota+'</b></div>';
+      if(Math.abs(o.cal-Math.round(o.raw))>3)html+='<div style="font-size:9px;color:var(--mu);opacity:.6">raw: '+Math.round(o.raw)+'%</div>';
       html+='</div></div>';
     });
     html+='</div>';
