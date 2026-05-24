@@ -2702,6 +2702,50 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX DEFINITIV NGP flickering — preserve _ng in loadLive()
+  Bug regresie persistenta: fix anterior (fallback local) reducea efectele
+  vizuale dar nu rezolva cauza radacina; in scenarii cu txg=0 + form goals
+  mici (echipe noi), fallback dadea ng=0 → flicker continua.
+  CAUZA EXACTA:
+    loadLive() (REST /api/football, refresh la ~30s):
+      ST.ms = raw.map(...) — obiecte NOI din REST, fara proprietatea _ng
+      enrichData era preservata din vechi via map _ed
+      _ng setat de WS NU era preservata → calcScore fallback → 0% sau ne-WS
+  Fix in loadLive() (DOAR aceasta functie modificata):
+    Construit map _eng paralel cu _ed inainte de re-map:
+      ST.ms.forEach(... if(m.enrichData)_ed[fid]=m.enrichData;
+                        if(typeof m._ng==='number' && m._ng>0)_eng[fid]=m._ng;)
+    Re-aplicat _ng pe obiectele raw inainte de calcScore:
+      ST.ms = raw.map(... if(_ed[fid])m.enrichData=_ed[fid];
+                           if(_eng[fid])m._ng=_eng[fid];
+                           m._s=calcScore(m); return m;)
+  Pattern identic cu enrichData preservation existent — simpla extindere.
+  Rezultat:
+    _ng persista intre REST refresh-uri pana cand WS push aduce alta valoare
+    calcScore intra in branch m._ng>0 → ng = m._ng (sursa truth)
+    Flickering 60%→0%→60% rezolvat DEFINITIV
+    Fallback local ramane disponibil pentru:
+      - meciuri noi inainte de primul WS push (rar)
+      - WS disconnect prelungit (loadLive ramane sa serveasca date stale)
+  Verificare: 3 blocuri JS inline validate cu new Function() OK
+  Zero modificari la alte fisiere.
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: c1a1cf4
+
+[24.05.2026] - MERGE → main (NGP flickering DEFINITIV) + deploy
+  Metoda: fast-forward push direct
+  Range: b2f9648..c1a1cf4 — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Deploy: GitHub Actions declansat automat
+  Test recomandat post-deploy:
+    1) Deschide meci live in UI
+    2) Astept 2+ minute (acopera ≥4 REST refresh-uri la 30s fiecare)
+    3) NGP trebuie sa ramana stabil — fara flicker la 0%
+    4) Daca Ctrl+F5 (refresh complet UI): NGP foloseste fallback local
+       cateva secunde pana la primul WS push (acceptabil)
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
