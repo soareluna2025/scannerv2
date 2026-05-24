@@ -718,10 +718,10 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 
   <!-- TAB: PRE-MECI -->
   <div class="tab-content" id="tab-pre">
-    <!-- Toolbar sticky cu butoane (compact, alb pe top opps) -->
-    <div id="pm-toolbar" style="position:sticky;top:0;z-index:50;background:var(--bg);padding:6px 12px;display:flex;gap:6px;border-bottom:1px solid var(--bor)">
-      <button onclick="loadPM()" id="btn-pm" style="flex:1;background:#22c55e;color:#000;border:none;padding:9px 8px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">Încarcă Pre-meci</button>
-      <button onclick="loadTopOpps()" id="btn-topopps" style="flex:1;background:#fff;color:#000;border:none;padding:9px 8px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">📊 Top Oportunități</button>
+    <!-- Toolbar sticky cu butoane (compact, alb pe top opps, fara gap) -->
+    <div id="pm-toolbar" style="position:sticky;top:-12px;z-index:50;background:var(--bg);padding:4px 12px 6px;margin:-12px -12px 0;display:flex;gap:6px;border-bottom:1px solid var(--bor)">
+      <button onclick="loadPM()" id="btn-pm" style="flex:1;background:#22c55e;color:#000;border:none;padding:8px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">Încarcă Pre-meci</button>
+      <button onclick="loadTopOpps()" id="btn-topopps" style="flex:1;background:#fff;color:#000;border:none;padding:8px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">📊 Top Oportunități</button>
     </div>
     <div id="top-opps-panel" style="display:none;padding:8px 12px"></div>
     <div id="pm-body">
@@ -4027,6 +4027,22 @@ function simRender(d){
     setTimeout(animateBall, 1800);
   });
 })();
+// Ajustez page.top in functie de wr-bar (eliminam gap)
+function adjustPageTop(){
+  var wr=document.getElementById('wr-bar');
+  var page=document.getElementById('page');
+  if(!wr||!page)return;
+  var visible=wr.style.display!=='none'&&wr.offsetHeight>0;
+  if(visible){
+    var wrH=wr.offsetHeight;
+    page.style.top=(56+wrH)+'px';
+  }else{
+    page.style.top='56px';
+  }
+}
+document.addEventListener('DOMContentLoaded',adjustPageTop);
+window.addEventListener('load',adjustPageTop);
+setTimeout(adjustPageTop,500);  // safety after dynamic content
 </script>
 <script>
 if ('serviceWorker' in navigator) {
