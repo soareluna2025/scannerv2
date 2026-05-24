@@ -441,7 +441,12 @@ async function scanLive10s() {
       }
 
       // Calcul scoring + upsert snapshot
+      // V1_sotDerived formula (cea mai bună la backtest: Brier 0.2573):
+      // override homeFormGoals/awayFormGoals din SOT live (SOT/mn * 9)
+      // când SOT prezent, fallback la form DB istoric altfel.
       const f  = calcFeatures(m, matchFd[id] || {});
+      if (f.mn > 0 && f.hSOT > 0) f.homeFormGoals = (f.hSOT / f.mn) * 9;
+      if (f.mn > 0 && f.aSOT > 0) f.awayFormGoals = (f.aSOT / f.mn) * 9;
       const ng = calcNextGoal(f);
       const mk = calcMarkets(f);
 
