@@ -2795,7 +2795,35 @@ NEXT STEPS (prioritizat):
                     esuat silentios.
                  3) /api/backfill-stats endpoint admin pentru backfill
                     h2h + match_stats istoric (params key, type, limit).
-  Commit: 7c1933d
+                 + scripts/backfill-quick.sh helper bash pentru iPhone.
+  Commit: 7c1933d, 704716d
+
+[24.05 ~11:18] - BACKFILL RULAT pe VPS:
+                 - h2h: 1000 meciuri (era 0) ✓
+                 - match_stats: 31/200 succes (169 skipped - API nu are
+                   stats pentru ligi obscure, sample creste la 38 total)
+
+[24.05 ~11:25] - BACKTEST V2 dupa h2h backfill (rezultate INCREDIBILE):
+                 Brier scores scazute cu 20-52% pe TOATE pietele majore:
+                   GG               0.225 -> 0.107  (-52%)
+                   Cards Over 2.5   0.386 -> 0.201  (-48%)
+                   Gazde marcheaza  0.180 -> 0.095  (-47%)
+                   Oaspeti marcheaza 0.208 -> 0.113  (-46%)
+                   Over 2.5 total   0.210 -> 0.114  (-46%)
+                   Over 0.5 total   0.115 -> 0.079  (-32% TOP)
+                   Over 1.5 total   0.179 -> 0.127  (-29%)
+                 Formula este acum BIMODALA: sub 50% real 0%, peste 70%
+                 real 100%. Cliff in mid-range.
+
+[24.05 ~prezent] - CALIBRATION V2 (refacut pe backtest post-h2h):
+                 - api/utils/generator-calibration.js: tabele rescrise
+                   reflectand pattern bimodal nou (la 70%+ → 100%, la
+                   sub 50% → 0%, cliff in 50-70%).
+                 - index.html: G2_CALIBRATION inline updated (MIRROR).
+                 Tabelele vechi erau bazate pe formula NECALIBRATA (h2h
+                 gol) si subestimau predictiile bune. Acum reflecta
+                 realitatea masurata post-h2h.
+  Commit: 5f26318
 
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
