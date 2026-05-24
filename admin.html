@@ -1010,6 +1010,46 @@ body{
     </div>
   </section>
 
+  <section class="card" id="cardCalibration">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg></span>
+      <h2>Calibrare Probabilități</h2>
+      <button class="hc-btn" onclick="loadCalibration()" style="margin-left:auto">Reîncarcă</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">Tabele calibrare pre-meci (predictions) + LIVE (match_events). Generate săptămânal duminică 05:00 / 05:30.</div>
+    <div id="cal-results" style="margin-top:8px">
+      <div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">Apasă „Reîncarcă"</div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="hc-btn" onclick="triggerCalibration('recalibrate-tables')">▶ Recalibrează pre-meci</button>
+      <button class="hc-btn" onclick="triggerCalibration('calibrate-live')">▶ Recalibrează LIVE</button>
+    </div>
+  </section>
+
+  <section class="card" id="cardBets">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6M7 16h8"/></svg></span>
+      <h2>Statistici Bilete &amp; ROI</h2>
+      <button class="hc-btn" onclick="loadBetsAggregate()" style="margin-left:auto">Reîncarcă</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">Pariuri salvate de utilizator — ROI per piață / ligă / interval cotă.</div>
+    <div id="bets-results" style="margin-top:8px">
+      <div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">Apasă „Reîncarcă"</div>
+    </div>
+  </section>
+
+  <section class="card" id="cardLeagues">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>
+      <h2>Inteligență Ligi (Insights)</h2>
+      <button class="hc-btn" onclick="loadLeaguesInsights()" style="margin-left:auto">Reîncarcă</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">Win Rate per ligă pe predicții Over 1.5 (≥70%, 180 zile). Baseline așteptat: 70%.</div>
+    <div id="leagues-results" style="margin-top:8px">
+      <div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">Apasă „Reîncarcă"</div>
+    </div>
+  </section>
+
 </main>
 
 <nav class="bnav">
@@ -1448,6 +1488,209 @@ function renderWinRatePatterns(d){
 
   h += '<div style="font-size:10px;color:var(--mu);margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)">Snapshot la ' + new Date(d.meta.asOf).toLocaleString('ro-RO') + '</div>';
   return h;
+}
+
+// ──────────────────────────────────────────────────────────────
+// CALIBRARE (pre-meci + LIVE)
+async function loadCalibration() {
+  var el = document.getElementById('cal-results');
+  el.innerHTML = '<div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">⏳ Încarcă...</div>';
+  try {
+    var d = await apiFetch('/api/admin/calibration');
+    if (!d.ok) { el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + (d.error || 'unknown') + '</div>'; return; }
+    var brierColor = function(b) {
+      if (b === null) return 'var(--mu)';
+      if (b < 0.15) return '#22c55e';
+      if (b < 0.22) return '#f59e0b';
+      return '#ef4444';
+    };
+    var h = '';
+    // PRE-MECI
+    h += '<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:6px">📊 PRE-MECI calibration_tables</div>';
+    if (!d.pre.length) {
+      h += '<div style="color:var(--mu);font-size:11px;padding:8px">Tabela goală — rulează cron-ul de recalibrare.</div>';
+    } else {
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:14px">';
+      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:6px">Modul</th><th style="padding:6px;text-align:right">n</th><th style="padding:6px;text-align:right">Brier</th><th style="padding:6px;text-align:right">Buckets</th><th style="padding:6px;text-align:right">Updated</th></tr></thead><tbody>';
+      d.pre.forEach(function(r) {
+        var clr = brierColor(r.brier);
+        var bn = Array.isArray(r.buckets) ? r.buckets.length : 0;
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:6px;font-family:monospace">' + r.module + '</td>';
+        h += '<td style="padding:6px;text-align:right">' + r.sample_size.toLocaleString() + '</td>';
+        h += '<td style="padding:6px;text-align:right;color:' + clr + ';font-weight:700">' + (r.brier !== null ? r.brier.toFixed(3) : '—') + '</td>';
+        h += '<td style="padding:6px;text-align:right">' + bn + '</td>';
+        h += '<td style="padding:6px;text-align:right;font-size:10px;color:var(--mu)">' + new Date(r.updated).toLocaleDateString('ro-RO') + '</td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+    // LIVE
+    h += '<div style="font-weight:700;font-size:13px;color:#6366f1;margin:14px 0 6px">🎯 LIVE calibration_live</div>';
+    if (!d.live.length) {
+      h += '<div style="color:var(--mu);font-size:11px;padding:8px">Tabela goală — rulează cron-ul de calibrare LIVE.</div>';
+    } else {
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px">';
+      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:6px">Market</th><th style="padding:6px;text-align:right">Buckets</th><th style="padding:6px;text-align:right">Samples</th><th style="padding:6px;text-align:right">Updated</th></tr></thead><tbody>';
+      d.live.forEach(function(r) {
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:6px;font-family:monospace">' + r.market + '</td>';
+        h += '<td style="padding:6px;text-align:right">' + r.buckets + '</td>';
+        h += '<td style="padding:6px;text-align:right">' + r.samples.toLocaleString() + '</td>';
+        h += '<td style="padding:6px;text-align:right;font-size:10px;color:var(--mu)">' + new Date(r.updated).toLocaleDateString('ro-RO') + '</td></tr>';
+      });
+      h += '</tbody></table>';
+      h += '<div style="margin-top:8px;font-size:10px;color:var(--mu)">Total bucket-uri LIVE: ' + d.live_total + ' (max teoretic 6×7×3 = 126)</div>';
+    }
+    h += '<div style="margin-top:10px;font-size:10px;color:var(--mu);padding:8px;background:rgba(34,197,94,.05);border-left:2px solid #22c55e;border-radius:4px;line-height:1.5">💡 Brier scor: <b style="color:#22c55e">&lt;0.15 excelent</b>, <b style="color:#f59e0b">0.15-0.22 ok</b>, <b style="color:#ef4444">&gt;0.22 slab</b>. Cu mai multe date, scorul scade automat.</div>';
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare fetch: ' + e.message + '</div>';
+  }
+}
+
+async function triggerCalibration(jobName) {
+  if (!confirm('Rulez „' + jobName + '"? Poate dura 30-90 secunde.')) return;
+  try {
+    var r = await fetch(BASE + '/api/admin/trigger-cron', {
+      method: 'POST',
+      headers: { 'X-Api-Key': _key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job: jobName }),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      toast('Cron „' + jobName + '" pornit (fire-and-forget). Reîncarcă peste 1-2 min.', '#22c55e');
+    } else {
+      toast('Eroare: ' + (d.error || 'unknown'), '#ef4444');
+    }
+  } catch (e) { toast('Eroare: ' + e.message, '#ef4444'); }
+}
+
+// ──────────────────────────────────────────────────────────────
+// STATISTICI BILETE / ROI
+async function loadBetsAggregate() {
+  var el = document.getElementById('bets-results');
+  el.innerHTML = '<div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">⏳ Încarcă...</div>';
+  try {
+    var d = await apiFetch('/api/admin/bets-aggregate');
+    if (!d.ok) { el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + (d.error || 'unknown') + '</div>'; return; }
+    if (d.empty) { el.innerHTML = '<div style="color:var(--mu);padding:10px;font-size:12px">' + d.message + '</div>'; return; }
+    var g = d.global;
+    var roi = g.staked > 0 ? +(g.netProfit / g.staked * 100).toFixed(1) : null;
+    var wr  = (g.wins + g.losses) > 0 ? +(g.wins / (g.wins + g.losses) * 100).toFixed(1) : null;
+    var roiClr = roi === null ? 'var(--mu)' : roi > 5 ? '#22c55e' : roi >= -5 ? '#f59e0b' : '#ef4444';
+    var profitClr = g.netProfit > 0 ? '#22c55e' : g.netProfit < 0 ? '#ef4444' : 'var(--mu)';
+    var h = '';
+    // Global stats card
+    h += '<div style="background:rgba(255,255,255,.03);border-radius:8px;padding:12px;margin-bottom:14px">';
+    h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;font-size:11px">';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#22c55e">' + g.wins + '</div><div style="color:var(--mu)">WIN</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#ef4444">' + g.losses + '</div><div style="color:var(--mu)">LOSS</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#f59e0b">' + g.pending + '</div><div style="color:var(--mu)">PEND</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:var(--tx)">' + (wr === null ? '—' : wr + '%') + '</div><div style="color:var(--mu)">WR</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#6366f1">' + g.multi + '</div><div style="color:var(--mu)">MULTI</div></div>';
+    h += '</div>';
+    h += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bor);display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;font-size:11px">';
+    h += '<div><div style="color:var(--mu)">Miză total</div><div style="font-weight:700">' + g.staked.toFixed(4) + ' LTC</div></div>';
+    h += '<div><div style="color:var(--mu)">Profit net</div><div style="font-weight:800;color:' + profitClr + ';font-size:14px">' + (g.netProfit >= 0 ? '+' : '') + g.netProfit.toFixed(4) + ' LTC</div></div>';
+    h += '<div><div style="color:var(--mu)">ROI</div><div style="font-weight:800;color:' + roiClr + ';font-size:14px">' + (roi === null ? '—' : (roi >= 0 ? '+' : '') + roi + '%') + '</div></div>';
+    h += '</div></div>';
+
+    // Per market
+    if (d.by_market.length) {
+      h += '<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:6px">🎯 Per Piață</div>';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px">';
+      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:5px">Piață</th><th style="padding:5px;text-align:right">N</th><th style="padding:5px;text-align:right">W/L</th><th style="padding:5px;text-align:right">WR%</th><th style="padding:5px;text-align:right">Profit LTC</th><th style="padding:5px;text-align:right">ROI%</th></tr></thead><tbody>';
+      d.by_market.forEach(function(r) {
+        var roiC = r.roi === null ? 'var(--mu)' : r.roi > 5 ? '#22c55e' : r.roi >= -5 ? '#f59e0b' : '#ef4444';
+        var pC = r.profit > 0 ? '#22c55e' : r.profit < 0 ? '#ef4444' : 'var(--mu)';
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
+        h += '<td style="padding:5px">' + r.market + '</td>';
+        h += '<td style="padding:5px;text-align:right">' + r.total + '</td>';
+        h += '<td style="padding:5px;text-align:right;font-size:10px"><span style="color:#22c55e">' + r.wins + '</span>/<span style="color:#ef4444">' + r.losses + '</span></td>';
+        h += '<td style="padding:5px;text-align:right;font-weight:700">' + (r.winRate === null ? '—' : r.winRate + '%') + '</td>';
+        h += '<td style="padding:5px;text-align:right;color:' + pC + '">' + (r.profit > 0 ? '+' : '') + r.profit.toFixed(4) + '</td>';
+        h += '<td style="padding:5px;text-align:right;color:' + roiC + ';font-weight:700">' + (r.roi === null ? '—' : (r.roi >= 0 ? '+' : '') + r.roi + '%') + '</td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table>';
+    }
+
+    // Per cota bucket
+    if (d.by_cota.length) {
+      h += '<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:6px">📊 Per Interval Cotă</div>';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px">';
+      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:5px">Cotă</th><th style="padding:5px;text-align:right">N</th><th style="padding:5px;text-align:right">W/L</th><th style="padding:5px;text-align:right">WR%</th><th style="padding:5px;text-align:right">Profit</th></tr></thead><tbody>';
+      d.by_cota.forEach(function(r) {
+        var pC = r.profit > 0 ? '#22c55e' : r.profit < 0 ? '#ef4444' : 'var(--mu)';
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
+        h += '<td style="padding:5px;font-family:monospace">' + r.bucket + '</td>';
+        h += '<td style="padding:5px;text-align:right">' + r.total + '</td>';
+        h += '<td style="padding:5px;text-align:right;font-size:10px"><span style="color:#22c55e">' + r.wins + '</span>/<span style="color:#ef4444">' + r.losses + '</span></td>';
+        h += '<td style="padding:5px;text-align:right;font-weight:700">' + (r.winRate === null ? '—' : r.winRate + '%') + '</td>';
+        h += '<td style="padding:5px;text-align:right;color:' + pC + '">' + (r.profit > 0 ? '+' : '') + r.profit.toFixed(4) + '</td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table>';
+    }
+
+    // Per liga
+    if (d.by_league.length) {
+      h += '<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:6px">🏆 Per Ligă (top 15)</div>';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:5px">Liga</th><th style="padding:5px;text-align:right">N</th><th style="padding:5px;text-align:right">WR%</th><th style="padding:5px;text-align:right">Profit LTC</th></tr></thead><tbody>';
+      d.by_league.forEach(function(r) {
+        var pC = r.profit > 0 ? '#22c55e' : r.profit < 0 ? '#ef4444' : 'var(--mu)';
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
+        h += '<td style="padding:5px">' + r.league + '</td>';
+        h += '<td style="padding:5px;text-align:right">' + r.total + '</td>';
+        h += '<td style="padding:5px;text-align:right;font-weight:700">' + (r.winRate === null ? '—' : r.winRate + '%') + '</td>';
+        h += '<td style="padding:5px;text-align:right;color:' + pC + '">' + (r.profit > 0 ? '+' : '') + r.profit.toFixed(4) + '</td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table>';
+    }
+
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare fetch: ' + e.message + '</div>';
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// INTELIGENȚĂ LIGI
+async function loadLeaguesInsights() {
+  var el = document.getElementById('leagues-results');
+  el.innerHTML = '<div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">⏳ Încarcă...</div>';
+  try {
+    var d = await apiFetch('/api/admin/leagues-insights');
+    if (!d.ok) { el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + (d.error || 'unknown') + '</div>'; return; }
+    var h = '';
+    // Summary
+    h += '<div style="background:rgba(255,255,255,.03);border-radius:8px;padding:10px;margin-bottom:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;font-size:11px">';
+    h += '<div><div style="font-size:18px;font-weight:800;color:var(--tx)">' + d.total_leagues + '</div><div style="color:var(--mu)">Total ligi</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#22c55e">' + d.counts.overperformers + '</div><div style="color:var(--mu)">Over (+10pp)</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#f59e0b">' + d.counts.on_target + '</div><div style="color:var(--mu)">On target</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#ef4444">' + d.counts.underperformers + '</div><div style="color:var(--mu)">Under (-10pp)</div></div>';
+    h += '</div>';
+    // Table
+    h += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+    h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:5px">Ligă</th><th style="padding:5px">Țară</th><th style="padding:5px;text-align:right">N</th><th style="padding:5px;text-align:right">WR%</th><th style="padding:5px;text-align:right">vs Baseline</th><th style="padding:5px">Sugestie</th></tr></thead><tbody>';
+    d.leagues.forEach(function(r) {
+      var wrClr = r.winRate === null ? 'var(--mu)' : r.winRate >= 80 ? '#22c55e' : r.winRate >= 60 ? '#f59e0b' : '#ef4444';
+      var diffClr = r.diffFromBaseline === null ? 'var(--mu)' : r.diffFromBaseline >= 10 ? '#22c55e' : r.diffFromBaseline <= -10 ? '#ef4444' : 'var(--mu)';
+      h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
+      h += '<td style="padding:5px">' + r.league + '</td>';
+      h += '<td style="padding:5px;font-size:10px;color:var(--mu)">' + r.country + '</td>';
+      h += '<td style="padding:5px;text-align:right">' + r.total + '</td>';
+      h += '<td style="padding:5px;text-align:right;color:' + wrClr + ';font-weight:700">' + (r.winRate === null ? '—' : r.winRate + '%') + '</td>';
+      h += '<td style="padding:5px;text-align:right;color:' + diffClr + ';font-weight:700">' + (r.diffFromBaseline === null ? '—' : (r.diffFromBaseline >= 0 ? '+' : '') + r.diffFromBaseline + 'pp') + '</td>';
+      h += '<td style="padding:5px;font-size:10px">' + r.suggestion + '</td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div style="margin-top:10px;font-size:10px;color:var(--mu);padding:8px;background:rgba(99,102,241,.05);border-left:2px solid #6366f1;border-radius:4px;line-height:1.5">💡 Filtru: predicții cu prob ≥ 70% Over 1.5, min 10 samples, 180 zile. Baseline așteptat: ' + d.baseline + '%.</div>';
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare fetch: ' + e.message + '</div>';
+  }
 }
 </script>
 </body>

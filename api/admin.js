@@ -260,6 +260,9 @@ const ALLOWED_JOBS = {
   'prematch-enrichment':'/api/cron/prematch-enrichment',
   'scan':               '/api/cron/scan',
   'backfill':           '/api/backfill/start',
+  'recalibrate-tables': '/api/cron/recalibrate-tables',
+  'calibrate-live':     '/api/cron/calibrate-live',
+  'learning-analysis':  '/api/cron/learning-analysis',
 };
 
 router.post('/trigger-cron', async (req, res) => {
@@ -546,6 +549,263 @@ router.get('/win-rate-patterns', async (req, res) => {
     });
   } catch (e) {
     console.error('[win-rate-patterns]', e.message, e.stack);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── GET /api/admin/calibration ──────────────────────────────────────────────
+// Vizualizare calibrare pre-meci + LIVE din DB (tabela calibration_tables si calibration_live)
+router.get('/calibration', async (req, res) => {
+  try {
+    const { rows: preRows } = await query(`
+      SELECT module, buckets, sample_size, brier_score, generated_at
+      FROM calibration_tables
+      ORDER BY module
+    `).catch(() => ({ rows: [] }));
+
+    const { rows: liveRows } = await query(`
+      SELECT market, minute_bucket, score_state, n_samples, real_pct, generated_at
+      FROM calibration_live
+      ORDER BY market, minute_bucket, score_state
+    `).catch(() => ({ rows: [] }));
+
+    // Group LIVE by market for summary
+    const liveByMarket = {};
+    liveRows.forEach(r => {
+      if (!liveByMarket[r.market]) liveByMarket[r.market] = { n: 0, buckets: 0, samples: 0, last: null };
+      liveByMarket[r.market].buckets++;
+      liveByMarket[r.market].samples += Number(r.n_samples);
+      if (!liveByMarket[r.market].last || new Date(r.generated_at) > new Date(liveByMarket[r.market].last)) {
+        liveByMarket[r.market].last = r.generated_at;
+      }
+    });
+
+    res.json({
+      ok: true,
+      pre: preRows.map(r => ({
+        module:      r.module,
+        sample_size: Number(r.sample_size || 0),
+        brier:       r.brier_score ? Number(r.brier_score) : null,
+        buckets:     r.buckets,
+        updated:     r.generated_at,
+      })),
+      live: Object.entries(liveByMarket).map(([market, v]) => ({
+        market,
+        buckets:     v.buckets,
+        samples:     v.samples,
+        updated:     v.last,
+      })),
+      live_total: liveRows.length,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── GET /api/admin/bets-aggregate ───────────────────────────────────────────
+// Statistici agregate bilete: per market, per liga, distributie cota
+router.get('/bets-aggregate', async (req, res) => {
+  try {
+    // Verifica daca tabela bets exista
+    const { rows: tableCheck } = await query(`
+      SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='bets') AS exists
+    `);
+    if (!tableCheck[0]?.exists) {
+      return res.json({ ok: true, empty: true, message: 'Tabela bets nu exista inca' });
+    }
+
+    // Sumar global
+    const { rows: globalRows } = await query(`
+      SELECT
+        COUNT(*)::int                                                      AS total,
+        COUNT(*) FILTER (WHERE outcome = 'WIN')::int                        AS wins,
+        COUNT(*) FILTER (WHERE outcome = 'LOSS')::int                       AS losses,
+        COUNT(*) FILTER (WHERE outcome = 'VOID')::int                       AS voids,
+        COUNT(*) FILTER (WHERE outcome = 'PENDING')::int                    AS pending,
+        COUNT(*) FILTER (WHERE is_multi = TRUE)::int                        AS multi_count,
+        COALESCE(SUM(stake) FILTER (WHERE outcome IN ('WIN','LOSS')), 0)    AS staked,
+        COALESCE(SUM(profit) FILTER (WHERE outcome IN ('WIN','LOSS')), 0)   AS net_profit,
+        COALESCE(AVG(cota), 0)                                              AS avg_cota,
+        COALESCE(AVG(expected_prob), 0)                                     AS avg_expected_prob
+      FROM bets
+    `);
+    const g = globalRows[0] || {};
+
+    // Per market (doar single, non-multi)
+    const { rows: byMarket } = await query(`
+      SELECT
+        market,
+        COUNT(*)::int                                                       AS total,
+        COUNT(*) FILTER (WHERE outcome = 'WIN')::int                         AS wins,
+        COUNT(*) FILTER (WHERE outcome = 'LOSS')::int                        AS losses,
+        COALESCE(SUM(stake) FILTER (WHERE outcome IN ('WIN','LOSS')), 0)     AS staked,
+        COALESCE(SUM(profit) FILTER (WHERE outcome IN ('WIN','LOSS')), 0)    AS profit
+      FROM bets
+      WHERE is_multi IS NOT TRUE
+      GROUP BY market
+      HAVING COUNT(*) >= 1
+      ORDER BY COUNT(*) DESC
+      LIMIT 20
+    `);
+
+    // Per liga
+    const { rows: byLeague } = await query(`
+      SELECT
+        league_name,
+        COUNT(*)::int                                                       AS total,
+        COUNT(*) FILTER (WHERE outcome = 'WIN')::int                         AS wins,
+        COUNT(*) FILTER (WHERE outcome = 'LOSS')::int                        AS losses,
+        COALESCE(SUM(profit) FILTER (WHERE outcome IN ('WIN','LOSS')), 0)    AS profit
+      FROM bets
+      WHERE league_name IS NOT NULL AND is_multi IS NOT TRUE
+      GROUP BY league_name
+      HAVING COUNT(*) >= 1
+      ORDER BY COUNT(*) DESC
+      LIMIT 15
+    `);
+
+    // Distributie cota (buckets)
+    const { rows: byCotaBucket } = await query(`
+      SELECT
+        CASE
+          WHEN cota < 1.20 THEN '1.00-1.20'
+          WHEN cota < 1.30 THEN '1.20-1.30'
+          WHEN cota < 1.50 THEN '1.30-1.50'
+          WHEN cota < 2.00 THEN '1.50-2.00'
+          WHEN cota < 3.00 THEN '2.00-3.00'
+          ELSE '3.00+'
+        END AS bucket,
+        COUNT(*)::int                                                       AS total,
+        COUNT(*) FILTER (WHERE outcome = 'WIN')::int                         AS wins,
+        COUNT(*) FILTER (WHERE outcome = 'LOSS')::int                        AS losses,
+        COALESCE(SUM(profit) FILTER (WHERE outcome IN ('WIN','LOSS')), 0)    AS profit
+      FROM bets
+      WHERE is_multi IS NOT TRUE
+      GROUP BY bucket
+      ORDER BY MIN(cota)
+    `);
+
+    res.json({
+      ok: true,
+      global: {
+        total:      Number(g.total || 0),
+        wins:       Number(g.wins || 0),
+        losses:     Number(g.losses || 0),
+        voids:      Number(g.voids || 0),
+        pending:    Number(g.pending || 0),
+        multi:      Number(g.multi_count || 0),
+        staked:     Number(g.staked || 0),
+        netProfit:  Number(g.net_profit || 0),
+        avgCota:    Number(g.avg_cota || 0),
+        avgExpProb: Number(g.avg_expected_prob || 0),
+      },
+      by_market: byMarket.map(r => ({
+        market:   r.market,
+        total:    Number(r.total),
+        wins:     Number(r.wins),
+        losses:   Number(r.losses),
+        staked:   Number(r.staked),
+        profit:   Number(r.profit),
+        winRate:  (Number(r.wins) + Number(r.losses)) > 0 ? +(Number(r.wins) / (Number(r.wins) + Number(r.losses)) * 100).toFixed(1) : null,
+        roi:      Number(r.staked) > 0 ? +(Number(r.profit) / Number(r.staked) * 100).toFixed(1) : null,
+      })),
+      by_league: byLeague.map(r => ({
+        league:   r.league_name,
+        total:    Number(r.total),
+        wins:     Number(r.wins),
+        losses:   Number(r.losses),
+        profit:   Number(r.profit),
+        winRate:  (Number(r.wins) + Number(r.losses)) > 0 ? +(Number(r.wins) / (Number(r.wins) + Number(r.losses)) * 100).toFixed(1) : null,
+      })),
+      by_cota: byCotaBucket.map(r => ({
+        bucket:   r.bucket,
+        total:    Number(r.total),
+        wins:     Number(r.wins),
+        losses:   Number(r.losses),
+        profit:   Number(r.profit),
+        winRate:  (Number(r.wins) + Number(r.losses)) > 0 ? +(Number(r.wins) / (Number(r.wins) + Number(r.losses)) * 100).toFixed(1) : null,
+      })),
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── GET /api/admin/leagues-insights ─────────────────────────────────────────
+// Analiza per liga: WR pe Over 1.5 din predictions vs baseline, sugestii
+router.get('/leagues-insights', async (req, res) => {
+  try {
+    const baseline = 70;  // baseline expected WR
+    const { rows } = await query(`
+      SELECT
+        p.league_id,
+        l.name AS league_name,
+        l.country,
+        COUNT(*)::int                                                         AS total,
+        COUNT(*) FILTER (WHERE p.result_over15 = TRUE)::int                    AS wins,
+        COUNT(*) FILTER (WHERE p.result_over15 = FALSE)::int                   AS losses,
+        AVG(p.over15_prob)                                                     AS avg_predicted
+      FROM predictions p
+      LEFT JOIN leagues l ON l.league_id = p.league_id
+      WHERE p.result_over15 IS NOT NULL
+        AND p.over15_prob >= 70
+        AND p.created_at > NOW() - INTERVAL '180 days'
+      GROUP BY p.league_id, l.name, l.country
+      HAVING COUNT(*) >= 10
+      ORDER BY COUNT(*) DESC
+      LIMIT 50
+    `).catch(() => ({ rows: [] }));
+
+    const insights = rows.map(r => {
+      const total = Number(r.total);
+      const wins = Number(r.wins);
+      const losses = Number(r.losses);
+      const resolved = wins + losses;
+      const winRate = resolved > 0 ? +(wins / resolved * 100).toFixed(1) : null;
+      const avgPred = Number(r.avg_predicted || 0).toFixed(1);
+      // Diferenta vs baseline
+      const diff = winRate !== null ? +(winRate - baseline).toFixed(1) : null;
+      // Sugestie threshold:
+      // - daca WR > 80% si n >= 20: poate scadea threshold-ul (mai multe picks valide)
+      // - daca WR < 60% si n >= 20: ridica threshold (mai stringent)
+      let suggestion = '—';
+      if (resolved >= 20) {
+        if (winRate >= 80) suggestion = '⬇ scade prag (-5pp): mai multe picks bune';
+        else if (winRate < 60) suggestion = '⬆ ridica prag (+10pp): predictii slabe';
+        else if (winRate >= 70) suggestion = '✓ baseline ok';
+        else suggestion = '⚠ monitor: WR sub baseline';
+      }
+      return {
+        league_id:   r.league_id,
+        league:      r.league_name || `Liga ${r.league_id}`,
+        country:     r.country || '—',
+        total,
+        wins,
+        losses,
+        winRate,
+        avgPredicted: Number(avgPred),
+        diffFromBaseline: diff,
+        suggestion,
+      };
+    });
+
+    // Categorisez
+    const overperformers = insights.filter(i => i.diffFromBaseline !== null && i.diffFromBaseline >= 10);
+    const underperformers = insights.filter(i => i.diffFromBaseline !== null && i.diffFromBaseline <= -10);
+    const onTarget = insights.filter(i => i.diffFromBaseline !== null && Math.abs(i.diffFromBaseline) < 10);
+
+    res.json({
+      ok: true,
+      baseline,
+      total_leagues: insights.length,
+      counts: {
+        overperformers: overperformers.length,
+        on_target:      onTarget.length,
+        underperformers:underperformers.length,
+      },
+      leagues: insights,
+    });
+  } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
