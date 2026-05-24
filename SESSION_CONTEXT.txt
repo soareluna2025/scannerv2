@@ -2776,6 +2776,27 @@ NEXT STEPS (prioritizat):
                  Util pentru 'de ce scorul e X?' sau 'lipseste vreun JOIN?'
   Commit: 92d8a24
 
+[24.05 ~prezent] - GENERATOR UI ETAPA 4 (EV calc + filtru min score):
+                 - g2Detail: calculator EV per recomandare (input cota,
+                   real prob calibrata, cota minima auto, EV verde/galben/
+                   rosu, persistence localStorage per (fid, cat, sub, thr))
+                 - g2RenderTop10: dropdown filtru prag minim (Toate, 50%+,
+                   60%+, ..., 90%+) cu counter 'X/Y' afisat. Confirmate
+                   raman vizibile indiferent de filtru.
+                 - Function g2EvRecalc helper (mirror evRecalc din modal)
+  Commit: cff1755
+
+[24.05 ~prezent] - INFRA FIX (3 fix-uri identificate de backtest):
+                 1) WIRE-UP saveH2H: functie orfana in scan.js, acum
+                    apelata dupa resolveOutcome loop pentru FT matches.
+                    Impact: h2h DB se va popula la urmatorul scan.
+                 2) collect-finished verifica match_stats (nu doar
+                    player_stats) - re-proceseaza meciuri cu collect
+                    esuat silentios.
+                 3) /api/backfill-stats endpoint admin pentru backfill
+                    h2h + match_stats istoric (params key, type, limit).
+  Commit: 7c1933d
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
