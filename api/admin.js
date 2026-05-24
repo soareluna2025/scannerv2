@@ -434,7 +434,7 @@ router.get('/win-rate-patterns', async (req, res) => {
         COUNT(*) FILTER (WHERE outcome = 'PENDING')::int AS pending
       FROM prediction_log
       WHERE module = $1
-        AND created_at > NOW() - ($2 || ' days')::interval
+        AND created_at > NOW() - (INTERVAL '1 day' * $2)
         ${lgClause}
     `;
     const { rows: ovRows } = await query(ovSQL, paramsBase);
@@ -463,7 +463,7 @@ router.get('/win-rate-patterns', async (req, res) => {
         COUNT(*) FILTER (WHERE outcome = 'WIN')::int AS wins
       FROM prediction_log
       WHERE module = $1
-        AND created_at > NOW() - ($2 || ' days')::interval
+        AND created_at > NOW() - (INTERVAL '1 day' * $2)
         AND outcome IN ('WIN','LOSS')
         ${lgClause}
       GROUP BY 1
@@ -503,7 +503,7 @@ router.get('/win-rate-patterns', async (req, res) => {
           COUNT(*) FILTER (WHERE outcome = 'WIN') AS wins
         FROM prediction_log
         WHERE module = $1
-          AND created_at > NOW() - ($2 || ' days')::interval
+          AND created_at > NOW() - (INTERVAL '1 day' * $2)
           AND outcome IN ('WIN','LOSS')
           AND minute IS NOT NULL
           ${lgClause}
@@ -529,7 +529,7 @@ router.get('/win-rate-patterns', async (req, res) => {
         COUNT(*) FILTER (WHERE outcome = 'WIN')::int AS wins
       FROM prediction_log
       WHERE module = $1
-        AND created_at > NOW() - ($2 || ' days')::interval
+        AND created_at > NOW() - (INTERVAL '1 day' * $2)
         AND outcome IN ('WIN','LOSS')
         AND score_at_prediction IS NOT NULL
         ${lgClause}
@@ -558,7 +558,7 @@ router.get('/win-rate-patterns', async (req, res) => {
           ROUND(100.0 * COUNT(*) FILTER (WHERE outcome = 'WIN') / NULLIF(COUNT(*), 0), 1) AS wr
         FROM prediction_log
         WHERE module = $1
-          AND created_at > NOW() - ($2 || ' days')::interval
+          AND created_at > NOW() - (INTERVAL '1 day' * $2)
           AND outcome IN ('WIN','LOSS')
           AND league_name IS NOT NULL
         GROUP BY league_name, league_id
