@@ -27,6 +27,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname, { index: 'index.html' }));
 
 // API routes — mapate direct la handler-ele Vercel
+import { logError } from './api/db.js';
+
 const apiFiles = [
   'football', 'today', 'enrich', 'match', 'players',
   'agent', 'update-results', 'health-check', 'simulate',
@@ -42,6 +44,7 @@ for (const name of apiFiles) {
       await mod.default(req, res);
     } catch (e) {
       console.error(`[${name}]`, e.message);
+      logError(name, e.message);  // vizibil in admin -> Erori Recente
       if (!res.headersSent) res.status(500).json({ error: e.message });
     }
   });
@@ -51,11 +54,12 @@ for (const name of apiFiles) {
 const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'learning-analysis', 'recalibrate-tables', 'calibrate-live'];
 for (const name of cronFiles) {
   app.all(`/api/cron/${name}`, async (req, res) => {
-    try {
+    try {  // catch-block jos logheaza in cron_logs
       const mod = await import(`./api/cron/${name}.js`);
       await mod.default(req, res);
     } catch (e) {
       console.error(`[cron/${name}]`, e.message);
+      logError(`cron-${name}`, e.message);  // vizibil in admin -> Erori Recente
       if (!res.headersSent) res.status(500).json({ error: e.message });
     }
   });
@@ -80,6 +84,7 @@ app.post('/api/backfill/start', async (req, res) => {
     const result = await startBackfill();
     res.json(result);
   } catch (e) {
+    logError('backfill', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -89,6 +94,7 @@ app.post('/api/backfill/stop', async (req, res) => {
     const result = await stopBackfill();
     res.json(result);
   } catch (e) {
+    logError('backfill', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -98,6 +104,7 @@ app.get('/api/backfill/status', async (req, res) => {
     const result = await getBackfillStatus();
     res.json(result);
   } catch (e) {
+    logError('backfill', e.message);
     res.status(500).json({ error: e.message });
   }
 });

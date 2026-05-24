@@ -954,8 +954,20 @@ body{
       <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3 L22 21 H2 Z"/><path d="M12 10 V14 M12 17 V18"/></svg></span>
       <h2>Erori Recente</h2>
       <span class="extra" id="errCount">0</span>
+      <select id="errDays" onchange="loadErrors()" style="background:rgba(255,255,255,.05);border:1px solid var(--bor);color:var(--tx);padding:5px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-left:auto;margin-right:6px">
+        <option value="1">1 zi</option>
+        <option value="7">7 zile</option>
+        <option value="14" selected>14 zile</option>
+        <option value="30">30 zile</option>
+        <option value="all">Toate</option>
+      </select>
     </div>
     <div id="errList"><div class="empty ok">—</div></div>
+    <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+      <button class="hc-btn" onclick="clearErrors(7)">🗑 Cur&#259;&#539;&#259; &gt;7 zile</button>
+      <button class="hc-btn" onclick="clearErrors(30)">🗑 Cur&#259;&#539;&#259; &gt;30 zile</button>
+      <button class="hc-btn" onclick="clearErrors('all')" style="border-color:#ef4444;color:#ef4444">⚠ &Scaron;terge TOATE</button>
+    </div>
   </section>
 
   <section class="card" id="cardBackfill">
@@ -1272,13 +1284,17 @@ async function loadCron() {
 
 async function loadErrors() {
   try {
-    var d = await apiFetch('/api/admin/errors');
-    document.getElementById('errCount').textContent = d.count || 0;
+    var sel = document.getElementById('errDays');
+    var val = sel ? sel.value : '14';
+    var qs = val === 'all' ? '?all=1' : '?days=' + val;
+    var d = await apiFetch('/api/admin/errors' + qs);
+    var ec = document.getElementById('errCount');
+    ec.textContent = (d.count || 0) + (d.total_all_time && d.total_all_time !== d.count ? ' / ' + d.total_all_time : '');
     var list = document.getElementById('errList');
     if (!d.errors || !d.errors.length) {
-      list.innerHTML = '<div class="empty ok">✓ Nicio eroare recentă</div>';
+      list.innerHTML = '<div class="empty ok">✓ Nicio eroare în acest interval</div>';
     } else {
-      list.innerHTML = d.errors.slice(0,20).map(function(e){
+      list.innerHTML = d.errors.slice(0,30).map(function(e){
         return '<div class="err-row">'
           + '<div class="err-job">' + (e.job_name||'unknown') + '</div>'
           + '<div class="err-time">' + fmtDate(e.ran_at) + '</div>'
@@ -1288,6 +1304,31 @@ async function loadErrors() {
     }
   } catch(e) {
     document.getElementById('errList').innerHTML = '<div class="empty err">' + e.message + '</div>';
+  }
+}
+
+async function clearErrors(scope) {
+  var confirmMsg;
+  if (scope === 'all')          confirmMsg = '⚠ &Scaron;terge TOATE erorile? Aceast&#259; ac&#539;iune e ireversibil&#259;.';
+  else if (scope === 7)         confirmMsg = '&Scaron;terge erorile mai vechi de 7 zile?';
+  else if (scope === 30)        confirmMsg = '&Scaron;terge erorile mai vechi de 30 zile?';
+  else                          confirmMsg = '&Scaron;terge erori?';
+  if (!confirm(confirmMsg)) return;
+  try {
+    var qs = scope === 'all' ? '?all=1' : '?days=' + scope;
+    var r = await fetch(BASE + '/api/admin/clear-errors' + qs, {
+      method: 'DELETE',
+      headers: { 'X-Api-Key': _key },
+    });
+    var d = await r.json();
+    if (d.ok) {
+      toast('🗑 ' + d.deleted + ' erori &scaron;terse', '#22c55e');
+      loadErrors();
+    } else {
+      toast('✗ ' + (d.error || 'eroare'), '#ef4444');
+    }
+  } catch(e) {
+    toast('✗ ' + e.message, '#ef4444');
   }
 }
 

@@ -236,16 +236,64 @@ router.get('/cron-status', async (req, res) => {
 });
 
 // ── GET /api/admin/errors ────────────────────────────────────────────────────
+// Default: ultimele 14 zile. Opt: ?days=N (1-90) | ?all=1 (toate)
 router.get('/errors', async (req, res) => {
   try {
+    const showAll = req.query?.all === '1';
+    const days = Math.min(Math.max(parseInt(req.query?.days || '14', 10), 1), 90);
+    let whereDate = showAll ? '' : `AND ran_at > NOW() - INTERVAL '${days} days'`;
     const { rows } = await query(`
-      SELECT job_name, ran_at, status, error_msg, fixtures_processed
+      SELECT id, job_name, ran_at, status, error_msg, fixtures_processed
+      FROM cron_logs
+      WHERE (error_msg IS NOT NULL OR status = 'error') ${whereDate}
+      ORDER BY ran_at DESC
+      LIMIT 100
+    `).catch(() => ({ rows: [] }));
+    // Numar total fara filtru
+    const { rows: totalRows } = await query(`
+      SELECT COUNT(*)::int AS n
       FROM cron_logs
       WHERE error_msg IS NOT NULL OR status = 'error'
-      ORDER BY ran_at DESC
-      LIMIT 50
-    `).catch(() => ({ rows: [] }));
-    res.json({ ok: true, count: rows.length, errors: rows });
+    `).catch(() => ({ rows: [{ n: 0 }] }));
+    res.json({
+      ok: true,
+      count: rows.length,
+      total_all_time: totalRows[0]?.n || 0,
+      filter: showAll ? 'all' : `last_${days}_days`,
+      errors: rows,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── DELETE /api/admin/clear-errors ───────────────────────────────────────────
+// Sterge erori din cron_logs. Optiuni:
+//   ?days=N      - sterge erori MAI VECHI decat N zile (recomandare: 7)
+//   ?job=NAME    - sterge erori doar pentru un anumit job
+//   ?all=1       - sterge TOATE (atentie: ireversibil)
+router.delete('/clear-errors', async (req, res) => {
+  try {
+    const all = req.query?.all === '1';
+    const days = parseInt(req.query?.days || '0', 10);
+    const job = req.query?.job;
+    let sql, params = [];
+    if (all) {
+      sql = `DELETE FROM cron_logs WHERE error_msg IS NOT NULL OR status = 'error'`;
+    } else if (job) {
+      sql = `DELETE FROM cron_logs WHERE job_name = $1 AND (error_msg IS NOT NULL OR status = 'error')`;
+      params = [job];
+    } else if (days > 0) {
+      sql = `DELETE FROM cron_logs WHERE (error_msg IS NOT NULL OR status = 'error') AND ran_at < NOW() - INTERVAL '${days} days'`;
+    } else {
+      return res.status(400).json({ ok: false, error: 'Specifica ?days=N sau ?job=NAME sau ?all=1' });
+    }
+    const result = await query(sql, params);
+    res.json({
+      ok: true,
+      deleted: result.rowCount || 0,
+      filter: all ? 'all' : job ? `job=${job}` : `older_than_${days}_days`,
+    });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
