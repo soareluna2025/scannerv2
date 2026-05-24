@@ -1747,33 +1747,20 @@ async function loadTopOpps(){
       else if(o.lgBad)lgBadge=' <span style="background:rgba(239,68,68,.12);color:#ef4444;font-size:8px;font-weight:800;padding:1px 4px;border-radius:5px">⚠'+o.lgBad.wr+'%</span>';
       var hid=o.m.teams&&o.m.teams.home&&o.m.teams.home.id||0;
       var aid=o.m.teams&&o.m.teams.away&&o.m.teams.away.id||0;
-      var pickKey=o.fid+'|'+o.label;
-      var isAdded=window.BETS_ADDED&&window.BETS_ADDED[pickKey];
-      var checkboxBg=isAdded?'#22c55e':'rgba(255,255,255,.05)';
-      var checkboxIcon=isAdded?'✓':'';
-      // Stocheaza pick data global pentru toggleBet
-      window.PICK_DATA=window.PICK_DATA||{};
-      window.PICK_DATA[pickKey]={
-        fid:o.fid,home:o.m.teams&&o.m.teams.home&&o.m.teams.home.name||'',
-        away:o.m.teams&&o.m.teams.away&&o.m.teams.away.name||'',
-        league:o.m.league&&o.m.league.name||'',
-        leagueId:o.m.league&&o.m.league.id||null,
-        market:o.label,cal:o.cal,minCota:o.minCota
-      };
-      var r='<div style="background:#1e2530;border-radius:8px;padding:9px 11px;margin-bottom:6px;border-left:2px solid '+clr+';display:flex;gap:8px;align-items:flex-start">';
-      // Checkbox
-      r+='<button onclick="event.stopPropagation();toggleBetFromPick(\''+pickKey.replace(/\'/g,"\\'")+'\',this)" style="background:'+checkboxBg+';color:#000;border:2px solid '+(isAdded?'#22c55e':'#475569')+';width:24px;height:24px;border-radius:6px;font-weight:900;font-size:14px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0;margin-top:2px">'+checkboxIcon+'</button>';
-      // Card content (click separat pe corp = open modal)
-      r+='<div style="flex:1;cursor:pointer" onclick="mdOpen('+o.fid+','+hid+','+aid+',this)">';
+      var fav=isFav(o.fid);
+      var labelEsc=o.label.replace(/'/g,"\\'");
+      var r='<div style="background:#1e2530;border-radius:8px;padding:9px 11px;margin-bottom:6px;border-left:2px solid '+clr+';cursor:pointer" onclick="mdOpen('+o.fid+','+hid+','+aid+',this)">';
       r+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">';
-      r+='<div style="font-size:9px;font-weight:800;color:'+clr+';letter-spacing:.4px">#'+(i+1)+' &middot; '+kick+'</div>';
+      r+='<div style="font-size:9px;font-weight:800;color:'+clr+';letter-spacing:.4px">'
+        +'<button class="star-btn'+(fav?' active':'')+'" style="margin-right:6px" onclick="event.stopPropagation();toggleFavPMWithPick('+o.fid+',this,\''+labelEsc+'\','+o.minCota+','+o.cal+')">'+(fav?'⭐':'☆')+'</button>'
+        +'#'+(i+1)+' &middot; '+kick+'</div>';
       r+='<div style="font-size:10px;color:var(--mu);max-width:160px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+htmlEsc(o.m.league&&o.m.league.name||'')+lgBadge+'</div></div>';
       r+='<div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:3px">'+htmlEsc(o.m.teams&&o.m.teams.home&&o.m.teams.home.name||'')+' vs '+htmlEsc(o.m.teams&&o.m.teams.away&&o.m.teams.away.name||'')+'</div>';
       r+='<div style="font-size:11px;color:var(--ac);font-weight:600;margin-bottom:4px">'+htmlEsc(o.label)+'</div>';
       r+='<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">';
       r+='<b style="font-size:15px;color:'+clr+'">'+o.cal+'%</b>';
       r+='<span style="font-size:10px;color:var(--mu)">cot&#259; min &ge; <b style="color:#fff">'+o.minCota+'</b></span>';
-      r+='</div></div></div>';
+      r+='</div></div>';
       return r;
     }
 
@@ -3573,20 +3560,35 @@ function toggleFavPM(fid,btn){
   var ed=_pmEnrich[fid]||null;
   _toggleFavCommon(fid,'pre',m,ed,btn);
 }
-function _toggleFavCommon(fid,type,m,ed,btn){
+function _toggleFavCommon(fid,type,m,ed,btn,pickContext){
   var d=loadFavs();
   var idx=-1;
   for(var i=0;i<d.items.length;i++){if(d.items[i].fid===fid){idx=i;break;}}
   if(idx>=0){
-    d.items.splice(idx,1);
-    if(btn){btn.classList.remove('active');btn.textContent='☆';}
+    // Already favorite — daca am pickContext nou, doar updatez context (nu sterg)
+    if(pickContext){
+      d.items[idx].pickContext=pickContext;
+      if(btn){btn.classList.add('active');btn.textContent='⭐';}
+    }else{
+      // Toggle clasic — sterg
+      d.items.splice(idx,1);
+      if(btn){btn.classList.remove('active');btn.textContent='☆';}
+    }
   }else{
-    d.items.push({fid:fid,type:type,m:m,ed:ed,savedAt:new Date().toISOString()});
+    var entry={fid:fid,type:type,m:m,ed:ed,savedAt:new Date().toISOString()};
+    if(pickContext)entry.pickContext=pickContext;
+    d.items.push(entry);
     if(btn){btn.classList.add('active');btn.textContent='⭐';}
   }
   saveFavs(d);
   updateFavBadge();
   if(document.getElementById('tab-fav').classList.contains('active'))renderFavs();
+}
+// Variants pentru a apela cu pick context din Top Oportunitati
+function toggleFavPMWithPick(fid,btn,pickMarket,pickMinCota,pickCal){
+  var m=_pmMatches.find(function(x){return x.fixture&&x.fixture.id===fid;});
+  var ed=_pmEnrich[fid]||null;
+  _toggleFavCommon(fid,'pre',m,ed,btn,{market:pickMarket,minCota:pickMinCota,cal:pickCal});
 }
 function updateFavBadge(){
   var n=loadFavs().items.length;
@@ -3642,13 +3644,13 @@ function renderFavs(){
     }else{
       timeStr=m.fixture&&m.fixture.date?'<span style="font-size:10px;color:var(--mu)">🕐 '+new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>':'';
     }
-    var s='<div class="pm-card" style="cursor:pointer" onclick="mdOpen('+fid+','+hid+','+aid+',this)">';
-    s+='<div class="pm-header">';
+    var s='<div class="pm-card">';
+    s+='<div class="pm-header" style="cursor:pointer" onclick="mdOpen('+fid+','+hid+','+aid+',this)">';
     s+='<div class="pm-kickoff"><button class="star-btn active" onclick="event.stopPropagation();removeFav('+fid+')">⭐</button>'+flag+lg+' · '+timeStr+'</div>';
     s+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu)">'+hg+' - '+ag+'</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div>';
     s+='</div>';
     if(ed&&ed.homeWin!=null){
-      s+='<div class="pm-body">';
+      s+='<div class="pm-body" style="cursor:pointer" onclick="mdOpen('+fid+','+hid+','+aid+',this)">';
       s+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(ed.over15Prob||0,100)+'%;background:'+ec(ed.over15Prob)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(ed.over15Prob)+'">'+Math.round(ed.over15Prob||0)+'%</div></div>';
       s+='<div class="enrich-row hda-row"><span style="color:'+ec(ed.homeWin)+'">H:'+ed.homeWin+'%</span><span style="color:'+ec(ed.draw)+'">D:'+ed.draw+'%</span><span style="color:'+ec(ed.awayWin)+'">A:'+ed.awayWin+'%</span></div>';
       if(ed.hasOdds&&ed.bestEV>0){
@@ -3656,6 +3658,11 @@ function renderFavs(){
       }
       s+='</div>';
     }
+    // Bilet picker — buton + sectiune ascunsa cu piete
+    s+='<div style="padding:8px 10px;border-top:1px solid var(--bor)">';
+    s+='<button onclick="toggleFavPicker('+fid+')" style="width:100%;background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.3);padding:7px;border-radius:6px;font-weight:700;font-size:11px;cursor:pointer">📋 + Adaug&#259; pe bilet</button>';
+    s+='<div id="fav-picker-'+fid+'" style="display:none;margin-top:8px"></div>';
+    s+='</div>';
     s+='</div>';
     return s;
   }
@@ -4226,6 +4233,99 @@ function switchFavSub(which){
     bFavs.style.background='rgba(255,255,255,.05)';bFavs.style.color='var(--tx)';
     bBets.style.background='transparent';bBets.style.color='var(--mu)';
   }
+}
+
+// Deschide/inchide pickerul de piete pe un card de favorit
+function toggleFavPicker(fid){
+  var box=document.getElementById('fav-picker-'+fid);
+  if(!box)return;
+  if(box.style.display==='block'){box.style.display='none';return;}
+  // Construiesc lista de piete disponibile pe baza enrich data
+  var d=loadFavs();
+  var item=d.items.find(function(x){return x.fid===fid;});
+  if(!item){box.innerHTML='<div style="font-size:11px;color:var(--mu)">Date lipsa</div>';box.style.display='block';return;}
+  // Foloseste enrich data live updated cand este disponibil
+  var ed=item.type==='live'?(ST.ms.find(function(x){return x.fixture&&x.fixture.id===fid;})||{}).enrichData:_pmEnrich[fid];
+  ed=ed||item.ed;
+  if(!ed){
+    box.innerHTML='<div style="font-size:11px;color:var(--mu);padding:6px">⚠️ Date enrich indisponibile pentru acest meci. Deschide detaliul pentru recalcul.</div>';
+    box.style.display='block';
+    return;
+  }
+  // Piete posibile cu probabilitati calibrate
+  var markets=[];
+  function addMkt(label,raw,cat,sub,thr){
+    if(typeof raw!=='number')return;
+    var p=typeof g2Calibrate==='function'?g2Calibrate(cat,sub,thr,Math.round(raw)):Math.round(raw);
+    var minCota=p>0?+(100/p).toFixed(2):null;
+    if(p<50||!minCota)return;
+    markets.push({label:label,prob:p,minCota:minCota});
+  }
+  addMkt('Over 1.5 total', ed.over15Prob, 'goals_total', null, 1.5);
+  addMkt('Over 2.5 total', ed.over25Prob, 'goals_total', null, 2.5);
+  addMkt('GG (ambele marcheaza)', ed.ggProb, 'gg', null, null);
+  addMkt('Gazde marcheaza', ed.homeScoreRate, 'goals_home', null, 0.5);
+  addMkt('Oaspeti marcheaza', ed.awayScoreRate, 'goals_away', null, 0.5);
+  addMkt('1 (Gazde castiga)', ed.homeWin, 'win', 'home', null);
+  addMkt('X (Egal)', ed.draw, 'win', 'draw', null);
+  addMkt('2 (Oaspeti castiga)', ed.awayWin, 'win', 'away', null);
+  // Pre-fav cu pickContext apare primul
+  var defaultMarket=item.pickContext&&item.pickContext.market;
+  markets.sort(function(a,b){
+    if(defaultMarket){if(a.label===defaultMarket)return -1;if(b.label===defaultMarket)return 1;}
+    return b.prob-a.prob;
+  });
+  if(!markets.length){
+    box.innerHTML='<div style="font-size:11px;color:var(--mu);padding:6px">⚠️ Nicio pia&#539;&#259; cu probabilitate &gt;50%</div>';
+    box.style.display='block';return;
+  }
+  // Verifica daca deja in selectii pentru a evita duplicate
+  var sels=getSelections();
+  var existingKeys={};
+  sels.forEach(function(s){if(s.fid===fid)existingKeys[s.market]=true;});
+  var m=item.m;
+  var home=m.teams&&m.teams.home&&m.teams.home.name||'';
+  var away=m.teams&&m.teams.away&&m.teams.away.name||'';
+  var league=m.league&&m.league.name||'';
+  var leagueId=m.league&&m.league.id||null;
+  var h='<div style="background:rgba(0,0,0,.2);border-radius:6px;padding:8px">';
+  h+='<div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:700">Alege pia&#539;&#259;</div>';
+  markets.forEach(function(mk){
+    var inSel=existingKeys[mk.label];
+    var clr=mk.prob>=85?'#22c55e':mk.prob>=75?'#10b981':'#f59e0b';
+    var labelEsc=mk.label.replace(/'/g,"\\'");
+    var btnTxt=inSel?'✓ &Icirc;n selec&#539;ii':'+ Adaug&#259;';
+    var btnBg=inSel?'rgba(34,197,94,.2)':'rgba(255,255,255,.05)';
+    var btnClr=inSel?'#22c55e':'var(--tx)';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 0;border-bottom:1px solid var(--bor)">';
+    h+='<div style="flex:1;min-width:0"><div style="font-size:11px;color:#fff;font-weight:600">'+htmlEsc(mk.label)+(mk.label===defaultMarket?' <span style="background:rgba(99,102,241,.2);color:#a5b4fc;font-size:9px;padding:1px 4px;border-radius:3px;font-weight:800">Top Opps</span>':'')+'</div>';
+    h+='<div style="font-size:10px;color:var(--mu);margin-top:1px"><b style="color:'+clr+'">'+mk.prob+'%</b> &middot; cot&#259; min '+mk.minCota+'</div></div>';
+    h+='<button onclick="addFavMarketToSelections('+fid+',\''+labelEsc+'\','+mk.prob+','+mk.minCota+',this)" '+(inSel?'disabled':'')+' style="background:'+btnBg+';color:'+btnClr+';border:1px solid var(--bor);padding:6px 10px;border-radius:5px;font-size:11px;font-weight:700;cursor:'+(inSel?'default':'pointer')+';white-space:nowrap">'+btnTxt+'</button>';
+    h+='</div>';
+  });
+  h+='</div>';
+  box.innerHTML=h;
+  box.style.display='block';
+  // Stocheaza meta meci pentru addFavMarketToSelections
+  window.FAV_META=window.FAV_META||{};
+  window.FAV_META[fid]={home:home,away:away,league:league,leagueId:leagueId};
+}
+
+// Adauga o piata din favorite in selectiile de bilet
+function addFavMarketToSelections(fid, market, prob, minCota, btn){
+  var meta=(window.FAV_META||{})[fid]||{};
+  var pickKey=fid+'|'+market;
+  var sels=getSelections();
+  if(sels.some(function(s){return s.pickKey===pickKey;}))return;
+  sels.push({
+    pickKey:pickKey, fid:fid, home:meta.home, away:meta.away,
+    league:meta.league, leagueId:meta.leagueId,
+    market:market, cal:prob, minCota:minCota, cota:minCota,
+    addedAt:Date.now(),
+  });
+  setSelections(sels);
+  // UI feedback
+  if(btn){btn.disabled=true;btn.innerHTML='✓ &Icirc;n selec&#539;ii';btn.style.background='rgba(34,197,94,.2)';btn.style.color='#22c55e';}
 }
 
 // Render sectiunea Selectii (picks bifate dar inca neformate ca bilete)
