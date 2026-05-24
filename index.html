@@ -688,8 +688,10 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   <div class="stat"><div class="stat-v" id="s-upd">--:--</div><div class="stat-l">Update</div></div>
 </div>
 
-<!-- WIN RATE — date din DB (predictions.result_over15) ultimele 30 zile -->
-<div class="wr" id="wr-bar" style="display:flex" onclick="wrShowInfo()" style="cursor:help">
+<!-- MAIN CONTENT -->
+<main class="page" id="page">
+<!-- WIN RATE — date din DB, sticky in interiorul page (zero gap) -->
+<div class="wr" id="wr-bar" style="display:flex;position:sticky;top:0;z-index:60" onclick="wrShowInfo()">
   <div style="display:flex;flex-direction:column">
     <span class="wr-lbl">Over 1.5 win rate &middot; 30 zile <span style="opacity:.5">ⓘ</span></span>
     <span style="font-size:8px;color:var(--mu);font-weight:500;letter-spacing:.3px;margin-top:1px">predic&#539;ii confirmate din DB (server-side)</span>
@@ -701,9 +703,6 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     <span class="wr-r" id="wr-r">—</span>
   </div>
 </div>
-
-<!-- MAIN CONTENT -->
-<main class="page" id="page">
 
   <!-- TAB: LIVE -->
   <div class="tab-content active" id="tab-live">
@@ -718,10 +717,10 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 
   <!-- TAB: PRE-MECI -->
   <div class="tab-content" id="tab-pre">
-    <!-- Toolbar sticky cu butoane (compact, alb pe top opps, fara gap) -->
-    <div id="pm-toolbar" style="position:sticky;top:-12px;z-index:50;background:var(--bg);padding:4px 12px 6px;margin:-12px -12px 0;display:flex;gap:6px;border-bottom:1px solid var(--bor)">
-      <button onclick="loadPM()" id="btn-pm" style="flex:1;background:#22c55e;color:#000;border:none;padding:8px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">Încarcă Pre-meci</button>
-      <button onclick="loadTopOpps()" id="btn-topopps" style="flex:1;background:#fff;color:#000;border:none;padding:8px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">📊 Top Oportunități</button>
+    <!-- Toolbar cu butoane (sub wr-bar sticky) -->
+    <div id="pm-toolbar" style="display:flex;gap:6px;padding-bottom:6px">
+      <button onclick="loadPM()" id="btn-pm" style="flex:1;background:#22c55e;color:#000;border:none;padding:9px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">Încarcă Pre-meci</button>
+      <button onclick="loadTopOpps()" id="btn-topopps" style="flex:1;background:#fff;color:#000;border:none;padding:9px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">📊 Top Oportunități</button>
     </div>
     <div id="top-opps-panel" style="display:none;padding:8px 12px"></div>
     <div id="pm-body">
@@ -1194,7 +1193,6 @@ function connect(){
       document.getElementById('live-badge').style.display='flex';
       document.getElementById('stats-bar').style.display='flex';
       document.getElementById('wr-bar').style.display='flex';
-      document.getElementById('page').style.top='141px';
       fetchSupabaseWinRate();
       connectWS();
       _autoIt=setInterval(function(){loadLive();},CFG.RI);
@@ -1219,7 +1217,6 @@ function disconnect(){
   document.getElementById('ws-indicator').style.display='none';
   document.getElementById('stats-bar').style.display='none';
   document.getElementById('wr-bar').style.display='none';
-  document.getElementById('page').style.top='56px';
 }
 
 async function loadLive(cb){
@@ -4027,37 +4024,9 @@ function simRender(d){
     setTimeout(animateBall, 1800);
   });
 })();
-// Ajustez page.top in functie de wr-bar (eliminam gap intre banner si content)
-function adjustPageTop(){
-  var wr=document.getElementById('wr-bar');
-  var page=document.getElementById('page');
-  if(!wr||!page)return;
-  var visible=wr.style.display!=='none'&&wr.offsetHeight>0;
-  if(visible){
-    var wrH=wr.offsetHeight;
-    page.style.top=(56+wrH)+'px';
-  }else{
-    page.style.top='56px';
-  }
-}
-document.addEventListener('DOMContentLoaded',adjustPageTop);
-window.addEventListener('load',adjustPageTop);
-// Resize listener: la orice schimbare (rotatie telefon, keyboard show/hide,
-// fereastra resize pe desktop), recalculez gap-ul.
-window.addEventListener('resize',adjustPageTop);
-window.addEventListener('orientationchange',adjustPageTop);
-// MutationObserver pe wr-bar: daca isi schimba continutul (ex: numere update),
-// re-masuram inaltimea reala.
-(function(){
-  var wr=document.getElementById('wr-bar');
-  if(!wr||!window.MutationObserver)return;
-  var obs=new MutationObserver(function(){adjustPageTop();});
-  obs.observe(wr,{childList:true,subtree:true,attributes:true,attributeFilter:['style']});
-})();
-// Safety timeouts pentru render dinamic / late content
-setTimeout(adjustPageTop,300);
-setTimeout(adjustPageTop,1000);
-setTimeout(adjustPageTop,3000);
+// adjustPageTop no-op — wr-bar este acum INTERIORUL .page (sticky), zero gap.
+// Pastrez stub-ul pentru compat cu apeluri vechi din toggleConn/disconnect.
+function adjustPageTop(){}
 </script>
 <script>
 if ('serviceWorker' in navigator) {
