@@ -12,7 +12,7 @@ const SEASONS    = [2026, 2025, 2024, 2023, 2022];
 const LEAGUE_IDS = [...ALLOWED_LEAGUE_IDS];
 const BASE_URL   = 'https://v3.football.api-sports.io';
 const DELAY_MS   = 250;
-const STOP_AT    = 100_000; // reserve 50k/day for live scanner
+const STOP_AT    = 145_000; // 5k buffer pentru live scanner (user activ pe 110k+ azi)
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function log(msg)  { console.log(`[backfill] ${new Date().toISOString()} ${msg}`); }
