@@ -1232,7 +1232,9 @@ function evRecalc(inputId, realProb, displayId){
   var el = document.getElementById(inputId);
   var disp = document.getElementById(displayId);
   if(!el || !disp) return;
-  var cota = parseFloat(el.value);
+  // Accept atat ',' cat si '.' ca separator zecimal (RO vs EN locale)
+  var raw = (el.value || '').toString().replace(',', '.');
+  var cota = parseFloat(raw);
   if(!cota || cota < 1.01){
     disp.innerHTML = '&mdash;';
     disp.style.color = 'var(--mu)';
@@ -1832,9 +1834,14 @@ async function mdFetch(silent){
     // Start auto-refresh for live matches (10s interval)
     if(isLive&&!silent&&!_mdRefreshTimer){
       _mdRefreshTimer=setInterval(function(){
-        if(!document.getElementById('md-overlay').classList.contains('open')){
+        var ovEl=document.getElementById('md-overlay');
+        if(!ovEl||!ovEl.classList.contains('open')){
           clearInterval(_mdRefreshTimer);_mdRefreshTimer=null;return;
         }
+        // SKIP refresh daca user-ul scrie intr-un input din modal
+        // (altfel pierde focus si cursor la fiecare 10s)
+        var act=document.activeElement;
+        if(act&&act.tagName==='INPUT'&&ovEl.contains(act))return;
         mdFetch(true);
       },10000);
     }
@@ -2093,7 +2100,7 @@ function mdRenderSumar(d){
       if(!mk.alreadyWon){
         out+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
         out+='<label style="font-size:11px;color:var(--mu)">Cota ta:</label>';
-        out+='<input type="number" step="0.01" min="1" value="'+savedCota+'" placeholder="ex: 1.40" id="'+savedKey+'" oninput="evRecalc(\''+savedKey+'\','+mk.realProb+',\''+savedKey+'_v\')" style="background:rgba(255,255,255,.06);border:1px solid var(--bor);color:var(--tx);padding:6px 8px;border-radius:6px;font-size:13px;font-weight:600;width:80px">';
+        out+='<input type="text" inputmode="decimal" pattern="[0-9.,]*" value="'+savedCota+'" placeholder="ex: 1.40" id="'+savedKey+'" oninput="evRecalc(\''+savedKey+'\','+mk.realProb+',\''+savedKey+'_v\')" style="background:rgba(255,255,255,.06);border:1px solid var(--bor);color:var(--tx);padding:6px 8px;border-radius:6px;font-size:13px;font-weight:600;width:80px">';
         out+='<div id="'+savedKey+'_v" style="font-size:13px;font-weight:700">&mdash;</div>';
         out+='</div>';
       }
