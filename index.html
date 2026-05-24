@@ -1322,7 +1322,12 @@ function renderMatches(){
     var sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
     var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.home&&m.teams.home.id);});
     var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.away&&m.teams.away.id);});
-    var snap=[s.hg||0,s.ag||0,s.mn||0,Math.round(s.ng||0),sh,s.forte?1:0,hRed?1:0,aRed?1:0].join('|');
+    // Include lg+team names în snap pentru a forta rebuild cand datele se populeaza
+    // dupa primul render (cauza bug-ului 'card fara header J2/J3 LEAGUE').
+    var lgName=m.league&&m.league.name||'';
+    var hName=m.teams&&m.teams.home&&m.teams.home.name||'';
+    var aName=m.teams&&m.teams.away&&m.teams.away.name||'';
+    var snap=[s.hg||0,s.ag||0,s.mn||0,Math.round(s.ng||0),sh,s.forte?1:0,hRed?1:0,aRed?1:0,lgName,hName,aName].join('|');
     var cur=existing[fid];
     if(cur&&cur.dataset.snap===snap){
       newNodes.push(cur);
