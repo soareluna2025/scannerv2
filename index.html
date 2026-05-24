@@ -1018,19 +1018,9 @@ function calcScore(m){
   var aDA=getStat(st,1,'Dangerous Attacks');
   var txg=hxg+axg;
   var remFrac=Math.max(0,Math.min(1,(95-mn)/90));
-  // NGP: prefera m._ng din WebSocket scanner backend (sursa truth).
-  // Fallback la calcul local cand m._ng lipseste/0 (date venite din REST
-  // /api/football → loadLive ~30s — obiectul match nu are _ng setat).
-  // Fara fallback: NGP flickering 60%→0%→60% intre push-uri WS si fetch REST.
-  var ng;
-  if(typeof m._ng==='number'&&m._ng>0){
-    ng=m._ng;
-  }else{
-    var remXg=mn>0?(txg/mn)*(90-mn):0.025*(90-mn);
-    if(txg===0)remXg=0.7*remFrac;
-    if(mn>=70)remXg*=1.2;if(mn>=80)remXg*=1.15;
-    ng=Math.round(Math.max(3,Math.min(97,(1-Math.exp(-Math.max(remXg,0.05)))*100)));
-  }
+  // NGP: foloseste valoarea backend (m._ng din WebSocket LIVE_UPDATE/LIVE_DELTA)
+  // Fallback 0 daca lipseste (meci nou inainte de primul broadcast scanner).
+  var ng=(typeof m._ng==='number')?m._ng:0;
   var totalG=hg+ag;
   var lxg=txg>0?txg*3:0;
   var lb=lxg>0?lxg*.55+(m.enrichData?.lambdaTotal??1.4)*.45:1.6;
@@ -1172,19 +1162,8 @@ async function loadLive(cb){
     if(!r.ok)throw new Error('HTTP '+r.status);
     var d=await r.json();
     var raw=Array.isArray(d.response)?d.response:(Array.isArray(d)?d:[]);
-    var _ed={};var _eng={};
-    ST.ms.forEach(function(m){
-     var fid=m.fixture&&m.fixture.id;
-     if(m.enrichData)_ed[fid]=m.enrichData;
-     if(typeof m._ng==='number'&&m._ng>0)_eng[fid]=m._ng;
-    });
-    ST.ms=raw.map(function(m){
-     var fid=m.fixture&&m.fixture.id;
-     if(_ed[fid])m.enrichData=_ed[fid];
-     if(_eng[fid])m._ng=_eng[fid];
-     m._s=calcScore(m);
-     return m;
-    });
+    var _ed={};ST.ms.forEach(function(m){if(m.enrichData)_ed[m.fixture&&m.fixture.id]=m.enrichData;});
+    ST.ms=raw.map(function(m){m._s=calcScore(m);var e=_ed[m.fixture&&m.fixture.id];if(e)m.enrichData=e;return m;});
     renderMatches();
     updateStats();
     trackWR();
@@ -1326,10 +1305,7 @@ function renderMatches(){
   var newNodes=[];
   leagueOrder.forEach(function(lid){
     var lg=leagues[lid];
-    lg.ms.sort(function(a,b){
-      return new Date(b.fixture?.date || 0) -
-             new Date(a.fixture?.date || 0);
-    });
+    lg.ms.sort(function(a,b){return((b._s&&b._s.ng)||0)-((a._s&&a._s.ng)||0);});
     lg.ms.forEach(function(m){
       var s=m._s||{};
       var fid=String(m.fixture&&m.fixture.id||0);
@@ -1978,16 +1954,13 @@ function mdRenderSumar(d){
   }
   // NGP for live matches (FIX 9)
   if(isLive){
-    var liveM=ST.ms.find(function(x){
-      return x.fixture&&x.fixture.id===_md.fixtureId;
-    });
-    var ngVal=(liveM&&liveM._s&&liveM._s.ng)||0;
-    var ngpClr=ngVal>=80?'#00d4a8':ngVal>=60?'#ffd166':'#ff6b6b';
+    var ngpData=calcScore(fix);
+    var ngpClr=ngpData.ng>=80?'#00d4a8':ngpData.ng>=60?'#ffd166':'#ff6b6b';
     out+='<div class="md-section"><div class="md-section-title">Probabilitate gol următor (NGP)</div>';
     out+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
-    if(ngVal>=70)out+='<div class="badge-forte">⚡ FORTE</div>';
-    out+='<div class="ngp-pct" style="color:'+ngpClr+'">'+ngVal+'%</div></div>';
-    out+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+ngVal+'%;background:'+ngpClr+'"></div></div>';
+    if(ngpData.forte)out+='<div class="badge-forte">⚡ FORTE</div>';
+    out+='<div class="ngp-pct" style="color:'+ngpClr+'">'+ngpData.ng+'%</div></div>';
+    out+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+ngpData.ng+'%;background:'+ngpClr+'"></div></div>';
     out+='</div>';
   }
 

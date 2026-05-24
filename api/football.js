@@ -1,6 +1,5 @@
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
 import { isAllowedMatch } from './utils/league-filter.js';
-import pool from './db.js';
 
 function log(msg) {
   console.log(`[football] ${new Date().toISOString()} ${msg}`);
@@ -127,23 +126,6 @@ export default async function handler(req, res) {
 
   if (toEnrich.length) {
     await Promise.allSettled(toEnrich.map(m => enrichOne(m, key)));
-  }
-
-  // Inject _ng din match_snapshots (scriere de scanner.js la fiecare 10s)
-  // Asta evita flickering UI cand REST suprascrie objects fara _ng setat de WS
-  const ids = filtered.map(m => m.fixture?.id).filter(Boolean);
-  if (ids.length > 0) {
-    try {
-      const snap = await pool.query(
-        'SELECT fixture_id, ng FROM match_snapshots WHERE fixture_id = ANY($1) AND outcome != $2',
-        [ids, 'STALE']
-      );
-      const ngMap = {};
-      snap.rows.forEach(r => ngMap[r.fixture_id] = r.ng);
-      filtered.forEach(m => { if (ngMap[m.fixture?.id]) m._ng = ngMap[m.fixture.id]; });
-    } catch (e) {
-      log(`ng inject failed: ${e.message}`);
-    }
   }
 
   return res.status(200).json({ response: filtered });

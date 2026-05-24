@@ -441,46 +441,19 @@ async function scanLive10s() {
       }
 
       // Calcul scoring + upsert snapshot
-      // Foloseste statistics cached din scanLiveStats (endpoint dedicat cu xG real)
-      // pentru a evita NGP instabil cand /fixtures?live=all nu returneaza xG.
-      const mWithStats = {
-        ...m,
-        statistics: liveCache[id]?.cachedStats || m.statistics || []
-      };
-      const f  = calcFeatures(mWithStats, matchFd[id] || {});
-
-      // FIX 1: xG persistence — daca txg>0 salveaza pentru extrapolare;
-      // daca txg=0 dar avem xG anterior valid, extrapoleaza la min curent
-      if (f.txg > 0 && liveCache[id]) {
-        liveCache[id].lastValidXg = f.txg;
-        liveCache[id].lastValidMn = f.mn;
-      }
-      if (f.txg === 0 && liveCache[id]?.lastValidXg > 0) {
-        const mn = f.mn || 1;
-        const lastMn = liveCache[id].lastValidMn || mn;
-        f.txg = liveCache[id].lastValidXg * (mn / lastMn);
-      }
-
+      const f  = calcFeatures(m, matchFd[id] || {});
       const ng = calcNextGoal(f);
       const mk = calcMarkets(f);
-
-      // FIX 2: NGP smoothing — medie ultimele 3 valori pt stabilitate UI
-      // (alerta foloseste ng instant ca sa nu rateze spike-uri reale)
-      const prevNgs = liveCache[id]?.ngHistory || [];
-      prevNgs.push(ng);
-      if (prevNgs.length > 3) prevNgs.shift();
-      if (liveCache[id]) liveCache[id].ngHistory = prevNgs;
-      const smoothNg = Math.round(prevNgs.reduce((a, b) => a + b, 0) / prevNgs.length);
 
       upsertSnapshot({
         fixture_id:   id,            league_id:  m.league?.id,
         home_team:    m.teams?.home?.name,       away_team: m.teams?.away?.name,
         status_short: sh,            minute:     currMin,
         home_goals:   currHome,      away_goals: currAway,
-        ng: smoothNg, over15: mk.over15,         outcome: 'LIVE',
+        ng,           over15: mk.over15,         outcome: 'LIVE',
       }).catch(e => log(`upsertSnapshot ${id}: ${e.message}`));
 
-      processedMatches.push({ ...m, _ng: smoothNg, _mk: mk });
+      processedMatches.push({ ...m, _ng: ng, _mk: mk });
 
       // Alerte — o singura data per meci cand NGP trece de 70%
       if (ng > 70 || mk.over15 > 70) {
@@ -602,7 +575,6 @@ async function scanLiveStats() {
   for (const id of activeIds) {
     try {
       const stats = await fetchWithRetry(`/fixtures/statistics?fixture=${id}`);
-      if (liveCache[id]) liveCache[id].cachedStats = stats;
       if (!stats.length || !liveCache[id]) continue;
 
       const cached = liveCache[id];
