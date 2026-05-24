@@ -2902,6 +2902,85 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX NGP — xG persistence + smoothing (scanner.js)
+  DOUA fix-uri critice in scanLive10s, abordeaza cauze diferite ale
+  instabilitatii NGP observate post fix anterior cu cachedStats.
+
+  PROBLEMA 1 — NGP oscileaza 97% ↔ 40%:
+    Chiar cu cachedStats, /fixtures/statistics uneori returneaza date
+    incomplete (xG absent). Cand txg=0 → calcNextGoal cade pe form
+    fallback → NGP fals 97%. Cand xG revine: NGP scade brusc la 40%.
+
+  PROBLEMA 2 — Cardurile sar sus-jos:
+    UI sorteaza dupa NGP. NGP se schimba la 10s → re-sortare → carduri
+    rebalansate vizual chiar daca scorul nu se schimba.
+
+  FIX 1 — xG persistence + extrapolare lineara:
+    if (f.txg > 0 && liveCache[id]) {
+      liveCache[id].lastValidXg = f.txg;
+      liveCache[id].lastValidMn = f.mn;
+    }
+    if (f.txg === 0 && liveCache[id]?.lastValidXg > 0) {
+      const mn = f.mn || 1;
+      const lastMn = liveCache[id].lastValidMn || mn;
+      f.txg = liveCache[id].lastValidXg * (mn / lastMn);
+    }
+    Pastram cel mai recent xG valid si extrapolam linear la minutul
+    curent cand API returneaza 0. Elimina caderea pe form fallback.
+
+  FIX 2 — NGP smoothing pe 3 valori (medie 30s):
+    const prevNgs = liveCache[id]?.ngHistory || [];
+    prevNgs.push(ng);
+    if (prevNgs.length > 3) prevNgs.shift();
+    if (liveCache[id]) liveCache[id].ngHistory = prevNgs;
+    const smoothNg = Math.round(prevNgs.reduce((a,b) => a+b, 0) / prevNgs.length);
+    smoothNg folosit in upsertSnapshot + processedMatches → UI primeste
+    valoarea mediata 30s → fara salturi vizibile, sortare stabila.
+
+  IMPORTANT — Alerta NGP ramane pe ng INSTANT (nu smoothed):
+    Pentru a NU rata spike-uri reale care merita alertare imediata.
+    Doar UI/snapshot folosesc smoothNg. Logica alerta linia 465+
+    (if ng > 70) si logPrediction folosesc ng original.
+
+  EFECT COMBINAT:
+    xG persistence elimina valori fantoma din form fallback (NGP 97% fals)
+    Smoothing mediaza oscilatii reziduale → UI stabil
+    Alerta ramane reactiva la praguri (NGP spike real declanseaza imediat)
+    Sortarea UI stabila → carduri nu mai sar sus-jos
+
+  Arhitectura completa NGP (acum complet stabilizata):
+    1) scanLiveStats /fixtures/statistics → liveCache[id].cachedStats (60s)
+    2) scanLive10s foloseste cachedStats → calcFeatures
+       2a) FIX 1: persist xG valid → extrapolare cand absent
+       2b) calcNextGoal → ng instant
+       2c) FIX 2: smoothing 3 valori → smoothNg
+    3) smoothNg → match_snapshots.ng (DB)
+                → processedMatches._ng (WS broadcast)
+    4) /api/football pool.query match_snapshots → m._ng pe filtered (REST)
+    5) ST.ms in UI primeste smoothNg via ambele cai (WS + REST)
+    6) Card si modal afiseaza acelasi smoothNg via ST.ms
+
+  Verificare: node --check api/cron/scanner.js OK
+  Zero modificari la alte fisiere.
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: 4518dab
+
+[24.05.2026] - MERGE → main (xG persistence + smoothing) + deploy
+  Metoda: fast-forward push direct
+  Range: bca119f..4518dab — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Deploy: GitHub Actions declansat automat
+  Test recomandat post-deploy:
+    1) Astept 90+ secunde (1 ciclu scanLiveStats + 3 cicluri scanLive10s
+       pentru smoothing sa aiba istoric complet)
+    2) Deschid meci live in UI
+    3) NGP STABIL la fiecare 10s — fara salturi 97%↔40%
+    4) Cardurile NU sar sus-jos in sortarea live
+    5) Alerta NGP ramane reactiva la spike-uri reale (test cu meci unde
+       atac brusc declanseaza alerta in 10s, nu 30s)
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
