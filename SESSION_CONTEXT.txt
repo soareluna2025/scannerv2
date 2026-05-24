@@ -2746,6 +2746,44 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FIX modal NGP — sincronizat cu card via ST.ms
+  Bug regresie ramasa dupa fix loadLive() pentru flickering: modalul afisa
+  un NGP diferit fata de card (modal recalculat local cu fix care nu avea
+  _ng setat).
+  CAUZA EXACTA:
+    mdRenderSumar() la linia 1978 apela: var ngpData = calcScore(fix);
+    Variabila fix vine din /api/match si NU are proprietatea _ng setata
+    (doar scanner WS si loadLive populeaza _ng pe obj din ST.ms).
+    → calcScore intra in branch fallback local → valoare diferita de card.
+  Fix (DOAR mdRenderSumar() in index.html):
+    Inlocuit recalcul cu lookup in ST.ms (sursa truth populata de WS + REST):
+      var liveM = ST.ms.find(x => x.fixture?.id === _md.fixtureId);
+      var ngVal = (liveM && liveM._s && liveM._s.ng) || 0;
+    Cascade rename: ngpData.ng → ngVal, ngpData.forte → ngVal >= 70 inline.
+  Rezultat:
+    Modal si card afiseaza ACEEASI valoare NGP, ambele din ST.ms.
+    Sursa truth unificata: scanner WS → ST.ms → card + modal.
+    Daca meciul nu e in ST.ms (rar — modal deschis la primul load): ng=0
+    pana la urmatorul broadcast WS.
+  Verificare: 3 blocuri JS inline validate cu new Function() OK
+  Zero modificari la alte fisiere.
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: 64bd12e
+
+[24.05.2026] - MERGE → main (modal NGP sync) + deploy
+  Metoda: fast-forward push direct
+  Range: a7cdccc..64bd12e — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Deploy: GitHub Actions declansat automat
+  Test recomandat post-deploy:
+    1) Deschide meci live, noteaza NGP din card (ex: 60%)
+    2) Click card → modal se deschide → sectiunea "Probabilitate gol urmator"
+    3) Modal trebuie sa arate IDENTIC 60% (era valoare diferita inainte)
+    4) Inchide modal, asteapta 30+s, redeschide — tot 60% (sau valoare
+       actualizata WS, dar identic intre card si modal)
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
