@@ -1277,15 +1277,6 @@ function renderMatches(){
   });
   sc.innerHTML=html;
 
-  // group by league
-  var leagues={};var leagueOrder=[];
-  ms.forEach(function(m){
-    var lid=m.league&&m.league.id||'0';
-    var ln=m.league&&m.league.name||'Unknown';
-    if(!leagues[lid]){leagues[lid]={name:ln,ms:[]};leagueOrder.push(lid);}
-    leagues[lid].ms.push(m);
-  });
-
   var list=document.getElementById('match-list');
 
   if(!ms.length){
@@ -1295,6 +1286,12 @@ function renderMatches(){
     return;
   }
 
+  // Flat sort: cel mai recent început sus, indiferent de campionat
+  ms.sort(function(a,b){
+    return new Date(b.fixture?.date || 0) -
+           new Date(a.fixture?.date || 0);
+  });
+
   // Map existing card elements by fixture id for reuse
   var existing={};
   list.querySelectorAll('.card[data-fid]').forEach(function(el){
@@ -1303,31 +1300,24 @@ function renderMatches(){
 
   // Build ordered node list — reuse unchanged cards, rebuild only changed ones
   var newNodes=[];
-  leagueOrder.forEach(function(lid){
-    var lg=leagues[lid];
-    lg.ms.sort(function(a,b){
-     return new Date(b.fixture?.date || 0) -
-            new Date(a.fixture?.date || 0);
-    });
-    lg.ms.forEach(function(m){
-      var s=m._s||{};
-      var fid=String(m.fixture&&m.fixture.id||0);
-      var sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
-      var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.home&&m.teams.home.id);});
-      var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.away&&m.teams.away.id);});
-      var snap=[s.hg||0,s.ag||0,s.mn||0,Math.round(s.ng||0),sh,s.forte?1:0,hRed?1:0,aRed?1:0].join('|');
-      var cur=existing[fid];
-      if(cur&&cur.dataset.snap===snap){
-        newNodes.push(cur);
-      } else {
-        var tmp=document.createElement('div');
-        tmp.innerHTML=buildCardHtml(m,lg.name);
-        var newEl=tmp.firstElementChild;
-        newEl.dataset.fid=fid;
-        newEl.dataset.snap=snap;
-        newNodes.push(newEl);
-      }
-    });
+  ms.forEach(function(m){
+    var s=m._s||{};
+    var fid=String(m.fixture&&m.fixture.id||0);
+    var sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
+    var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.home&&m.teams.home.id);});
+    var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.away&&m.teams.away.id);});
+    var snap=[s.hg||0,s.ag||0,s.mn||0,Math.round(s.ng||0),sh,s.forte?1:0,hRed?1:0,aRed?1:0].join('|');
+    var cur=existing[fid];
+    if(cur&&cur.dataset.snap===snap){
+      newNodes.push(cur);
+    } else {
+      var tmp=document.createElement('div');
+      tmp.innerHTML=buildCardHtml(m,m.league&&m.league.name||'');
+      var newEl=tmp.firstElementChild;
+      newEl.dataset.fid=fid;
+      newEl.dataset.snap=snap;
+      newNodes.push(newEl);
+    }
   });
 
   var sy=document.getElementById('page').scrollTop;
