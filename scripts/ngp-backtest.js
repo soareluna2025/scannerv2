@@ -15,21 +15,53 @@
 
 // ── Auto-load .env din root-ul proiectului (POSTGRES_URL etc.) ───
 import { readFileSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const __dirname_ = dirname(fileURLToPath(import.meta.url));
-const envPath = join(__dirname_, '..', '.env');
-if (existsSync(envPath)) {
-  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
-    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/i);
-    if (m && !process.env[m[1]]) {
-      let v = m[2];
-      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
-        v = v.slice(1, -1);
+
+// Caut .env în mai multe locații tipice
+const envCandidates = [
+  join(__dirname_, '..', '.env'),
+  resolve(process.cwd(), '.env'),
+  '/root/scannerv2/.env',
+];
+let envLoaded = null;
+for (const p of envCandidates) {
+  if (existsSync(p)) {
+    const content = readFileSync(p, 'utf8');
+    let count = 0;
+    for (let line of content.split(/\r?\n/)) {
+      line = line.replace(/^\s*export\s+/, '');  // suportă "export KEY=val"
+      const eq = line.indexOf('=');
+      if (eq <= 0) continue;
+      const key = line.slice(0, eq).trim();
+      if (!/^[A-Z_][A-Z0-9_]*$/i.test(key)) continue;
+      let val = line.slice(eq + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
       }
-      process.env[m[1]] = v;
+      if (!process.env[key]) {
+        process.env[key] = val;
+        count++;
+      }
     }
+    envLoaded = { path: p, count };
+    break;
   }
+}
+
+if (!process.env.POSTGRES_URL) {
+  console.error('❌ POSTGRES_URL nu este setat!');
+  console.error('   .env căutat la:');
+  for (const p of envCandidates) console.error(`     - ${p} ${existsSync(p) ? '✓ există' : '✗ lipsă'}`);
+  if (envLoaded) console.error(`   Încărcat din: ${envLoaded.path} (${envLoaded.count} variabile)`);
+  console.error('\n   Soluție rapidă:  set -a; source /root/scannerv2/.env; set +a');
+  console.error('   apoi reia comanda.');
+  process.exit(1);
+}
+
+if (envLoaded && !process.argv.includes('--json')) {
+  console.log(`✓ .env încărcat din ${envLoaded.path} (${envLoaded.count} variabile)`);
 }
 
 import { query } from '../api/db.js';
