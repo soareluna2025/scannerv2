@@ -31,8 +31,28 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Single query care intoarce toate ligile cu sample suficient + WR-ul lor.
-    // Frontend / client decide bucket dupa praguri.
+    // 1. Overall stats — pentru banner-ul scanner "Alerte NGP > 70" unificat
+    const { rows: ovRows } = await query(`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE result_over15 = TRUE)::int  AS wins,
+        COUNT(*) FILTER (WHERE result_over15 = FALSE)::int AS losses,
+        COUNT(*) FILTER (WHERE result_over15 IS NULL)::int AS pending
+      FROM predictions
+      WHERE created_at > NOW() - (INTERVAL '1 day' * $1)
+    `, [days]);
+    const ov = ovRows[0] || { total: 0, wins: 0, losses: 0, pending: 0 };
+    const resolved = Number(ov.wins) + Number(ov.losses);
+    const overall = {
+      total:    Number(ov.total),
+      wins:     Number(ov.wins),
+      losses:   Number(ov.losses),
+      pending:  Number(ov.pending),
+      resolved,
+      winRate:  resolved > 0 ? Math.round(Number(ov.wins) / resolved * 100) : null,
+    };
+
+    // 2. Per-league stats — pentru badge-uri good/bad
     const { rows } = await query(`
       SELECT
         league_id,
@@ -64,7 +84,7 @@ export default async function handler(req, res) {
       else if (wr <= maxWR) bad.push(entry);
     }
 
-    const result = { good, bad };
+    const result = { overall, good, bad };
     if (isDefault) {
       _cache = result;
       _cacheTs = Date.now();

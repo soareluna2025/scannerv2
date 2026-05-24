@@ -688,16 +688,16 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   <div class="stat"><div class="stat-v" id="s-upd">--:--</div><div class="stat-l">Update</div></div>
 </div>
 
-<!-- WIN RATE (rebranded ca ALERTE NGP, cu disclaimer) -->
-<div class="wr" id="wr-bar" style="display:none" onclick="wrShowInfo()" style="cursor:help">
+<!-- WIN RATE — date din DB (predictions.result_over15) ultimele 30 zile -->
+<div class="wr" id="wr-bar" style="display:flex" onclick="wrShowInfo()" style="cursor:help">
   <div style="display:flex;flex-direction:column">
-    <span class="wr-lbl">Alerte NGP &gt; 70 <span style="opacity:.5">ⓘ</span></span>
-    <span style="font-size:8px;color:var(--mu);font-weight:500;letter-spacing:.3px;margin-top:1px">alertă → gol oric&acirc;nd &icirc;n meci (NU profit)</span>
+    <span class="wr-lbl">Over 1.5 win rate &middot; 30 zile <span style="opacity:.5">ⓘ</span></span>
+    <span style="font-size:8px;color:var(--mu);font-weight:500;letter-spacing:.3px;margin-top:1px">predic&#539;ii confirmate din DB (server-side)</span>
   </div>
   <div class="wr-items">
-    <span class="wr-w" id="wr-w">W: 0</span>
-    <span class="wr-l" id="wr-l">L: 0</span>
-    <span class="wr-p" id="wr-p">P: 0</span>
+    <span class="wr-w" id="wr-w">W: —</span>
+    <span class="wr-l" id="wr-l">L: —</span>
+    <span class="wr-p" id="wr-p">P: —</span>
     <span class="wr-r" id="wr-r">—</span>
   </div>
 </div>
@@ -962,17 +962,39 @@ var ST={ms:[],connected:false,ws:null,score:'all'};
 // Liste de ligi cu performanta dovedita pe Over 1.5 (din /api/learning-leagues)
 // GOOD_LEAGUES (WR >= 75%, n >= 5) → badge verde, foloseste-le
 // BAD_LEAGUES  (WR <= 50%, n >= 5) → badge rosu, eviti pariurile aici
-var GOOD_LEAGUES={};  // {league_id: {name, wr, n}}
+// Plus banner-ul "Alerte NGP" arata acum overall din DB (nu localStorage)
+var GOOD_LEAGUES={};
 var BAD_LEAGUES={};
-(function loadLearningLeagues(){
+function loadLearningLeagues(){
   try{
-    fetch('/api/learning-leagues').then(function(r){return r.json();}).then(function(d){
+    fetch('/api/learning-leagues?ts='+Date.now()).then(function(r){return r.json();}).then(function(d){
       if(!d||!d.ok)return;
+      GOOD_LEAGUES={};BAD_LEAGUES={};
       (d.good||[]).forEach(function(lg){GOOD_LEAGUES[lg.id]={name:lg.name,wr:lg.wr,n:lg.n};});
       (d.bad||[]).forEach(function(lg){BAD_LEAGUES[lg.id] ={name:lg.name,wr:lg.wr,n:lg.n};});
+      // Update banner cu date DB
+      if(d.overall){
+        var ov=d.overall;
+        var wEl=document.getElementById('wr-w');
+        var lEl=document.getElementById('wr-l');
+        var pEl=document.getElementById('wr-p');
+        var rEl=document.getElementById('wr-r');
+        if(wEl)wEl.textContent='W: '+ov.wins;
+        if(lEl)lEl.textContent='L: '+ov.losses;
+        if(pEl)pEl.textContent='P: '+ov.pending;
+        if(rEl){
+          if(ov.winRate!==null){
+            rEl.textContent=ov.winRate+'%';
+            rEl.style.color=ov.winRate>=70?'#22c55e':ov.winRate>=55?'#f59e0b':'#ef4444';
+          }else{rEl.textContent='—';rEl.style.color='';}
+        }
+      }
     }).catch(function(){});
   }catch(e){}
-})();
+}
+loadLearningLeagues();
+// Refresh la 5 min sa fie sincronizat cu cache-ul server-side
+setInterval(loadLearningLeagues, 5*60*1000);
 
 // ── CLOCK ────────────────────────────────────────────────────
 function tickClock(){
@@ -1466,36 +1488,15 @@ function trackWR(){
   saveWR(data);renderWR(data);
 }
 function renderWR(data){
-  var p=data.predictions;
-  var w=p.filter(function(x){return x.outcome==='WIN';}).length;
-  var l=p.filter(function(x){return x.outcome==='LOSS';}).length;
-  var pend=p.filter(function(x){return x.outcome==='PENDING';}).length;
-  var t=w+l;var rate=t>0?Math.round(w/t*100):0;
-  document.getElementById('wr-w').textContent='W: '+w;
-  document.getElementById('wr-l').textContent='L: '+l;
-  document.getElementById('wr-p').textContent='P: '+pend;
-  document.getElementById('wr-r').textContent=t>0?rate+'%':'—';
+  // Banner-ul afiseaza acum date din DB via loadLearningLeagues().
+  // Functia veche (localStorage) este disabled pentru a evita conflict.
+  // Tracking-ul intern localStorage continua dar nu mai pictureaza banner-ul.
 }
 async function fetchSupabaseWinRate(){
-  try{
-    var r=await fetch('/api/db-stats');
-    var d=await r.json();
-    var wr=d&&d.ngpWinRate;
-    if(!wr)return;
-    document.getElementById('wr-w').textContent='W: '+wr.w;
-    document.getElementById('wr-l').textContent='L: '+wr.l;
-    document.getElementById('wr-p').textContent='P: '+wr.p;
-    var rEl=document.getElementById('wr-r');
-    if(wr.rate!=null){
-      rEl.textContent=wr.rate+'%';
-      rEl.style.color=wr.rate>60?'#22c55e':wr.rate>=40?'#f59e0b':'#ef4444';
-    } else {
-      rEl.textContent='—';rEl.style.color='';
-    }
-  }catch(e){}
+  // Disabled — banner-ul foloseste acum loadLearningLeagues() (data din DB cu sample mare).
+  return;
 }
-// Poll server W/L/P every 30s while connected
-setInterval(function(){if(ST.connected)fetchSupabaseWinRate();},30000);
+// Polling-ul vechi e dezactivat; loadLearningLeagues() ruleaza la 5min.
 
 // ── PRE-MECI ──────────────────────────────────────────────────
 var PM_SENT=new Set();var PM_LOADED=false;
