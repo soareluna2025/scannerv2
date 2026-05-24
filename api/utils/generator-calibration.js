@@ -11,105 +11,100 @@
 //   goals_away_0.5/1.5
 // Markets neacoperite (n=7): cards/corners — pass-through.
 
+// Tabele actualizate dupa h2h backfill (24.05.2026 v2):
+// Formula este acum BIMODALA — prediceri sub 50% = real 0%, peste 70% = real 100%.
+// Brier scores au scazut cu 20-52% pe toate pietele dupa popularea h2h.
 const CALIBRATION = {
-  // Gazde marchează — formula SUBESTIMEAZĂ la high (oportunitate!)
+  // Gazde marchează — formula PRACTIC PERFECTA (Brier 0.095)
+  // Sub 50% real 0%, peste 70% real 100%. Cliff la 60-70%.
   home: [
-    { from: 0,  to: 20, real: 5 },
-    { from: 20, to: 30, real: 5 },     // 0% measured, conservative
-    { from: 30, to: 40, real: 8 },     // 0% measured, conservative
-    { from: 40, to: 50, real: 26 },
-    { from: 50, to: 60, real: 58 },    // ✓ calibrat
-    { from: 60, to: 70, real: 78 },    // +12pp boost
-    { from: 70, to: 80, real: 81 },
-    { from: 80, to: 90, real: 96 },    // 🎁 +11pp BOOST mare
-    { from: 90, to: 101, real: 100 },
+    { from: 0,  to: 50, real: 0 },     // model spune nu = real nu
+    { from: 50, to: 60, real: 2 },     // n=116, actual 1.7%
+    { from: 60, to: 70, real: 81 },    // n=32, actual 81.3% — cliff zone
+    { from: 70, to: 101, real: 100 },  // 700+ samples, toate 100%
   ],
-  // Oaspeți marchează — calibrare bună la high, anomalii la mid
+  // Oaspeți marchează — Brier 0.113, identic bimodal
   away: [
-    { from: 0,  to: 30, real: 15 },
-    { from: 30, to: 40, real: 16 },    // -19pp discount
+    { from: 0,  to: 50, real: 1 },
+    { from: 50, to: 60, real: 12 },    // n=126, actual 11.9%
+    { from: 60, to: 70, real: 93 },    // n=124, actual 92.7%
+    { from: 70, to: 101, real: 100 },  // toate 100%
+  ],
+  // GG — Brier 0.107, cliff la 50-60
+  gg: [
+    { from: 0,  to: 50, real: 0 },     // toate buckets 0-50: real 0%
+    { from: 50, to: 60, real: 67 },    // n=72, actual 66.7%
+    { from: 60, to: 70, real: 99 },    // n=153, actual 99.3%
+    { from: 70, to: 101, real: 100 },  // toate 100%
+  ],
+  // Over 0.5 total — Brier 0.079, aproape perfect
+  'goals_total_0.5': [
+    { from: 0,  to: 50, real: 25 },
+    { from: 50, to: 60, real: 39 },
+    { from: 60, to: 70, real: 58 },    // n=176
+    { from: 70, to: 80, real: 60 },    // n=37 unreliable, mediez catre 80+
+    { from: 80, to: 101, real: 100 },  // 733 samples toate 100%
+  ],
+  // Over 1.5 total — Brier 0.127
+  'goals_total_1.5': [
+    { from: 0,  to: 30, real: 0 },
+    { from: 30, to: 40, real: 28 },
     { from: 40, to: 50, real: 43 },
-    { from: 50, to: 60, real: 58 },
-    { from: 60, to: 70, real: 70 },
+    { from: 50, to: 60, real: 43 },    // n=150
+    { from: 60, to: 70, real: 68 },    // n=99
+    { from: 70, to: 101, real: 100 },  // 520 samples toate 100%
+  ],
+  // Over 2.5 total — Brier 0.114
+  'goals_total_2.5': [
+    { from: 0,  to: 40, real: 0 },
+    { from: 40, to: 50, real: 7 },
+    { from: 50, to: 60, real: 62 },    // cliff
+    { from: 60, to: 70, real: 98 },
+    { from: 70, to: 101, real: 100 },
+  ],
+  // Over 0.5 gazde — Brier 0.132, calibrat gradual
+  'goals_home_0.5': [
+    { from: 0,  to: 30, real: 0 },
+    { from: 30, to: 40, real: 20 },
+    { from: 40, to: 50, real: 12 },
+    { from: 50, to: 60, real: 34 },
+    { from: 60, to: 70, real: 29 },    // unusual dip
+    { from: 70, to: 80, real: 83 },
+    { from: 80, to: 90, real: 93 },
+    { from: 90, to: 101, real: 99 },
+  ],
+  // Over 1.5 gazde — Brier 0.163
+  'goals_home_1.5': [
+    { from: 0,  to: 20, real: 0 },
+    { from: 20, to: 30, real: 10 },
+    { from: 30, to: 40, real: 15 },
+    { from: 40, to: 50, real: 22 },
+    { from: 50, to: 60, real: 66 },    // cliff
+    { from: 60, to: 70, real: 76 },
+    { from: 70, to: 80, real: 85 },
+    { from: 80, to: 101, real: 97 },
+  ],
+  // Over 0.5 oaspeți — Brier 0.170 (gradual)
+  'goals_away_0.5': [
+    { from: 0,  to: 30, real: 0 },
+    { from: 30, to: 40, real: 12 },
+    { from: 40, to: 50, real: 27 },
+    { from: 50, to: 60, real: 26 },
+    { from: 60, to: 70, real: 38 },
     { from: 70, to: 80, real: 77 },
     { from: 80, to: 90, real: 87 },
-    { from: 90, to: 101, real: 100 },
+    { from: 90, to: 101, real: 95 },
   ],
-  // GG — formula degenerează la 80%+ (cap aplicat)
-  gg: [
-    { from: 0,  to: 20, real: 5 },
-    { from: 20, to: 30, real: 5 },
-    { from: 30, to: 40, real: 22 },
-    { from: 40, to: 50, real: 40 },
-    { from: 50, to: 60, real: 54 },
-    { from: 60, to: 70, real: 61 },
-    { from: 70, to: 80, real: 80 },    // ✓ sweet spot
-    { from: 80, to: 101, real: 70 },   // CAP — formula minte peste 80
-  ],
-  // Over 0.5 total — formula EXCELENTĂ (Brier 0.115), pass-through cu micro-fix
-  'goals_total_0.5': [
-    { from: 0,  to: 50, real: 30 },
-    { from: 50, to: 60, real: 40 },
-    { from: 60, to: 70, real: 52 },
-    { from: 70, to: 80, real: 81 },
-    { from: 80, to: 90, real: 90 },
-    { from: 90, to: 101, real: 87 },   // micro-discount
-  ],
-  // Over 1.5 total — bună, subestimează la high
-  'goals_total_1.5': [
-    { from: 0,  to: 30, real: 10 },
-    { from: 30, to: 40, real: 15 },
-    { from: 40, to: 50, real: 49 },
-    { from: 50, to: 60, real: 64 },
-    { from: 60, to: 70, real: 73 },
-    { from: 70, to: 80, real: 81 },
-    { from: 80, to: 90, real: 95 },    // BOOST
-    { from: 90, to: 101, real: 100 },
-  ],
-  // Over 2.5 total — bine calibrată
-  'goals_total_2.5': [
-    { from: 0,  to: 30, real: 18 },
-    { from: 30, to: 40, real: 29 },
-    { from: 40, to: 50, real: 40 },
-    { from: 50, to: 60, real: 61 },
-    { from: 60, to: 70, real: 76 },
-    { from: 70, to: 80, real: 73 },
-    { from: 80, to: 90, real: 89 },
-    { from: 90, to: 101, real: 87 },
-  ],
-  // Over 0.5 gazde — bine calibrată
-  'goals_home_0.5': [
-    { from: 0,  to: 40, real: 5 },
-    { from: 40, to: 50, real: 8 },
-    { from: 50, to: 60, real: 27 },
-    { from: 60, to: 70, real: 58 },
-    { from: 70, to: 80, real: 75 },
-    { from: 80, to: 90, real: 81 },
-    { from: 90, to: 101, real: 96 },
-  ],
-  // Over 1.5 gazde
-  'goals_home_1.5': [
-    { from: 0,  to: 20, real: 5 },
-    { from: 20, to: 30, real: 8 },
-    { from: 30, to: 40, real: 26 },
-    { from: 40, to: 50, real: 43 },
-  ],
-  // Over 0.5 oaspeți — formula SUPRAESTIMEAZĂ sistematic
-  'goals_away_0.5': [
-    { from: 0,  to: 30, real: 10 },
-    { from: 30, to: 40, real: 10 },    // -25pp discount mare
-    { from: 40, to: 50, real: 10 },    // -35pp discount HUGE
-    { from: 50, to: 60, real: 42 },
-    { from: 60, to: 70, real: 57 },
-    { from: 70, to: 80, real: 70 },
-    { from: 80, to: 90, real: 75 },    // cap
-    { from: 90, to: 101, real: 87 },
-  ],
-  // Over 1.5 oaspeți — boost la high
+  // Over 1.5 oaspeți — Brier 0.164
   'goals_away_1.5': [
-    { from: 0,  to: 10, real: 3 },
-    { from: 10, to: 20, real: 5 },
-    { from: 20, to: 30, real: 10 },
+    { from: 0,  to: 20, real: 0 },
+    { from: 20, to: 30, real: 4 },
+    { from: 30, to: 40, real: 13 },
+    { from: 40, to: 50, real: 24 },
+    { from: 50, to: 60, real: 45 },
+    { from: 60, to: 70, real: 66 },
+    { from: 70, to: 80, real: 89 },
+    { from: 80, to: 101, real: 100 },
   ],
 };
 
