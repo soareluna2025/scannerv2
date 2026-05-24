@@ -3737,8 +3737,13 @@ function simRender(d){
   var topProb=sim.scoreDistribution&&sim.scoreDistribution[0]?sim.scoreDistribution[0].prob:null;
   if(topProb)html+=' ('+topProb+'%)';
   html+='</div>';
+  // Badges: model calibrat + ligi WR per istoric DB
   var calibBadge=sim.modelCalibrated?'<span style="font-size:10px;background:rgba(99,102,241,0.18);color:#818cf8;border-radius:8px;padding:2px 8px;font-weight:700">🧠 Model calibrat</span>':'<span style="font-size:10px;background:rgba(100,116,139,0.15);color:var(--mu);border-radius:8px;padding:2px 8px">📊 Model generic</span>';
-  html+='<div style="margin-top:6px">'+calibBadge+'</div>';
+  var lgId=fix.leagueId||parseInt(document.getElementById('sim-lid')?.value||0,10);
+  var lgWrBadge='';
+  if(GOOD_LEAGUES[lgId])lgWrBadge=' <span style="font-size:10px;background:rgba(34,197,94,.15);color:#22c55e;border-radius:8px;padding:2px 8px;font-weight:700;border:1px solid rgba(34,197,94,.25)" title="Win rate istoric Over 1.5 in aceasta liga">⚡ Lig&#259; '+GOOD_LEAGUES[lgId].wr+'% WR (n='+GOOD_LEAGUES[lgId].n+')</span>';
+  else if(BAD_LEAGUES[lgId])lgWrBadge=' <span style="font-size:10px;background:rgba(239,68,68,.12);color:#ef4444;border-radius:8px;padding:2px 8px;font-weight:700" title="Liga cu performanta slaba pe Over 1.5">⚠ Lig&#259; doar '+BAD_LEAGUES[lgId].wr+'% WR (n='+BAD_LEAGUES[lgId].n+')</span>';
+  html+='<div style="margin-top:6px;display:flex;justify-content:center;flex-wrap:wrap;gap:4px">'+calibBadge+lgWrBadge+'</div>';
   html+='</div>';
 
   // ── Result bars ───────────────────────────────────────────
@@ -3765,45 +3770,47 @@ function simRender(d){
     html+='</div></div>';
   }
 
-  // ── Markets with confidence intervals ────────────────────
+  // ── Markets — RAW (Poisson) + CALIBRAT (din backtest 1000 meciuri post h2h-fix)
   if(sim.markets){
-    html+='<div class="sim-section"><div class="sim-section-title">PIEȚE</div>';
+    html+='<div class="sim-section"><div class="sim-section-title">PIEȚE — calibrat la istoric real</div>';
     var ci=sim.confidenceIntervals||{};
-    var ciMarginStr=sim.sampleSize!=null?(' <span style="font-size:10px;color:var(--mu)">(n='+sim.sampleSize+')</span>'):'';
-    // Over 1.5, Over 2.5, GG — with CI bars
-    var ciMkts=[
-      ['Over 1.5',sim.markets.over15,ci.over15],
-      ['Over 2.5',sim.markets.over25,ci.over25],
-      ['GG',      sim.markets.gg,    ci.gg],
+    // Map: market key → [label, raw, calCategory, calSub, calThr]
+    var calMkts=[
+      ['Over 0.5 total', sim.markets.over05, 'goals','total',0.5],
+      ['Over 1.5 total', sim.markets.over15, 'goals','total',1.5],
+      ['Over 2.5 total', sim.markets.over25, 'goals','total',2.5],
+      ['GG ambele marc.',sim.markets.gg,     'gg',   'total',0],
     ];
-    ciMkts.forEach(function(m){
-      var val=m[1],ciObj=m[2];
-      var margin=ciObj?ciObj.margin:null;
-      html+='<div style="margin-bottom:8px">';
-      html+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">';
-      html+='<span style="font-size:12px;color:var(--mu2)">'+m[0]+'</span>';
-      html+='<span style="font-weight:800;font-size:14px;color:'+ec(val)+'">'+val+'%';
-      if(margin!=null)html+=' <span style="font-size:10px;color:var(--mu);font-weight:400">± '+margin+'%</span>';
-      html+='</span></div>';
-      // Uncertainty bar
-      var lo=margin!=null?Math.max(0,val-margin):val;
-      var hi=margin!=null?Math.min(100,val+margin):val;
-      html+='<div style="position:relative;height:6px;background:var(--bor);border-radius:3px;overflow:hidden">';
-      html+='<div style="position:absolute;left:'+lo+'%;width:'+(hi-lo)+'%;height:100%;background:rgba(99,102,241,0.25);border-radius:3px"></div>';
-      html+='<div style="position:absolute;left:0;width:'+val+'%;height:100%;background:'+ec(val)+';border-radius:3px;opacity:0.8"></div>';
+    calMkts.forEach(function(row){
+      var lbl=row[0],raw=row[1],cat=row[2],sub=row[3],thr=row[4];
+      if(typeof raw!=='number')return;
+      var cal=g2Calibrate(cat,sub,thr,Math.round(raw));
+      var minCota=cal>0?(100/cal).toFixed(2):'—';
+      html+='<div style="margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">';
+      html+='<span style="font-size:12px;color:var(--tx);font-weight:600">'+lbl+'</span>';
+      html+='<span style="font-weight:800;font-size:16px;color:'+ec(cal)+'">'+cal+'%</span>';
+      html+='</div>';
+      // Bar calibrata
+      html+='<div style="position:relative;height:6px;background:var(--bor);border-radius:3px;overflow:hidden;margin-bottom:4px">';
+      html+='<div style="position:absolute;left:0;width:'+cal+'%;height:100%;background:'+ec(cal)+';border-radius:3px"></div></div>';
+      html+='<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mu)">';
+      html+='<span>raw MC: '+Math.round(raw)+'%'+(Math.abs(cal-Math.round(raw))>3?' <span style="color:var(--ac)">→ '+(cal>raw?'+':'')+(cal-Math.round(raw))+'pp</span>':'')+'</span>';
+      html+='<span>cot&#259; min &ge; <b style="color:var(--tx)">'+minCota+'</b></span>';
       html+='</div></div>';
     });
-    // Remaining markets compact
-    html+='<div class="sim-market-grid" style="margin-top:4px">';
+    // Piete simple compact (Over 3.5, BTTS No)
     var mkts2=[
-      ['BTTS No',sim.markets.bttsNo],['Over 0.5',sim.markets.over05],['Over 3.5',sim.markets.over35],
+      ['Over 3.5',sim.markets.over35],
+      ['BTTS No', sim.markets.bttsNo],
     ];
+    html+='<div class="sim-market-grid" style="margin-top:4px">';
     mkts2.forEach(function(m){
       html+='<div class="sim-market-item"><div class="sim-market-name">'+m[0]+'</div>';
       html+='<div class="sim-market-val" style="color:'+ec(m[1])+'">'+m[1]+'%</div></div>';
     });
     html+='</div>';
-    if(sim.sampleSize!=null)html+='<div style="font-size:10px;color:var(--mu);margin-top:4px">Interval calculat din '+sim.sampleSize+' meciuri istorice</div>';
+    html+='<div style="font-size:10px;color:var(--mu);margin-top:8px;line-height:1.4;padding:6px 8px;background:rgba(59,130,246,.05);border-left:2px solid #3b82f6;border-radius:4px">📐 Probabilit&#259;&#539;ile sunt <b>calibrate empiric</b> pe 1000 meciuri istorice post-h2h backfill (Brier 0.08-0.13). Cota minim&#259; = 100 / probabilitate. Pariu profitabil dac&#259; cota Bet365 &ge; cota minim&#259;.</div>';
     html+='</div>';
   }
 

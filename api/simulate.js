@@ -667,6 +667,7 @@ export default async function handler(req, res) {
     fixture: {
       id: fid, homeTeam: homeName, awayTeam: awayName,
       league: fix?.league?.name || '',
+      leagueId: lid || fix?.league?.id || 0,
       minute: elapsed, score: `${hgCur}-${agCur}`, status: fixStatus,
       referee: refName,
     },
