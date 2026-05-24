@@ -2630,6 +2630,10 @@ NEXT STEPS (prioritizat):
                    (liniile 140-141, ambele fetch-uri spre API-Football)
   Commit: c560dac
 
+[24.05 ~prezent] - api/today.js: filtru suplimentar future-only
+                   (elimină fixture.date <= Date.now() după dedup window)
+  Commit: 2ff5158
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
