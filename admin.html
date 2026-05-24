@@ -1382,7 +1382,7 @@ async function loadWinRatePatterns(){
   try {
     var days   = document.getElementById('wr-days').value;
     var module = document.getElementById('wr-module').value;
-    var d      = await apiFetch('/win-rate-patterns?days=' + days + '&module=' + module + '&minSamples=5');
+    var d      = await apiFetch('/api/admin/win-rate-patterns?days=' + days + '&module=' + module + '&minSamples=5');
     if (!d.ok) { out.innerHTML = '<div style="color:#ef4444;padding:12px">Eroare: ' + (d.error||'unknown') + '</div>'; return; }
     out.innerHTML = renderWinRatePatterns(d);
   } catch (e) {
