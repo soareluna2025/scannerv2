@@ -223,15 +223,19 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, message: 'No FT fixtures today', date: today });
     }
 
-    // Filter out fixtures already in player_stats
+    // Filter out fixtures already FULLY processed (player_stats + match_stats)
+    // Inainte verifica DOAR player_stats, lasand match_stats nepopulat pentru
+    // meciuri unde collectMatchStats a esuat silentios. Acum cer ambele.
     const fixtureIds = fixtures.map(f => f.fixture.id);
-    const existRes = await query(
-      'SELECT DISTINCT fixture_id FROM player_stats WHERE fixture_id = ANY($1)',
-      [fixtureIds]
-    );
-    const existSet = new Set(existRes.rows.map(r => r.fixture_id));
+    const [psRes, msRes] = await Promise.all([
+      query('SELECT DISTINCT fixture_id FROM player_stats WHERE fixture_id = ANY($1)', [fixtureIds]),
+      query('SELECT DISTINCT fixture_id FROM match_stats WHERE fixture_id = ANY($1)', [fixtureIds]),
+    ]);
+    const psSet = new Set(psRes.rows.map(r => r.fixture_id));
+    const msSet = new Set(msRes.rows.map(r => r.fixture_id));
 
-    const toProcess = fixtures.filter(f => !existSet.has(f.fixture.id));
+    // Re-procesez daca lipseste oricare (player_stats SAU match_stats)
+    const toProcess = fixtures.filter(f => !psSet.has(f.fixture.id) || !msSet.has(f.fixture.id));
 
     let totalPlayers    = 0;
     let totalMatchStats = 0;

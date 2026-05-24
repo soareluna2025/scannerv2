@@ -31,7 +31,7 @@ const apiFiles = [
   'football', 'today', 'enrich', 'match', 'players',
   'agent', 'update-results', 'health-check', 'simulate',
   'elo', 'monte-carlo', 'match-momentum', 'db-stats', 'generator',
-  'standings-data', 'venue-weather'
+  'standings-data', 'venue-weather', 'backfill-stats'
 ];
 
 for (const name of apiFiles) {

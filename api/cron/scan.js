@@ -263,6 +263,17 @@ export default async function handler(req, res) {
     }
   }
 
+  // Salvează h2h pentru meciurile FT (funcție orfană înainte, acum wired up)
+  // Permite Generator-ului să folosească date h2h reale în calculul GG.
+  if (finishedMatches.length > 0) {
+    try {
+      await saveH2H(finishedMatches);
+      log(`h2h: ${finishedMatches.length} meciuri salvate`);
+    } catch (e) {
+      log(`saveH2H error: ${e.message}`);
+    }
+  }
+
   if (_runCount % 10 === 0) {
     log('recalculating league patterns...');
     try {
