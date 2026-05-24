@@ -2648,6 +2648,11 @@ NEXT STEPS (prioritizat):
                    trimite meciuri medium/low priority fara _ng)
   Commit: 9ddb0af
 
+[24.05 ~prezent] - scripts/ngp-backtest.js: script masurare calibrare NGP
+                   pe date istorice (live_stats + fixtures_history).
+                   5 formule, Brier/LogLoss/CalibErr, curba calibrare 10pp.
+  Commit: e27efcc
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
