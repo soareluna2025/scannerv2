@@ -712,6 +712,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     <div id="live-body" style="display:none">
       <div class="score-chips" id="score-chips"></div>
       <div id="match-list"></div>
+      <button onclick="showHistoricModal()" style="width:100%;background:rgba(99,102,241,.1);color:#a5b4fc;border:1px solid rgba(99,102,241,.3);padding:12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin:16px 0 24px">📊 ISTORIC — Verifică calibrarea reală vs afișat</button>
     </div>
   </div>
 
@@ -730,7 +731,21 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
         <div class="empty-s">Apasă butonul pentru a încărca meciurile de azi</div>
       </div>
     </div>
+    <button onclick="showHistoricModal()" style="width:calc(100% - 24px);background:rgba(99,102,241,.1);color:#a5b4fc;border:1px solid rgba(99,102,241,.3);padding:12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin:16px 12px 24px">📊 ISTORIC — Verifică calibrarea reală vs afișat</button>
   </div>
+
+<!-- MODAL: ISTORIC CALIBRARE -->
+<div id="hist-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);z-index:9999;overflow-y:auto">
+  <div style="background:#0f172a;min-height:100%;padding:16px;max-width:600px;margin:0 auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--bor)">
+      <div style="font-size:16px;font-weight:800;color:#a5b4fc">📊 ISTORIC CALIBRARE</div>
+      <button onclick="document.getElementById('hist-modal').style.display='none'" style="background:rgba(255,255,255,.05);color:var(--tx);border:none;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer">✕</button>
+    </div>
+    <div id="hist-modal-body">
+      <div style="text-align:center;color:var(--mu);padding:30px;font-size:12px">Se încarcă...</div>
+    </div>
+  </div>
+</div>
 
   <!-- TAB: PREFERATE + BILETE -->
   <div class="tab-content" id="tab-fav">
@@ -4226,6 +4241,135 @@ async function loadBetsAddedCache(){
   sels.forEach(function(s){window.BETS_ADDED[s.pickKey]=true;});
 }
 loadBetsAddedCache();
+
+// ── MODAL ISTORIC CALIBRARE ───────────────────────────────────────
+// Permite verificare: cand modelul zice X%, ce % real are istoric
+async function showHistoricModal(){
+  var modal=document.getElementById('hist-modal');
+  var body=document.getElementById('hist-modal-body');
+  modal.style.display='block';
+  body.innerHTML='<div style="text-align:center;color:var(--mu);padding:30px;font-size:12px">⏳ Se &icirc;ncarc&#259;...</div>';
+  try{
+    var r=await fetch('/api/calibration');
+    var d=await r.json();
+    if(!d.ok){body.innerHTML='<div style="color:#ef4444;padding:14px">Eroare: '+(d.error||'unknown')+'</div>';return;}
+    var h='';
+
+    // ─── INTRO ───
+    h+='<div style="background:rgba(34,197,94,.06);border-left:3px solid #22c55e;padding:10px;border-radius:6px;margin-bottom:14px;font-size:11.5px;line-height:1.5">';
+    h+='💡 <b>Ce vezi aici</b>: harta dintre ce <b>afi&scaron;eaz&#259; aplica&#539;ia</b> &scaron;i ce s-a &icirc;nt&acirc;mplat <b>real</b> &icirc;n istoric. Dac&#259; modelul zice 80% &scaron;i istoric arat&#259; 65%, modelul <b>supraestimeaz&#259;</b>. Folose&scaron;te ca verificare a &icirc;ncrederii &icirc;n predic&#539;ii.';
+    h+='</div>';
+
+    // ─── BRIER LEGENDA ───
+    h+='<div style="background:rgba(255,255,255,.03);padding:10px;border-radius:6px;margin-bottom:14px">';
+    h+='<div style="font-size:11px;font-weight:800;color:var(--tx);margin-bottom:6px">📐 BRIER SCOR — Cum interpretezi</div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">';
+    h+='<div><span style="color:#22c55e;font-weight:800">&lt; 0.10</span> &nbsp;Excep&#539;ional 🌟</div>';
+    h+='<div><span style="color:#22c55e;font-weight:800">0.10-0.15</span> &nbsp;Excelent ✅</div>';
+    h+='<div><span style="color:#f59e0b;font-weight:800">0.15-0.22</span> &nbsp;OK ⚠️</div>';
+    h+='<div><span style="color:#ef4444;font-weight:800">0.22-0.30</span> &nbsp;Slab ❌</div>';
+    h+='<div><span style="color:#ef4444;font-weight:800">&gt; 0.30</span> &nbsp;Foarte slab 🔴</div>';
+    h+='</div>';
+    h+='<div style="font-size:10px;color:var(--mu);margin-top:6px;line-height:1.4">Brier = medie ((predic&#539;ie - real)&#178;). Mai mic = mai precis. Cu mai multe predic&#539;ii rezolvate, scorul scade automat.</div>';
+    h+='</div>';
+
+    // ─── PRE-MECI ───
+    h+='<div style="margin-bottom:14px">';
+    h+='<div style="font-size:13px;font-weight:800;color:#22c55e;margin-bottom:6px">📅 PRE-MECI — Calibrare predic&#539;ii</div>';
+    var preMods=d.modules||{};
+    var preKeys=Object.keys(preMods);
+    if(!preKeys.length){
+      h+='<div style="color:var(--mu);padding:10px;font-size:11px">Calibrare lipse&scaron;te. Cron-ul a rulat dar tabela e goal&#259;.</div>';
+    }else{
+      preKeys.forEach(function(modKey){
+        var m=preMods[modKey];
+        var brierClr=!m.brier?'var(--mu)':m.brier<0.15?'#22c55e':m.brier<0.22?'#f59e0b':'#ef4444';
+        h+='<div style="background:rgba(255,255,255,.03);padding:10px;border-radius:6px;margin-bottom:10px">';
+        h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">';
+        h+='<div style="font-weight:700;font-family:monospace;font-size:12px">'+modKey+'</div>';
+        h+='<div style="font-size:10px;color:var(--mu)">n='+m.n+' &middot; Brier <b style="color:'+brierClr+'">'+(m.brier?m.brier.toFixed(3):'—')+'</b></div>';
+        h+='</div>';
+        if(m.buckets&&m.buckets.length){
+          h+='<table style="width:100%;border-collapse:collapse;font-size:11px">';
+          h+='<thead><tr style="color:var(--mu);font-size:10px"><th style="text-align:left;padding:3px 0">Model zice</th><th style="text-align:right">Real %</th><th style="text-align:right">Diff</th><th style="text-align:right">Samples</th></tr></thead><tbody>';
+          m.buckets.forEach(function(b){
+            // diff = bucket-mid - real
+            var mid=(b.min+b.max)/2;
+            var diff=b.pct-mid;
+            var diffClr=Math.abs(diff)<5?'var(--mu)':diff>0?'#22c55e':'#ef4444';
+            var diffTxt=(diff>=0?'+':'')+Math.round(diff)+'pp';
+            h+='<tr style="border-top:1px solid rgba(255,255,255,.04)">';
+            h+='<td style="padding:4px 0">'+b.min+'-'+b.max+'%</td>';
+            h+='<td style="text-align:right;font-weight:700">'+b.pct+'%</td>';
+            h+='<td style="text-align:right;color:'+diffClr+';font-weight:700">'+diffTxt+'</td>';
+            h+='<td style="text-align:right;color:var(--mu)">'+b.n+'</td>';
+            h+='</tr>';
+          });
+          h+='</tbody></table>';
+          h+='<div style="font-size:10px;color:var(--mu);margin-top:4px;line-height:1.3">📖 Citire: pe linia <b>70-80%</b>, modelul prezice 70-80%. Coloana „Real" arat&#259; <b>ce % din meciuri au avut rezultat pozitiv</b>. Diff <span style="color:#22c55e">verde</span> = real &gt; model (subestima). <span style="color:#ef4444">Ro&scaron;u</span> = real &lt; model (supraestima).</div>';
+        }
+        h+='</div>';
+      });
+    }
+    h+='</div>';
+
+    // ─── LIVE ───
+    h+='<div>';
+    h+='<div style="font-size:13px;font-weight:800;color:#6366f1;margin-bottom:6px">🎯 LIVE — Pattern pe (minut + scor)</div>';
+    var live=d.live||{};
+    var liveKeys=Object.keys(live);
+    if(!liveKeys.length){
+      h+='<div style="color:var(--mu);padding:10px;font-size:11px">Calibrare LIVE lipse&scaron;te.</div>';
+    }else{
+      // Group by market
+      var byMarket={};
+      liveKeys.forEach(function(k){
+        var parts=k.split('|');
+        var mb=parts[0],ss=parts[1],mkt=parts[2];
+        if(!byMarket[mkt])byMarket[mkt]={};
+        if(!byMarket[mkt][mb])byMarket[mkt][mb]={};
+        byMarket[mkt][mb][ss]=live[k];
+      });
+      var mktOrder=['over15','over25','gg'];
+      mktOrder.forEach(function(mkt){
+        if(!byMarket[mkt])return;
+        var mktLbl=mkt==='over15'?'Over 1.5':mkt==='over25'?'Over 2.5':'GG (ambele marc.)';
+        h+='<div style="background:rgba(255,255,255,.03);padding:10px;border-radius:6px;margin-bottom:10px">';
+        h+='<div style="font-weight:700;font-size:12px;margin-bottom:6px">'+mktLbl+'</div>';
+        h+='<table style="width:100%;border-collapse:collapse;font-size:11px">';
+        h+='<thead><tr style="color:var(--mu);font-size:10px"><th style="text-align:left;padding:3px 0">Minut</th><th style="text-align:left">Scor</th><th style="text-align:right">Real %</th><th style="text-align:right">N</th></tr></thead><tbody>';
+        var mbOrder=['0-15','16-30','31-45','46-60','61-75','76-90'];
+        var ssOrder=['0-0','1-0','0-1','1-1','home_+2','away_+2','other'];
+        var ssLbl={'0-0':'0-0','1-0':'1-0','0-1':'0-1','1-1':'1-1','home_+2':'H +2','away_+2':'A +2','other':'altul'};
+        mbOrder.forEach(function(mb){
+          var byScore=byMarket[mkt][mb];
+          if(!byScore)return;
+          ssOrder.forEach(function(ss){
+            var d=byScore[ss];
+            if(!d||d.n<10)return;
+            var clr=d.pct>=70?'#22c55e':d.pct>=50?'#f59e0b':'#ef4444';
+            h+='<tr style="border-top:1px solid rgba(255,255,255,.04)">';
+            h+='<td style="padding:3px 0">'+mb+'\'</td>';
+            h+='<td>'+(ssLbl[ss]||ss)+'</td>';
+            h+='<td style="text-align:right;font-weight:700;color:'+clr+'">'+d.pct.toFixed(0)+'%</td>';
+            h+='<td style="text-align:right;color:var(--mu)">'+d.n+'</td>';
+            h+='</tr>';
+          });
+        });
+        h+='</tbody></table>';
+        h+='</div>';
+      });
+      h+='<div style="font-size:10px;color:var(--mu);padding:6px;line-height:1.4">📖 Citire: pe linia <b>61-75\'</b> + <b>0-0</b> la <b>Over 1.5</b>, vezi % real din 5000 meciuri istorice cu acela&scaron;i context. Cifre mici (sub 30%) = pattern „blocat", cifre mari (peste 70%) = goluri probabile.</div>';
+    }
+    h+='</div>';
+
+    h+='<div style="text-align:center;margin-top:14px;padding-top:10px;border-top:1px solid var(--bor);font-size:10px;color:var(--mu)">Actualizat: '+(d.generated_at?new Date(d.generated_at).toLocaleString('ro-RO'):'—')+'</div>';
+
+    body.innerHTML=h;
+  }catch(e){
+    body.innerHTML='<div style="color:#ef4444;padding:14px">Eroare fetch: '+e.message+'</div>';
+  }
+}
 
 // Toggle: adauga/scoate pick din selectii (FARA prompt, FARA insert in DB)
 function toggleBetFromPick(pickKey, btn){
