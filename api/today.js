@@ -94,10 +94,15 @@ export default async function handler(req, res) {
     const dbFixtures = await getFixturesFromDB();
     log(`db fixtures: ${dbFixtures.length}`);
 
-    if (dbFixtures.length >= 5) {
+    // Filtru future-only (acelaşi comportament ca pe ramura API)
+    const nowMs = Date.now();
+    const filtered = dbFixtures.filter(m => new Date(m.kickoff_time).getTime() > nowMs);
+    log(`db future-only filter: ${dbFixtures.length} → ${filtered.length}`);
+
+    if (filtered.length >= 5) {
       // Use Number() to guard against pg returning league_id as string
-      const afterLeague = dbFixtures.filter(f => ALLOWED_LEAGUE_IDS.has(Number(f.league_id)));
-      log(`after league filter (db): ${afterLeague.length}/${dbFixtures.length} (removed ${dbFixtures.length - afterLeague.length})`);
+      const afterLeague = filtered.filter(f => ALLOWED_LEAGUE_IDS.has(Number(f.league_id)));
+      log(`after league filter (db): ${afterLeague.length}/${filtered.length} (removed ${filtered.length - afterLeague.length})`);
 
       const leagueIds = [...new Set(afterLeague.map(f => f.league_id))];
       const leagueRows = await getLeaguesFromDB(leagueIds);
@@ -122,6 +127,7 @@ export default async function handler(req, res) {
         _debug: {
           source:      'postgres',
           rawTotal:    dbFixtures.length,
+          afterFuture: filtered.length,
           afterLeague: afterLeague.length,
           final:       allowed.length,
         },
