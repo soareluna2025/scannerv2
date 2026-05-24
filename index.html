@@ -682,9 +682,12 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
   <div class="stat"><div class="stat-v" id="s-upd">--:--</div><div class="stat-l">Update</div></div>
 </div>
 
-<!-- WIN RATE -->
-<div class="wr" id="wr-bar" style="display:none">
-  <span class="wr-lbl">Win Rate</span>
+<!-- WIN RATE (rebranded ca ALERTE NGP, cu disclaimer) -->
+<div class="wr" id="wr-bar" style="display:none" onclick="wrShowInfo()" style="cursor:help">
+  <div style="display:flex;flex-direction:column">
+    <span class="wr-lbl">Alerte NGP &gt; 70 <span style="opacity:.5">ⓘ</span></span>
+    <span style="font-size:8px;color:var(--mu);font-weight:500;letter-spacing:.3px;margin-top:1px">alertă → gol oric&acirc;nd &icirc;n meci (NU profit)</span>
+  </div>
   <div class="wr-items">
     <span class="wr-w" id="wr-w">W: 0</span>
     <span class="wr-l" id="wr-l">L: 0</span>
@@ -1350,6 +1353,18 @@ function renderMatches(){
 function loadWR(){try{var s=localStorage.getItem(WR_KEY);return s?JSON.parse(s):{predictions:[]};}catch(e){return{predictions:[]};}}
 function saveWR(d){try{localStorage.setItem(WR_KEY,JSON.stringify(d));}catch(e){}}
 function resetWR(){try{localStorage.removeItem(WR_KEY);}catch(e){}renderWR({predictions:[]});}
+function wrShowInfo(){
+  alert('Ce înseamnă acest contor\n\n'+
+        'Numără câte alerte NGP > 70% au fost urmate de un gol oricând până la finalul meciului.\n\n'+
+        'W (Win): a venit gol\n'+
+        'L (Loss): meci terminat fără gol după alertă\n'+
+        'P (Pending): meci încă în desfășurare\n\n'+
+        '⚠ Atenție:\n'+
+        '• NU e calculator de profit — nu ține cont de cote\n'+
+        '• NU înseamnă că, dacă ai pariat, ai câștigat — depinde de cotă vs probabilitate reală\n'+
+        '• "Goal anywhere" e prea permisiv — un gol în min 89 contează WIN chiar dacă ai pariat la min 30\n\n'+
+        'Pentru pariere reală, calculează EV = (NGP/100) × cota − 1. EV > 0 = pariu profitabil pe termen lung.');
+}
 
 function trackWR(){
   var data=loadWR();var now=new Date().toISOString();
