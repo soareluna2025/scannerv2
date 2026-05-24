@@ -107,6 +107,12 @@ const limit = (() => {
   return i >= 0 && args[i + 1] ? parseInt(args[i + 1], 10) : 2000;
 })();
 const jsonOnly = args.includes('--json');
+// --window N: măsoară 'gol în următoarele N minute' în loc de 'rest of match'
+// Default 0 = rest of match (compat. cu rularea anterioară). 15 = relevant pentru pariere live.
+const windowMin = (() => {
+  const i = args.indexOf('--window');
+  return i >= 0 && args[i + 1] ? parseInt(args[i + 1], 10) : 0;
+})();
 
 const log = (...m) => { if (!jsonOnly) console.log(...m); };
 
@@ -245,14 +251,42 @@ async function backtest() {
     `, [fx.fixture_id]);
 
     const finalGoals = (fx.final_home || 0) + (fx.final_away || 0);
+    // Pre-compute snapshot lookup pentru window-based outcome
+    const snapsList = snapsRes.rows;
 
-    for (const r of snapsRes.rows) {
+    for (let i = 0; i < snapsList.length; i++) {
+      const r = snapsList[i];
       totalSnaps++;
       const mn = r.elapsed;
       if (mn < 5 || mn > 85) { skippedSnaps++; continue; }  // ignoră începutul și finalul
 
       const goalsAtMn = (r.home_goals || 0) + (r.away_goals || 0);
-      const hit = finalGoals > goalsAtMn;  // a venit gol după acest minut?
+
+      // Determină 'hit' în funcție de --window
+      let hit;
+      if (windowMin > 0) {
+        // Window mode: gol între minutul mn și mn+windowMin
+        const targetMn = mn + windowMin;
+        let goalsAtTarget = goalsAtMn;
+        let foundWindowSnap = false;
+        // Caut snapshot la sau după mn+windowMin (în aceeași listă, sortată ASC)
+        for (let j = i + 1; j < snapsList.length; j++) {
+          if (snapsList[j].elapsed >= targetMn) {
+            goalsAtTarget = (snapsList[j].home_goals || 0) + (snapsList[j].away_goals || 0);
+            foundWindowSnap = true;
+            break;
+          }
+        }
+        // Dacă nu există snapshot în fereastră dar meciul s-a terminat în interval, folosesc FT
+        if (!foundWindowSnap) {
+          if (targetMn >= 90) goalsAtTarget = finalGoals;
+          else { skippedSnaps++; continue; }  // window neacoperit de date, skip
+        }
+        hit = goalsAtTarget > goalsAtMn;
+      } else {
+        // Rest-of-match mode (default, compat. cu rulări anterioare)
+        hit = finalGoals > goalsAtMn;
+      }
 
       const s = {
         mn,
@@ -277,7 +311,8 @@ async function backtest() {
   log(`   ${samples.length} predicții evaluate (${Object.keys(FORMULAS).length} formule × snapshot-uri valide)\n`);
 
   // 3. Per formulă: curbă calibrare + Brier score
-  const report = { meta: { limit, fixtures: fxRes.rows.length, totalSnaps, validSnaps: samples.length / Object.keys(FORMULAS).length }, formulas: {} };
+  const outcomeMode = windowMin > 0 ? `goal in next ${windowMin} min` : 'goal in rest of match';
+  const report = { meta: { limit, fixtures: fxRes.rows.length, totalSnaps, validSnaps: samples.length / Object.keys(FORMULAS).length, windowMin, outcomeMode }, formulas: {} };
 
   for (const fname of Object.keys(FORMULAS)) {
     const fSamples = samples.filter(s => s.formula === fname);
@@ -341,7 +376,8 @@ function printReport(report) {
 
   console.log(`Meciuri analizate: ${report.meta.fixtures}`);
   console.log(`Snapshot-uri totale: ${report.meta.totalSnaps}`);
-  console.log(`Predicții per formulă: ${Math.round(report.meta.validSnaps)}\n`);
+  console.log(`Predicții per formulă: ${Math.round(report.meta.validSnaps)}`);
+  console.log(`Mod outcome: ${report.meta.outcomeMode}\n`);
 
   // Comparație globală
   console.log('📈 COMPARAȚIE METRICI (lower = better)');
