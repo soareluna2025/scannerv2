@@ -1213,6 +1213,43 @@ function updateStats(){
 // ── RENDER MATCHES ────────────────────────────────────────────
 function ngpColor(p){return p>=80?'#00d4a8':p>=60?'#ffd166':'#ff6b6b';}
 
+// ── EV CALCULATOR HELPERS ────────────────────────────────────────
+// Mapeaza NGP afisat -> probabilitate reala (din backtest 531 meciuri, 24.05.2026)
+function calibratedAnytimeProb(displayedNgp){
+  if(displayedNgp >= 80) return 0.84;  // raw 90+ calibrat la 83, real ~80%
+  if(displayedNgp >= 60) return 0.82;  // raw 60-80, real ~80-85%
+  if(displayedNgp >= 40) return 0.75;
+  if(displayedNgp >= 20) return 0.60;
+  return 0.30;  // baseline pentru orice meci cu min cunoscut
+}
+function calibrated15minProb(displayedNg15){
+  if(displayedNg15 >= 35) return 0.40;  // peak observat in backtest
+  if(displayedNg15 >= 25) return 0.35;
+  if(displayedNg15 >= 15) return 0.32;
+  return 0.28;  // baseline
+}
+function evRecalc(inputId, realProb, displayId){
+  var el = document.getElementById(inputId);
+  var disp = document.getElementById(displayId);
+  if(!el || !disp) return;
+  var cota = parseFloat(el.value);
+  if(!cota || cota < 1.01){
+    disp.innerHTML = '&mdash;';
+    disp.style.color = 'var(--mu)';
+    return;
+  }
+  // Persist in localStorage
+  try { localStorage.setItem(inputId, cota.toString()); } catch(e){}
+  var ev = realProb * cota - 1;
+  var evPct = Math.round(ev * 100);
+  var sign = ev >= 0 ? '+' : '';
+  var color, icon, label;
+  if(ev >= 0.08){ color='#22c55e'; icon='✅'; label='profitabil'; }
+  else if(ev >= 0){ color='#f59e0b'; icon='⚠️'; label='marginal'; }
+  else { color='#ef4444'; icon='❌'; label='NU paria'; }
+  disp.innerHTML = '<span style="color:'+color+'">EV: '+sign+evPct+'% '+icon+' '+label+'</span>';
+}
+
 function buildCardHtml(m,lgName){
   var s=m._s||{};var mk=s.mk||{};
   var hg=s.hg||0;var ag=s.ag||0;var mn=s.mn||0;var ng=s.ng||0;
@@ -2021,6 +2058,62 @@ function mdRenderSumar(d){
     out+='<b>Dreapta</b> reflect&acirc; şansa real&#259; de gol &icirc;n 15 min — mult mai mic&#259; (max ~50%).';
     out+='</div>';
     out+='</div>';
+
+    // ── CALCULATOR EV — 3 piețe principale ─────────────────────────
+    var anytimeNgp = ngpData.ng;
+    var rpAny = calibratedAnytimeProb(anytimeNgp);
+    var rp15 = calibrated15minProb(ng15===null?0:ng15);
+    // Over 1.5 logic
+    var rpO15;
+    if (hg + ag >= 2) rpO15 = 1.0;
+    else if (hg + ag === 1) rpO15 = rpAny;
+    else rpO15 = rpAny * 0.55;  // need 2 goals from 0
+
+    var markets = [
+      { id:'o05', label:'Over 0.5 (tot meciul)', realProb:rpAny, alreadyWon:(hg+ag>=1) },
+      { id:'o15', label:'Over 1.5 (tot meciul)', realProb:rpO15, alreadyWon:(hg+ag>=2) },
+      { id:'ng15', label:'Gol &icirc;n urm&#259;toarele 15 min', realProb:rp15, alreadyWon:false },
+    ];
+
+    out+='<div class="md-section"><div class="md-section-title">🧮 Calculator EV (Bet365)</div>';
+    out+='<div style="font-size:10px;color:var(--mu);margin-bottom:10px">Pariaz&#259; doar dac&#259; cota ta &gt;= cota minim&#259;.</div>';
+    markets.forEach(function(mk){
+      var pct = Math.round(mk.realProb*100);
+      var minCota = mk.realProb > 0 ? (1/mk.realProb).toFixed(2) : '—';
+      var fid = (fix&&fix.fixture&&fix.fixture.id) || 0;
+      var savedKey = 'ev_'+fid+'_'+mk.id;
+      var savedCota = '';
+      try { savedCota = localStorage.getItem(savedKey) || ''; } catch(e){}
+      out+='<div style="background:rgba(255,255,255,.03);border-radius:10px;padding:12px;margin-bottom:10px;border-left:3px solid #3b82f6">';
+      out+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">';
+      out+='<div style="font-size:13px;font-weight:700">'+mk.label+'</div>';
+      if(mk.alreadyWon) out+='<div style="font-size:10px;color:#22c55e;font-weight:700">✓ DEJA C&#194;ȘTIGAT</div>';
+      out+='</div>';
+      out+='<div style="font-size:11px;color:var(--mu);margin-bottom:8px">Real: <b style="color:var(--tx)">'+pct+'%</b> &nbsp;•&nbsp; Cota minim&#259;: <b style="color:var(--tx)">'+minCota+'</b></div>';
+      if(!mk.alreadyWon){
+        out+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
+        out+='<label style="font-size:11px;color:var(--mu)">Cota ta:</label>';
+        out+='<input type="number" step="0.01" min="1" value="'+savedCota+'" placeholder="ex: 1.40" id="'+savedKey+'" oninput="evRecalc(\''+savedKey+'\','+mk.realProb+',\''+savedKey+'_v\')" style="background:rgba(255,255,255,.06);border:1px solid var(--bor);color:var(--tx);padding:6px 8px;border-radius:6px;font-size:13px;font-weight:600;width:80px">';
+        out+='<div id="'+savedKey+'_v" style="font-size:13px;font-weight:700">&mdash;</div>';
+        out+='</div>';
+      }
+      out+='</div>';
+    });
+    out+='<div style="font-size:10px;color:var(--mu);margin-top:6px;line-height:1.5">';
+    out+='💡 EV = (Probabilitate &times; Cota) &minus; 1. EV &gt; 0 = profit pe termen lung. ';
+    out+='Probabilitatea real&#259; e m&#259;surat&#259; pe backtest 531 meciuri.';
+    out+='</div>';
+    out+='</div>';
+    // Trigger initial calc pe cotele salvate
+    setTimeout(function(){
+      markets.forEach(function(mk){
+        if(mk.alreadyWon) return;
+        var fid = (fix&&fix.fixture&&fix.fixture.id) || 0;
+        var key = 'ev_'+fid+'_'+mk.id;
+        var el = document.getElementById(key);
+        if(el && el.value) evRecalc(key, mk.realProb, key+'_v');
+      });
+    }, 50);
   }
 
   // Poisson probs — date PRE-MECI, periculoase la pariere live cand meciul a evoluat
