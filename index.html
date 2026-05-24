@@ -1083,15 +1083,31 @@ function connectWS(){
     try{
       var msg=JSON.parse(ev.data);
       if(msg.type==='LIVE_UPDATE'&&msg.payload&&Array.isArray(msg.payload.matches)){
-        var _ed={};ST.ms.forEach(function(m){if(m.enrichData)_ed[m.fixture&&m.fixture.id]=m.enrichData;});
-        ST.ms=msg.payload.matches.map(function(m){m._s=calcScore(m);var e=_ed[m.fixture&&m.fixture.id];if(e)m.enrichData=e;return m;});
+        var _ed={};var _ngPrev={};ST.ms.forEach(function(m){
+          var fid=m.fixture&&m.fixture.id;
+          if(m.enrichData)_ed[fid]=m.enrichData;
+          if(typeof m._ng==='number')_ngPrev[fid]=m._ng;
+        });
+        ST.ms=msg.payload.matches.map(function(m){
+          var fid=m.fixture&&m.fixture.id;
+          if(m._ng===undefined && _ngPrev[fid]!==undefined) m._ng=_ngPrev[fid];
+          m._s=calcScore(m);
+          var e=_ed[fid];if(e)m.enrichData=e;
+          return m;
+        });
         renderMatches();updateStats();trackWR();genUpdateBadge();
       } else if(msg.type==='LIVE_DELTA'&&msg.payload&&Array.isArray(msg.payload.changed)){
-        var _ed={};ST.ms.forEach(function(m){if(m.enrichData)_ed[m.fixture&&m.fixture.id]=m.enrichData;});
+        var _ed={};var _ngPrev={};ST.ms.forEach(function(m){
+          var fid=m.fixture&&m.fixture.id;
+          if(m.enrichData)_ed[fid]=m.enrichData;
+          if(typeof m._ng==='number')_ngPrev[fid]=m._ng;
+        });
         msg.payload.changed.forEach(function(m){
+          var fid=m.fixture&&m.fixture.id;
+          if(m._ng===undefined && _ngPrev[fid]!==undefined) m._ng=_ngPrev[fid];
           m._s=calcScore(m);
-          var ed=_ed[m.fixture&&m.fixture.id];if(ed)m.enrichData=ed;
-          var idx=ST.ms.findIndex(function(x){return x.fixture&&x.fixture.id===(m.fixture&&m.fixture.id);});
+          var ed=_ed[fid];if(ed)m.enrichData=ed;
+          var idx=ST.ms.findIndex(function(x){return x.fixture&&x.fixture.id===fid;});
           if(idx>=0)ST.ms[idx]=m; else ST.ms.push(m);
         });
         renderMatches();updateStats();
