@@ -2721,6 +2721,16 @@ NEXT STEPS (prioritizat):
                    + disclaimer explicit pentru user
   Commit: e6c630c
 
+[24.05 ~prezent] - CALCULATOR EV 3 piete in modal:
+                   - Over 0.5 tot meciul (real prob din ng anytime backtest)
+                   - Over 1.5 tot meciul (cu goluri actuale, DEJA CASTIGAT
+                     daca hg+ag>=2, realProb adaptat per scor curent)
+                   - Gol in urmatoarele 15 min (din ng15 backtest)
+                   - Cota minima auto-calculata, input cota personala,
+                     EV recalc live cu verdict colorat (verde/galben/rosu)
+                   - Persistence localStorage per (fixture_id, piata)
+  Commit: 303e065
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
