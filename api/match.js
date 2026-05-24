@@ -54,6 +54,32 @@ async function getLeagueStats(lgid) {
   } catch (_) { return null; }
 }
 
+async function getLiveStatsFromDB(fixtureId) {
+  if (!fixtureId) return null;
+  try {
+    const r = await query(
+      `SELECT elapsed, home_sot, away_sot, home_goals, away_goals
+       FROM live_stats
+       WHERE fixture_id = $1
+       ORDER BY recorded_at DESC
+       LIMIT 1`,
+      [Number(fixtureId)]
+    );
+    return r.rows[0] || null;
+  } catch (_) { return null; }
+}
+
+// Dynamic lambda live — identic cu enrich.js calcDynamicLambda
+function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
+  if (!elapsed || elapsed <= 0) return { lambda: lambdaBase, dynamic: false };
+  const minutesLeft = Math.max(1, 90 - elapsed);
+  const fraction = minutesLeft / 90;
+  const shotRate = (sot / Math.max(elapsed, 1)) * 90;
+  const intensityFactor = 1 + Math.min(shotRate / 25, 0.4);
+  const lambdaRemaining = lambdaBase * fraction * intensityFactor;
+  return { lambda: currentGoals + lambdaRemaining, dynamic: true };
+}
+
 function calcPoisson(hGames, aGames, h2h, hId, aId, lgHome = 1.2, lgAway = 1.2) {
   const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
   const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
@@ -150,8 +176,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ── DB fallback: form_stats → teams_stats, plus h2h/odds/logos ─────
-    const [dbH2H, sbHForm, sbAForm, dbOddsRows, dbLogos, tsH, tsA] = await Promise.all([
+    // ── DB fallback: form_stats → teams_stats, plus h2h/odds/logos/live ─
+    const [dbH2H, sbHForm, sbAForm, dbOddsRows, dbLogos, tsH, tsA, liveStats] = await Promise.all([
       query('SELECT home_team_id, away_team_id, home_goals, away_goals, match_date FROM h2h WHERE (home_team_id=$1 AND away_team_id=$2) OR (home_team_id=$2 AND away_team_id=$1) ORDER BY match_date DESC LIMIT 10', [hId, aId]).catch(() => ({ rows: [] })),
       getFormFromDB(hId),
       getFormFromDB(aId),
@@ -159,6 +185,7 @@ export default async function handler(req, res) {
       query('SELECT team_id, logo FROM teams WHERE team_id = ANY($1)', [[hId, aId]]).catch(() => ({ rows: [] })),
       getTeamStatsFromDB(hId, null),
       getTeamStatsFromDB(aId, null),
+      getLiveStatsFromDB(id),
     ]);
 
     const needH2H   = dbH2H.rows.length   < 3;
@@ -268,6 +295,32 @@ export default async function handler(req, res) {
         ggProb: mx2.ggProb, homeWin: mx2.homeWin,
         draw: mx2.draw, awayWin: mx2.awayWin,
       });
+    }
+
+    // ── Dynamic lambda live — override final cand live_stats are date ─────────
+    // Source: tabel live_stats (snapshot scanner cron); recordat per minut.
+    if (liveStats && Number(liveStats.elapsed) > 0) {
+      const r2 = v => Math.round(v * 100) / 100;
+      const elapsed = Number(liveStats.elapsed);
+      const hgCur   = Number(liveStats.home_goals) || 0;
+      const agCur   = Number(liveStats.away_goals) || 0;
+      const hSot    = Number(liveStats.home_sot)   || 0;
+      const aSot    = Number(liveStats.away_sot)   || 0;
+      const dynHome = calcDynamicLambda(poissonResult.lambdaHome, elapsed, hgCur, hSot);
+      const dynAway = calcDynamicLambda(poissonResult.lambdaAway, elapsed, agCur, aSot);
+      poissonResult.lambdaHome  = r2(dynHome.lambda);
+      poissonResult.lambdaAway  = r2(dynAway.lambda);
+      poissonResult.lambdaTotal = r2(poissonResult.lambdaHome + poissonResult.lambdaAway);
+      // Recalculate matrix with dynamic lambdas
+      const mx3 = calcPoisson6x6(poissonResult.lambdaHome, poissonResult.lambdaAway);
+      Object.assign(poissonResult, {
+        over15Prob: mx3.over15Prob, over25Prob: mx3.over25Prob,
+        ggProb: mx3.ggProb, homeWin: mx3.homeWin,
+        draw: mx3.draw, awayWin: mx3.awayWin,
+      });
+      poissonResult.isDynamic = true;
+      poissonResult.liveElapsed = elapsed;
+      poissonResult.liveScore = `${hgCur}-${agCur}`;
     }
 
     const evData        = calcEV(poissonResult, oddsRaw);
