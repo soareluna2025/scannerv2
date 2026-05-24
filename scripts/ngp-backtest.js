@@ -64,8 +64,41 @@ if (envLoaded && !process.argv.includes('--json')) {
   console.log(`✓ .env încărcat din ${envLoaded.path} (${envLoaded.count} variabile)`);
 }
 
-import { query } from '../api/db.js';
-import pool from '../api/db.js';
+// ── Pool propriu cu parsare URL explicită (evită SASL bug din pg) ──
+import pkg from 'pg';
+const { Pool } = pkg;
+
+function buildPool() {
+  const raw = process.env.POSTGRES_URL.trim();
+  let cfg;
+  try {
+    const u = new URL(raw);
+    cfg = {
+      host:     u.hostname,
+      port:     parseInt(u.port) || 5432,
+      user:     decodeURIComponent(u.username),
+      password: decodeURIComponent(u.password),
+      database: u.pathname.replace(/^\//, ''),
+    };
+    if (!process.argv.includes('--json')) {
+      const masked = '*'.repeat(Math.min(cfg.password.length, 8));
+      console.log(`✓ DB parsat: user=${cfg.user} pass=${masked}(${cfg.password.length} chars) host=${cfg.host}:${cfg.port} db=${cfg.database}`);
+    }
+    if (typeof cfg.password !== 'string' || cfg.password.length === 0) {
+      console.error('❌ Parola extrasă din POSTGRES_URL este goală sau invalidă!');
+      console.error('   Verifică .env: cat /root/scannerv2/.env | grep POSTGRES_URL');
+      process.exit(1);
+    }
+  } catch (e) {
+    console.error(`❌ POSTGRES_URL invalid (${e.message})`);
+    console.error(`   Valoare brută: "${raw.slice(0, 30)}..."`);
+    process.exit(1);
+  }
+  return new Pool(cfg);
+}
+
+const pool = buildPool();
+const query = (text, params) => pool.query(text, params);
 
 // ── Parse args ────────────────────────────────────────────────
 const args = process.argv.slice(2);
