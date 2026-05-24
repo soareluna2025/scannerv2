@@ -3335,6 +3335,10 @@ function g2RenderTop10(){
   G2.top10=scored.slice(0,10);
   var isTested=g2CalibrationTested(G2.cat);
   var html='';
+  // Construiesc market label din G2 category (folosit pentru pickContext)
+  var g2Meta=G2_CATS[G2.cat]||{label:G2.cat};
+  var g2SubLbl=G2.sub==='home'?'Gazde ':G2.sub==='away'?'Oaspe&#539;i ':G2.sub==='total'?'Total ':'';
+  var g2MktLbl=(G2.cat==='home'||G2.cat==='away')?g2Meta.label:(g2SubLbl+g2Meta.label+' Over '+G2.thr);
   G2.top10.forEach(function(item,idx){
     var m=item.m,pct=item.score,raw=item.raw,done=item.confirmed;
     // Live-adjust pentru lista (afisat ca % principal)
@@ -3344,15 +3348,23 @@ function g2RenderTop10(){
     var sub='';
     if(m.is_live)sub='<span class="gen-live-dot"></span>'+m.minute+'\' · '+m.home_goals+'-'+m.away_goals;
     else if(m.match_date)sub=new Date(m.match_date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' · '+(m.league_name||'');
-    html+='<div class="g2row'+(done?' g2done':'')+'" onclick="g2Detail('+idx+')">';
+    var fid=m.fixture_id;
+    var fav=fid?isFav(fid):false;
+    var minCotaG2=displayPct>0?(100/displayPct).toFixed(2):'1.00';
+    var roundedPct=Math.round(displayPct);
+    var mktLblEsc=g2MktLbl.replace(/'/g,"\\'");
+    html+='<div class="g2row'+(done?' g2done':'')+'">';
     var hLogo=m.home_logo?'<img src="'+m.home_logo+'" width="20" height="20" style="border-radius:3px;object-fit:contain;vertical-align:middle;margin-right:4px" onerror="this.style.display=\'none\'">':'';
     var aLogo=m.away_logo?'<img src="'+m.away_logo+'" width="20" height="20" style="border-radius:3px;object-fit:contain;vertical-align:middle;margin-right:4px" onerror="this.style.display=\'none\'">':'';
-    html+='<div class="g2rank">#'+(idx+1)+'</div>';
-    html+='<div class="g2row-info">';
+    // Star + rank inline pentru a economisi spatiu
+    html+='<div class="g2rank" style="display:flex;align-items:center;gap:4px">';
+    if(fid)html+='<button class="star-btn'+(fav?' active':'')+'" onclick="event.stopPropagation();toggleFavGen('+idx+',this,\''+mktLblEsc+'\','+minCotaG2+','+roundedPct+')">'+(fav?'⭐':'☆')+'</button>';
+    html+='#'+(idx+1)+'</div>';
+    html+='<div class="g2row-info" onclick="g2Detail('+idx+')" style="cursor:pointer">';
     html+='<div class="g2row-teams">'+hLogo+(m.home_team||'?')+' <span style="color:var(--mu)">vs</span> '+aLogo+(m.away_team||'?')+(done?'<span class="g2conf-badge">✓</span>':'')+'</div>';
     html+='<div class="g2row-sub">'+sub+'</div>';
     html+='</div>';
-    html+='<div class="g2row-pct" style="color:'+clr+'">'+Math.round(displayPct)+'%</div>';
+    html+='<div class="g2row-pct" onclick="g2Detail('+idx+')" style="color:'+clr+';cursor:pointer">'+roundedPct+'%</div>';
     if(pLive!==null&&Math.abs(pLive-pct)>3)html+='<div style="font-size:9px;color:var(--mu);margin-left:4px">pre:'+Math.round(pct)+'%</div>';
     else if(isTested&&Math.abs(raw-pct)>3)html+='<div style="font-size:9px;color:var(--mu);margin-left:4px">brut:'+raw+'%</div>';
     html+='</div>';
@@ -3597,6 +3609,26 @@ function toggleFavPMWithPick(fid,btn,pickMarket,pickMinCota,pickCal){
   var m=_pmMatches.find(function(x){return x.fixture&&x.fixture.id===fid;});
   var ed=_pmEnrich[fid]||null;
   _toggleFavCommon(fid,'pre',m,ed,btn,{market:pickMarket,minCota:pickMinCota,cal:pickCal});
+}
+// Variant pentru tab-ul Genereaza (G2.top10) — datele sunt in format diferit
+function toggleFavGen(idx,btn,pickMarket,pickMinCota,pickCal){
+  var item=G2&&G2.top10&&G2.top10[idx];
+  if(!item||!item.m)return;
+  var gm=item.m;
+  var fid=gm.fixture_id;
+  if(!fid)return;
+  // Convertesc match-ul Gen in format API-Football (necesar pentru renderFavs)
+  var converted={
+    fixture:{id:fid,date:gm.match_date},
+    teams:{
+      home:{id:gm.home_team_id||null,name:gm.home_team||'?',logo:gm.home_logo||null},
+      away:{id:gm.away_team_id||null,name:gm.away_team||'?',logo:gm.away_logo||null},
+    },
+    league:{id:gm.league_id||null,name:gm.league_name||'',flag:gm.league_flag||null,logo:gm.league_logo||null},
+    goals:{home:gm.home_goals||0,away:gm.away_goals||0},
+  };
+  var type=gm.is_live?'live':'pre';
+  _toggleFavCommon(fid,type,converted,null,btn,{market:pickMarket,minCota:pickMinCota,cal:pickCal});
 }
 function updateFavBadge(){
   var n=loadFavs().items.length;
@@ -4255,11 +4287,6 @@ function toggleFavPicker(fid){
   // Foloseste enrich data live updated cand este disponibil
   var ed=item.type==='live'?(ST.ms.find(function(x){return x.fixture&&x.fixture.id===fid;})||{}).enrichData:_pmEnrich[fid];
   ed=ed||item.ed;
-  if(!ed){
-    box.innerHTML='<div style="font-size:11px;color:var(--mu);padding:6px">⚠️ Date enrich indisponibile pentru acest meci. Deschide detaliul pentru recalcul.</div>';
-    box.style.display='block';
-    return;
-  }
   // Piete posibile cu probabilitati calibrate
   var markets=[];
   function addMkt(label,raw,cat,sub,thr){
@@ -4269,14 +4296,30 @@ function toggleFavPicker(fid){
     if(p<50||!minCota)return;
     markets.push({label:label,prob:p,minCota:minCota});
   }
-  addMkt('Over 1.5 total', ed.over15Prob, 'goals_total', null, 1.5);
-  addMkt('Over 2.5 total', ed.over25Prob, 'goals_total', null, 2.5);
-  addMkt('GG (ambele marcheaza)', ed.ggProb, 'gg', null, null);
-  addMkt('Gazde marcheaza', ed.homeScoreRate, 'goals_home', null, 0.5);
-  addMkt('Oaspeti marcheaza', ed.awayScoreRate, 'goals_away', null, 0.5);
-  addMkt('1 (Gazde castiga)', ed.homeWin, 'win', 'home', null);
-  addMkt('X (Egal)', ed.draw, 'win', 'draw', null);
-  addMkt('2 (Oaspeti castiga)', ed.awayWin, 'win', 'away', null);
+  if(ed){
+    addMkt('Over 1.5 total', ed.over15Prob, 'goals_total', null, 1.5);
+    addMkt('Over 2.5 total', ed.over25Prob, 'goals_total', null, 2.5);
+    addMkt('GG (ambele marcheaza)', ed.ggProb, 'gg', null, null);
+    addMkt('Gazde marcheaza', ed.homeScoreRate, 'goals_home', null, 0.5);
+    addMkt('Oaspeti marcheaza', ed.awayScoreRate, 'goals_away', null, 0.5);
+    addMkt('1 (Gazde castiga)', ed.homeWin, 'win', 'home', null);
+    addMkt('X (Egal)', ed.draw, 'win', 'draw', null);
+    addMkt('2 (Oaspeti castiga)', ed.awayWin, 'win', 'away', null);
+  }
+  // Daca pickContext exista si nu apare deja in markets, adauga-l ca fallback
+  if(item.pickContext&&item.pickContext.market){
+    var pc=item.pickContext;
+    var hasIt=markets.some(function(mk){return mk.label===pc.market;});
+    if(!hasIt){
+      markets.unshift({label:pc.market, prob:pc.cal||50, minCota:pc.minCota||(pc.cal>0?+(100/pc.cal).toFixed(2):2.00)});
+    }
+  }
+  // Daca nu am piete deloc (nici ed, nici pickContext), arata mesaj
+  if(!markets.length){
+    box.innerHTML='<div style="font-size:11px;color:var(--mu);padding:6px">⚠️ Date enrich indisponibile pentru acest meci. Deschide detaliul pentru recalcul.</div>';
+    box.style.display='block';
+    return;
+  }
   // Pre-fav cu pickContext apare primul
   var defaultMarket=item.pickContext&&item.pickContext.market;
   markets.sort(function(a,b){
