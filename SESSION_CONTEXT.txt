@@ -2446,6 +2446,73 @@ NEXT STEPS (prioritizat):
   Branch: claude/alohascan-v2-audit-mV382 pastrat
   Commit: (doar SESSION_CONTEXT.txt)
 
+[24.05.2026] - FEAT api/match.js — adaugat dynamic lambda live din live_stats
+  Bug nefix in sprint anterior: match.js folosea doar lambda pre-meci;
+  enrich.js avea calcDynamicLambda dar match.js nu beneficia de el.
+  Fix (api/match.js DOAR):
+    Helperi adaugati:
+      getLiveStatsFromDB(fixtureId) — SELECT elapsed, home_sot, away_sot,
+        home_goals, away_goals FROM live_stats WHERE fixture_id=$1
+        ORDER BY recorded_at DESC LIMIT 1
+      calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) — verbatim
+        identic cu enrich.js calcDynamicLambda (liniile 10-18)
+    Promise.all DB: + getLiveStatsFromDB(id) — al 8-lea element
+    Handler logic (dupa teams_stats override):
+      Daca liveStats && elapsed > 0:
+        Apply calcDynamicLambda pentru home + away separat
+        Recalculeaza calcPoisson6x6 cu lambdas dinamice
+        Update over15/over25/gg/1X2 prob in poissonResult
+        Adauga in payload: isDynamic, liveElapsed, liveScore
+  NOTA TEHNICA — formula calcDynamicLambda:
+    Enrich.js (si match.js dupa fix) folosesc shotRate = sot/elapsed*90
+    pentru intensityFactor (NU sot brut). User instructiune scria
+    "intensityFactor = 1 + min(sot/25, 0.4)" — paraphrase; "identic cu
+    enrich.js" prevalent → folosit formula reala enrich.js.
+    Daca user vrea literal sot/25 (fara shotRate normalize), modificare
+    triviala: scoate liniile shotRate, foloseste sot direct in min().
+  Test scenarii (lambdaBase=1.5):
+    Pre-match (elapsed=0)         → λ=1.50 (neschimbat, dynamic=false) ✅
+    Min 30, 1-0, 5 SOT (normal)   → λ=2.40 (gol + remaining cu intensitate)
+    Min 60, 0-0, 2 SOT (slow)     → λ=0.56 (intensitate scazuta + putin timp)
+    Min 75, 2-1, 8 SOT (hot)      → λ=2.35 (2 goluri existente)
+    Min 88, 1-0, 7 SOT (panic)    → λ=1.04 (foarte putin timp ramas)
+  Ordine completa calcul lambda in match.js:
+    1) calcPoisson — pre-meci cu lgHome/lgAway fallback (din league_stats)
+    2) teams_stats override — daca form insuficient
+    3) DYNAMIC LAMBDA LIVE — daca live_stats.elapsed > 0
+    4) calcPoisson6x6 recalculat dupa fiecare override
+  Verificare: node --check api/match.js OK | doar match.js modificat
+  Linii: 323 → 376 (+55: getLiveStatsFromDB + calcDynamicLambda + override)
+  Branch: claude/alohascan-v2-audit-mV382
+  Commit: 52e89a3
+
+[24.05.2026] - MERGE → main (match.js dynamic lambda live) + deploy
+  Metoda: fast-forward push direct
+  Range: 5f62d01..52e89a3 — 1 commit pe origin/main
+  Pre-merge: git merge-base --is-ancestor origin/main BRANCH → YES
+  Verificari post-push:
+    origin/main HEAD: 52e89a3 ✅
+    api/match.js SHA: 696f06a64a335332a30c4a45c517471a70bccda2 ✅
+    Continut verificat via mcp__github__get_file_contents:
+      getLiveStatsFromDB function exportata corect ✅
+      calcDynamicLambda function — identica cu enrich.js ✅
+      Promise.all DB include getLiveStatsFromDB(id) ✅
+      Dynamic lambda override block dupa teams_stats ✅
+  Deploy: GitHub Actions declansat automat
+  Status sprint Audit Poisson: 7/9 fix-uri aplicate
+    1) match.js calcPoisson H/A perspective    ✅ 0162197
+    2) match.js awayForm formResult            ✅ 971d3fa
+    3) cron live-score DRY extraction          ✅ f99eb1d
+    4) calc-utils poissonProb guard λ<=0       ✅ e571cad
+    5) index.html calcScore real lambda        ✅ dd3cf3e
+    6) match.js fallback DB chain              ✅ 9c35b2c
+    7) match.js dynamic lambda live            ✅ 52e89a3
+  Bug-uri Poisson NEFIX (sprint viitor):
+    - scan.js/scanner.js xG-weighted×3 vs enrich.js cross-product (arhitectural)
+    - Truncare matrice 6×6 vs Monte Carlo full distribution
+  Branch: claude/alohascan-v2-audit-mV382 pastrat
+  Commit: (doar SESSION_CONTEXT.txt)
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
