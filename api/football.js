@@ -1,5 +1,6 @@
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
 import { isAllowedMatch } from './utils/league-filter.js';
+import { calcNextGoal } from './utils/live-score.js';
 
 function log(msg) {
   console.log(`[football] ${new Date().toISOString()} ${msg}`);
@@ -113,6 +114,25 @@ export default async function handler(req, res) {
   // ── Filters — sistem centralizat din utils/league-filter.js ────
   const filtered = passedStatus.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
   log(`[Filter] ${passedStatus.length} meciuri → ${filtered.length} după filtrare`);
+
+  // ── Injectie _ng per meci (heuristica derivata din SOT cand xG lipseste) ──
+  // homeFormGoals/awayFormGoals = SOT/mn * 9 → rata estimata goluri/meci din SOT actual,
+  // fallback 0.35 daca lipsesc datele. Fix temporar pentru NGP 0% pe carduri LIVE.
+  for (const m of filtered) {
+    const mn    = m.fixture?.status?.elapsed || 0;
+    const stats = Array.isArray(m.statistics) ? m.statistics : [];
+    const hStat = stats[0]?.statistics || [];
+    const aStat = stats[1]?.statistics || [];
+    const findVal = (arr, type) => parseFloat(arr.find(s => s.type === type)?.value) || 0;
+    const hxg  = findVal(hStat, 'expected_goals');
+    const axg  = findVal(aStat, 'expected_goals');
+    const hSOT = findVal(hStat, 'Shots on Goal');
+    const aSOT = findVal(aStat, 'Shots on Goal');
+    const txg  = hxg + axg;
+    const homeFormGoals = (mn > 0 && hSOT > 0) ? (hSOT / mn) * 9 : 0.35;
+    const awayFormGoals = (mn > 0 && aSOT > 0) ? (aSOT / mn) * 9 : 0.35;
+    m._ng = calcNextGoal({ mn, txg, homeFormGoals, awayFormGoals });
+  }
 
   // ── Optional enrichment ────────────────────────────────────────
   const toEnrich = filtered
