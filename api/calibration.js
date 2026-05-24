@@ -28,16 +28,30 @@ export default async function handler(req, res) {
     const modules = {};
     for (const r of rows) {
       modules[r.module] = {
-        buckets:  r.buckets,  // already JSONB
+        buckets:  r.buckets,
         n:        Number(r.sample_size || 0),
         brier:    r.brier_score ? Number(r.brier_score) : null,
         updated:  r.generated_at,
       };
     }
 
+    // Calibrare LIVE: per (minute_bucket, score_state, market) -> real_pct
+    const { rows: liveRows } = await query(`
+      SELECT minute_bucket, score_state, market, n_samples, real_pct
+      FROM calibration_live
+      ORDER BY market, minute_bucket, score_state
+    `).catch(() => ({ rows: [] }));
+
+    const live = {};
+    for (const r of liveRows) {
+      const key = `${r.minute_bucket}|${r.score_state}|${r.market}`;
+      live[key] = { n: Number(r.n_samples), pct: Number(r.real_pct) };
+    }
+
     const result = {
       generated_at: rows.length ? rows[0].generated_at : null,
       modules,
+      live,
     };
     _cache = result;
     _cacheTs = Date.now();

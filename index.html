@@ -3068,23 +3068,42 @@ var G2_CALIBRATION={
 };
 // Stocheaza ultima Brier per modul (din /api/calibration). Afisat opt in UI.
 var CALIBRATION_META={};
-// Auto-update G2_CALIBRATION din DB (recalibrate-tables cron). Inlocuieste
-// hardcoded buckets cu cele dinamice cand disponibile.
+// LIVE calibration: {"minute_bucket|score_state|market": {n, pct}}
+var LIVE_CALIBRATION={};
+// Auto-update G2_CALIBRATION din DB (recalibrate-tables cron) si LIVE table.
 (function loadDynamicCalibration(){
   try{
     fetch('/api/calibration').then(function(r){return r.json();}).then(function(d){
-      if(!d||!d.ok||!d.modules)return;
-      Object.keys(d.modules).forEach(function(moduleKey){
-        var mod=d.modules[moduleKey];
-        if(!mod||!Array.isArray(mod.buckets)||!mod.buckets.length)return;
-        // Convert from {min,max,pct,n} format to [min,max,pct] format
-        G2_CALIBRATION[moduleKey]=mod.buckets.map(function(b){return [b.min,b.max,b.pct];});
-        CALIBRATION_META[moduleKey]={n:mod.n,brier:mod.brier,updated:mod.updated};
-      });
-      console.log('[calibration] Loaded dynamic from DB:',Object.keys(d.modules).join(', '));
+      if(!d||!d.ok)return;
+      // Pre-meci calibration
+      if(d.modules){
+        Object.keys(d.modules).forEach(function(moduleKey){
+          var mod=d.modules[moduleKey];
+          if(!mod||!Array.isArray(mod.buckets)||!mod.buckets.length)return;
+          G2_CALIBRATION[moduleKey]=mod.buckets.map(function(b){return [b.min,b.max,b.pct];});
+          CALIBRATION_META[moduleKey]={n:mod.n,brier:mod.brier,updated:mod.updated};
+        });
+      }
+      // LIVE calibration
+      if(d.live){LIVE_CALIBRATION=d.live;}
+      console.log('[calibration] modules:'+Object.keys(d.modules||{}).length+' live:'+Object.keys(d.live||{}).length);
     }).catch(function(){});
   }catch(e){}
 })();
+// Helper: calibrare LIVE pentru (minute, scor_h, scor_a, market)
+function liveCalibrate(minute, hg, ag, market){
+  var mb=minute<=15?'0-15':minute<=30?'16-30':minute<=45?'31-45':minute<=60?'46-60':minute<=75?'61-75':'76-90';
+  var sst;
+  if(hg===0&&ag===0)sst='0-0';
+  else if(hg===1&&ag===0)sst='1-0';
+  else if(hg===0&&ag===1)sst='0-1';
+  else if(hg===1&&ag===1)sst='1-1';
+  else if(hg-ag>=2)sst='home_+2';
+  else if(ag-hg>=2)sst='away_+2';
+  else sst='other';
+  var key=mb+'|'+sst+'|'+market;
+  return LIVE_CALIBRATION[key]||null;
+}
 
 // ── NGP CALIBRATION (rest of match) ──────────────────────────
 // Extras din backtest 26297 predictii (24.05.2026, V0_current formula).
@@ -3809,23 +3828,47 @@ function simRender(d){
       ['Over 2.5 total', sim.markets.over25, 'goals','total',2.5],
       ['GG ambele marc.',sim.markets.gg,     'gg',   'total',0],
     ];
+    // Parse scor curent pentru LIVE calibration lookup
+    var liveHg=0, liveAg=0;
+    if(isLiveSim&&sim.currentScore){
+      var parts=sim.currentScore.split('-');
+      liveHg=parseInt(parts[0]||'0',10);
+      liveAg=parseInt(parts[1]||'0',10);
+    }
     calMkts.forEach(function(row){
       var lbl=row[0],raw=row[1],cat=row[2],sub=row[3],thr=row[4];
       if(typeof raw!=='number')return;
-      // Pe LIVE: folosim raw (Poisson dinamic e deja calibrat per minute ramase)
-      // Pe PRE-MECI: aplicam G2_CALIBRATION (validat pe backtest)
-      var displayProb = isLiveSim ? Math.round(raw) : g2Calibrate(cat,sub,thr,Math.round(raw));
+      var displayProb, calSource, calNote;
+      if(isLiveSim){
+        // LIVE: incearca calibrare LIVE din DB
+        var marketKey=cat==='gg'?'gg':(thr>=2.5?'over25':'over15');
+        var liveCal=liveCalibrate(sim.elapsed||0,liveHg,liveAg,marketKey);
+        if(liveCal&&liveCal.n>=10){
+          displayProb=Math.round(liveCal.pct);
+          calSource='live-cal';
+          calNote='calibrat LIVE (n='+liveCal.n+' meciuri istorice in acelasi context)';
+        }else{
+          displayProb=Math.round(raw);
+          calSource='raw';
+          calNote='Poisson live (lambda redus dupa min '+sim.elapsed+')';
+        }
+      }else{
+        displayProb=g2Calibrate(cat,sub,thr,Math.round(raw));
+        calSource='pre-cal';
+      }
       var minCota=displayProb>0?(100/displayProb).toFixed(2):'—';
       html+='<div style="margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px">';
       html+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">';
-      html+='<span style="font-size:12px;color:var(--tx);font-weight:600">'+lbl+'</span>';
+      html+='<span style="font-size:12px;color:var(--tx);font-weight:600">'+lbl+(calSource==='live-cal'?' <span style="font-size:9px;background:rgba(99,102,241,.2);color:#a5b4fc;padding:1px 5px;border-radius:4px;font-weight:700">🎯 LIVE-CAL</span>':'')+'</span>';
       html+='<span style="font-weight:800;font-size:16px;color:'+ec(displayProb)+'">'+displayProb+'%</span>';
       html+='</div>';
       html+='<div style="position:relative;height:6px;background:var(--bor);border-radius:3px;overflow:hidden;margin-bottom:4px">';
       html+='<div style="position:absolute;left:0;width:'+displayProb+'%;height:100%;background:'+ec(displayProb)+';border-radius:3px"></div></div>';
       html+='<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mu)">';
-      if(isLiveSim){
-        html+='<span>Poisson live (lambda redus dupa min '+sim.elapsed+')</span>';
+      if(calSource==='live-cal'){
+        html+='<span>'+calNote+(Math.abs(displayProb-Math.round(raw))>3?' <span style="color:var(--ac)">vs Poisson '+Math.round(raw)+'%</span>':'')+'</span>';
+      }else if(isLiveSim){
+        html+='<span>'+calNote+'</span>';
       }else{
         html+='<span>raw MC: '+Math.round(raw)+'%'+(Math.abs(displayProb-Math.round(raw))>3?' <span style="color:var(--ac)">→ '+(displayProb>raw?'+':'')+(displayProb-Math.round(raw))+'pp</span>':'')+'</span>';
       }
