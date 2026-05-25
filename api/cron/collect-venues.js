@@ -111,14 +111,15 @@ export default async function handler(req, res) {
       await new Promise(r => setTimeout(r, 100));
     }
 
-    // Strategie 2 (fallback): daca nimic gasit prin venue_id, iteram prin teams si fetch /venues?team=X
-    if (missing.length === 0 && collected.length === 0) {
+    // Strategie 2 (fallback): daca nimic gasit prin venue_id, iteram prin teams (cu venue_id NULL) si fetch /venues?team=X
+    if (collected.length === 0) {
       const { rows: teams } = await query(`
         SELECT team_id, name FROM teams
-        WHERE team_id NOT IN (SELECT DISTINCT venue_id FROM venues WHERE venue_id IS NOT NULL)
+        WHERE venue_id IS NULL
         ORDER BY team_id
         LIMIT $1
       `, [LIMIT]).catch(() => ({ rows: [] }));
+      console.log(`[collect-venues] fallback: ${teams.length} teams fara venue_id`);
       for (const t of teams) {
         try {
           const r = await fetchApiFootball(`/venues?team=${t.team_id}`);
