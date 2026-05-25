@@ -3014,6 +3014,242 @@ NEXT STEPS (prioritizat):
   ❌ UI Consensus Engine: NEFACUT
 ================================================================================
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+14. DIAGNOSTIC COMPLET — 25.05.2026 (rulat pe VPS via scripts/diagnostic-db.sh)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SCRIPT: scripts/diagnostic-db.sql (psql -f) — 10 sectiuni, 30+ interogari
+RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
+
+── A. INVENTAR TABELE (valori reale din DB) ─────────────────────────────────
+
+  player_stats       1,843,922 rows  385 MB  (TOATE din Mai 2026 — backfill recent)
+  match_events       1,381,630 rows  203 MB
+  odds                 543,851 rows  105 MB  (colectat de collect-finished)
+  live_stats           111,370 rows   18 MB
+  match_stats           95,918 rows   18 MB
+  fixtures_history      77,225 rows   21 MB
+  coach_career          35,649 rows  5.3 MB  (date brute antrenori)
+  prematch_data         16,023 rows  167 MB  (14 tipuri de date, bogat!)
+  coaches               10,686 rows  2.6 MB
+  teams                  7,595 rows  1.4 MB
+  form_stats             6,368 rows  2.8 MB
+  venues                 4,605 rows  1.1 MB
+  coach_stats            3,997 rows  664 kB
+  standings              2,484 rows  632 kB  ← COLECTAT dar IGNORAT in enrich.js
+  h2h                    2,369 rows  464 kB
+  teams_stats            1,577 rows  448 kB
+  predictions            1,256 rows  544 kB
+  alerts                 1,119 rows   19 MB
+  fixtures               1,065 rows  424 kB
+  referee_stats            233 rows   88 kB
+  injuries                   4 rows  232 kB  ← APROAPE GOL (date sunt in prematch_data)
+  TABELE GOALE (0 randuri): sidelined, players_season, top_assists, venue_weather,
+    bets, bookmakers, squads, trophies, live_odds, fixture_status_log, top_scorers,
+    transfers
+
+── B. CRON JOBS — STARE REALA ───────────────────────────────────────────────
+
+  prematch-enrichment  2,017 rulari  | ultima: 25.05 13:00 | 100% succes
+  referee-extended       756 rulari  | ultima: 25.05 12:25 | 100% succes (fix loop aplicat)
+  collect-team-stats      42 rulari  | ultima: 25.05 11:39 | 100% succes (40 echipe/run)
+  coach-stats              1 rulari  | ultima: 25.05 11:27 | 100% succes (3,997 agregati)
+  collect-coaches         36 rulari  | ultima: 25.05 07:37 | 100% succes
+  collect-venues          44 rulari  | ultima: 25.05 06:58 | 100% succes
+  calibrate-live           4 rulari  | ultima: 25.05 04:46 | 100% succes (105 buckets)
+  recalibrate-tables       2 rulari  | ultima: 25.05 04:39 | 100% succes (4 buckets)
+  collect-daily           74 rulari  | ultima: 25.05 04:00 | 100% succes
+  referee-stats           71 rulari  | ultima: 25.05 02:30 | 100% succes
+  league-stats            30 rulari  | ultima: 25.05 02:00 | 100% succes
+
+  ❌ collect-finished     50 rulari  | ultima: 24.05 21:07 | 0% succes (50/50 ERORI)
+     → player_stats, match_stats, match_events, odds NU se colecteaza zilnic din FT
+     → BUT: player_stats e populat din backfill (1.84M rows din mai 2026)
+     → TREBUIE INVESTIGAT si reparat
+
+  ❌ backfill:2024/2023/2022 → 1-2 rulari, TOATE cu erori
+     backfill:2022: 55,064 procesate (mare parte din cei 1.84M player_stats)
+
+── C. MECIURI — COVERAGE ────────────────────────────────────────────────────
+
+  Fixtures NS (urmatoarele 7 zile): 35 (33 azi, 2 maine)
+  Coverage per fixture (urmatoarele 3 zile):
+    cu_odds (din tabelul odds):    0/35  ← ZERO! Cote sunt in prematch_data, nu JOIN-uite
+    cu_h2h_prematch:               2/35
+    cu_injuries_prematch:         31/35  (in prematch_data)
+    cu_predictions_api:           35/35  (in prematch_data — IGNORATE in enrich.js!)
+    cu_lineups_prematch:          16/35
+    cu_injuries_db (tabel injuries): 0/35 ← injuries table GOL
+    cu_coaches_prematch:           0/35
+
+  fixtures_history pe luni (ultimele 12):
+    Mai 2026:    13,069 meciuri, 3,062 cu arbitru
+    Aprilie 2026: 8,616 meciuri, 2,026 cu arbitru
+    Mai-Dec 2025: 17-28 meciuri/luna, 0 cu arbitru ← date istorice limitate
+    → Arbitrii colectati DOAR in ultimele 2 luni (referee-stats ruleaza cu 24 luni lookback)
+
+── D. CALITATEA DATELOR ─────────────────────────────────────────────────────
+
+  coach_stats — coloane reale (CONFIRMAT):
+    coach_id, coach_name, matches, wins, draws, losses, win_rate,
+    avg_goals_for, avg_goals_against, clean_sheet_rate, failed_to_score_rate,
+    style, tenure_days, current_team_id, last_match_date, updated_at  (16 coloane)
+    ✅ style EXISTA (enrich.js o cere — OK)
+    ✅ tenure_days EXISTA (enrich.js o cere — OK)
+    ⚠️  coloana se numeste avg_goals_for (NU goals_for_avg) — atentie la query-uri noi
+
+  referee_stats — coloane reale (CONFIRMAT):
+    referee_name, total_matches, avg_yellow_cards, avg_red_cards, avg_penalties,
+    avg_fouls, avg_corners, avg_goals, pct_over_25, pct_gg, pct_btts,
+    referee_style, updated_at, home_win_rate, away_win_rate, draw_rate,
+    pct_over_3_5_cards, pct_over_4_5_cards, avg_yellow_h1, avg_yellow_h2,
+    card_bias_score  (21 coloane)
+    ✅ avg_yellow_cards EXISTA (enrich.js o cere — OK)
+    ✅ referee_style EXISTA
+    ✅ home_win_rate + card_bias_score (130/233 populate dupa extended run)
+    Medie home_win_rate: 46.92%, medie card_bias: +1.92 (usor pro-home — normal)
+
+  venues — altitudine:
+    4,604 venues TOTAL, TOATE cu altitude_m = NULL
+    ❌ OpenElevation NE-RULATAT — altitude impact nefolosit
+
+  injuries (tabel DB):
+    4 randuri total — practic GOL
+    Date exista in prematch_data (data_type='injuries', 978 fixtures)
+    → prematch-enrichment colecteaza injuries dar NU le scrie in tabelul injuries
+
+  odds (tabel DB):
+    543,851 randuri — dar colectat de collect-finished (BROKEN)
+    → pentru fixtures NS viitoare: 0 cote disponibile in tabelul odds
+    → cotele pentru viitoare sunt in prematch_data (data_type='odds', 982 fixtures)
+    → enrich.js citeste din odds table (nu prematch_data) → NO cote pentru NS!
+
+  form_stats:
+    6,368 randuri, toate actualizate azi (collect-daily ruleaza OK)
+    coverage last5: 6,019/6,368 (94%)
+    ⚠️  JOIN cu fixtures viitoare: doar 8/35 home form, 9/35 away form (23-26%)
+    → form_stats acopera echipele cu istorice in fixtures_history
+    → echipele recente/noi din ligi de nisa NU au form_stats
+
+  teams_stats:
+    1,576 perechi (team_id, league_id), 1,525 echipe unice, 129 ligi
+    1,398/1,576 au avg_goals (89%)
+    avg_goals_for: 1.36, avg_goals_against: 1.32 (realistic)
+    ✅ JOIN complet pentru 35/35 fixtures viitoare (home + away)
+
+  standings:
+    2,484 randuri, 157 ligi, actualizate azi
+    ❌ IGNORAT in enrich.js (nu e folosit in calcul Poisson sau Confidence Score)
+
+  h2h:
+    2,369 meciuri, 1,386 perechi unice (2011-2026)
+    1,286 meciuri in ultimul an
+
+── E. PREMATCH_DATA — 14 TIPURI COLECTATE ───────────────────────────────────
+
+  odds         982 fixtures  (cote bookmaker — NU citite de enrich.js pentru NS!)
+  injuries     978 fixtures  (accidentati — NU copiate in tabelul injuries)
+  lineups      956 fixtures  (formatii probabile)
+  predictions  900 fixtures  (predictii API-Football) ← IGNORATE complet in enrich.js
+  away_form    811 fixtures
+  home_form    811 fixtures
+  h2h          214 fixtures
+  fixture      214 fixtures
+  coach_home   214 fixtures
+  coach_away   214 fixtures
+  squads_away  214 fixtures
+  squads_home  214 fixtures
+  standings    214 fixtures  (clasament) ← IGNORAT in enrich.js
+  venues       214 fixtures
+
+  Cel mai complet fixture: 14 tipuri de date (odds+injuries+lineups+predictions+
+    h2h+form+coaches+squads+standings+venues)
+
+  Sample 'predictions' payload: contine date H2H + scoruri istorice per meci
+  (NU este predictia API-Football — e date brute despre ultimele intalniri directe)
+
+── F. LANTUL DE DATE — JOIN-URI ─────────────────────────────────────────────
+
+  coaches → coach_stats:   3,997/10,686 (37%) au stats
+                           6,689 fara stats (antrenori vechi/inactivi)
+  fixtures → referee_stats: 0/35 upcoming fixtures au arbitru in stats
+                            (normal — arbitrii anuntati cu 24-48h inainte)
+  fixtures → teams_stats:  35/35 ✅ (100% acoperire pentru upcoming)
+  fixtures → form_stats:   8/35 home, 9/35 away ⚠️ (23-26% — GAP MAJOR)
+
+── G. PLAYER_STATS ──────────────────────────────────────────────────────────
+
+  Total: 1,843,922 randuri, 1,731 echipe
+  ATENTIE: TOATE randurile au created_at in Mai 2026 (backfill rulat recent)
+  Rating disponibil: 1,345,742/1,843,922 (73%), medie 6.86
+  NULL ratings: 498,180 (27%) — normal, unele pozitii nu au rating API
+  pass_accuracy: 1,339,144/1,843,922 (73%)
+
+── I. PREDICTIONS — CALITATE ────────────────────────────────────────────────
+
+  Total predictii: 1,256
+  Cu rezultat verificat: 622  (50%)
+  Neverificate: 634 (50%)
+  Over 1.5 reale: ~344 (55% din verificate)
+  ❌ BRIER SCORE: 0.1950 (sample 622)
+     Target: ≤ 0.1300
+     Gap: 0.065 (50% deasupra targetului)
+     Predictia actuala e semnificativ mai slaba decat targetul
+
+── J. REZUMAT SURSE (din diagnostic J1) ─────────────────────────────────────
+
+  ✅ player_stats (Team Strength):    1,843,922 randuri
+  ✅ form_stats (Layer 2 forma):          6,368 randuri (dar JOIN slab!)
+  ✅ h2h (Layer 3):                       2,369 randuri
+  ✅ referee_stats (impact arbitru):        233 arbitri
+  ✅ coach_stats (impact antrenor):       3,997 antrenori
+  ✅ teams_stats (lambda sezon):          1,576 perechi
+  ✅ odds (EV + Kelly):                   1,101 fixtures (in prematch_data)
+  ✅ injuries (in prematch_data):            99 fixtures (NU in tabelul injuries!)
+  ❌ prematch predictions API:      IGNORATE — 900 fixtures cu date valide
+  ❌ venues altitude:               PROBLEMA — 4,604 cu altitude=NULL
+  ❌ standings:                     IGNORATE — 2,484 randuri nevalorificate
+
+── ERORI IN SCRIPTUL DIAGNOSTIC (de corectat in diagnostic-db.sql) ──────────
+
+  A2:  odds.updated_at → odds.collected_at (coloana reala)
+  D4:  goals_for_avg → avg_goals_for (coloana reala in coach_stats)
+  D9:  injuries.updated_at → injuries.created_at (coloana reala)
+  D10: odds.updated_at → odds.collected_at
+  F2:  cs.goals_for_avg → cs.avg_goals_for
+  H1:  match_snapshots.captured_at → match_snapshots.created_at (coloana reala)
+  H2:  alerts.created_at → alerts.sent_at (coloana reala)
+  I1:  predictions.predicted_at → predictions.updated_at (coloana reala)
+
+── PROBLEME CRITICE DE REZOLVAT ─────────────────────────────────────────────
+
+  P1. collect-finished BROKEN (50/50 erori): INVESTIGHEAZA + FIX
+      → match_stats, match_events, odds zilnice NU se colecteaza
+      → impact: odds invechite in tabelul odds; Brier Score nu se poate imbunatati
+
+  P2. form_stats JOIN slab (23-26%):
+      → form_stats acopera echipele din fixtures_history (ligi mari, date vechi)
+      → echipele noi/din ligi mici NU au form_stats → fallback la teams_stats
+      → solutie: verifica daca collect-daily calculeaza form pt toate ligile active
+
+  P3. injuries tabel gol (4 rows):
+      → prematch-enrichment colecteaza injuries in prematch_data dar NU le scrie in DB
+      → enrich.js citeste din tabelul injuries (gol) → zero penalizare injuries
+      → solutie: adauga sync din prematch_data(injuries) → injuries table
+
+  P4. Odds pentru NS fixtures (0 in tabelul odds):
+      → prematch_data are 982 fixtures cu cote dar enrich.js citeste din tabelul odds
+      → enrich.js nu poate face EV/Kelly pentru meciuri NS
+      → solutie: enrich.js sa citeasca si din prematch_data(odds) ca fallback
+
+  P5. Brier Score 0.1950 (target ≤ 0.13):
+      → necesita calibrare + mai multe date verificate
+      → recalibrate-tables + calibrate-live au rulat (4 buckets) dar sample mic
+
+  P6. venues altitude = NULL (4,604):
+      → impact altitudine nefolosit in calcul
+      → solutie: ruleaza collect-venues cu OpenElevation
+
 ================================================================================
   ⚠️  IMPORTANT — WORKFLOW GIT (Claude Code pe web, repo remote):
   ---------------------------------------------------------------
