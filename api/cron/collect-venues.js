@@ -111,7 +111,7 @@ export default async function handler(req, res) {
       await new Promise(r => setTimeout(r, 100));
     }
 
-    // Strategie 2 (fallback): daca nimic gasit prin venue_id, iteram prin teams (cu venue_id NULL) si fetch /venues?team=X
+    // Strategie 2 (fallback): folosim /teams?id=X care returneaza ATAT team cat si venue
     if (collected.length === 0) {
       const { rows: teams } = await query(`
         SELECT team_id, name FROM teams
@@ -122,11 +122,12 @@ export default async function handler(req, res) {
       console.log(`[collect-venues] fallback: ${teams.length} teams fara venue_id`);
       for (const t of teams) {
         try {
-          const r = await fetchApiFootball(`/venues?team=${t.team_id}`);
+          const r = await fetchApiFootball(`/teams?id=${t.team_id}`);
           const d = await r.json();
-          const v = d.response?.[0];
+          const item = d.response?.[0];
+          const v = item?.venue;
           if (!v || !v.id) continue;
-          // UPSERT in teams pentru viitor
+          // UPDATE teams.venue_id pentru viitor
           await query(`UPDATE teams SET venue_id = $1 WHERE team_id = $2`, [v.id, t.team_id]).catch(() => {});
           const climate = climateZone(null);
           await query(`
@@ -135,7 +136,7 @@ export default async function handler(req, res) {
             ON CONFLICT (venue_id) DO UPDATE SET
               name = EXCLUDED.name, city = EXCLUDED.city, capacity = EXCLUDED.capacity,
               surface = EXCLUDED.surface, updated_at = NOW()
-          `, [v.id, v.name || null, v.address || null, v.city || null, v.country || null,
+          `, [v.id, v.name || null, v.address || null, v.city || null, item.team?.country || null,
               v.capacity || null, v.surface || null, v.image || null, climate]).catch(() => {});
           collected.push({ id: v.id, name: v.name, city: v.city, team: t.name });
           await new Promise(r => setTimeout(r, 100));
