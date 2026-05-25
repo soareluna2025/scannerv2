@@ -3037,6 +3037,21 @@ NEXT STEPS (prioritizat):
                  Sleep 1.1s/req (Nominatim rate limit 1/s). Prioritizeaza venues fara altitude existente.
                  Cron duminica 04:00, LIMIT=200/run. Manual: /api/cron/collect-venues?limit=500
 
+[25.05 ~17:00] - HYBRID V2: standings lambda blend + Layer 8 API Consensus integrate in enrich.js
+                 Commit: d73df50 (main)
+                 getStandingsForTeam(): citeste goals_for/against/played din standings
+                 lambdaHome/Away blend: 60% form_recent + 40% seasonal (standings)
+                 getPrematchPredictions(): citeste prematch_data WHERE data_type='predictions'
+                 score8 = 100 - |theirHomeWin - ourHomeWin| * 2, greutate 8% in confidence
+                 _standingsBlend si breakdown.apiConsensus adaugate in raspunsul /api/enrich
+                 Verificare: bash scripts/verify-hybrid-v2.sh → toate 4 checks OK
+
+[25.05 ~17:30] - FIX: prediction_log si model_weights tabele lipsa create pe VPS
+                 Commit: ba9e0ee (scripts/create-model-weights.sql)
+                 prediction_log: creat manual in Termius (INSERT-uri din logPrediction() silently failed)
+                 model_weights: 23 valori default in 8 module (NGP/OVER15/OVER25/GG/CONFIDENCE/CARDS/CORNERS/GENERATOR)
+                 Script reutilizabil: psql -U alohascan -d elefant -f scripts/create-model-weights.sql
+
 ================================================================================
   STARE HYBRID V2 LA 25.05 ~15:00 (dupa diagnostic):
   ✅ L0 Poisson: activ, lambda din form_stats/teams_stats/league_stats
@@ -3068,7 +3083,12 @@ NEXT STEPS (prioritizat):
      breakdown.apiConsensus adaugat in raspuns
   ❌ Consensus Engine: NEFACUT
   ❌ UI Consensus Engine: NEFACUT
-  Commit: 58db4bd
+  ✅ prediction_log: CREAT MANUAL PE VPS (tabel 37) — logPrediction() functional
+     era missing → silent failure in enrich.js; acum accept INSERT-uri
+  ✅ model_weights: CREAT MANUAL PE VPS (tabel 38) — 23 valori default in 8 module
+     script: scripts/create-model-weights.sql
+     module-uri: NGP(3), OVER15(2), OVER25(1), GG(5), CONFIDENCE(7), CARDS(2), CORNERS(2), GENERATOR(1)
+  Commit: 58db4bd (Hybrid V2 enrich.js) | ba9e0ee (create-model-weights.sql)
 ================================================================================
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
