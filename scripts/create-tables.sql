@@ -337,6 +337,38 @@ CREATE TABLE IF NOT EXISTS coaches (
     UNIQUE (coach_id, team_id)
 );
 
+-- ── 16b. coach_career ───────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS coach_career (
+    id           SERIAL PRIMARY KEY,
+    coach_id     INT NOT NULL,
+    team_id      INT,
+    team_name    TEXT,
+    start_date   DATE,
+    end_date     DATE,
+    UNIQUE (coach_id, team_id, start_date)
+);
+CREATE INDEX IF NOT EXISTS idx_coach_career_coach ON coach_career(coach_id);
+
+-- ── 16c. coach_stats ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS coach_stats (
+    coach_id             INT PRIMARY KEY,
+    coach_name           TEXT,
+    matches              INT DEFAULT 0,
+    wins                 INT DEFAULT 0,
+    draws                INT DEFAULT 0,
+    losses               INT DEFAULT 0,
+    win_rate             NUMERIC(5,2),
+    avg_goals_for        NUMERIC(4,2),
+    avg_goals_against    NUMERIC(4,2),
+    clean_sheet_rate     NUMERIC(5,2),
+    failed_to_score_rate NUMERIC(5,2),
+    style                TEXT,
+    tenure_days          INT,
+    current_team_id      INT,
+    last_match_date      TIMESTAMPTZ,
+    updated_at           TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ── 17. transfers ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS transfers (
     id              SERIAL PRIMARY KEY,
