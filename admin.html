@@ -966,7 +966,7 @@ body{
     <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
       <button class="hc-btn" onclick="clearErrors(7)">🗑 Cur&#259;&#539;&#259; &gt;7 zile</button>
       <button class="hc-btn" onclick="clearErrors(30)">🗑 Cur&#259;&#539;&#259; &gt;30 zile</button>
-      <button class="hc-btn" onclick="clearErrors('all')" style="border-color:#ef4444;color:#ef4444">⚠ &Scaron;terge TOATE</button>
+      <button class="hc-btn" onclick="clearErrors('all')" style="border-color:#ef4444;color:#ef4444">⚠ Șterge TOATE</button>
     </div>
   </section>
 
@@ -1349,10 +1349,10 @@ async function loadErrors() {
 
 async function clearErrors(scope) {
   var confirmMsg;
-  if (scope === 'all')          confirmMsg = '⚠ &Scaron;terge TOATE erorile? Aceast&#259; ac&#539;iune e ireversibil&#259;.';
-  else if (scope === 7)         confirmMsg = '&Scaron;terge erorile mai vechi de 7 zile?';
-  else if (scope === 30)        confirmMsg = '&Scaron;terge erorile mai vechi de 30 zile?';
-  else                          confirmMsg = '&Scaron;terge erori?';
+  if (scope === 'all')          confirmMsg = '⚠ Șterge TOATE erorile? Aceast&#259; ac&#539;iune e ireversibil&#259;.';
+  else if (scope === 7)         confirmMsg = 'Șterge erorile mai vechi de 7 zile?';
+  else if (scope === 30)        confirmMsg = 'Șterge erorile mai vechi de 30 zile?';
+  else                          confirmMsg = 'Șterge erori?';
   if (!confirm(confirmMsg)) return;
   try {
     var qs = scope === 'all' ? '?all=1' : '?days=' + scope;

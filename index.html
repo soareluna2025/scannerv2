@@ -4257,7 +4257,7 @@ async function showHistoricModal(){
 
     // ─── INTRO ───
     h+='<div style="background:rgba(34,197,94,.06);border-left:3px solid #22c55e;padding:10px;border-radius:6px;margin-bottom:14px;font-size:11.5px;line-height:1.5">';
-    h+='💡 <b>Ce vezi aici</b>: harta dintre ce <b>afi&scaron;eaz&#259; aplica&#539;ia</b> &scaron;i ce s-a &icirc;nt&acirc;mplat <b>real</b> &icirc;n istoric. Dac&#259; modelul zice 80% &scaron;i istoric arat&#259; 65%, modelul <b>supraestimeaz&#259;</b>. Folose&scaron;te ca verificare a &icirc;ncrederii &icirc;n predic&#539;ii.';
+    h+='💡 <b>Ce vezi aici</b>: harta dintre ce <b>afișeaz&#259; aplica&#539;ia</b> și ce s-a &icirc;nt&acirc;mplat <b>real</b> &icirc;n istoric. Dac&#259; modelul zice 80% și istoric arat&#259; 65%, modelul <b>supraestimeaz&#259;</b>. Folosește ca verificare a &icirc;ncrederii &icirc;n predic&#539;ii.';
     h+='</div>';
 
     // ─── BRIER LEGENDA ───
@@ -4279,7 +4279,7 @@ async function showHistoricModal(){
     var preMods=d.modules||{};
     var preKeys=Object.keys(preMods);
     if(!preKeys.length){
-      h+='<div style="color:var(--mu);padding:10px;font-size:11px">Calibrare lipse&scaron;te. Cron-ul a rulat dar tabela e goal&#259;.</div>';
+      h+='<div style="color:var(--mu);padding:10px;font-size:11px">Calibrare lipsește. Cron-ul a rulat dar tabela e goal&#259;.</div>';
     }else{
       preKeys.forEach(function(modKey){
         var m=preMods[modKey];
@@ -4306,7 +4306,7 @@ async function showHistoricModal(){
             h+='</tr>';
           });
           h+='</tbody></table>';
-          h+='<div style="font-size:10px;color:var(--mu);margin-top:4px;line-height:1.3">📖 Citire: pe linia <b>70-80%</b>, modelul prezice 70-80%. Coloana „Real" arat&#259; <b>ce % din meciuri au avut rezultat pozitiv</b>. Diff <span style="color:#22c55e">verde</span> = real &gt; model (subestima). <span style="color:#ef4444">Ro&scaron;u</span> = real &lt; model (supraestima).</div>';
+          h+='<div style="font-size:10px;color:var(--mu);margin-top:4px;line-height:1.3">📖 Citire: pe linia <b>70-80%</b>, modelul prezice 70-80%. Coloana „Real" arat&#259; <b>ce % din meciuri au avut rezultat pozitiv</b>. Diff <span style="color:#22c55e">verde</span> = real &gt; model (subestima). <span style="color:#ef4444">Roșu</span> = real &lt; model (supraestima).</div>';
         }
         h+='</div>';
       });
@@ -4319,7 +4319,7 @@ async function showHistoricModal(){
     var live=d.live||{};
     var liveKeys=Object.keys(live);
     if(!liveKeys.length){
-      h+='<div style="color:var(--mu);padding:10px;font-size:11px">Calibrare LIVE lipse&scaron;te.</div>';
+      h+='<div style="color:var(--mu);padding:10px;font-size:11px">Calibrare LIVE lipsește.</div>';
     }else{
       // Group by market
       var byMarket={};
@@ -4359,7 +4359,7 @@ async function showHistoricModal(){
         h+='</tbody></table>';
         h+='</div>';
       });
-      h+='<div style="font-size:10px;color:var(--mu);padding:6px;line-height:1.4">📖 Citire: pe linia <b>61-75\'</b> + <b>0-0</b> la <b>Over 1.5</b>, vezi % real din 5000 meciuri istorice cu acela&scaron;i context. Cifre mici (sub 30%) = pattern „blocat", cifre mari (peste 70%) = goluri probabile.</div>';
+      h+='<div style="font-size:10px;color:var(--mu);padding:6px;line-height:1.4">📖 Citire: pe linia <b>61-75\'</b> + <b>0-0</b> la <b>Over 1.5</b>, vezi % real din 5000 meciuri istorice cu același context. Cifre mici (sub 30%) = pattern „blocat", cifre mari (peste 70%) = goluri probabile.</div>';
     }
     h+='</div>';
 
@@ -4559,7 +4559,7 @@ function renderSelectionsSection(sels){
   h+='<div style="background:rgba(99,102,241,.05);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:10px;margin-bottom:12px">';
   h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
   h+='<div style="font-size:12px;font-weight:800;color:#a5b4fc;text-transform:uppercase;letter-spacing:.5px">📌 Selec&#539;ii curente (<span id="selections-count">'+sels.length+'</span>)</div>';
-  h+='<button onclick="clearSelections()" style="background:rgba(255,255,255,.05);color:var(--mu);border:none;padding:4px 8px;border-radius:5px;font-size:10px;cursor:pointer">✕ &Scaron;terge tot</button>';
+  h+='<button onclick="clearSelections()" style="background:rgba(255,255,255,.05);color:var(--mu);border:none;padding:4px 8px;border-radius:5px;font-size:10px;cursor:pointer">✕ Șterge tot</button>';
   h+='</div>';
   // List per pick
   sels.forEach(function(s,i){
@@ -4585,7 +4585,7 @@ function renderSelectionsSection(sels){
   if(sels.length>=2){
     h+='<div id="multi-preview" style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:8px;margin-bottom:8px;font-size:11px">';
     h+='<div style="display:flex;justify-content:space-between"><span style="color:var(--mu)">Cot&#259; combinat&#259; ('+sels.length+'x):</span><b style="color:#22c55e" id="multi-cota">'+totalCotaCombinat.toFixed(2)+'</b></div>';
-    h+='<div style="display:flex;justify-content:space-between"><span style="color:var(--mu)">C&acirc;&scaron;tig poten&#539;ial:</span><b style="color:#22c55e" id="multi-payout">'+(totalCotaCombinat*parseFloat(stake)).toFixed(4)+' LTC</b></div>';
+    h+='<div style="display:flex;justify-content:space-between"><span style="color:var(--mu)">C&acirc;știg poten&#539;ial:</span><b style="color:#22c55e" id="multi-payout">'+(totalCotaCombinat*parseFloat(stake)).toFixed(4)+' LTC</b></div>';
     h+='</div>';
   }
   // Butoane
