@@ -36,9 +36,13 @@ async function ensureTable() {
     )
   `);
   // Migratii lazy pentru tabele existente din versiuni anterioare (fara aceste coloane)
+  // ATENTIE: pentru tabela bets foarte veche, lipsesc inclusiv market/cota/stake
   await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS fixture_id INT`).catch(() => {});
   await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS home_team TEXT`).catch(() => {});
   await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS away_team TEXT`).catch(() => {});
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS market TEXT`).catch(() => {});
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS cota NUMERIC(8,3)`).catch(() => {});
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS stake NUMERIC(10,2)`).catch(() => {});
   await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS outcome TEXT DEFAULT 'PENDING'`).catch(() => {});
   await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS payout NUMERIC(10,2)`).catch(() => {});
   await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS profit NUMERIC(10,2)`).catch(() => {});
