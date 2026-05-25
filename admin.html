@@ -875,7 +875,7 @@ body{
     </div>
   </div>
 
-  <button class="btn-c" onclick="saveKeyAndRefresh()">Conectare</button>
+  <button class="btn-c" id="btnAuth" onclick="onAuthClick()">Conectare</button>
 </header>
 
 <main class="wrap">
@@ -1183,13 +1183,39 @@ if (_key) {
   document.getElementById('apiKeyInput').value = _key;
   document.getElementById('keyInputWrap').style.display = 'none';
   init();
+} else {
+  // Setam butonul la 'Conectare' chiar si fara key
+  setTimeout(function(){ if(typeof updateAuthBtn==='function') updateAuthBtn(); }, 0);
 }
 
 function saveKeyAndRefresh() {
   _key = document.getElementById('apiKeyInput').value.trim();
   if (_key) localStorage.setItem('aloha_admin_key', _key);
   document.getElementById('keyInputWrap').style.display = _key ? 'none' : 'block';
+  updateAuthBtn();
   init();
+}
+
+function logout() {
+  if (!confirm('Te deconectezi din admin?')) return;
+  localStorage.removeItem('aloha_admin_key');
+  _key = '';
+  if (_timer) { clearInterval(_timer); _timer = null; }
+  document.getElementById('keyInputWrap').style.display = 'block';
+  document.getElementById('refreshInfo').textContent = '— Introdu API key și apasă Conectare —';
+  updateAuthBtn();
+  toast('Deconectat', '#f59e0b');
+}
+
+function onAuthClick() {
+  if (_key) logout();
+  else saveKeyAndRefresh();
+}
+
+function updateAuthBtn() {
+  var btn = document.getElementById('btnAuth');
+  if (!btn) return;
+  btn.textContent = _key ? 'Deconectare' : 'Conectare';
 }
 
 function toast(msg, color) {
@@ -1528,6 +1554,7 @@ async function refresh() {
 
 function init() {
   if (_timer) clearInterval(_timer);
+  updateAuthBtn();
   refresh();
   _timer = setInterval(refresh, 30000);
 }
