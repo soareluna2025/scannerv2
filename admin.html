@@ -809,9 +809,47 @@ body{
   .status-cell{padding:11px}
   .status-cell .val{font-size:20px}
 }
+/* ─── SPLASH SCREEN (PNG logo + fade-in) ───────────────────────── */
+#splash{position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden}
+#spl-logo{width:min(320px,70vw);height:auto;display:block;animation:splFadeIn 1.2s cubic-bezier(.25,.46,.45,.94) both}
+@keyframes splFadeIn{0%{opacity:0;transform:scale(.85)}100%{opacity:1;transform:scale(1)}}
+#spl-hint{opacity:0;color:rgba(255,255,255,.5);font-size:13px;margin-top:24px;letter-spacing:.6px;font-family:-apple-system,sans-serif;pointer-events:none;animation:splHintPulse 2.2s ease-in-out infinite 1.4s}
+@keyframes splHintPulse{0%,100%{opacity:.3}50%{opacity:.85}}
+#spl-logo.spl-idle{animation:splLogoPulse 3s ease-in-out infinite}
+@keyframes splLogoPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+#spl-logo.spl-tapped{animation:splZoomAbsorb .55s cubic-bezier(.55,0,1,.45) forwards!important}
+@keyframes splZoomAbsorb{0%{transform:scale(1);opacity:1}60%{transform:scale(6);opacity:1}100%{transform:scale(12);opacity:0}}
+#splash.spl-exit{animation:splBgFade .35s ease-in .4s forwards}
+@keyframes splBgFade{to{opacity:0}}
 </style>
 </head>
 <body>
+
+<!-- SPLASH SCREEN -->
+<div id="splash" onclick="splashTap()">
+  <img id="spl-logo" src="/admin-icons/source-square.png" alt="AlohaAdmin">
+  <div id="spl-hint">Apasă pentru a continua</div>
+</div>
+<script>
+(function(){
+  var tapped = false;
+  window.splashTap = function(){
+    if(tapped) return;
+    tapped = true;
+    var logo = document.getElementById('spl-logo');
+    var splash = document.getElementById('splash');
+    if(logo){ logo.classList.remove('spl-idle'); logo.classList.add('spl-tapped'); }
+    if(splash) splash.classList.add('spl-exit');
+    setTimeout(function(){ if(splash) splash.style.display = 'none'; }, 750);
+  };
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      var logo = document.getElementById('spl-logo');
+      if(logo && !tapped) logo.classList.add('spl-idle');
+    }, 1500);
+  });
+})();
+</script>
 
 <div class="orbs" aria-hidden="true">
   <div class="orb orb-1"></div>
