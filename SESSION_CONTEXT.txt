@@ -2991,6 +2991,21 @@ NEXT STEPS (prioritizat):
                  Commit: 1893585 (feature branch) + fceca62 (main via MCP)
                  Vezi sectiunea 14 pentru toate rezultatele.
 
+[25.05 ~15:xx] - P1 FIX: collect-finished logCron 'ok' → 'success' (false positive diagnostic)
+                 Commit: 39a6b44
+
+[25.05 ~15:xx] - P2 INVESTIGAT: form_stats JOIN 23% — NON-ISSUE confirmat
+                 enrich.js citeste din fixtures_history direct (nu form_stats)
+                 generator.js are fallback teams_stats (35/35 = 100%)
+
+[25.05 ~15:xx] - P3 FIX: injuries fallback din prematch_data adaugat in enrich.js
+                 getInjuriesFromDB() acum citeste si din prematch_data (978 fixtures)
+                 daca injuries table e goala pentru acel fixture
+
+[25.05 ~15:xx] - P4 FIX: odds fallback din prematch_data adaugat in enrich.js
+                 getOddsFromDB() acum citeste si din prematch_data (982 fixtures)
+                 daca odds table e goala pentru acel fixture — salveaza API quota
+
 ================================================================================
   STARE HYBRID V2 LA 25.05 ~15:00 (dupa diagnostic):
   ✅ L0 Poisson: activ, lambda din form_stats/teams_stats/league_stats
@@ -3003,13 +3018,14 @@ NEXT STEPS (prioritizat):
   ✅ H2H: 2,369 meciuri, 1,386 perechi unice
   🔄 L4+ Referee Extended: 130/233 cu stats complete (103 fara home_win_rate)
   ⚠️  form_stats JOIN GAP: doar 8-9/35 fixtures viitoare au JOIN activ (23%)
-  ⚠️  collect-finished BROKEN: 50 rulari, 0 succese — odds/match_stats NU se colecteaza
-  ⚠️  Brier Score: 0.1950 (target ≤ 0.13) — sample 622 predictii verificate
-  ❌ venues altitude: 4,604 NULL — OpenElevation nerulatat
-  ❌ injuries table: 4 randuri (golita) — date in prematch_data dar NU in tabel
+  ✅ collect-finished: P1 FIX (status 'ok'→'success') — job era functional, 1154 fixtures/run
+  ✅ form_stats JOIN: P2 NON-ISSUE — enrich.js citeste fixtures_history direct
+  ✅ injuries: P3 FIX — getInjuriesFromDB() fallback din prematch_data (978 fixtures)
+  ✅ odds NS: P4 FIX — getOddsFromDB() fallback din prematch_data (982 fixtures)
+  ⚠️  Brier Score: 0.1950 (target ≤ 0.13) — sample 622 predictii verificate (P5 PENDING)
+  ❌ venues altitude: 4,604 NULL — OpenElevation nerulatat (P6 PENDING)
   ❌ prematch predictions (900 fixtures): COLECTATE dar IGNORATE in enrich.js
   ❌ standings (2,484 randuri): COLECTATE dar IGNORATE in enrich.js
-  ❌ odds prematch: 982 fixtures in prematch_data, dar C2 arata 0 in odds JOIN
   ❌ Consensus Engine: NEFACUT
   ❌ UI Consensus Engine: NEFACUT
 ================================================================================

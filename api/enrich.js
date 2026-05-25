@@ -435,14 +435,62 @@ async function getOddsFromDB(fixtureId) {
       'SELECT *, bet_name AS market, value_name AS label, value_odd AS odd_value FROM odds WHERE fixture_id = $1 AND bookmaker_id = 8',
       [fixtureId]
     );
-    return r.rows;
+    if (r.rows.length > 0) return r.rows;
+
+    // Fallback: prematch_data stochează odds ca array [{bookmakers:[{id,name,bets:[{name,values}]}]}]
+    const pd = await query(
+      `SELECT payload FROM prematch_data WHERE fixture_id = $1 AND data_type = 'odds'
+       ORDER BY collected_at DESC LIMIT 1`,
+      [fixtureId]
+    );
+    if (!pd.rows.length) return [];
+    const arr = pd.rows[0].payload;
+    if (!Array.isArray(arr) || !arr.length) return [];
+    const rows = [];
+    for (const item of arr) {
+      for (const bm of item.bookmakers || []) {
+        for (const bet of bm.bets || []) {
+          for (const v of bet.values || []) {
+            const oddVal = parseFloat(v.odd);
+            if (!oddVal) continue;
+            rows.push({
+              bookmaker_id:   bm.id,
+              bookmaker_name: bm.name,
+              market:         bet.name,
+              label:          v.value,
+              odd_value:      oddVal,
+            });
+          }
+        }
+      }
+    }
+    return rows;
   } catch (_) { return []; }
 }
 
 async function getInjuriesFromDB(fixtureId) {
   try {
     const r = await query('SELECT * FROM injuries WHERE fixture_id = $1', [fixtureId]);
-    return r.rows;
+    if (r.rows.length > 0) return r.rows;
+
+    // Fallback: prematch_data stochează injuries ca array JSON brut
+    const pd = await query(
+      `SELECT payload FROM prematch_data WHERE fixture_id = $1 AND data_type = 'injuries'
+       ORDER BY collected_at DESC LIMIT 1`,
+      [fixtureId]
+    );
+    if (!pd.rows.length) return [];
+    const arr = pd.rows[0].payload;
+    if (!Array.isArray(arr)) return [];
+    return arr.map(item => ({
+      fixture_id:  fixtureId,
+      team_id:     item.team?.id    || null,
+      team_name:   item.team?.name  || null,
+      player_id:   item.player?.id  || null,
+      player_name: item.player?.name || null,
+      type:        item.player?.type || null,
+      reason:      item.player?.reason || null,
+    }));
   } catch (_) { return []; }
 }
 
