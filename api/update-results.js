@@ -6,6 +6,15 @@ import { fetchApiFootball } from './utils/fetch-api.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+async function logCron(status, msg = '') {
+  try {
+    await query(
+      `INSERT INTO cron_logs (job_name, status, error_msg) VALUES ('update-results', $1, $2)`,
+      [status, msg || null]
+    );
+  } catch (_) {}
+}
+
 export default async function handler(req, res) {
   const afKey = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
@@ -13,15 +22,16 @@ export default async function handler(req, res) {
 
   try {
     // Select predictions without results where match_date has passed
-    // M4: Limit 50 per run — excess processat la rularea urmatoare (02:00)
+    // Limit 200/run — 200 * 500ms = 100s, safe in cron window
     const pendingRes = await query(
       `SELECT id, fixture_id FROM predictions
        WHERE result_over15 IS NULL AND match_date < NOW()
-       LIMIT 50`
+       LIMIT 200`
     );
 
     const pending = pendingRes.rows;
     if (!pending.length) {
+      await logCron('success', 'no pending');
       return res.status(200).json({ updated: 0, total: 0 });
     }
 
@@ -92,8 +102,10 @@ export default async function handler(req, res) {
       await sleep(500);
     }
 
+    await logCron('success', `updated ${updated}/${pending.length}`);
     return res.status(200).json({ updated, total: pending.length });
   } catch (e) {
+    await logCron('error', e.message);
     return res.status(500).json({ error: e.message });
   }
 }
