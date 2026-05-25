@@ -313,6 +313,8 @@ const ALLOWED_JOBS = {
   'calibrate-live':     '/api/cron/calibrate-live',
   'learning-analysis':  '/api/cron/learning-analysis',
   'collect-venues':     '/api/cron/collect-venues',
+  'collect-coaches':    '/api/cron/collect-coaches',
+  'coach-stats':        '/api/cron/coach-stats',
 };
 
 router.post('/trigger-cron', async (req, res) => {

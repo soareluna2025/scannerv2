@@ -7,6 +7,52 @@ const PRE_MATCH_STATUSES = new Set(['NS']);
 const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
 const FINISHED_STATUSES = new Set(['FT','AET','PEN','SUSP','ABD','AWD','WO']);
 
+// Coach impact: returneaza multiplicatori pe baza style + tenure
+// Tenure < 90 zile → bounce effect (+8% offensive). Tenure > 3 ani → veteran stability (+3%).
+// Style 'offensive' boost over 2.5. Style 'defensive' boost under + clean sheet.
+async function getCoachImpact(teamId) {
+  const impact = { over15: 1, over25: 1, gg: 1, source: [] };
+  if (!teamId) return impact;
+  try {
+    const { rows } = await query(`
+      SELECT cs.style, cs.tenure_days, cs.avg_goals_for, cs.avg_goals_against,
+             cs.clean_sheet_rate, cs.failed_to_score_rate, cs.win_rate, cs.matches
+      FROM coach_stats cs
+      JOIN coaches c ON c.coach_id = cs.coach_id
+      WHERE c.team_id = $1
+      ORDER BY cs.updated_at DESC
+      LIMIT 1
+    `, [teamId]);
+    const cs = rows[0];
+    if (!cs || cs.matches < 5) return impact;
+    // Tenure effect
+    if (cs.tenure_days != null) {
+      if (cs.tenure_days < 90) {
+        impact.over15 *= 1.08; impact.over25 *= 1.10;
+        impact.source.push(`coach_new(${cs.tenure_days}d)`);
+      } else if (cs.tenure_days > 1095) {
+        impact.over15 *= 1.03;
+        impact.source.push(`coach_veteran(${Math.round(cs.tenure_days/365)}y)`);
+      }
+    }
+    // Style effect
+    if (cs.style === 'offensive') {
+      impact.over25 *= 1.12; impact.gg *= 1.08;
+      impact.source.push('style_offensive');
+    } else if (cs.style === 'open') {
+      impact.over25 *= 1.15; impact.gg *= 1.12;
+      impact.source.push('style_open');
+    } else if (cs.style === 'defensive') {
+      impact.over25 *= 0.88; impact.gg *= 0.92;
+      impact.source.push('style_defensive');
+    } else if (cs.style === 'pragmatic') {
+      impact.over15 *= 0.95;
+      impact.source.push('style_pragmatic');
+    }
+  } catch (e) { /* silent */ }
+  return impact;
+}
+
 // Returneaza multiplicatori pe Over1.5, Over2.5, GG pe baza venue + meteo.
 // Default toate la 1.0 (no effect). Apel safe — daca lipsesc date, returneaza neutru.
 //
@@ -600,6 +646,23 @@ export default async function handler(req, res) {
       result._venueSurface = venueInfo.surface;
       result._venueAltitude = venueInfo.altitude_m;
     }
+
+    // Coach impact (Faza 2 Hybrid) — aplicat pentru ambele echipe agregat
+    try {
+      const homeImp = await getCoachImpact(hId);
+      const awayImp = await getCoachImpact(aId);
+      // Combina cele 2 cu media geometrica (echivalent multiplicare conservatoare)
+      const combine = (a, b) => Math.sqrt(a * b);
+      const o15 = combine(homeImp.over15, awayImp.over15);
+      const o25 = combine(homeImp.over25, awayImp.over25);
+      const ggm = combine(homeImp.gg,     awayImp.gg);
+      if (homeImp.source.length || awayImp.source.length) {
+        result.over15Prob = Math.max(0, Math.min(100, result.over15Prob * o15));
+        result.over25Prob = Math.max(0, Math.min(100, result.over25Prob * o25));
+        result.ggProb    = Math.max(0, Math.min(100, result.ggProb    * ggm));
+        result._coachImpact = `H:${homeImp.source.join(',')}|A:${awayImp.source.join(',')}`;
+      }
+    } catch (_) { /* silent */ }
 
     // Ajustare Over 2.5 bazată pe stilul arbitrului
     if (refereeStats && Number(refereeStats.total_matches) >= 5) {
