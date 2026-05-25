@@ -37,20 +37,6 @@ async function geocodeCity(city, country) {
 }
 
 // Lookup altitude prin Open-Elevation (gratuit, fara cheie)
-async function getAltitude(lat, lng) {
-  if (!lat || !lng) return null;
-  try {
-    // Open-Meteo elevation — acelasi provider ca weather, stabil si gratuit
-    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lng}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    const d = await res.json();
-    const m = d.elevation?.[0];
-    return typeof m === 'number' ? Math.round(m) : null;
-  } catch (e) {
-    return null;
-  }
-}
-
 // Climate zone simplu pe baza de latitudine
 function climateZone(lat) {
   if (lat == null) return null;
@@ -64,8 +50,22 @@ function climateZone(lat) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Elevation batch: Open-Meteo accepta pana la 100 perechi lat/lng intr-un singur request
+async function getAltitudeBatch(coords) {
+  if (!coords.length) return [];
+  try {
+    const lats = coords.map(c => c.lat).join(',');
+    const lngs = coords.map(c => c.lng).join(',');
+    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lngs}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const d = await res.json();
+    return Array.isArray(d.elevation) ? d.elevation.map(e => typeof e === 'number' ? Math.round(e) : 0) : coords.map(() => 0);
+  } catch (_) {
+    return coords.map(() => 0);
+  }
+}
+
 async function processVenues(LIMIT) {
-    // Venues existente fara altitude — city/country deja in DB, nu mai apelam API-Football
     const { rows: toProcess } = await query(`
       SELECT venue_id AS vid, city, country FROM venues
       WHERE altitude_m IS NULL AND city IS NOT NULL
@@ -73,44 +73,49 @@ async function processVenues(LIMIT) {
       LIMIT $1
     `, [LIMIT]).catch(() => ({ rows: [] }));
 
-    const collected = [];
+    if (!toProcess.length) {
+      console.log('[collect-venues] nimic de procesat');
+      return;
+    }
 
-    // Geocodare directa din city/country (fara API-Football) + sleep Nominatim 1req/s
-    for (const r of toProcess) {
-      try {
-        const coords = await geocodeCity(r.city, r.country);
-        const lat = coords?.lat ?? null;
-        const lng = coords?.lng ?? null;
-        // Daca geocodarea reuseste, incercam elevation; fallback la 0 (sea level)
-        // ca sa nu blocam progresul daca Open-Meteo are probleme temporare
-        let altitude = null;
-        if (lat != null && lng != null) {
-          altitude = await getAltitude(lat, lng) ?? 0;
-        }
-        const climate = climateZone(lat);
+    // Pas 1: geocodare unica per oras (nu per venue) — economiseste apeluri Nominatim
+    const cityCache = new Map(); // "city|country" → {lat, lng} | null
+    const uniqueCities = [...new Set(toProcess.map(r => `${r.city}|${r.country ?? ''}`))];
+    console.log(`[collect-venues] ${toProcess.length} venues, ${uniqueCities.length} orase unice`);
 
-        // Doar daca am obtinut cel putin lat/lng actualizam — altfel sarim
-        if (lat == null) {
-          console.warn(`[collect-venues] geocodare esec: ${r.city} (${r.country})`);
-        } else {
-          await query(`
-            UPDATE venues
-            SET latitude = COALESCE($1, latitude),
-                longitude = COALESCE($2, longitude),
-                altitude_m = COALESCE($3, altitude_m),
-                climate_zone = COALESCE($4, climate_zone),
-                updated_at = NOW()
-            WHERE venue_id = $5
-          `, [lat, lng, altitude, climate, r.vid]);
-
-          collected.push({ id: r.vid, city: r.city, lat, altitude });
-          console.log(`[collect-venues] ${r.city} (${r.country}) → lat=${lat} alt=${altitude}m`);
-        }
-      } catch (e) {
-        console.warn(`[collect-venues] venue ${r.vid} (${r.city}):`, e.message);
-      }
+    for (const key of uniqueCities) {
+      const [city, country] = key.split('|');
+      const coords = await geocodeCity(city, country);
+      cityCache.set(key, coords);
       await sleep(1100); // Nominatim rate limit: 1 req/s
     }
+
+    // Pas 2: elevation batch pentru toate coordonatele obtinute (un singur request API)
+    const withCoords = toProcess
+      .map(r => ({ ...r, coords: cityCache.get(`${r.city}|${r.country ?? ''}`) }))
+      .filter(r => r.coords);
+
+    const elevations = await getAltitudeBatch(withCoords.map(r => r.coords));
+
+    // Pas 3: UPDATE batch in DB
+    const collected = [];
+    for (let i = 0; i < withCoords.length; i++) {
+      const r = withCoords[i];
+      const { lat, lng } = r.coords;
+      const altitude = elevations[i] ?? 0;
+      const climate = climateZone(lat);
+      try {
+        await query(`
+          UPDATE venues
+          SET latitude = $1, longitude = $2, altitude_m = $3, climate_zone = $4, updated_at = NOW()
+          WHERE venue_id = $5
+        `, [lat, lng, altitude, climate, r.vid]);
+        collected.push({ id: r.vid, city: r.city, lat, altitude });
+      } catch (e) {
+        console.warn(`[collect-venues] UPDATE esec venue ${r.vid}:`, e.message);
+      }
+    }
+    console.log(`[collect-venues] done: ${collected.length}/${toProcess.length} venues procesate`);
 
     await query(`
       INSERT INTO cron_logs (job_name, ran_at, status, fixtures_processed)
@@ -123,7 +128,7 @@ async function processVenues(LIMIT) {
 export default async function handler(req, res) {
   try {
     await ensureColumns();
-    const LIMIT = parseInt(req.query?.limit || '200', 10);
+    const LIMIT = parseInt(req.query?.limit || '500', 10);
 
     const { rows: pending } = await query(`
       SELECT COUNT(*)::int AS n FROM venues WHERE altitude_m IS NULL AND city IS NOT NULL
