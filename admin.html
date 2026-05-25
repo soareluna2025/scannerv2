@@ -466,8 +466,21 @@ body{
 }
 .db-foot:hover{color:#fff;letter-spacing:1.5px}
 
-/* ===== API FOOTBALL USAGE ===== */
-.api-wrap{display:flex;gap:18px;align-items:center}
+/* ===== API FOOTBALL USAGE — WOW pack ===== */
+#cardAPI:not(.collapsed){
+  position:relative;overflow:hidden;
+}
+#cardAPI:not(.collapsed)::after{
+  content:'';position:absolute;inset:-2px;border-radius:24px;pointer-events:none;
+  background:radial-gradient(circle at 70% 50%,rgba(34,211,238,.10) 0%,transparent 50%);
+  animation:apiCardBreath 4s ease-in-out infinite;
+  z-index:0;
+}
+@keyframes apiCardBreath{
+  0%,100%{opacity:.5}
+  50%{opacity:1}
+}
+.api-wrap{display:flex;gap:18px;align-items:center;position:relative;z-index:1}
 .api-rows{flex:0 0 55%;display:flex;flex-direction:column;gap:9px}
 .api-row{
   display:flex;align-items:center;justify-content:space-between;
@@ -475,55 +488,86 @@ body{
 }
 .api-row .k{color:var(--mu);font-size:11.5px;font-weight:500}
 .api-row .v{
-  color:var(--tx);font-weight:600;
-  font-family:'Rajdhani',sans-serif;font-size:15px;
+  color:var(--tx);font-weight:700;
+  font-family:'Rajdhani',sans-serif;font-size:17px;
   font-variant-numeric:tabular-nums;
+  transition:color .3s,text-shadow .3s;
 }
-.api-row .v.ac{color:var(--ac)}
+.api-row .v.ac{
+  color:var(--ac);
+  text-shadow:0 0 12px rgba(34,211,238,.4);
+}
 .api-bar{
-  width:100%;height:6px;
+  position:relative;
+  width:100%;height:8px;
   background:rgba(255,255,255,0.06);
-  border-radius:3px;overflow:hidden;margin-top:6px;
-  box-shadow:inset 0 1px 1px rgba(0,0,0,0.4);
+  border-radius:4px;overflow:hidden;margin-top:6px;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,0.5);
 }
 .api-bar-fill{
+  position:relative;
   height:100%;
-  background:linear-gradient(90deg,var(--ac-3),var(--ac));
-  border-radius:3px;
-  box-shadow:0 0 8px rgba(34,211,238,0.3);
-  transition:width .7s var(--ease);
+  background:linear-gradient(90deg,var(--ac-3),var(--ac),#67E8F9);
+  border-radius:4px;
+  box-shadow:0 0 12px rgba(34,211,238,0.5),0 0 4px rgba(34,211,238,0.8);
+  transition:width 1.4s cubic-bezier(.25,.46,.45,.94);
+  overflow:hidden;
+}
+.api-bar-fill::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.45) 50%,transparent 100%);
+  animation:apiShimmer 2.4s linear infinite;
+}
+@keyframes apiShimmer{
+  0%{transform:translateX(-100%)}
+  100%{transform:translateX(200%)}
 }
 .api-bar-info{
-  color:var(--ac);font-size:11px;font-weight:600;
-  margin-top:6px;letter-spacing:.3px;
+  color:var(--ac);font-size:11px;font-weight:700;
+  margin-top:8px;letter-spacing:.5px;
+  text-shadow:0 0 8px rgba(34,211,238,.4);
 }
 .circ{
   flex:0 0 45%;position:relative;
   display:flex;align-items:center;justify-content:center;
-  height:140px;
+  height:170px;
 }
 .circ svg{
   transform:rotate(-90deg);
-  filter:drop-shadow(0 2px 8px rgba(34,211,238,0.2));
+  filter:drop-shadow(0 4px 14px rgba(34,211,238,0.45));
+  animation:circGlow 3s ease-in-out infinite;
 }
-.circ-bg{fill:none;stroke:rgba(255,255,255,0.06);stroke-width:8}
+@keyframes circGlow{
+  0%,100%{filter:drop-shadow(0 4px 14px rgba(34,211,238,0.45))}
+  50%{filter:drop-shadow(0 6px 22px rgba(34,211,238,0.75)) drop-shadow(0 0 8px rgba(103,232,249,0.4))}
+}
+.circ-bg{fill:none;stroke:rgba(255,255,255,0.06);stroke-width:10}
 .circ-fg{
-  fill:none;stroke:url(#greenGrad);stroke-width:8;stroke-linecap:round;
-  transition:stroke-dashoffset .7s var(--ease);
+  fill:none;stroke:url(#greenGrad);stroke-width:10;stroke-linecap:round;
+  transition:stroke-dashoffset 1.6s cubic-bezier(.25,.46,.45,.94);
+  filter:drop-shadow(0 0 8px rgba(34,211,238,.6));
 }
 .circ-txt{
   position:absolute;inset:0;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
 }
 .circ-txt .p{
-  font-family:'Rajdhani',sans-serif;font-weight:600;
-  font-size:26px;color:var(--tx);line-height:1;
-  font-variant-numeric:tabular-nums;
+  font-family:'Rajdhani',sans-serif;font-weight:700;
+  font-size:34px;
+  background:linear-gradient(135deg,#fff 0%,var(--ac) 100%);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;
+  line-height:1;font-variant-numeric:tabular-nums;
+  text-shadow:0 0 30px rgba(34,211,238,.3);
 }
-.circ-txt .p .u{font-size:14px;color:var(--ac);margin-left:1px;font-weight:500}
+.circ-txt .p .u{
+  font-size:16px;color:var(--ac);margin-left:2px;font-weight:600;
+  -webkit-text-fill-color:var(--ac);background:none;
+}
 .circ-txt .l{
-  font-size:9.5px;color:var(--mu);
-  letter-spacing:1.5px;margin-top:4px;text-transform:uppercase;
+  font-size:10px;color:var(--mu);
+  letter-spacing:2px;margin-top:6px;text-transform:uppercase;
+  font-weight:600;
 }
 
 /* ===== MECIURI LIVE ===== */
@@ -1358,22 +1402,60 @@ async function loadDB() {
   }
 }
 
+// Countup animat pentru numere
+function animateNumber(el, from, to, duration, formatter) {
+  if (!el) return;
+  if (!duration) duration = 1200;
+  if (!formatter) formatter = function(n){return Math.round(n);};
+  var start = null;
+  function step(ts) {
+    if (!start) start = ts;
+    var t = Math.min((ts - start) / duration, 1);
+    // ease-out cubic
+    var eased = 1 - Math.pow(1 - t, 3);
+    var val = from + (to - from) * eased;
+    el.textContent = formatter(val);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
 async function loadAPI() {
   try {
     var d = await apiFetch('/api/admin/api-usage');
     var pct = Math.round(d.pct_used || 0);
     var rows = document.getElementById('apiRows');
+    // Salveaza valorile anterioare pentru countup (default 0 la prima incarcare)
+    var prevUsed = window._apiPrev?.used || 0;
+    var prevRem = window._apiPrev?.rem || 0;
+    var prevPct = window._apiPrev?.pct || 0;
+    window._apiPrev = {used: d.requests_today, rem: d.remaining, pct: pct};
+
     rows.innerHTML = ''
       + '<div class="api-row"><span class="k">Plan</span><span class="v ac">' + (d.plan||'?') + '</span></div>'
       + '<div class="api-row"><span class="k">Expiră</span><span class="v ac">' + (d.plan_end||'?') + '</span></div>'
-      + '<div class="api-row"><span class="k">Utilizate azi</span><span class="v">' + fmtNum(d.requests_today) + '</span></div>'
-      + '<div class="api-row"><span class="k">Rămase</span><span class="v">' + fmtNum(d.remaining) + ' / ' + fmtNum(d.limit_day) + '</span></div>'
-      + '<div class="api-bar"><div class="api-bar-fill" style="width:' + pct + '%"></div></div>'
-      + '<div class="api-bar-info">' + pct + '% utilizat ›</div>';
+      + '<div class="api-row"><span class="k">Utilizate azi</span><span class="v" id="apiUsed">' + fmtNum(prevUsed) + '</span></div>'
+      + '<div class="api-row"><span class="k">Rămase</span><span class="v"><span id="apiRem">' + fmtNum(prevRem) + '</span> / ' + fmtNum(d.limit_day) + '</span></div>'
+      + '<div class="api-bar"><div class="api-bar-fill" style="width:' + prevPct + '%"></div></div>'
+      + '<div class="api-bar-info"><span id="apiPctBar">' + prevPct + '</span>% utilizat ›</div>';
+
+    // Animatii countup (cu delay mic ca DOM-ul sa fie attached)
+    setTimeout(function(){
+      animateNumber(document.getElementById('apiUsed'), prevUsed, d.requests_today, 1200, function(n){return fmtNum(Math.round(n));});
+      animateNumber(document.getElementById('apiRem'), prevRem, d.remaining, 1200, function(n){return fmtNum(Math.round(n));});
+      animateNumber(document.getElementById('apiPctBar'), prevPct, pct, 1400);
+      // Bara liniara se umple cu transition CSS
+      var bar = rows.querySelector('.api-bar-fill');
+      if (bar) requestAnimationFrame(function(){bar.style.width = pct + '%';});
+    }, 50);
+
+    // Cerc - animatie arc
     var circ = 351.86;
     var off = circ * (1 - pct/100);
     document.getElementById('circFg').setAttribute('stroke-dashoffset', off);
-    document.getElementById('circPct').textContent = pct;
+    // Countup pct in centru cerc
+    var pctEl = document.getElementById('circPct');
+    if (pctEl) animateNumber(pctEl, prevPct, pct, 1500);
   } catch(e) {
     document.getElementById('apiRows').innerHTML = '<div class="empty err">' + e.message + '</div>';
   }
