@@ -887,22 +887,32 @@ export default async function handler(req, res) {
             }).catch(() => {});
           }
         }
+
+        // Salveaza/actualizeaza predicția pre-meci — mereu ultima versiune (DO UPDATE)
+        // WHERE result_over15 IS NULL garanteaza ca nu suprascrie dupa ce meciul s-a jucat
+        query(
+          `INSERT INTO predictions (fixture_id, home_team, away_team, league_name, league_id, match_date,
+            lambda_home, lambda_away, lambda_total, over15_prob, over25_prob, gg_prob,
+            home_score_rate, away_score_rate, h2h_over15, confidence)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          ON CONFLICT (fixture_id) DO UPDATE SET
+            lambda_home=EXCLUDED.lambda_home, lambda_away=EXCLUDED.lambda_away,
+            lambda_total=EXCLUDED.lambda_total,
+            over15_prob=EXCLUDED.over15_prob, over25_prob=EXCLUDED.over25_prob,
+            gg_prob=EXCLUDED.gg_prob, home_score_rate=EXCLUDED.home_score_rate,
+            away_score_rate=EXCLUDED.away_score_rate, h2h_over15=EXCLUDED.h2h_over15,
+            confidence=EXCLUDED.confidence, updated_at=NOW()
+          WHERE predictions.result_over15 IS NULL`,
+          [
+            Number(fid), hn || '', an || '', lg || '', lgid ? Number(lgid) : null, dt || null,
+            payload.lambdaHome, payload.lambdaAway, payload.lambdaTotal,
+            payload.over15Prob, payload.over25Prob, payload.ggProb,
+            payload.homeScoreRate, payload.awayScoreRate, payload.h2hOver15,
+            payload.confidenceScore || null,
+          ]
+        ).catch(() => {});
       }
 
-      query(
-        `INSERT INTO predictions (fixture_id, home_team, away_team, league_name, league_id, match_date,
-          lambda_home, lambda_away, lambda_total, over15_prob, over25_prob, gg_prob,
-          home_score_rate, away_score_rate, h2h_over15, confidence)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-        ON CONFLICT (fixture_id) DO NOTHING`,
-        [
-          Number(fid), hn || '', an || '', lg || '', lgid ? Number(lgid) : null, dt || null,
-          payload.lambdaHome, payload.lambdaAway, payload.lambdaTotal,
-          payload.over15Prob, payload.over25Prob, payload.ggProb,
-          payload.homeScoreRate, payload.awayScoreRate, payload.h2hOver15,
-          payload.confidenceScore || null,
-        ]
-      ).catch(() => {});
     }
 
     res.status(200).json(payload);
