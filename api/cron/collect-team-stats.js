@@ -122,8 +122,8 @@ export default async function handler(req, res) {
     const { rows: pairs } = await query(`
       SELECT DISTINCT f.home_team_id AS team_id, f.league_id
       FROM fixtures f
-      WHERE f.fixture_date >= NOW() - INTERVAL '30 days'
-        AND f.fixture_date <= NOW() + INTERVAL '7 days'
+      WHERE f.match_date >= NOW() - INTERVAL '30 days'
+        AND f.match_date <= NOW() + INTERVAL '7 days'
         AND f.home_team_id IS NOT NULL
         AND f.league_id IS NOT NULL
         AND NOT EXISTS (
@@ -136,8 +136,8 @@ export default async function handler(req, res) {
       UNION
       SELECT DISTINCT f.away_team_id AS team_id, f.league_id
       FROM fixtures f
-      WHERE f.fixture_date >= NOW() - INTERVAL '30 days'
-        AND f.fixture_date <= NOW() + INTERVAL '7 days'
+      WHERE f.match_date >= NOW() - INTERVAL '30 days'
+        AND f.match_date <= NOW() + INTERVAL '7 days'
         AND f.away_team_id IS NOT NULL
         AND f.league_id IS NOT NULL
         AND NOT EXISTS (
