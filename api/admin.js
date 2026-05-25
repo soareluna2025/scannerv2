@@ -945,9 +945,9 @@ router.post('/db-cleanup', async (req, res) => {
     const ALLOWED = {
       'predictions':              { col: 'created_at', label: 'Predictii' },
       'cron_logs':                { col: 'ran_at',     label: 'Logs cron' },
-      'alerts':                   { col: 'created_at', label: 'Alerte' },
+      'alerts':                   { col: 'sent_at',    label: 'Alerte' },
       'live_stats':               { col: 'recorded_at',label: 'Stats live' },
-      'prematch_enrichment_log':  { col: 'logged_at',  label: 'Log prematch' },
+      'prematch_enrichment_log':  { col: 'executed_at',label: 'Log prematch' },
     };
     if (!ALLOWED[table]) {
       return res.status(400).json({ ok: false, error: `Tabel invalid. Permise: ${Object.keys(ALLOWED).join(', ')}` });
@@ -987,9 +987,9 @@ router.get('/db-cleanup-preview', async (req, res) => {
     const ALLOWED = {
       'predictions': 'created_at',
       'cron_logs': 'ran_at',
-      'alerts': 'created_at',
+      'alerts': 'sent_at',
       'live_stats': 'recorded_at',
-      'prematch_enrichment_log': 'logged_at',
+      'prematch_enrichment_log': 'executed_at',
     };
     const preview = {};
     for (const [table, col] of Object.entries(ALLOWED)) {
