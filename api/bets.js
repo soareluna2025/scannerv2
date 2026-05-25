@@ -14,6 +14,33 @@
 import { query } from './db.js';
 
 async function ensureTable() {
+  // Diagnostic: daca tabela bets exista dar e corupta (lipsa coloana id sau e goala
+  // si lipsesc coloane critice), o re-cream de la zero. Sigur pentru ca nu pierdem
+  // date — INSERT-urile esuasera oricum.
+  try {
+    const { rows: tableExists } = await query(`
+      SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='bets') AS e
+    `);
+    if (tableExists[0]?.e) {
+      const { rows: hasId } = await query(`
+        SELECT EXISTS(
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='bets' AND column_name='id'
+        ) AS e
+      `);
+      if (!hasId[0]?.e) {
+        // Tabela corupta — lipseste id. Verificam daca are date inainte sa drop.
+        const { rows: cnt } = await query(`SELECT COUNT(*)::int AS n FROM bets`).catch(() => ({ rows: [{ n: 0 }] }));
+        if (cnt[0].n === 0) {
+          console.log('[bets] Tabela bets corupta (lipsa id), 0 randuri — DROP+CREATE');
+          await query(`DROP TABLE bets`);
+        } else {
+          console.error('[bets] Tabela bets corupta dar are', cnt[0].n, 'randuri — NU drop. Necesita interventie manuala.');
+        }
+      }
+    }
+  } catch (e) { console.warn('[bets] ensureTable diagnostic:', e.message); }
+
   await query(`
     CREATE TABLE IF NOT EXISTS bets (
       id            SERIAL PRIMARY KEY,
