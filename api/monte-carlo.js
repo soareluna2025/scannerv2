@@ -13,6 +13,7 @@ export function runSimulation(lambdaHome, lambdaAway, simCount = 10000, currentH
   let over05 = 0, over15 = 0, over25 = 0, over35 = 0, gg = 0;
   const minuteBuckets = [0, 0, 0, 0, 0, 0];
   let totalGoals = 0;
+  const simTotals = new Array(simCount);
 
   for (let i = 0; i < simCount; i++) {
     // Simulate remaining goals, then add current score
@@ -24,6 +25,7 @@ export function runSimulation(lambdaHome, lambdaAway, simCount = 10000, currentH
 
     const key = `${hg}-${ag}`;
     scoreCounts[key] = (scoreCounts[key] || 0) + 1;
+    simTotals[i] = total;
 
     if (hg > ag) homeWins++;
     else if (hg === ag) draws++;
@@ -59,6 +61,28 @@ export function runSimulation(lambdaHome, lambdaAway, simCount = 10000, currentH
     goalTiming[label] = totalGoals > 0 ? Math.round(minuteBuckets[i] / totalGoals * 100) : 0;
   });
 
+  // Scenarios: derive optimist / pessimist / surprise from full distribution
+  const allScoresData = Object.entries(scoreCounts).map(([score, count]) => {
+    const [h, a] = score.split('-').map(Number);
+    return { score, count, total: h + a, prob: Math.round(count / simCount * 1000) / 10 };
+  });
+
+  const sorted = [...simTotals].sort((a, b) => a - b);
+  const p10total = sorted[Math.floor(simCount * 0.10)];
+  const p90total = sorted[Math.floor(simCount * 0.90)];
+
+  const optCandidates  = allScoresData.filter(s => s.total >= p90total).sort((a, b) => b.count - a.count);
+  const pessCandidates = allScoresData.filter(s => s.total <= p10total).sort((a, b) => b.count - a.count);
+  const surpriseCands  = allScoresData
+    .filter(s => s.prob >= 5 && s.prob < 15)
+    .sort((a, b) => b.total - a.total);
+
+  const scenarios = {
+    optimist:  optCandidates[0]  ? { score: optCandidates[0].score,  goals: optCandidates[0].total,  prob: optCandidates[0].prob  } : null,
+    pessimist: pessCandidates[0] ? { score: pessCandidates[0].score, goals: pessCandidates[0].total, prob: pessCandidates[0].prob } : null,
+    surprise:  surpriseCands[0]  ? { score: surpriseCands[0].score,  goals: surpriseCands[0].total,  prob: surpriseCands[0].prob  } : null,
+  };
+
   return {
     simCount,
     results: {
@@ -79,5 +103,6 @@ export function runSimulation(lambdaHome, lambdaAway, simCount = 10000, currentH
     secondMostLikelyScore: scoreDistribution[1]?.score || `${currentHome + 1}-${currentAway}`,
     goalTiming,
     confidence,
+    scenarios,
   };
 }

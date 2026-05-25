@@ -1,0 +1,121 @@
+name: Deploy AlohaScan to VPS
+
+on:
+  push:
+    branches: [main, claude/generate-ssh-key-vultr-8S9YY]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: root
+          password: ${{ secrets.VPS_PASSWORD }}
+          envs: API_FOOTBALL_KEY,POSTGRES_URL,ANTHROPIC_API_KEY,XAI_API_KEY,BACKUP_TOKEN
+          command_timeout: 8m
+          script: |
+            export PATH="/snap/bin:$PATH"
+
+            # Pull latest code (reset hard to avoid divergent branches issues)
+            cd /root/scannerv2
+            git fetch origin
+            git reset --hard origin/main
+            npm install --silent
+
+            # Write .env with secrets from GitHub
+            EXISTING_KEY=$(grep '^ADMIN_API_KEY=' /root/scannerv2/.env 2>/dev/null | cut -d= -f2)
+            if [ -z "$EXISTING_KEY" ]; then
+              NEW_KEY=$(python3 -c "import uuid; print(str(uuid.uuid4()))")
+              KEY_STATUS="generat nou"
+            else
+              NEW_KEY="$EXISTING_KEY"
+              KEY_STATUS="existent"
+            fi
+            printf 'API_FOOTBALL_KEY=%s\nPOSTGRES_URL=%s\nANTHROPIC_API_KEY=%s\nXAI_API_KEY=%s\nADMIN_API_KEY=%s\n' \
+              "$API_FOOTBALL_KEY" "$POSTGRES_URL" "$ANTHROPIC_API_KEY" "$XAI_API_KEY" "$NEW_KEY" \
+              > /root/scannerv2/.env
+            echo "ENV scris: 5 chei, ADMIN_API_KEY: $KEY_STATUS"
+            chmod 600 /root/scannerv2/.env
+            echo "ENV OK: $(wc -l < /root/scannerv2/.env) chei"
+
+            # Backup token — scris din secret GitHub
+            if [ -n "$BACKUP_TOKEN" ]; then
+              echo "$BACKUP_TOKEN" > /root/.github_backup_token
+              chmod 600 /root/.github_backup_token
+              echo "BACKUP TOKEN: setat"
+            fi
+
+            # Backup script — instalare
+            mkdir -p /root/scripts
+            cp /root/scannerv2/scripts/backup-db.sh /root/scripts/backup-db.sh
+            chmod +x /root/scripts/backup-db.sh
+            echo "BACKUP SCRIPT: instalat"
+
+            # Crontab-uri — idempotent (fiecare linie înlocuiește versiunea veche)
+            LOG="/var/log/alohascan-cron.log"
+
+            C0="*/5 * * * * curl -sf http://localhost:3000/api/cron/prematch-enrichment >> $LOG 2>&1"
+            C2="0 2 * * * curl -sf http://localhost:3000/api/update-results >> $LOG 2>&1"
+            C3="0 3 * * * curl -sf http://localhost:3000/api/backfill/start >> $LOG 2>&1"
+            C4="0 6 * * * curl -sf http://localhost:3000/api/cron/collect-daily >> $LOG 2>&1"
+            C5="0 23 * * * curl -sf http://localhost:3000/api/cron/collect-finished >> $LOG 2>&1"
+            C6="0 4 * * * curl -sf http://localhost:3000/api/cron/league-stats >> $LOG 2>&1"
+            C7="30 4 * * * curl -sf http://localhost:3000/api/cron/referee-stats >> $LOG 2>&1"
+            C8="30 3 * * * curl -s -X POST http://localhost:3000/api/cron/learning-analysis >> /root/scannerv2/logs/learning.log 2>&1"
+            C9="15 4 * * * /root/scripts/backup-db.sh >> /var/log/alohascan-backup.log 2>&1"
+            C10="0 5 * * 0 curl -sf http://localhost:3000/api/cron/recalibrate-tables >> /root/scannerv2/logs/recalibrate.log 2>&1"
+            C11="30 5 * * 0 curl -sf http://localhost:3000/api/cron/calibrate-live >> /root/scannerv2/logs/calibrate-live.log 2>&1"
+
+            (
+              crontab -l 2>/dev/null \
+                | grep -v 'api/cron/scan' \
+                | grep -v 'api/cron/prematch-enrichment' \
+                | grep -v 'api/update-results' \
+                | grep -v 'api/backfill/start' \
+                | grep -v 'api/cron/collect-daily' \
+                | grep -v 'api/cron/collect-finished' \
+                | grep -v 'api/cron/league-stats' \
+                | grep -v 'api/cron/referee-stats' \
+                | grep -v 'api/cron/learning-analysis' \
+                | grep -v 'api/cron/recalibrate-tables' \
+                | grep -v 'api/cron/calibrate-live' \
+                | grep -v 'backup-db.sh'
+              echo "$C0"
+              echo "$C2"
+              echo "$C3"
+              echo "$C4"
+              echo "$C5"
+              echo "$C6"
+              echo "$C7"
+              echo "$C8"
+              echo "$C9"
+              echo "$C10"
+              echo "$C11"
+            ) | crontab -
+
+            echo "CRONTAB ACTIV:"
+            crontab -l | grep 'localhost:3000'
+
+            # Asigură că portul 3000 e deschis în firewall
+            ufw allow 3000/tcp 2>/dev/null || true
+
+            # Restart serviciu systemd
+            systemctl restart alohascan
+            sleep 4
+
+            # Verificare că serverul răspunde
+            systemctl is-active alohascan && echo "ALOHASCAN: ONLINE" || echo "ALOHASCAN: ERROR"
+            curl -sf http://localhost:3000/health && echo " ← HEALTH OK" || echo "HEALTH FAILED — verifică logs: journalctl -u alohascan -n 50"
+
+            echo "Deploy complet: $(date)"
+            echo "Accesează: http://$(curl -s ifconfig.me 2>/dev/null || echo '192.248.183.230'):3000"
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          BACKUP_TOKEN: ${{ secrets.BACKUP_TOKEN }}

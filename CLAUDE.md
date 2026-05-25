@@ -1,9 +1,49 @@
+# REGULI CLAUDE — AlohaScan Scanner V2
+
+> Acest fișier conține regulile fixe pentru sesiunile Claude pe acest repo.
+> Documentația tehnică completă a aplicației urmează după aceste reguli.
+
+---
+
+## 1. REGULI GENERALE
+
+- **După ORICE task finalizat**, actualizează `SESSION_CONTEXT.txt` secțiunea 12 cu ce s-a făcut (format: `[ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash`) și push.
+- **NU modifica niciodată** valoarea `10.000` simulări Monte Carlo din `api/monte-carlo.js` (parametrul `nSims` / `iterations`).
+- **NU committa niciodată** chei, token-uri, parole sau fișiere `.env`. Verifică `git diff` înainte de commit dacă ai dubii.
+- **Întotdeauna commit + push pe `main`** după orice modificare finalizată — push-ul pe main declanșează auto-deploy via GitHub Actions.
+- **Dacă userul cere „Faza X", „calibrare globală", „aplicăm calibrare", „verificare Faza X" sau „rollback Faza X"** → CITEȘTE `ROADMAP_CALIBRARE.md` ÎNAINTE de a începe orice modificare. Fișierul conține planul în 5 faze, trigger-urile (Brier scor, sample size, durată stabilă), modificările exacte de cod și procedura de rollback.
+- **Dacă userul cere „bump plan API" sau „abonament nou X k"** → ajustează `STOP_AT` în `api/backfill.js` la `(plan - 20k)` ca buffer pentru live scanner.
+
+## 2. STACK
+
+- **Runtime:** Node.js ESM (`/snap/bin/node`)
+- **DB:** PostgreSQL local pe VPS (`db: elefant`, `user: alohascan`)
+- **NU Supabase** — ignoră orice referință veche în cod sau documentație
+- **Deploy:** `git push origin main` → GitHub Actions (`deploy.yml`) → SSH pe VPS → `git reset --hard + npm install + systemctl restart alohascan`
+
+## 3. WORKFLOW STANDARD
+
+1. **Citește `SESSION_CONTEXT.txt`** la începutul oricărei sesiuni noi — conține istoric, stare DB, probleme cunoscute, task-uri în curs.
+2. **Lucrează pe branch `claude/...`** (ex. `claude/session-context-review-MNZ8Y`), apoi merge în `main` și push.
+3. **Verifică sintaxa** cu `node --check <fișier.js>` după orice editare de fișier JavaScript, înainte de commit.
+
+## 4. ARHITECTURĂ
+
+- **Filtre de ligi**: DOAR prin `isAllowedLeague()` / `isAllowedMatch()` din `api/utils/league-filter.js`. NU duplica logica WOMEN_TERMS / YOUTH_TERMS / LOWER_DIV_TERMS în alte fișiere.
+- **Apeluri API-Football**: DOAR prin `fetchApiFootball()` din `api/utils/fetch-api.js` — gestionează retry 429 cu backoff (30s/60s/120s) și autentificare. NU folosi `fetch()` direct pentru `v3.football.api-sports.io`.
+- **Limitele API zilnice** (plan 150.000/zi):
+  - **Scanner live**: rezervă **50.000/zi** (buget țintă)
+  - **Backfill**: maxim **50.000/zi** (constanta `STOP_AT` în `api/backfill.js` — atenție: în prezent setată la `100_000`, vezi audit C2 din SESSION_CONTEXT sec. 13)
+  - Restul (~50.000/zi): cron-uri (prematch-enrichment, collect-daily, collect-finished, referee-stats) + ad-hoc UI
+
+---
+
 # AlohaScan - Documentație Completă
 
 ## Ce face aplicația
 
 AlohaScan este un scanner de pariuri sportive care:
-1. Afișează meciuri LIVE și PRE-MECI din ~139 ligi globale
+1. Afișează meciuri LIVE și PRE-MECI din ~165 ligi globale
 2. Calculează probabilități Poisson pentru fiecare meci
 3. Calculează un scor de încredere pe 7 straturi
 4. Identifică pariuri cu valoare pozitivă (EV > 0)
@@ -12,22 +52,39 @@ AlohaScan este un scanner de pariuri sportive care:
 
 ---
 
+## Stack tehnic
+
+- **Runtime:** Node.js (ESM modules) via `/snap/bin/node`
+- **Server:** Express.js (`server.js`) — port 3000
+- **Baza de date:** PostgreSQL local pe VPS (`db: elefant`, `user: alohascan`)
+- **Process manager:** systemctl (`alohascan.service`)
+- **Deploy:** GitHub Actions → `deploy.yml` → SSH pe VPS → `git fetch + reset --hard + restart`
+- **API date:** API-Football v3 (api-sports.io)
+- **AI:** Claude API (Anthropic) — `api/agent.js`
+- **Notificări:** Telegram Bot API — `api/telegram.js`
+
+---
+
 ## Surse de date
 
 | Endpoint | Sursă | Utilizare |
 |----------|-------|-----------|
-| `api/football.js` | API-Football + football-data.org | Meciuri LIVE |
+| `api/football.js` | API-Football | Meciuri LIVE |
 | `api/today.js` | API-Football | Meciuri PRE-MECI (azi + 2 zile) |
 | `api/enrich.js` | API-Football | Analiză completă per meci |
 | `api/match.js` | API-Football | Detalii meci (formații, jucători, evenimente) |
 | `api/meteo.js` | Open-Meteo (gratuit, fără cheie) | Condiții meteo per stadion |
-| `api/stats.js` | Supabase | Istoricul predicțiilor + clasamente ligi |
-| `api/players.js` | API-Football + Supabase | Statistici jucători (backfill + collect) |
+| `api/players.js` | API-Football + PostgreSQL | Statistici jucători (backfill + collect) |
 | `api/agent.js` | Claude API (Anthropic) | Analiză AI la cerere |
 | `api/telegram.js` | Telegram Bot API | Notificări alerte NGP |
-| `api/update-results.js` | Supabase | Actualizare rezultate predicții |
-| `api/cron/scan.js` | intern | Cron zilnic 00:00 |
-| `api/cron/collect-finished.js` | API-Football + Supabase | Cron zilnic 23:00 — colectare stats jucători |
+| `api/update-results.js` | PostgreSQL | Actualizare rezultate predicții |
+| `api/cron/scan.js` | intern | Scanner live continuu |
+| `api/cron/scanner.js` | intern | Scanner live alternativ (WebSocket) |
+| `api/cron/collect-daily.js` | API-Football + PostgreSQL | Cron 06:00 — standings, teams, form_stats |
+| `api/cron/collect-finished.js` | API-Football + PostgreSQL | Cron 23:00 — stats jucători meciuri FT |
+| `api/cron/prematch-enrichment.js` | API-Football + PostgreSQL | Cron */5min — date prematch per stadiu |
+| `api/cron/league-stats.js` | PostgreSQL | Cron 04:00 — statistici per ligă |
+| `api/cron/referee-stats.js` | API-Football + PostgreSQL | Cron 04:00 — statistici per arbitru |
 
 ---
 
@@ -38,9 +95,8 @@ Fișier: `api/leagues.js`
 
 Regula: **maxim Liga 1 + Liga 2 + Cupă per țară**. Nicio ligă 3 sau mai joasă.
 
-- ~139 ligi active din Europa, Americas, Asia, Africa + competiții internaționale
-- Aplicat în: `today.js` (pre-meci) și `football.js` (live, doar sursa API-Football)
-- Sursa football-data.org nu se filtrează prin whitelist (acoperă doar top 12-14 ligi europene)
+- ~165 ligi active din Europa, Americas, Asia, Africa + competiții internaționale
+- Aplicat în: `today.js` (pre-meci) și `football.js` (live)
 
 ### 2. Filtru feminin
 ```
@@ -108,20 +164,20 @@ Fișier: `api/enrich.js` → `calcConfidence(result, oddsRaw, liveStats, teamStr
 | Strat | Sursă | Greutate (fără str.) | Greutate (cu str.) |
 |-------|-------|----------------------|---------------------|
 | 1. Poisson | `over15Prob` | 25% | 20% |
-| 2. Formă recentă | `(homeAvg + awayAvg) / 3.5 * 100` | 20% | 18% |
+| 2. Formă recentă | `form_stats` din PostgreSQL | 20% | 18% |
 | 3. H2H | `h2hOver15` (% meciuri directe cu >1.5 goluri) | 15% | 13% |
 | 4. Live / xG | `xg*25 + sot*3 + da*0.5` | 15% | 13% |
 | 5. EV piață 1.30-1.50 | `ev * 300` (capped 100) | 15% | 13% |
 | 6. Consistență | `(straturi>60 / 5) * 100` | 10% | 8% |
 | 7. Puterea echipei | `(homeStrength + awayStrength) / 2` | — | 15% |
 
-Stratul 7 se activează doar dacă există date în `player_stats` (Supabase). Dacă nu există, se folosesc greutățile din coloana „fără str.".
+Stratul 7 se activează dacă există date în `player_stats`. Dacă nu există, se folosesc greutățile din coloana „fără str.".
 
 ### D. Team Strength (Puterea echipei)
 
-Fișier: `api/enrich.js` → `getTeamStrengths(hId, aId, sbUrl, sbKey)`
+Fișier: `api/enrich.js` → `getTeamStrengths(hId, aId)`
 
-Citește ultimele 110 înregistrări per echipă din tabelul `player_stats` din Supabase.
+Citește ultimele 110 înregistrări per echipă din tabelul `player_stats` din PostgreSQL.
 
 ```
 avgRating    = media ratingurilor jucătorilor (scala 0-10)
@@ -154,15 +210,14 @@ playerScore = ratingNorm*0.35 + goalsScore*0.20
 
 ### F. NGP — Next Goal Probability (LIVE)
 
-Calculat în frontend (`index.html`) pentru meciurile live.
+Calculat în `api/utils/live-score.js` → `calcNextGoal(f)`, folosit de
+`api/cron/scan.js` și `api/cron/scanner.js`. Frontend `index.html`
+afișează direct `m._ng` din WebSocket (zero recalcul local).
 
 ```
-ngp = SOT * 4.5
-    + (Shots off Goal) * 1.5
-    + (Dangerous Attacks) * 0.3
-    + (Corners) * 2.0
-    + (Goals scored) * 8
-    - (elapsed / 90) * 15   ← penalizare timp scurs
+NGP: remXg = (txg/mn)*(90-mn); fallback txg=0: formGoals*2.5*remFrac;
+     mn>=70: *1.2; mn>=80: *1.15; prob=1-exp(-max(remXg,0.05));
+     ng=round(min(97,max(3,prob*100)))
 ```
 Normalizat 0-100%. Alertă Telegram când NGP > pragul setat de utilizator.
 
@@ -178,75 +233,54 @@ Afișat în detaliile meciului. Cache 10 minute în memorie.
 
 ---
 
-## Structura bazei de date (Supabase)
+## Structura bazei de date (PostgreSQL local)
 
-### `predictions`
-Salvată automat la fiecare analiză de meci.
-Câmpuri: `fixture_id`, `home_team`, `away_team`, `league_name`, `match_date`, `lambda_home/away/total`, `over15_prob`, `over25_prob`, `gg_prob`, `home/away_score_rate`, `h2h_over15`, `confidence`, `result_over15` (actualizat de cron).
+Schema completă: `scripts/create-tables.sql` (36 tabele)
 
-### `player_stats`
-Colectată prin backfill și cron zilnic 23:00.
-Câmpuri: `player_id`, `fixture_id`, `team_id`, `team_name`, `player_name`, `rating`, `goals`, `assists`, `pass_accuracy`, `shots_on_target`, `minutes_played`, `player_score`.
-Constrângere unică: `(player_id, fixture_id)`.
+### Tabele principale
 
-### `backfill_progress`
-Urmărește progresul backfill-ului per ligă.
-Câmpuri: `league_id` (PK), `status` (pending/running/done/error), `fixtures_processed`, `players_upserted`, `last_run`.
-
-### `cron_logs`
-Log automat după fiecare rulare cron.
-Câmpuri: `job_name`, `ran_at`, `fixtures_processed`, `players_upserted`, `status`, `error_msg`.
+| Tabel | Descriere |
+|-------|-----------|
+| `fixtures` | Meciuri programate și live |
+| `fixtures_history` | Meciuri terminate (cu referee) |
+| `live_stats` | Statistici live per minut (home/away separate) |
+| `alerts` | Alerte NGP/over15 (alert_type, ngp_value, telegram_ok) |
+| `odds` | Cote normalizate (fixture_id, bookmaker_id, bet_id, value_name) |
+| `predictions` | Predicții Poisson per meci |
+| `standings` | Clasamente per ligă/sezon/echipă |
+| `form_stats` | Forma recentă echipe (last5_home, last5_away, avg_scored/conceded) |
+| `player_stats` | Statistici jucători per meci |
+| `prematch_data` | Date pre-meci colectate în 7 etape |
+| `prematch_enrichment_log` | Log etape prematch per fixture |
+| `league_stats` | Statistici agregate per ligă (goluri, carduri, cornere) |
+| `referee_stats` | Statistici per arbitru (stil, medie goluri/carduri) |
+| `cron_logs` | Log rulări cron |
+| `backfill_progress` | Progres backfill per ligă |
 
 ---
 
-## Cron Jobs (Vercel)
+## Cron Jobs (VPS crontab)
 
 | Path | Orar | Ce face |
 |------|------|---------|
-| `/api/cron/scan` | 00:00 zilnic | Scan general |
-| `/api/update-results` | 02:00 zilnic | Actualizează `result_over15` în predictions |
-| `/api/cron/collect-finished` | 23:00 zilnic | Colectează stats jucători pentru meciurile FT din ziua curentă |
+| `/api/cron/prematch-enrichment` | `*/5 * * * *` | Date prematch în 7 etape pre-kickoff |
+| `/api/update-results` | `0 2 * * *` | Actualizează `result_over15` în predictions |
+| `/api/backfill/start` | `0 3 * * *` | Backfill date istorice jucători |
+| `/api/cron/collect-daily` | `0 6 * * *` | Standings, teams, form_stats |
+| `/api/cron/league-stats` | `0 4 * * *` | Statistici per ligă din fixtures_history |
+| `/api/cron/referee-stats` | `0 4 * * *` | Statistici per arbitru din fixtures_history |
+| `/api/cron/collect-finished` | `0 23 * * *` | Stats jucători meciuri FT din ziua curentă |
 
 ---
 
-## Limite Vercel Hobby Plan
-
-- **Max 12 funcții serverless** — avem 11 active
-- **Cron jobs:** doar zilnice (nu orare)
-- **Timeout funcție:** 10 secunde
-
-### Funcții active (11/12)
-1. `api/agent.js`
-2. `api/cron/collect-finished.js`
-3. `api/cron/scan.js`
-4. `api/enrich.js`
-5. `api/football.js`
-6. `api/match.js`
-7. `api/players.js`
-8. `api/stats.js`
-9. `api/telegram.js`
-10. `api/today.js`
-11. `api/update-results.js`
-
-`api/leagues.js` — **nu contează** ca funcție (exportă doar o constantă, nu un handler).
-
----
-
-## Stack tehnic
-
-- **Frontend:** Vanilla JS, CSS inline în `index.html` (~1950 linii)
-- **Backend:** Vercel Serverless Functions (`api/*.js`, format ESM)
-- **Baza de date:** Supabase (PostgreSQL) via REST API
-- **Deploy:** push pe `main` → GitHub Actions → Vercel REST API → producție
-
-## Variabile de mediu (Vercel)
+## Variabile de mediu (GitHub Secrets → .env pe VPS)
 
 | Variabilă | Utilizare |
 |-----------|-----------|
 | `API_FOOTBALL_KEY` | API-Football v3 (api-sports.io) |
-| `FOOTBALL_DATA_KEY` | football-data.org |
-| `SUPABASE_URL` | URL proiect Supabase |
-| `SUPABASE_KEY` | Service role key Supabase |
+| `POSTGRES_URL` | `postgresql://alohascan:***@localhost:5432/elefant` |
 | `ANTHROPIC_API_KEY` | Claude API (agent AI) |
-| `TELEGRAM_BOT_TOKEN` | Bot Telegram notificări |
-| `TELEGRAM_CHAT_ID` | Chat ID destinatar Telegram |
+| `XAI_API_KEY` | xAI API (rezervă) |
+| `ADMIN_API_KEY` | Cheie acces admin dashboard (generat automat la deploy) |
+
+Fișierul `.env` se rescrie la fiecare deploy via `deploy.yml`. Nu se commitează niciodată în repo.

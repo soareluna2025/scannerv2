@@ -1,11 +1,147 @@
 import { calcPoisson6x6, parseOddsItem, calcEV } from './calc-utils.js';
+import { query } from './db.js';
+import { logPrediction } from './log-prediction.js';
+import { fetchApiFootball } from './utils/fetch-api.js';
 
-async function fetchWithRetry(url, opts, attempts = 2) {
-  for (let i = 0; i < attempts; i++) {
-    try { return await fetch(url, opts); } catch (e) {
-      if (i === attempts - 1) throw e;
+const PRE_MATCH_STATUSES = new Set(['NS']);
+const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
+const FINISHED_STATUSES = new Set(['FT','AET','PEN','SUSP','ABD','AWD','WO']);
+
+// Referee impact: home bias + cards markets adjustments
+async function getRefereeImpact(refereeName) {
+  const impact = { homeWin: 1, over25: 1, cards: 1, over35Cards: null, source: [] };
+  if (!refereeName) return impact;
+  try {
+    const { rows } = await query(`
+      SELECT total_matches, home_win_rate, avg_yellow_cards, pct_over_3_5_cards, pct_over_4_5_cards, card_bias_score
+      FROM referee_stats WHERE referee_name = $1
+    `, [refereeName]);
+    const r = rows[0];
+    if (!r || Number(r.total_matches) < 5) return impact;
+    // Home bias adjustment
+    if (r.home_win_rate != null) {
+      if (Number(r.home_win_rate) > 55) {
+        impact.homeWin *= 1.10;
+        impact.source.push(`home_bias(${Number(r.home_win_rate).toFixed(0)}%)`);
+      } else if (Number(r.home_win_rate) < 35) {
+        impact.homeWin *= 0.90;
+        impact.source.push(`away_bias(${Number(r.home_win_rate).toFixed(0)}%)`);
+      }
+    }
+    // Cards prediction (separate market)
+    if (r.pct_over_3_5_cards != null) {
+      impact.over35Cards = +Number(r.pct_over_3_5_cards).toFixed(0);
+      impact.source.push(`o3.5cards(${impact.over35Cards}%)`);
+    }
+    // Card-happy referee → mai multe stop-uri → mai putin Over goluri
+    if (r.avg_yellow_cards > 5) {
+      impact.over25 *= 0.95;
+      impact.source.push(`cardy_ref(${Number(r.avg_yellow_cards).toFixed(1)})`);
+    }
+  } catch (e) { /* silent */ }
+  return impact;
+}
+
+// Coach impact: returneaza multiplicatori pe baza style + tenure
+// Tenure < 90 zile → bounce effect (+8% offensive). Tenure > 3 ani → veteran stability (+3%).
+// Style 'offensive' boost over 2.5. Style 'defensive' boost under + clean sheet.
+async function getCoachImpact(teamId) {
+  const impact = { over15: 1, over25: 1, gg: 1, source: [] };
+  if (!teamId) return impact;
+  try {
+    const { rows } = await query(`
+      SELECT cs.style, cs.tenure_days, cs.avg_goals_for, cs.avg_goals_against,
+             cs.clean_sheet_rate, cs.failed_to_score_rate, cs.win_rate, cs.matches
+      FROM coach_stats cs
+      JOIN coaches c ON c.coach_id = cs.coach_id
+      WHERE c.team_id = $1
+      ORDER BY cs.updated_at DESC
+      LIMIT 1
+    `, [teamId]);
+    const cs = rows[0];
+    if (!cs || cs.matches < 5) return impact;
+    // Tenure effect
+    if (cs.tenure_days != null) {
+      if (cs.tenure_days < 90) {
+        impact.over15 *= 1.08; impact.over25 *= 1.10;
+        impact.source.push(`coach_new(${cs.tenure_days}d)`);
+      } else if (cs.tenure_days > 1095) {
+        impact.over15 *= 1.03;
+        impact.source.push(`coach_veteran(${Math.round(cs.tenure_days/365)}y)`);
+      }
+    }
+    // Style effect
+    if (cs.style === 'offensive') {
+      impact.over25 *= 1.12; impact.gg *= 1.08;
+      impact.source.push('style_offensive');
+    } else if (cs.style === 'open') {
+      impact.over25 *= 1.15; impact.gg *= 1.12;
+      impact.source.push('style_open');
+    } else if (cs.style === 'defensive') {
+      impact.over25 *= 0.88; impact.gg *= 0.92;
+      impact.source.push('style_defensive');
+    } else if (cs.style === 'pragmatic') {
+      impact.over15 *= 0.95;
+      impact.source.push('style_pragmatic');
+    }
+  } catch (e) { /* silent */ }
+  return impact;
+}
+
+// Returneaza multiplicatori pe Over1.5, Over2.5, GG pe baza venue + meteo.
+// Default toate la 1.0 (no effect). Apel safe — daca lipsesc date, returneaza neutru.
+//
+// Bazat pe studii: altitudine > 2000m reduce ~15% intensitatea oaspetilor,
+// vant > 30 km/h face long-balls dificile, ploaie intensa creste cards.
+async function getVenueAndMeteoImpact(fixtureId, venueId, meteoData) {
+  const impact = { over15: 1, over25: 1, gg: 1, cards: 1, source: [] };
+  // Venue altitude
+  if (venueId) {
+    try {
+      const { rows } = await query(
+        `SELECT altitude_m, surface FROM venues WHERE venue_id = $1`,
+        [venueId]
+      );
+      const v = rows[0];
+      if (v) {
+        if (v.altitude_m > 2500) {
+          impact.over15 *= 0.78; impact.over25 *= 0.70;
+          impact.source.push(`altitude_extreme(${v.altitude_m}m)`);
+        } else if (v.altitude_m > 2000) {
+          impact.over15 *= 0.88; impact.over25 *= 0.82;
+          impact.source.push(`altitude_high(${v.altitude_m}m)`);
+        } else if (v.altitude_m > 1500) {
+          impact.over15 *= 0.94; impact.over25 *= 0.90;
+          impact.source.push(`altitude_mid(${v.altitude_m}m)`);
+        }
+        if (v.surface === 'artificial') {
+          impact.over25 *= 1.05;
+          impact.source.push('artificial_turf');
+        }
+      }
+    } catch (e) { /* silent */ }
+  }
+  // Meteo
+  if (meteoData) {
+    const { temperature, wind_kmh, precipitation_mm } = meteoData;
+    if (wind_kmh > 30) {
+      impact.over25 *= 0.90; impact.cards *= 1.05;
+      impact.source.push(`wind(${Math.round(wind_kmh)}kmh)`);
+    }
+    if (precipitation_mm > 5) {
+      impact.over25 *= 0.92; impact.cards *= 1.20;
+      impact.source.push(`rain(${precipitation_mm}mm)`);
+    }
+    if (temperature > 32) {
+      impact.over15 *= 0.92; impact.over25 *= 0.88;
+      impact.source.push(`hot(${Math.round(temperature)}C)`);
+    }
+    if (temperature < 2) {
+      impact.over25 *= 0.96;
+      impact.source.push(`cold(${Math.round(temperature)}C)`);
     }
   }
+  return impact;
 }
 
 function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
@@ -18,7 +154,7 @@ function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
   return { lambda: currentGoals + lambdaRemaining, dynamic: true };
 }
 
-function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agParam, sothParam, sotaParam) {
+function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agParam, sothParam, sotaParam, lgHome = 1.2, lgAway = 1.2) {
   const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
   const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
 
@@ -27,13 +163,12 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
   const awayAvgScored   = avg(aGames, m => (m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0);
   const awayAvgConceded = avg(aGames, m => (m.teams?.away?.id === aId ? m.goals?.home : m.goals?.away) ?? 0);
 
-  const FALLBACK = 1.2;
   let lambdaHome = hGames.length && aGames.length
     ? (homeAvgScored + awayAvgConceded) / 2
-    : FALLBACK;
+    : lgHome;
   let lambdaAway = hGames.length && aGames.length
     ? (awayAvgScored + homeAvgConceded) / 2
-    : FALLBACK;
+    : lgAway;
 
   let isDynamic = false;
   const elapsedNum = parseInt(elapsedParam) || 0;
@@ -57,10 +192,10 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
   return {
     homeAvgScored:   r2(homeAvgScored),
     homeAvgConceded: r2(homeAvgConceded),
-    homeScoreRate:   pct(hGames, m => (m.goals?.home ?? 0) > 0) ?? Math.round((1 - Math.exp(-lambdaHome)) * 100),
+    homeScoreRate:   pct(hGames, m => ((m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away) ?? 0) > 0) ?? Math.round((1 - Math.exp(-lambdaHome)) * 100),
     awayAvgScored:   r2(awayAvgScored),
     awayAvgConceded: r2(awayAvgConceded),
-    awayScoreRate:   pct(aGames, m => (m.goals?.away ?? 0) > 0) ?? Math.round((1 - Math.exp(-lambdaAway)) * 100),
+    awayScoreRate:   pct(aGames, m => ((m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0) > 0) ?? Math.round((1 - Math.exp(-lambdaAway)) * 100),
     lambdaHome:      r2(lambdaHome),
     lambdaAway:      r2(lambdaAway),
     lambdaTotal:     r2(lambdaTotal),
@@ -78,21 +213,33 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
   };
 }
 
-async function getTeamStrengths(hId, aId, sbUrl, sbKey) {
-  if (!sbUrl || !sbKey) return { home: null, away: null };
+async function getLeagueStats(lgid) {
+  if (!lgid) return null;
+  try {
+    const r = await query('SELECT * FROM league_stats WHERE league_id = $1', [Number(lgid)]);
+    return r.rows[0] || null;
+  } catch (_) { return null; }
+}
+
+async function getRefereeStats(refName) {
+  if (!refName) return null;
+  try {
+    const r = await query('SELECT * FROM referee_stats WHERE referee_name = $1', [refName]);
+    return r.rows[0] || null;
+  } catch (_) { return null; }
+}
+
+async function getTeamStrengths(hId, aId) {
   try {
     const [rH, rA] = await Promise.all([
-      fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${hId}&select=rating,goals,pass_accuracy,shots_on_target&order=player_id.desc&limit=110`, {
-        headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
-      }),
-      fetch(`${sbUrl}/rest/v1/player_stats?team_id=eq.${aId}&select=rating,goals,pass_accuracy,shots_on_target&order=player_id.desc&limit=110`, {
-        headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
-      }),
+      query('SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY fixture_id DESC LIMIT 110', [hId]),
+      query('SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY fixture_id DESC LIMIT 110', [aId]),
     ]);
-    const [dH, dA] = await Promise.all([rH.json(), rA.json()]);
+    const dH = rH.rows;
+    const dA = rA.rows;
 
     const calcStr = (rows) => {
-      if (!Array.isArray(rows) || !rows.length) return null;
+      if (!Array.isArray(rows) || rows.length < 10) return null;
       const rated     = rows.filter(r => r.rating);
       const avgRating = rated.length ? rated.reduce((s, r) => s + Number(r.rating), 0) / rated.length : 5;
       const goalsPerGame = rows.reduce((s, r) => s + (r.goals || 0), 0) / rows.length;
@@ -116,42 +263,76 @@ async function getTeamStrengths(hId, aId, sbUrl, sbKey) {
   }
 }
 
-function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
+function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData) {
   const score1 = result.over15Prob ?? 50;
+  const elapsed  = liveStats?.elapsed ?? 0;
+  const sotTotal = liveStats?.sot     ?? null;
+  const ycTotal  = liveStats?.yc      ?? 0;
 
-  const homeAvg = result.homeAvgScored ?? 1.2;
-  const awayAvg = result.awayAvgScored ?? 1.0;
+  const homeAvg = result.homeAvgScored || 1.2;
+  const awayAvg = result.awayAvgScored || 1.0;
   const score2 = Math.min(100, (homeAvg + awayAvg) / 3.5 * 100);
 
   const score3 = result.h2hOver15 != null ? result.h2hOver15 : score1;
 
-  let score4 = score1;
-  if (liveStats && liveStats.xg != null) {
-    score4 = Math.max(50, Math.min(100, liveStats.xg * 25 + (liveStats.sot || 0) * 3 + (liveStats.da || 0) * 0.5));
+  // Layer 4 — Live: xG + SOT + DA (fără podea 50)
+  let score4 = score1; // fallback pentru pre-meci
+  if (liveStats) {
+    const sot = liveStats.sot || 0;
+    const xg  = liveStats.xg  || 0;
+    const da  = liveStats.da  || 0;
+    if (sot === 0 && elapsed > 10) {
+      score4 = 20; // niciun șut pe poartă după min 10 — semnal slab
+    } else {
+      score4 = Math.min(100, xg * 25 + sot * 3 + da * 0.5);
+    }
   }
 
-  let score5 = 50;
+  // Layer 5 — EV: folosim evData calculat deja (elimină hardcodarea la 50%)
+  let score5 = null;
   let bestMarket = null, bestCota = null, bestEV = null;
-  if (oddsRaw) {
+  if (evData?.hasOdds) {
+    const candidates = [
+      { name: 'Over 1.5', ev: evData.evOver15, cota: evData.cotaOver15 },
+      { name: 'GG',       ev: evData.evGG,     cota: evData.cotaGG },
+      { name: '1 Gazde',  ev: evData.evHome,   cota: evData.cotaHome },
+      { name: 'X Egal',   ev: evData.evDraw,   cota: evData.cotaDraw },
+      { name: '2 Oasp.',  ev: evData.evAway,   cota: evData.cotaAway },
+    ].filter(c => c.ev != null && c.cota != null && c.cota >= 1.20)
+     .sort((a, b) => b.ev - a.ev);
+
+    if (candidates.length) {
+      const best = candidates[0];
+      bestMarket = best.name;
+      bestCota   = best.cota;
+      if (best.ev > 0) {
+        score5 = Math.min(100, best.ev * 300);
+        bestEV = '+' + Math.round(best.ev * 100) + '%';
+      } else {
+        score5 = Math.max(10, 50 + Math.round(best.ev * 100));
+      }
+    }
+  } else if (oddsRaw) {
+    // fallback: calcul direct când evData nu e disponibil
     const markets = [
       { name: 'Over 1.5', cota: oddsRaw.cotaOver15, prob: result.over15Prob / 100 },
       { name: 'GG',       cota: oddsRaw.cotaGG,     prob: result.ggProb     / 100 },
       { name: '1 Gazde',  cota: oddsRaw.cotaHome,   prob: result.homeWin    / 100 },
       { name: 'X Egal',   cota: oddsRaw.cotaDraw,   prob: result.draw       / 100 },
       { name: '2 Oasp.',  cota: oddsRaw.cotaAway,   prob: result.awayWin    / 100 },
-    ].filter(m => m.cota >= 1.30 && m.cota <= 1.50 && m.prob != null);
+    ].filter(m => m.cota >= 1.20 && m.prob != null);
 
     if (markets.length) {
       const evMarkets = markets.map(m => ({ ...m, ev: m.prob * m.cota - 1 }))
         .sort((a, b) => b.ev - a.ev);
       const best = evMarkets[0];
+      bestMarket = best.name;
+      bestCota   = best.cota;
       if (best.ev > 0) {
         score5 = Math.min(100, best.ev * 300);
-        bestMarket = best.name;
-        bestCota   = best.cota;
-        bestEV     = '+' + Math.round(best.ev * 100) + '%';
+        bestEV = '+' + Math.round(best.ev * 100) + '%';
       } else {
-        score5 = 50;
+        score5 = Math.max(10, 50 + Math.round(best.ev * 100));
       }
     }
   }
@@ -175,16 +356,31 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
     { score: score2, w: 0.20 },
     { score: score3, w: 0.10 },
     { score: score4, w: 0.15 },
-    { score: score5, w: 0.08 },
+    { score: score5, w: 0 }, // EV — exclus din scor (informativ in breakdown)
     { score: score6, w: 0.05 },
     { score: score7, w: 0.20 },
-  ].filter(l => l.score != null);
+  ].filter(l => l.score !== null).filter(l => l.w > 0);
   const totalW = layers.reduce((s, l) => s + l.w, 0);
   const confidenceScore = Math.round(layers.reduce((s, l) => s + l.score * (l.w / totalW), 0));
   const hasStr = score7 != null;
 
+  let adjustedScore = confidenceScore;
+  // Penalizare date insuficiente la minute mici
+  if (elapsed > 0 && elapsed < 15) {
+    adjustedScore = Math.round(adjustedScore * 0.85);
+  } else if (elapsed >= 15 && elapsed < 30 && sotTotal !== null && sotTotal === 0) {
+    adjustedScore = Math.round(adjustedScore * 0.80);
+  }
+  if (elapsed >= 45 && sotTotal !== null && sotTotal === 0) {
+    adjustedScore = Math.max(10, adjustedScore - 20);
+  }
+  if (ycTotal >= 2) {
+    adjustedScore = Math.max(10, adjustedScore - 10);
+  }
+  adjustedScore = Math.max(5, Math.min(100, adjustedScore));
+
   return {
-    confidenceScore,
+    confidenceScore: adjustedScore,
     breakdown: {
       poisson:      Math.round(score1),
       forma:        Math.round(score2),
@@ -202,91 +398,142 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths) {
   };
 }
 
-// --- Supabase data helpers ---
+// --- PostgreSQL data helpers ---
 
-async function getFormFromSupabase(teamId, sbUrl, sbKey) {
+async function getFormFromDB(teamId) {
   try {
-    const res = await fetch(
-      `${sbUrl}/rest/v1/form_stats?team_id=eq.${teamId}&order=match_date.desc&limit=10`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const r = await query(
+      `SELECT home_team_id, away_team_id, home_goals, away_goals
+       FROM fixtures_history
+       WHERE (home_team_id = $1 OR away_team_id = $1)
+         AND status_short = 'FT'
+         AND home_goals IS NOT NULL
+       ORDER BY match_date DESC
+       LIMIT 10`,
+      [teamId]
     );
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    return r.rows.map(row => ({
+      teams: { home: { id: row.home_team_id }, away: { id: row.away_team_id } },
+      goals: { home: row.home_goals ?? 0, away: row.away_goals ?? 0 },
+    }));
   } catch (_) { return []; }
 }
 
-async function getH2HFromSupabase(homeId, awayId, sbUrl, sbKey) {
+async function getH2HFromDB(homeId, awayId) {
   try {
-    const res = await fetch(
-      `${sbUrl}/rest/v1/h2h` +
-      `?or=(and(home_team_id.eq.${homeId},away_team_id.eq.${awayId}),` +
-      `and(home_team_id.eq.${awayId},away_team_id.eq.${homeId}))` +
-      `&order=match_date.desc&limit=10`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const r = await query(
+      'SELECT * FROM h2h WHERE (home_team_id = $1 AND away_team_id = $2) OR (home_team_id = $2 AND away_team_id = $1) ORDER BY match_date DESC LIMIT 10',
+      [homeId, awayId]
     );
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    return r.rows;
   } catch (_) { return []; }
 }
 
-async function getOddsFromSupabase(fixtureId, sbUrl, sbKey) {
+async function getOddsFromDB(fixtureId) {
   try {
-    const res = await fetch(
-      `${sbUrl}/rest/v1/odds?fixture_id=eq.${fixtureId}&bookmaker_id=eq.8`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const r = await query(
+      'SELECT *, bet_name AS market, value_name AS label, value_odd AS odd_value FROM odds WHERE fixture_id = $1 AND bookmaker_id = 8',
+      [fixtureId]
     );
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    return r.rows;
   } catch (_) { return []; }
 }
 
-async function getInjuriesFromSupabase(fixtureId, sbUrl, sbKey) {
+async function getInjuriesFromDB(fixtureId) {
   try {
-    const url = `${sbUrl}/rest/v1/injuries?fixture_id=eq.${fixtureId}&active=eq.true`;
-    const res = await fetch(url, {
-      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
-    });
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    const r = await query('SELECT * FROM injuries WHERE fixture_id = $1', [fixtureId]);
+    return r.rows;
   } catch (_) { return []; }
 }
 
-async function getMatchStatsFromSupabase(fixtureId, sbUrl, sbKey) {
-  if (!fixtureId) return [];
+async function fetchAndStoreInjuries(fixtureId) {
   try {
-    const url = `${sbUrl}/rest/v1/match_stats?fixture_id=eq.${fixtureId}`;
-    const res = await fetch(url, {
-      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
-    });
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch (_) { return []; }
+    // M6: verifica DB înainte de API — skip dacă există date mai recente de 6h
+    const existing = await query(
+      `SELECT COUNT(*) AS cnt, MAX(updated_at) AS last_update FROM injuries WHERE fixture_id = $1`,
+      [fixtureId]
+    );
+    const lastUpdate = existing.rows[0]?.last_update;
+    if (lastUpdate && new Date(lastUpdate) > new Date(Date.now() - 6 * 60 * 60 * 1000)) return;
+
+    const r = await fetchApiFootball(`/injuries?fixture=${fixtureId}`);
+    const data = await r.json();
+    const list = data.response || [];
+    for (const item of list) {
+      await query(
+        `INSERT INTO injuries
+           (fixture_id, league_id, season, team_id, team_name,
+            player_id, player_name, type, reason)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (fixture_id, player_id) DO NOTHING`,
+        [
+          fixtureId,
+          item.league?.id      || null,
+          item.league?.season  || null,
+          item.team?.id        || null,
+          item.team?.name      || null,
+          item.player?.id      || null,
+          item.player?.name    || null,
+          item.player?.type    || null,
+          item.player?.reason  || null,
+        ]
+      );
+    }
+  } catch (_) {}
 }
 
-async function getLeaguePatternFromSupabase(leagueId, sbUrl, sbKey) {
-  if (!leagueId) return null;
+async function getTeamStatsFromDB(teamId, leagueId) {
   try {
-    const url = `${sbUrl}/rest/v1/league_patterns?league_id=eq.${leagueId}&limit=1`;
-    const res = await fetch(url, {
-      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
-    });
-    const data = await res.json();
-    return data?.[0] || null;
+    const r = leagueId
+      ? await query(
+          `SELECT avg_goals_for, avg_goals_against,
+                  clean_sheets_home, clean_sheets_away,
+                  played_home, played_away
+           FROM teams_stats WHERE team_id = $1 AND league_id = $2
+           ORDER BY season DESC LIMIT 1`,
+          [teamId, Number(leagueId)]
+        )
+      : await query(
+          `SELECT avg_goals_for, avg_goals_against,
+                  clean_sheets_home, clean_sheets_away,
+                  played_home, played_away
+           FROM teams_stats WHERE team_id = $1
+           ORDER BY season DESC LIMIT 1`,
+          [teamId]
+        );
+    return r.rows[0] || null;
   } catch (_) { return null; }
 }
 
-// Transform form_stats rows → API-Football-like format expected by calcPoisson
-function formStatsToFixtures(rows, teamId) {
-  return rows.map(row => ({
-    teams: {
-      home: { id: row.is_home ? teamId : 0 },
-      away: { id: row.is_home ? 0 : teamId },
-    },
-    goals: {
-      home: row.is_home ? (row.goals_scored ?? 0) : (row.goals_conceded ?? 0),
-      away: row.is_home ? (row.goals_conceded ?? 0) : (row.goals_scored ?? 0),
-    },
-  }));
+async function getVenueForFixture(fixtureId) {
+  try {
+    const r = await query(
+      `SELECT payload FROM prematch_data
+       WHERE fixture_id = $1 AND data_type = 'fixture'
+       ORDER BY collected_at DESC LIMIT 1`,
+      [fixtureId]
+    );
+    if (!r.rows.length) return null;
+    const payload = r.rows[0].payload;
+    const venueId = Array.isArray(payload) ? payload[0]?.fixture?.venue?.id : null;
+    if (!venueId) return null;
+    const v = await query(
+      'SELECT surface, latitude, longitude, altitude_m, climate_zone, capacity FROM venues WHERE venue_id = $1',
+      [venueId]
+    );
+    return v.rows[0] || null;
+  } catch (_) { return null; }
+}
+
+async function getMatchStatsFromDB(fixtureId) {
+  if (!fixtureId) return [];
+  try {
+    const r = await query(
+      'SELECT team_id, expected_goals AS xg, shots_on_goal AS shots_on_target FROM match_stats WHERE fixture_id = $1',
+      [fixtureId]
+    );
+    return r.rows;
+  } catch (_) { return []; }
 }
 
 // Transform h2h rows → API-Football-like format expected by calcPoisson
@@ -320,54 +567,56 @@ export default async function handler(req, res) {
   const key = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
   if (!key) return res.status(500).json({ error: 'API_FOOTBALL_KEY neconfigurat' });
 
-  const { h, a, fid, hn, an, lg, lgid, dt, br, elapsed, hg, ag, soth, sota } = req.query;
+  const { h, a, fid, hn, an, lg, lgid, dt, br, elapsed, hg, ag, soth, sota, ref, status_short } = req.query;
   if (!h || !a) return res.status(400).json({ error: 'Parametri h si a sunt necesari' });
 
   const hId      = Number(h);
   const aId      = Number(a);
-  const bankroll = parseFloat(br) || 10;
   const hdr      = { 'x-apisports-key': key };
-  const sbUrl    = process.env.SUPABASE_URL;
-  const sbKey    = process.env.SUPABASE_KEY;
 
   try {
-    // --- Batch 1: Supabase queries + team strengths + injuries + match_stats + league_pattern in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leaguePattern] = await Promise.all([
-      sbUrl && sbKey ? getFormFromSupabase(hId, sbUrl, sbKey)              : Promise.resolve([]),
-      sbUrl && sbKey ? getFormFromSupabase(aId, sbUrl, sbKey)              : Promise.resolve([]),
-      sbUrl && sbKey ? getH2HFromSupabase(hId, aId, sbUrl, sbKey)         : Promise.resolve([]),
-      fid && sbUrl && sbKey ? getOddsFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
-      getTeamStrengths(hId, aId, sbUrl, sbKey),
-      fid && sbUrl && sbKey ? getInjuriesFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
-      fid && sbUrl && sbKey ? getMatchStatsFromSupabase(Number(fid), sbUrl, sbKey) : Promise.resolve([]),
-      lgid && sbUrl && sbKey ? getLeaguePatternFromSupabase(Number(lgid), sbUrl, sbKey) : Promise.resolve(null),
+    // --- Batch 1: DB queries + team strengths + injuries + match_stats + venue in parallel ---
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo] = await Promise.all([
+      getFormFromDB(hId),
+      getFormFromDB(aId),
+      getH2HFromDB(hId, aId),
+      fid ? getOddsFromDB(Number(fid)) : Promise.resolve([]),
+      getTeamStrengths(hId, aId),
+      fid ? getInjuriesFromDB(Number(fid)) : Promise.resolve([]),
+      fid ? getMatchStatsFromDB(Number(fid)) : Promise.resolve([]),
+      getLeagueStats(lgid),
+      getRefereeStats(ref || null),
+      fid ? getVenueForFixture(Number(fid)) : Promise.resolve(null),
     ]);
 
-    // --- Batch 2: API-Football fallbacks only where Supabase had insufficient data ---
+    // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
     const needHForm = sbHForm.length  < 3;
     const needAForm = sbAForm.length  < 3;
     const needH2H   = sbH2H.length    < 3;
     const needOdds  = fid && sbOddsRows.length === 0;
 
     const [apiFbHForm, apiFbAForm, apiFbH2H, apiFbOdds] = await Promise.all([
-      needHForm ? fetchWithRetry(`https://v3.football.api-sports.io/fixtures?team=${h}&last=20&status=FT`, { headers: hdr }).then(r => r.json()) : null,
-      needAForm ? fetchWithRetry(`https://v3.football.api-sports.io/fixtures?team=${a}&last=20&status=FT`, { headers: hdr }).then(r => r.json()) : null,
-      needH2H   ? fetchWithRetry(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${h}-${a}&last=10`, { headers: hdr }).then(r => r.json()) : null,
-      needOdds  ? fetchWithRetry(`https://v3.football.api-sports.io/odds?fixture=${fid}&bookmaker=8`, { headers: hdr }).then(r => r.json()) : null,
+      needHForm ? fetchApiFootball(`/fixtures?team=${h}&last=20&status=FT`).then(r => r.json()) : null,
+      needAForm ? fetchApiFootball(`/fixtures?team=${a}&last=20&status=FT`).then(r => r.json()) : null,
+      needH2H   ? fetchApiFootball(`/fixtures/headtohead?h2h=${h}-${a}&last=10`).then(r => r.json()) : null,
+      needOdds  ? fetchApiFootball(`/odds?fixture=${fid}`).then(r => r.json()) : null,
     ]);
 
     // Resolve final datasets
-    const hGames = needHForm
-      ? (apiFbHForm?.response || []).slice(0, 10)
-      : formStatsToFixtures(sbHForm, hId);
-
-    const aGames = needAForm
-      ? (apiFbAForm?.response || []).slice(0, 10)
-      : formStatsToFixtures(sbAForm, aId);
-
+    const hGames = needHForm ? (apiFbHForm?.response || []).slice(0, 10) : sbHForm;
+    const aGames = needAForm ? (apiFbAForm?.response || []).slice(0, 10) : sbAForm;
     const h2h = needH2H
       ? (apiFbH2H?.response || []).slice(0, 10)
       : h2hToFixtures(sbH2H);
+
+    // teams_stats fallback when form still insufficient after API
+    const formInsufficient = hGames.length < 3 || aGames.length < 3;
+    const [tsH, tsA] = formInsufficient
+      ? await Promise.all([
+          getTeamStatsFromDB(hId, lgid),
+          getTeamStatsFromDB(aId, lgid),
+        ])
+      : [null, null];
 
     // Resolve odds
     let oddsRaw = null;
@@ -380,10 +629,7 @@ export default async function handler(req, res) {
       // League-level fallback
       if (!oddsRaw && lgid) {
         try {
-          const r5 = await fetch(
-            `https://v3.football.api-sports.io/odds?league=${lgid}&season=${new Date().getFullYear()}&bookmaker=8`,
-            { headers: hdr }
-          );
+          const r5 = await fetchApiFootball(`/odds?league=${lgid}&season=${new Date().getFullYear()}`);
           const d5 = await r5.json();
           const item2 = (d5.response || []).find(x => x.fixture?.id === Number(fid));
           if (item2) oddsRaw = parseOddsItem(item2);
@@ -392,43 +638,118 @@ export default async function handler(req, res) {
     }
 
     // --- Calculations ---
-    const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota);
-    const evData = calcEV(result, oddsRaw, bankroll);
+    const lgHome = parseFloat(leagueStats?.avg_home_goals) || 1.2;
+    const lgAway = parseFloat(leagueStats?.avg_away_goals) || 1.2;
+    const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota, lgHome, lgAway);
 
-    // --- Resolve xG: real from match_stats if available, else estimate from shots ---
+    // teams_stats lambda override — priority 2 (between form_stats and league_stats)
+    if (formInsufficient && (tsH || tsA)) {
+      const tsHScored   = tsH ? +(tsH.avg_goals_for)     : null;
+      const tsHConceded = tsH ? +(tsH.avg_goals_against) : null;
+      const tsAScored   = tsA ? +(tsA.avg_goals_for)     : null;
+      const tsAConceded = tsA ? +(tsA.avg_goals_against) : null;
+      if (tsHScored != null && tsAConceded != null)
+        result.lambdaHome = +((tsHScored + tsAConceded) / 2).toFixed(2);
+      if (tsAScored != null && tsHConceded != null)
+        result.lambdaAway = +((tsAScored + tsHConceded) / 2).toFixed(2);
+      result.lambdaTotal = +(result.lambdaHome + result.lambdaAway).toFixed(2);
+      // Recalculate matrix with improved lambdas
+      const mx2 = calcPoisson6x6(result.lambdaHome, result.lambdaAway);
+      Object.assign(result, {
+        over15Prob: mx2.over15Prob, over25Prob: mx2.over25Prob,
+        ggProb: mx2.ggProb, homeWin: mx2.homeWin,
+        draw: mx2.draw, awayWin: mx2.awayWin,
+      });
+      // Clean sheets penalty on GG — high CS rate at home/away → harder for opponent to score
+      const csRateH = tsH && tsH.played_home > 0 ? tsH.clean_sheets_home / tsH.played_home : 0;
+      const csRateA = tsA && tsA.played_away > 0 ? tsA.clean_sheets_away / tsA.played_away : 0;
+      if (csRateH > 0.35) result.ggProb = Math.max(0, result.ggProb * (1 - (csRateH - 0.35)));
+      if (csRateA > 0.35) result.ggProb = Math.max(0, result.ggProb * (1 - (csRateA - 0.35)));
+      result._teamsStatsUsed = true;
+    }
+
+    // Venue + altitude + meteo amplificat (Faza 1 Hybrid)
+    if (venueInfo) {
+      const venueMeteo = result.weather || null;
+      const imp = await getVenueAndMeteoImpact(fixtureId, venueId, venueMeteo);
+      if (imp.source.length > 0) {
+        result.over15Prob = Math.max(0, Math.min(100, result.over15Prob * imp.over15));
+        result.over25Prob = Math.max(0, Math.min(100, result.over25Prob * imp.over25));
+        result.ggProb    = Math.max(0, Math.min(100, result.ggProb    * imp.gg));
+        result._venueMeteoImpact = imp.source.join(',');
+      }
+      result._venueSurface = venueInfo.surface;
+      result._venueAltitude = venueInfo.altitude_m;
+    }
+
+    // Coach impact (Faza 2 Hybrid) — aplicat pentru ambele echipe agregat
+    try {
+      const homeImp = await getCoachImpact(hId);
+      const awayImp = await getCoachImpact(aId);
+      const combine = (a, b) => Math.sqrt(a * b);
+      const o15 = combine(homeImp.over15, awayImp.over15);
+      const o25 = combine(homeImp.over25, awayImp.over25);
+      const ggm = combine(homeImp.gg,     awayImp.gg);
+      if (homeImp.source.length || awayImp.source.length) {
+        result.over15Prob = Math.max(0, Math.min(100, result.over15Prob * o15));
+        result.over25Prob = Math.max(0, Math.min(100, result.over25Prob * o25));
+        result.ggProb    = Math.max(0, Math.min(100, result.ggProb    * ggm));
+        result._coachImpact = `H:${homeImp.source.join(',')}|A:${awayImp.source.join(',')}`;
+      }
+    } catch (_) { /* silent */ }
+
+    // Referee impact (Faza 3 Hybrid) — home bias + cards prediction
+    try {
+      if (ref) {
+        const refImp = await getRefereeImpact(ref);
+        if (refImp.source.length > 0) {
+          result.homeWin = Math.max(0, Math.min(100, result.homeWin * refImp.homeWin));
+          result.over25Prob = Math.max(0, Math.min(100, result.over25Prob * refImp.over25));
+          if (refImp.over35Cards != null) result.refOver35Cards = refImp.over35Cards;
+          result._refereeImpact = refImp.source.join(',');
+        }
+      }
+    } catch (_) { /* silent */ }
+
+    // Ajustare Over 2.5 bazată pe stilul arbitrului
+    if (refereeStats && Number(refereeStats.total_matches) >= 5) {
+      if (refereeStats.referee_style === 'open')
+        result.over25Prob = Math.min(100, result.over25Prob + 5);
+      else if (refereeStats.referee_style === 'closed')
+        result.over25Prob = Math.max(0, result.over25Prob - 5);
+    }
+
+    const evData = calcEV(result, oddsRaw);
+
+    // --- Resolve xG ---
     let xgSource = 'estimated';
     let xgValue  = (parseFloat(soth) || 0) * 0.4 + (parseFloat(sota) || 0) * 0.4;
 
     if (Array.isArray(matchStats) && matchStats.length) {
-      // Flat schema: single row with home_xg / away_xg columns
-      if (matchStats[0].home_xg != null || matchStats[0].away_xg != null) {
-        xgValue  = (parseFloat(matchStats[0].home_xg) || 0) + (parseFloat(matchStats[0].away_xg) || 0);
-        xgSource = 'supabase';
-      } else {
-        // Per-team rows with an xg column
-        const homeRow = matchStats.find(r => r.team_id === hId && r.xg != null);
-        const awayRow = matchStats.find(r => r.team_id === aId && r.xg != null);
-        if (homeRow || awayRow) {
-          xgValue  = (parseFloat(homeRow?.xg) || 0) + (parseFloat(awayRow?.xg) || 0);
-          xgSource = 'supabase';
-        }
+      const homeRow = matchStats.find(r => r.team_id === hId && r.xg != null);
+      const awayRow = matchStats.find(r => r.team_id === aId && r.xg != null);
+      if (homeRow || awayRow) {
+        xgValue  = (parseFloat(homeRow?.xg) || 0) + (parseFloat(awayRow?.xg) || 0);
+        xgSource = 'postgres';
       }
     }
 
-    const liveStats = (elapsed && parseInt(elapsed) > 0) ? {
+    const da  = parseInt(req.query.da)  || 0;
+    const yc  = parseInt(req.query.yc)  || 0;
+    const elapsedNum = parseInt(elapsed) || 0;
+    const liveStats = elapsedNum > 0 ? {
       xg:  xgValue,
       sot: (parseInt(soth) || 0) + (parseInt(sota) || 0),
-      da:  0,
+      da, yc, elapsed: elapsedNum,
     } : null;
 
-    const confData = calcConfidence(result, oddsRaw, liveStats, teamStrengths);
+    const confData = calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData);
 
-    // Add xg_source flag to breakdown when in live mode
     if (elapsed && parseInt(elapsed) > 0) {
       confData.breakdown.xg_source = xgSource;
     }
 
-    // --- Injuries adjustment (only when fid is present) ---
+    // --- Injuries adjustment ---
     if (fid && Array.isArray(injuries) && injuries.length >= 3) {
       let injuryPenalty = 0;
       if (injuries.length >= 8)      injuryPenalty = 15;
@@ -442,57 +763,98 @@ export default async function handler(req, res) {
       };
     }
 
-    // --- League pattern adjustment (only when lgid present and pattern found) ---
-    if (leaguePattern) {
-      const avgOver15 = parseFloat(leaguePattern.avg_over15) || 0;
-      const avgGG     = parseFloat(leaguePattern.avg_gg)     || 0;
-      let leagueAdj = 0;
+    const payload = { ...result, ...evData, ...confData, leagueStats: leagueStats || null, refereeStats: refereeStats || null };
 
-      if (avgOver15 > 0.65)      leagueAdj += 3;
-      else if (avgOver15 < 0.45) leagueAdj -= 3;
+    // Fire-and-forget: colectare injuries + prediction save + pre_match snapshot
+    if (fid) {
+      fetchAndStoreInjuries(Number(fid));
 
-      if (avgGG > 0.60) leagueAdj += 2;
+      // Pre-match snapshot for back-testing (only when not live)
+      if (PRE_MATCH_STATUSES.has(status_short) || (!parseInt(elapsed) && !LIVE_STATUSES.has(status_short))) {
+        const compositeScore = +(
+          payload.over15Prob * 0.40 + payload.ggProb * 0.30 + payload.homeWin * 0.30
+        ).toFixed(1);
+        query(
+          `INSERT INTO pre_match_snapshots
+             (fixture_id, home_team_id, away_team_id, lambda_home, lambda_away,
+              over15_prob, over25_prob, gg_prob, confidence, odds_snapshot, composite_score)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+           ON CONFLICT (fixture_id) DO UPDATE SET
+             lambda_home=EXCLUDED.lambda_home, lambda_away=EXCLUDED.lambda_away,
+             over15_prob=EXCLUDED.over15_prob, over25_prob=EXCLUDED.over25_prob,
+             gg_prob=EXCLUDED.gg_prob, confidence=EXCLUDED.confidence,
+             composite_score=EXCLUDED.composite_score`,
+          [
+            Number(fid), hId, aId,
+            payload.lambdaHome, payload.lambdaAway,
+            payload.over15Prob, payload.over25Prob, payload.ggProb,
+            payload.confidenceScore || null,
+            oddsRaw ? JSON.stringify(oddsRaw) : null,
+            compositeScore,
+          ]
+        ).catch(() => {});
 
-      if (leagueAdj !== 0) {
-        confData.confidenceScore = Math.max(10, confData.confidenceScore + leagueAdj);
-        confData.breakdown.league_pattern = {
-          layer: 'league_pattern',
-          value: leagueAdj,
-          note:  `avg_over15: ${Math.round(avgOver15 * 100)}%`,
-        };
+        // Log OVER15 prediction for self-learning
+        if (payload.over15Prob > 0) {
+          logPrediction({
+            fixture_id: Number(fid), league_id: lgid ? Number(lgid) : null,
+            league_name: lg, home_team: hn, away_team: an, match_date: dt || null,
+            minute: parseInt(elapsed) || 0,
+            score: elapsed > 0 ? `${parseInt(req.query.hg)||0}-${parseInt(req.query.ag)||0}` : '0-0',
+            module: 'OVER15',
+            predicted_value: payload.over15Prob, threshold_used: 65,
+            lambda_home: payload.lambdaHome, lambda_away: payload.lambdaAway,
+            layer1: payload.breakdown?.poisson     ?? null,
+            layer2: payload.breakdown?.forma        ?? null,
+            layer3: payload.breakdown?.h2h          ?? null,
+            layer4: payload.breakdown?.live         ?? null,
+            layer5: payload.breakdown?.ev           ?? null,
+            layer6: payload.breakdown?.consistenta  ?? null,
+            layer7: payload.breakdown?.putereEchipe ?? null,
+          }).catch(() => {});
+          logPrediction({
+            fixture_id: Number(fid), league_id: lgid ? Number(lgid) : null,
+            league_name: lg, home_team: hn, away_team: an, match_date: dt || null,
+            minute: parseInt(elapsed) || 0,
+            score: elapsed > 0 ? `${parseInt(req.query.hg)||0}-${parseInt(req.query.ag)||0}` : '0-0',
+            module: 'GG',
+            predicted_value: payload.ggProb, threshold_used: 60,
+            lambda_home: payload.lambdaHome, lambda_away: payload.lambdaAway,
+          }).catch(() => {});
+          if (payload.confidenceScore > 0) {
+            logPrediction({
+              fixture_id: Number(fid), league_id: lgid ? Number(lgid) : null,
+              league_name: lg, home_team: hn, away_team: an, match_date: dt || null,
+              minute: parseInt(elapsed) || 0,
+              module: 'CONFIDENCE',
+              predicted_value: payload.confidenceScore, threshold_used: 70,
+              lambda_home: payload.lambdaHome, lambda_away: payload.lambdaAway,
+              layer1: payload.breakdown?.poisson     ?? null,
+              layer2: payload.breakdown?.forma        ?? null,
+              layer3: payload.breakdown?.h2h          ?? null,
+              layer4: payload.breakdown?.live         ?? null,
+              layer5: payload.breakdown?.ev           ?? null,
+              layer6: payload.breakdown?.consistenta  ?? null,
+              layer7: payload.breakdown?.putereEchipe ?? null,
+            }).catch(() => {});
+          }
+        }
       }
-    }
 
-    const payload = { ...result, ...evData, ...confData };
-
-    if (sbUrl && sbKey && fid) {
-      fetch(`${sbUrl}/rest/v1/predictions`, {
-        method: 'POST',
-        headers: {
-          'apikey':        sbKey,
-          'Authorization': `Bearer ${sbKey}`,
-          'Content-Type':  'application/json',
-          'Prefer':        'resolution=ignore-duplicates,return=minimal'
-        },
-        body: JSON.stringify({
-          fixture_id:      Number(fid),
-          home_team:       hn  || '',
-          away_team:       an  || '',
-          league_name:     lg  || '',
-          league_id:       lgid ? Number(lgid) : null,
-          match_date:      dt  || null,
-          lambda_home:     payload.lambdaHome,
-          lambda_away:     payload.lambdaAway,
-          lambda_total:    payload.lambdaTotal,
-          over15_prob:     payload.over15Prob,
-          over25_prob:     payload.over25Prob,
-          gg_prob:         payload.ggProb,
-          home_score_rate: payload.homeScoreRate,
-          away_score_rate: payload.awayScoreRate,
-          h2h_over15:      payload.h2hOver15,
-          confidence:      payload.confidence,
-        })
-      }).catch(() => {});
+      query(
+        `INSERT INTO predictions (fixture_id, home_team, away_team, league_name, league_id, match_date,
+          lambda_home, lambda_away, lambda_total, over15_prob, over25_prob, gg_prob,
+          home_score_rate, away_score_rate, h2h_over15, confidence)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        ON CONFLICT (fixture_id) DO NOTHING`,
+        [
+          Number(fid), hn || '', an || '', lg || '', lgid ? Number(lgid) : null, dt || null,
+          payload.lambdaHome, payload.lambdaAway, payload.lambdaTotal,
+          payload.over15Prob, payload.over25Prob, payload.ggProb,
+          payload.homeScoreRate, payload.awayScoreRate, payload.h2hOver15,
+          payload.confidenceScore || null,
+        ]
+      ).catch(() => {});
     }
 
     res.status(200).json(payload);

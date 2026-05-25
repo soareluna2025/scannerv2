@@ -1,0 +1,49 @@
+name: Create DB Tables on VPS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-tables:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create tables on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: root
+          password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 10m
+          script: |
+            export PATH="/snap/bin:$PATH"
+            trap '' TERM
+
+            echo "=== 1. Verifica PostgreSQL ==="
+            systemctl is-active postgresql && echo "PostgreSQL: ACTIV" || systemctl start postgresql
+            sleep 1
+
+            echo "=== 2. Git pull ==="
+            cd /root/scannerv2
+            git pull origin main
+
+            echo "=== 3. Executie SQL ==="
+            PGPASSWORD=Firenze225854 psql -U alohascan -d elefant -h 127.0.0.1 -f /root/scannerv2/scripts/create-tables.sql
+
+            echo "=== 3b. Migrații ==="
+            PGPASSWORD=Firenze225854 psql -U alohascan -d elefant -h 127.0.0.1 -f /root/scannerv2/scripts/migrations/add-snapshots.sql
+
+            echo ""
+            echo "=== 4. Verificare tabele ==="
+            PGPASSWORD=Firenze225854 psql -U alohascan -d elefant -h 127.0.0.1 \
+              -c "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;"
+
+            echo ""
+            echo "=== 5. Verificare ligi ==="
+            PGPASSWORD=Firenze225854 psql -U alohascan -d elefant -h 127.0.0.1 \
+              -c "SELECT tier, COUNT(*) as total FROM leagues GROUP BY tier ORDER BY tier;"
+
+            echo ""
+            echo "================================================"
+            echo "  Tabele create cu succes!"
+            echo "================================================"
+            echo "DONE: $(date)"

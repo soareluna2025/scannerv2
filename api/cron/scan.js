@@ -1,272 +1,154 @@
 // Vercel Cron Job — runs every minute
-// Fetches live matches, calculates NGP/markets, stores snapshots in Supabase
-// Resolves WIN/LOSS for finished matches, updates league_patterns every 10 runs
+// Fetches live matches, calculates NGP/markets, stores snapshots in PostgreSQL
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://kdyafjlwbximefwdhbnc.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_KEY;
+import { query } from '../db.js';
+import { calcFeatures, calcNextGoal, calcGG, calcMarkets } from '../utils/live-score.js';
+
 const FOOTBALL_KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 const CRON_SECRET  = process.env.CRON_SECRET;
 
 const LIVE_STATUS = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'INT']);
 const DONE_STATUS = new Set(['FT', 'AET', 'PEN']);
 
-// --- Poisson helpers (mirrors index.html calcMarkets) ---
-function poissonProb(lambda, k) {
-  if (lambda <= 0) return k === 0 ? 1 : 0;
-  let p = Math.exp(-lambda);
-  for (let i = 0; i < k; i++) p = p * lambda / (i + 1);
-  return p;
-}
-
-function mkt(need, lambda) {
-  if (need <= 0) return 100;
-  let pFail = 0;
-  for (let k = 0; k < need; k++) pFail += poissonProb(lambda, k);
-  return Math.round(Math.max(5, Math.min(98, (1 - pFail) * 100)));
-}
-
-function getStat(stats, teamIdx, type) {
-  const team = stats?.[teamIdx]?.statistics;
-  if (!Array.isArray(team)) return 0;
-  const entry = team.find(s => s.type === type);
-  const v = entry?.value;
-  if (v === null || v === undefined || v === 'N/A' || v === '') return 0;
-  return parseFloat(v) || 0;
-}
-
-function calcFeatures(m) {
-  const st  = m.statistics || [];
-  const mn  = m.fixture?.status?.elapsed || 0;
-  const hg  = m.goals?.home ?? 0;
-  const ag  = m.goals?.away ?? 0;
-
-  const hxg  = getStat(st, 0, 'expected_goals');
-  const axg  = getStat(st, 1, 'expected_goals');
-  const hSOT = getStat(st, 0, 'Shots on Goal');
-  const aSOT = getStat(st, 1, 'Shots on Goal');
-  const hSh  = getStat(st, 0, 'Shots off Goal') + hSOT;
-  const aSh  = getStat(st, 1, 'Shots off Goal') + aSOT;
-  const hp   = getStat(st, 0, 'Ball Possession') || 50;
-  const hC   = getStat(st, 0, 'Corner Kicks');
-  const aC   = getStat(st, 1, 'Corner Kicks');
-  const hDA  = getStat(st, 0, 'Dangerous Attacks');
-  const aDA  = getStat(st, 1, 'Dangerous Attacks');
-  const hSv  = getStat(st, 0, 'Goalkeeper Saves');
-  const aSv  = getStat(st, 1, 'Goalkeeper Saves');
-
-  const txg = hxg + axg;
-  const tSh = hSh + aSh;
-  const tSOT = hSOT + aSOT;
-  const tC  = hC + aC;
-  const tDA = hDA + aDA;
-
-  return {
-    hxg, axg, hSOT, aSOT, hSh, aSh, hp, hC, aC, hDA, aDA, hSv, aSv,
-    txg, tSh, tSOT, tC, tDA, mn, hg, ag,
-    xgTotal: Math.min(txg / 3, 1),
-    hxgN: Math.min(hxg / 1.5, 1),
-    axgN: Math.min(axg / 1.5, 1),
-    shots: Math.min(tSh / 25, 1),
-    corners: Math.min(tC / 15, 1),
-    dangerousAttacks: tDA > 0 ? Math.min(tDA / 120, 1) : 0,
-    timeProgress: Math.min(mn / 90, 1),
-    isGoless: (hg + ag === 0) ? 1 : 0,
-    homeFormGoals: 0.35, awayFormGoals: 0.35,
-    homeFormGG: 0.45,    awayFormGG: 0.45,
-    h2hGoalRate: 0.35,   h2hGGRate: 0.45,
-    xgSpike: 0, prsAcc: 0,
-  };
-}
-
-function calcNextGoal(f) {
-  const mn = f.mn || 0;
-  const remFrac = Math.max(0, Math.min(1, (90 - mn) / 90));
-  let remXg = mn > 0 ? (f.txg / mn) * (90 - mn) : 0.025 * (90 - mn);
-  if (f.txg === 0) {
-    remXg = ((f.homeFormGoals + f.awayFormGoals) / 2 * 2.5) * remFrac;
-  }
-  remXg += f.xgSpike * 0.3 + f.prsAcc * 0.2;
-  if (mn >= 70) remXg *= 1.2;
-  if (mn >= 80) remXg *= 1.15;
-  const prob = 1 - Math.exp(-Math.max(remXg, 0.05));
-  return Math.round(Math.max(3, Math.min(97, prob * 100)));
-}
-
-function calcGG(f) {
-  const mn = f.mn || 0;
-  const remFrac = Math.max(0, Math.min(1, (90 - mn) / 90));
-  const histGG = (f.homeFormGG + f.awayFormGG) / 2 * 0.7 + f.h2hGGRate * 0.3;
-  const hxgRate = mn > 0 ? (f.hxg / (mn / 90)) : f.hxg;
-  const axgRate = mn > 0 ? (f.axg / (mn / 90)) : f.axg;
-  const pScore = (lam, scored) => {
-    if (scored > 0) return 1;
-    return 1 - Math.exp(-Math.max(lam * remFrac, 0.05));
-  };
-  const hLam = Math.max(hxgRate > 0 ? hxgRate : f.homeFormGoals * 1.5, 0.3);
-  const aLam = Math.max(axgRate > 0 ? axgRate : f.awayFormGoals * 1.5, 0.3);
-  let ggPred = pScore(hLam, f.hg) * pScore(aLam, f.ag) * 0.6 + histGG * 0.4;
-  if (f.hg === 0 && f.ag === 0 && mn >= 70) ggPred *= 0.75;
-  if (f.hg === 0 && f.ag === 0 && mn >= 80) ggPred *= 0.65;
-  return Math.round(Math.max(5, Math.min(95, ggPred * 100)));
-}
-
-function calcMarkets(f) {
-  const mn = f.mn || 0;
-  const totalG = f.hg + f.ag;
-  const remFrac = Math.max(0, Math.min(1, (95 - mn) / 90));
-  const lxg   = f.xgTotal > 0 ? f.txg * 3 : 0;
-  const lform  = ((f.homeFormGoals + f.awayFormGoals) / 2) * 3;
-  const lh2h   = f.h2hGoalRate * 3;
-  let lb = lxg > 0 ? lxg * 0.55 + lform * 0.25 + lh2h * 0.2
-                   : lform * 0.55 + lh2h * 0.45;
-  if (lb < 0.8) lb = 1.6;
-  const lr = lb * remFrac + f.xgSpike * 0.3 + f.prsAcc * 0.2;
-
-  const lhf = f.homeFormGoals * 1.5;
-  const laf = f.awayFormGoals * 1.5;
-  const lhb = Math.max(f.hxgN > 0 ? f.hxgN * 1.5 * 0.6 + lhf * 0.4 : lhf, 0.3);
-  const lab = Math.max(f.axgN > 0 ? f.axgN * 1.5 * 0.6 + laf * 0.4 : laf, 0.3);
-  const lhr = lhb * remFrac + f.xgSpike * 0.1;
-  const lar = lab * remFrac + f.prsAcc * 0.1;
-
-  return {
-    over05: mkt(Math.max(0, 1 - totalG), lr),
-    over15: mkt(Math.max(0, 2 - totalG), lr),
-    over25: mkt(Math.max(0, 3 - totalG), lr),
-    gg:     calcGG(f),
-    home05: mkt(Math.max(0, 1 - f.hg), lhr),
-    home15: mkt(Math.max(0, 2 - f.hg), lhr),
-    away05: mkt(Math.max(0, 1 - f.ag), lar),
-    away15: mkt(Math.max(0, 2 - f.ag), lar),
-  };
-}
-
-// --- Supabase REST helpers ---
-async function sbFetch(path, method = 'GET', body = null, preferExtra = '') {
-  if (!SUPABASE_KEY) throw new Error('SUPABASE_KEY not configured');
-  let prefer = '';
-  if (method === 'POST') prefer = preferExtra ? `return=minimal,${preferExtra}` : 'return=minimal';
-  const opts = {
-    method,
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      'Prefer': prefer,
-    },
-  };
-  if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(`${SUPABASE_URL}/rest/v1${path}`, opts);
-  if (!r.ok) {
-    const txt = await r.text();
-    throw new Error(`Supabase ${method} ${path} → ${r.status}: ${txt}`);
-  }
-  if (method === 'GET') return r.json();
-  return null;
-}
+// --- PostgreSQL helpers ---
 
 async function upsertSnapshot(row) {
-  await sbFetch('/match_snapshots', 'POST', row);
+  await query(
+    `INSERT INTO match_snapshots
+       (fixture_id, league_id, home_team, away_team,
+        status_short, minute, home_goals, away_goals,
+        ng, over15, outcome)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     ON CONFLICT (fixture_id) DO UPDATE SET
+       status_short=EXCLUDED.status_short,
+       minute=EXCLUDED.minute,
+       home_goals=EXCLUDED.home_goals,
+       away_goals=EXCLUDED.away_goals,
+       ng=EXCLUDED.ng,
+       over15=EXCLUDED.over15,
+       outcome=EXCLUDED.outcome`,
+    [
+      row.fixture_id, row.league_id, row.home_team, row.away_team,
+      row.status_short, row.minute, row.home_goals, row.away_goals,
+      row.ng, row.over15, row.outcome || 'LIVE',
+    ]
+  );
 }
 
 async function resolveOutcome(fixtureId, outcome, finalHome, finalAway) {
-  await sbFetch(
-    `/match_snapshots?fixture_id=eq.${fixtureId}&outcome=eq.LIVE`,
-    'PATCH',
-    { outcome, final_home: finalHome, final_away: finalAway, resolved_at: new Date().toISOString() }
+  await query(
+    `UPDATE match_snapshots
+     SET outcome=$1, final_home=$2, final_away=$3, resolved_at=NOW()
+     WHERE fixture_id=$4`,
+    [outcome, finalHome, finalAway, fixtureId]
   );
 }
 
 async function leagueSnapshots(leagueId, limit = 200) {
-  return sbFetch(
-    `/match_snapshots?league_id=eq.${leagueId}&outcome=neq.LIVE&order=created_at.desc&limit=${limit}`
-  );
+  try {
+    const r = leagueId
+      ? await query(
+          `SELECT * FROM match_snapshots
+           WHERE league_id=$1 AND outcome != 'LIVE'
+           ORDER BY created_at DESC LIMIT $2`,
+          [leagueId, limit])
+      : await query(
+          `SELECT * FROM match_snapshots
+           WHERE outcome != 'LIVE'
+           ORDER BY created_at DESC LIMIT $1`,
+          [limit]);
+    return r.rows;
+  } catch (_) { return []; }
 }
 
 async function upsertLeaguePattern(row) {
-  await sbFetch('/league_patterns?on_conflict=league_id', 'POST', row);
+  await query(
+    `INSERT INTO league_patterns
+       (league_id, sample_size, avg_ng, avg_over15, updated_at)
+     VALUES ($1,$2,$3,$4,NOW())
+     ON CONFLICT (league_id) DO UPDATE SET
+       sample_size=EXCLUDED.sample_size,
+       avg_ng=EXCLUDED.avg_ng,
+       avg_over15=EXCLUDED.avg_over15,
+       updated_at=NOW()`,
+    [row.league_id, row.sample_size, row.avg_ng, row.avg_over15]
+  );
 }
 
-async function saveLiveStats(m, f) {
-  const row = {
-    fixture_id:      m.fixture.id,
-    minute:          f.mn,
-    home_goals:      f.hg,
-    away_goals:      f.ag,
-    home_possession: f.hp || null,
-    away_possession: f.hp ? Math.round(100 - f.hp) : null,
-    home_xg:         f.hxg || null,
-    away_xg:         f.axg || null,
-    home_shots:      f.hSh,
-    away_shots:      f.aSh,
-    home_attacks:    f.hDA,
-    away_attacks:    f.aDA,
-    home_dangerous:  f.hDA,
-    away_dangerous:  f.aDA,
-    home_corners:    f.hC,
-    away_corners:    f.aC,
-    recorded_at:     new Date().toISOString(),
-  };
-  await sbFetch('/live_stats', 'POST', row);
+async function saveLiveStats(m, f, status) {
+  await query(
+    `INSERT INTO live_stats
+       (fixture_id, elapsed, home_goals, away_goals,
+        home_sot, away_sot, home_shots, away_shots,
+        home_possession, away_possession,
+        home_corners, away_corners,
+        home_da, away_da,
+        home_xg, away_xg)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+    [
+      m.fixture.id,
+      f.mn,
+      f.hg,
+      f.ag,
+      f.hSOT,
+      f.aSOT,
+      f.hSh,
+      f.aSh,
+      f.hp,
+      100 - (f.hp || 50),
+      f.hC,
+      f.aC,
+      f.hDA,
+      f.aDA,
+      f.hxg || null,
+      f.axg || null,
+    ]
+  );
 }
 
 async function saveH2H(matches) {
   for (const match of matches) {
-    const hg = match.goals?.home ?? 0;
-    const ag = match.goals?.away ?? 0;
-    const row = {
-      fixture_id:   match.fixture.id,
-      home_team_id: match.teams?.home?.id,
-      away_team_id: match.teams?.away?.id,
-      match_date:   match.fixture?.date,
-      home_goals:   hg,
-      away_goals:   ag,
-      result:       hg > ag ? 'H' : hg < ag ? 'A' : 'D',
-      over05:       (hg + ag) > 0,
-      over15:       (hg + ag) > 1,
-      over25:       (hg + ag) > 2,
-      gg:           hg > 0 && ag > 0,
-    };
-    await sbFetch('/h2h?on_conflict=fixture_id', 'POST', row, 'resolution=merge-duplicates');
+    const hg  = match.goals?.home ?? 0;
+    const ag  = match.goals?.away ?? 0;
+    const hid = match.teams?.home?.id;
+    const aid = match.teams?.away?.id;
+    if (!hid || !aid) continue;
+    await query(
+      `INSERT INTO h2h
+         (team1_id, team2_id, fixture_id, home_team_id, away_team_id,
+          match_date, home_goals, away_goals, league_id, season)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       ON CONFLICT (team1_id, team2_id, fixture_id) DO UPDATE SET
+         home_goals=EXCLUDED.home_goals, away_goals=EXCLUDED.away_goals`,
+      [
+        Math.min(hid, aid), Math.max(hid, aid),
+        match.fixture.id, hid, aid,
+        match.fixture?.date || null,
+        hg, ag,
+        match.league?.id || null,
+        new Date().getFullYear(),
+      ]
+    );
   }
 }
 
 async function saveFormStats(matches, teamId) {
-  for (const match of matches) {
-    const hg = match.goals?.home ?? 0;
-    const ag = match.goals?.away ?? 0;
-    const isHome   = match.teams?.home?.id === teamId;
-    const scored   = isHome ? hg : ag;
-    const conceded = isHome ? ag : hg;
-    const result   = scored > conceded ? 'W' : scored < conceded ? 'L' : 'D';
-    const row = {
-      fixture_id:     match.fixture.id,
-      team_id:        teamId,
-      league_id:      match.league?.id,
-      match_date:     match.fixture?.date,
-      is_home:        isHome,
-      goals_scored:   scored,
-      goals_conceded: conceded,
-      result,
-      over05: (hg + ag) > 0,
-      over15: (hg + ag) > 1,
-      over25: (hg + ag) > 2,
-      gg:     hg > 0 && ag > 0,
-    };
-    await sbFetch('/form_stats?on_conflict=fixture_id,team_id', 'POST', row, 'resolution=merge-duplicates');
-  }
+  // form_stats schema uses UNIQUE(team_id, league_id, season) with aggregate columns,
+  // not per-match rows — skip silently
+  return;
 }
 
 async function saveAlert(fixtureId, alertType, market, message, confidence) {
-  await sbFetch('/alerts', 'POST', {
-    fixture_id:    fixtureId,
-    alert_type:    alertType,
-    market,
-    message,
-    confidence,
-    sent_telegram: false,
-    created_at:    new Date().toISOString(),
-  });
+  await query(
+    `INSERT INTO alerts (fixture_id, alert_type, message, ngp_value, telegram_ok)
+     SELECT $1,$2,$3,$4,FALSE
+     WHERE NOT EXISTS (
+       SELECT 1 FROM alerts
+       WHERE fixture_id=$1 AND alert_type=$2
+         AND sent_at > NOW() - INTERVAL '2 hours'
+     )`,
+    [fixtureId, alertType, message, confidence || null]
+  );
 }
 
 let _runCount = 0;
@@ -287,10 +169,16 @@ export default async function handler(req, res) {
     log('ERROR: no FOOTBALL_API_KEY');
     return res.status(200).json({ error: 'No API key' });
   }
-  if (!SUPABASE_KEY) {
-    log('ERROR: no SUPABASE_KEY');
-    return res.status(200).json({ error: 'No Supabase key' });
-  }
+
+  // Ensure league_patterns table exists (referenced by upsertLeaguePattern)
+  await query(`CREATE TABLE IF NOT EXISTS league_patterns (
+    league_id    INTEGER PRIMARY KEY,
+    avg_ng       DECIMAL(5,2) DEFAULT 0,
+    avg_over15   DECIMAL(5,2) DEFAULT 0,
+    avg_gg       DECIMAL(5,2) DEFAULT 0,
+    sample_size  INTEGER DEFAULT 0,
+    updated_at   TIMESTAMP DEFAULT NOW()
+  )`).catch(() => {});
 
   _runCount++;
   log(`run #${_runCount}`);
@@ -332,52 +220,27 @@ export default async function handler(req, res) {
     try {
       const sh      = m.fixture?.status?.short || '';
       const elapsed = m.fixture?.status?.elapsed ?? 0;
-      const extra   = m.fixture?.status?.extra ?? null;
       const f       = calcFeatures(m);
       const ng      = calcNextGoal(f);
       const mk      = calcMarkets(f);
 
-      const row = {
-        fixture_id:  m.fixture.id,
-        league_id:   m.league?.id,
-        league_name: m.league?.name,
-        home_team:   m.teams?.home?.name,
-        away_team:   m.teams?.away?.name,
-        home_id:     m.teams?.home?.id,
-        away_id:     m.teams?.away?.id,
-        status_short: sh,
-        minute:      elapsed,
-        extra_time:  extra,
-        home_goals:  m.goals?.home ?? 0,
-        away_goals:  m.goals?.away ?? 0,
-        home_xg:     f.hxg,
-        away_xg:     f.axg,
-        total_xg:    f.txg,
-        total_shots: f.tSh,
-        total_sot:   f.tSOT,
-        total_corners: f.tC,
-        total_da:    f.tDA,
-        possession:  f.hp,
-        ng:          ng,
-        over05:      mk.over05,
-        over15:      mk.over15,
-        over25:      mk.over25,
-        gg:          mk.gg,
-        outcome:     'LIVE',
-        created_at:  new Date().toISOString(),
-      };
-
-      await upsertSnapshot(row);
+      await upsertSnapshot({
+        fixture_id: m.fixture.id, league_id: m.league?.id,
+        home_team: m.teams?.home?.name, away_team: m.teams?.away?.name,
+        status_short: sh, minute: elapsed,
+        home_goals: m.goals?.home ?? 0, away_goals: m.goals?.away ?? 0,
+        ng, over15: mk.over15, outcome: 'LIVE',
+      });
       snapshotResults.push({ id: m.fixture.id, ng, status: sh, minute: elapsed });
 
-      // Save live_stats (non-blocking, fiecare minut per meci)
-      saveLiveStats(m, f).catch(e => log(`live_stats error ${m.fixture.id}: ${e.message}`));
+      // Save live_stats (non-blocking)
+      saveLiveStats(m, f, sh).catch(e => log(`live_stats error ${m.fixture.id}: ${e.message}`));
 
-      // Save alert dacă NGP > 85 sau over15 > 82
-      if (ng > 85 || mk.over15 > 82) {
-        const alertType = ng > 85 ? 'HIGH_NGP' : 'HIGH_OVER15';
-        const market    = ng > 85 ? 'ng' : 'over15';
-        const conf      = ng > 85 ? ng / 100 : mk.over15 / 100;
+      // Save alert once per match when NGP > 70 or over15 > 70
+      if (ng > 70 || mk.over15 > 70) {
+        const alertType = ng > 70 ? 'HIGH_NGP' : 'HIGH_OVER15';
+        const market    = ng > 70 ? 'ng' : 'over15';
+        const conf      = ng > 70 ? ng / 100 : mk.over15 / 100;
         const msg       = `${m.teams?.home?.name} vs ${m.teams?.away?.name} — ${alertType} ${Math.round(conf * 100)}% min ${elapsed}`;
         saveAlert(m.fixture.id, alertType, market, msg, conf)
           .catch(e => log(`alert error ${m.fixture.id}: ${e.message}`));
@@ -392,7 +255,7 @@ export default async function handler(req, res) {
     try {
       const fh = m.goals?.home ?? 0;
       const fa = m.goals?.away ?? 0;
-      const outcome = (fh + fa) > 0 ? 'WIN' : 'LOSS';
+      const outcome = (fh + fa) >= 2 ? 'WIN' : 'LOSS';
       await resolveOutcome(m.fixture.id, outcome, fh, fa);
       resolved.push({ id: m.fixture.id, outcome, score: `${fh}-${fa}` });
     } catch (e) {
@@ -400,160 +263,102 @@ export default async function handler(req, res) {
     }
   }
 
+  // Salvează h2h pentru meciurile FT (funcție orfană înainte, acum wired up)
+  // Permite Generator-ului să folosească date h2h reale în calculul GG.
+  if (finishedMatches.length > 0) {
+    try {
+      await saveH2H(finishedMatches);
+      log(`h2h: ${finishedMatches.length} meciuri salvate`);
+    } catch (e) {
+      log(`saveH2H error: ${e.message}`);
+    }
+  }
+
   if (_runCount % 10 === 0) {
     log('recalculating league patterns...');
     try {
-      const recent = await sbFetch(
-        '/match_snapshots?outcome=neq.LIVE&order=created_at.desc&limit=1000&select=league_id,league_name,over05,over15,over25,gg,ng,minute,outcome'
-      );
-
+      const recent = await leagueSnapshots(null, 1000);
       const byLeague = {};
-      for (const row of recent) {
-        if (!row.league_id) continue;
-        if (!byLeague[row.league_id]) byLeague[row.league_id] = { name: row.league_name, rows: [] };
-        byLeague[row.league_id].rows.push(row);
+      for (const s of recent) {
+        if (!s.league_id) continue;
+        if (!byLeague[s.league_id]) byLeague[s.league_id] = [];
+        byLeague[s.league_id].push(s);
       }
-
-      for (const [leagueId, { name, rows }] of Object.entries(byLeague)) {
-        if (rows.length < 5) continue;
-        const wins  = rows.filter(r => r.outcome === 'WIN').length;
-        const total = rows.length;
-        const avg = (field) => rows.reduce((s, r) => s + (r[field] || 0), 0) / total;
-
-        await upsertLeaguePattern({
-          league_id:     parseInt(leagueId),
-          league_name:   name,
-          sample_size:   total,
-          win_rate:      Math.round((wins / total) * 100),
-          avg_ng:        Math.round(avg('ng')),
-          avg_over05:    Math.round(avg('over05')),
-          avg_over15:    Math.round(avg('over15')),
-          avg_over25:    Math.round(avg('over25')),
-          avg_gg:        Math.round(avg('gg')),
-          updated_at:    new Date().toISOString(),
-        });
+      let patternCount = 0;
+      for (const [lid, snaps] of Object.entries(byLeague)) {
+        const n         = snaps.length;
+        const avg_ng    = Math.round(snaps.reduce((s, x) => s + (x.ng    || 0), 0) / n);
+        const avg_over15 = Math.round(snaps.reduce((s, x) => s + (x.over15 || 0), 0) / n);
+        await upsertLeaguePattern({ league_id: Number(lid), sample_size: n, avg_ng, avg_over15 });
+        patternCount++;
       }
-      log(`league patterns updated for ${Object.keys(byLeague).length} leagues`);
+      log(`league patterns: ${patternCount} ligi actualizate din ${recent.length} snapshots`);
     } catch (e) {
       log(`league patterns error: ${e.message}`);
     }
   }
 
-  // 6. Scan pre-match fixtures (starting in next 24h)
+  // Pre-match — citire din prematch_data (populat de /api/cron/prematch-enrichment)
   const pmResults = [];
   try {
     const nowMs = Date.now();
-    const in24h = nowMs + 24 * 60 * 60 * 1000;
-    const today    = new Date(nowMs).toISOString().split('T')[0];
-    const tomorrow = new Date(in24h).toISOString().split('T')[0];
+    const in24h = new Date(nowMs + 24 * 60 * 60 * 1000).toISOString();
 
-    const [todayR, tomorrowR] = await Promise.all([
-      fetch(`https://v3.football.api-sports.io/fixtures?date=${today}&status=NS`,    { headers: { 'x-apisports-key': FOOTBALL_KEY } }),
-      fetch(`https://v3.football.api-sports.io/fixtures?date=${tomorrow}&status=NS`, { headers: { 'x-apisports-key': FOOTBALL_KEY } }),
-    ]);
-    const [todayData, tomorrowData] = await Promise.all([todayR.json(), tomorrowR.json()]);
-    const allFixtures = [
-      ...(Array.isArray(todayData.response)    ? todayData.response    : []),
-      ...(Array.isArray(tomorrowData.response) ? tomorrowData.response : []),
-    ];
+    const fxR = await query(
+      `SELECT fixture_id AS id FROM fixtures
+       WHERE status_short='NS' AND match_date >= $1 AND match_date <= $2
+       ORDER BY match_date ASC`,
+      [new Date(nowMs).toISOString(), in24h]
+    );
 
-    const upcoming = allFixtures.filter(m => {
-      const fd = m.fixture?.date ? new Date(m.fixture.date).getTime() : 0;
-      return fd >= nowMs && fd <= in24h;
-    });
-
-    log(`pre-match upcoming: ${upcoming.length}`);
-
-    for (const m of upcoming) {
+    for (const fx of fxR.rows) {
       try {
-        const hid = m.teams?.home?.id;
-        const aid = m.teams?.away?.id;
-        if (!hid || !aid) continue;
-
-        const [h2hR, hfR, afR] = await Promise.all([
-          fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${hid}-${aid}&last=10`, { headers: { 'x-apisports-key': FOOTBALL_KEY } }),
-          fetch(`https://v3.football.api-sports.io/fixtures?team=${hid}&last=5&status=FT`, { headers: { 'x-apisports-key': FOOTBALL_KEY } }),
-          fetch(`https://v3.football.api-sports.io/fixtures?team=${aid}&last=5&status=FT`, { headers: { 'x-apisports-key': FOOTBALL_KEY } })
-        ]);
-        const [h2hData, hfData, afData] = await Promise.all([h2hR.json(), hfR.json(), afR.json()]);
-
-        const h2h = h2hData.response || [];
-        const hForm = hfData.response || [];
-        const aForm = afData.response || [];
-
+        const dataR = await query(
+          `SELECT DISTINCT ON (data_type) data_type, payload
+           FROM prematch_data WHERE fixture_id=$1
+           ORDER BY data_type, stage DESC, collected_at DESC`,
+          [fx.id]
+        );
+        const dm    = Object.fromEntries(dataR.rows.map(r => [r.data_type, r.payload]));
+        const h2h   = Array.isArray(dm.h2h)       ? dm.h2h       : [];
+        const hForm = Array.isArray(dm.home_form)  ? dm.home_form  : [];
+        const aForm = Array.isArray(dm.away_form)  ? dm.away_form  : [];
         if (h2h.length < 3 || hForm.length < 3 || aForm.length < 3) continue;
 
-        // Salvează h2h și form_stats (non-blocking)
-        saveH2H(h2h).catch(e => log(`h2h save error ${m.fixture?.id}: ${e.message}`));
-        saveFormStats(hForm, hid).catch(e => log(`form home error ${m.fixture?.id}: ${e.message}`));
-        saveFormStats(aForm, aid).catch(e => log(`form away error ${m.fixture?.id}: ${e.message}`));
-
-        const h2hN = h2h.length;
-        const ggH2HN = h2h.filter(g => g.goals?.home > 0 && g.goals?.away > 0).length;
-        const o15H2HN = h2h.filter(g => (g.goals?.home || 0) + (g.goals?.away || 0) >= 2).length;
-        const ggH2H = ggH2HN / h2hN;
-        const over15H2H = o15H2HN / h2hN;
-
-        const hf5 = hForm.slice(0, 5);
-        const af5 = aForm.slice(0, 5);
-        const ggHF = hf5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / hf5.length;
-        const ggAF = af5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / af5.length;
-        const o15HF = hf5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / hf5.length;
-        const o15AF = af5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / af5.length;
-
-        const ggScore   = ggH2H * 0.30 + ggHF * 0.25 + ggAF * 0.25 + over15H2H * 0.20;
-        const o15Score  = over15H2H * 0.30 + (o15HF / 3) * 0.25 + (o15AF / 3) * 0.25 + ggH2H * 0.20;
-        const composite = (ggScore + o15Score) / 2 * 100;
-
-        const row = {
-          fixture_id:      m.fixture.id,
-          home_team:       m.teams?.home?.name,
-          away_team:       m.teams?.away?.name,
-          league_id:       m.league?.id,
-          league_name:     m.league?.name,
-          kickoff_time:    m.fixture.date,
-          gg_score:        Math.round(ggScore * 100),
-          over15_score:    Math.round(o15Score * 100),
-          composite_score: Math.round(composite),
-          h2h_gg_rate:     Math.round(ggH2H * 100),
-          h2h_over15_rate: Math.round(over15H2H * 100),
-          home_form_gg:    Math.round(ggHF * 100),
-          away_form_gg:    Math.round(ggAF * 100),
-          outcome:         'PENDING',
-          created_at:      new Date().toISOString(),
-        };
-
-        await sbFetch('/pre_match_snapshots?on_conflict=fixture_id', 'POST', row, 'resolution=merge-duplicates');
-        pmResults.push({ id: m.fixture.id, composite: Math.round(composite) });
+        const h2hN   = h2h.length;
+        const ggH2H  = h2h.filter(g => g.goals?.home > 0 && g.goals?.away > 0).length / h2hN;
+        const o15H2H = h2h.filter(g => (g.goals?.home || 0) + (g.goals?.away || 0) >= 2).length / h2hN;
+        const hf5    = hForm.slice(0, 5);
+        const af5    = aForm.slice(0, 5);
+        const ggHF   = hf5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / hf5.length;
+        const ggAF   = af5.filter(g => (g.goals?.home || 0) > 0 || (g.goals?.away || 0) > 0).length / af5.length;
+        const o15HF  = hf5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / hf5.length;
+        const o15AF  = af5.reduce((s, g) => s + (g.goals?.home || 0) + (g.goals?.away || 0), 0) / af5.length;
+        const ggScore  = ggH2H * 0.30 + ggHF * 0.25 + ggAF * 0.25 + o15H2H * 0.20;
+        const o15Score = o15H2H * 0.30 + (o15HF / 3) * 0.25 + (o15AF / 3) * 0.25 + ggH2H * 0.20;
+        pmResults.push({ id: fx.id, composite: Math.round((ggScore + o15Score) / 2 * 100) });
       } catch (e) {
-        log(`pm error fixture ${m.fixture?.id}: ${e.message}`);
+        log(`pm read error ${fx.id}: ${e.message}`);
       }
     }
-
-    // Resolve outcomes for pre-match snapshots that have finished
-    const pmResolved = [];
-    for (const m of finishedMatches) {
-      try {
-        const fh = m.goals?.home ?? null;
-        const fa = m.goals?.away ?? null;
-        if (fh === null || fa === null) continue;
-        const gg  = fh > 0 && fa > 0;
-        const o15 = fh + fa >= 2;
-        const outcome = (fh + fa) === 0 ? 'PUSH' : o15 ? 'WIN' : 'LOSS';
-        await sbFetch(
-          `/pre_match_snapshots?fixture_id=eq.${m.fixture.id}&outcome=eq.PENDING`,
-          'PATCH',
-          { outcome, actual_gg: gg, actual_over15: o15, actual_home: fh, actual_away: fa, resolved_at: new Date().toISOString() }
-        );
-        pmResolved.push(m.fixture.id);
-      } catch (e) { /* ignore */ }
-    }
-    if (pmResolved.length) log(`pm resolved: ${pmResolved.length}`);
   } catch (e) {
     log(`pre-match scan error: ${e.message}`);
   }
 
+  // Curăță snapshot-uri LIVE mai vechi de 6 ore (meciuri terminate fără resolveOutcome)
+  query(
+    `UPDATE match_snapshots SET outcome='STALE'
+     WHERE outcome='LIVE' AND created_at < NOW() - INTERVAL '6 hours'`
+  ).catch(() => {});
+
   log(`done: ${snapshotResults.length} snapshots, ${resolved.length} resolved, ${pmResults.length} pre-match`);
+
+  query(
+    `INSERT INTO cron_logs (job_name, fixtures_processed, status)
+     VALUES ($1,$2,'success')`,
+    ['scan', snapshotResults.length + resolved.length]
+  ).catch(() => {});
+
   return res.status(200).json({
     run: _runCount,
     snapshots: snapshotResults.length,

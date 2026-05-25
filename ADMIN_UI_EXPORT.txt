@@ -1,0 +1,1069 @@
+=== FISIER: /home/user/scannerv2/admin.html ===
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>AlohaScan · ADMIN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;overflow-x:hidden}
+:root{
+  --bg-body:#000;
+  --bg-wrap:#05070A;
+  --bg-card-1:#0D141D;
+  --bg-card-2:#091018;
+  --bg-mini:#0A1017;
+  --bd-mini:#15202B;
+  --ac:#00FF88;
+  --ac2:#00E676;
+  --ac3:#00C46A;
+  --tx:#FFFFFF;
+  --tx2:#A7B4C2;
+  --mu:#6E7B88;
+  --red:#FF4D67;
+  --yellow:#FFD23F;
+  --bd:rgba(0,255,136,0.18);
+  --bd-2:rgba(0,255,136,0.10);
+  --bd-3:rgba(0,255,136,0.30);
+}
+body{
+  background:var(--bg-body);
+  color:var(--tx);
+  font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  font-size:14px;
+  line-height:1.4;
+  min-height:100vh;
+  padding-bottom:88px;
+  position:relative;
+}
+
+/* ===== PARTICLES BG ===== */
+.particles{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.particles span{
+  position:absolute;
+  bottom:-10px;
+  background:rgba(0,255,136,0.15);
+  border-radius:50%;
+  animation:float linear infinite;
+}
+@keyframes float{
+  0%   {transform:translateY(0) translateX(0);opacity:0}
+  10%  {opacity:1}
+  90%  {opacity:1}
+  100% {transform:translateY(-110vh) translateX(20px);opacity:0}
+}
+.particles span:nth-child(1){left:4%;width:3px;height:3px;animation-duration:22s;animation-delay:0s}
+.particles span:nth-child(2){left:9%;width:2px;height:2px;animation-duration:28s;animation-delay:2s}
+.particles span:nth-child(3){left:14%;width:4px;height:4px;animation-duration:18s;animation-delay:4s}
+.particles span:nth-child(4){left:19%;width:2px;height:2px;animation-duration:30s;animation-delay:1s}
+.particles span:nth-child(5){left:24%;width:3px;height:3px;animation-duration:24s;animation-delay:6s}
+.particles span:nth-child(6){left:29%;width:2px;height:2px;animation-duration:26s;animation-delay:3s}
+.particles span:nth-child(7){left:34%;width:4px;height:4px;animation-duration:20s;animation-delay:9s}
+.particles span:nth-child(8){left:39%;width:3px;height:3px;animation-duration:32s;animation-delay:5s}
+.particles span:nth-child(9){left:44%;width:2px;height:2px;animation-duration:23s;animation-delay:11s}
+.particles span:nth-child(10){left:49%;width:3px;height:3px;animation-duration:27s;animation-delay:0s}
+.particles span:nth-child(11){left:54%;width:4px;height:4px;animation-duration:19s;animation-delay:7s}
+.particles span:nth-child(12){left:59%;width:2px;height:2px;animation-duration:29s;animation-delay:4s}
+.particles span:nth-child(13){left:64%;width:3px;height:3px;animation-duration:25s;animation-delay:13s}
+.particles span:nth-child(14){left:69%;width:2px;height:2px;animation-duration:21s;animation-delay:8s}
+.particles span:nth-child(15){left:74%;width:4px;height:4px;animation-duration:31s;animation-delay:2s}
+.particles span:nth-child(16){left:79%;width:3px;height:3px;animation-duration:24s;animation-delay:10s}
+.particles span:nth-child(17){left:84%;width:2px;height:2px;animation-duration:28s;animation-delay:6s}
+.particles span:nth-child(18){left:89%;width:3px;height:3px;animation-duration:22s;animation-delay:1s}
+.particles span:nth-child(19){left:94%;width:2px;height:2px;animation-duration:26s;animation-delay:12s}
+.particles span:nth-child(20){left:97%;width:4px;height:4px;animation-duration:20s;animation-delay:3s}
+
+/* ===== PAGE WRAPPER ===== */
+.page{
+  background:var(--bg-wrap);
+  min-height:100vh;
+  position:relative;
+  z-index:1;
+}
+
+/* ===== HEADER ===== */
+.header{
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:14px;
+  padding:14px 18px;
+  background:rgba(5,7,10,0.7);
+  border-bottom:1px solid var(--bd-2);
+  backdrop-filter:blur(20px);
+  position:sticky;top:0;z-index:50;
+}
+.brand{display:flex;flex-direction:column;gap:4px;min-width:0}
+.brand-row1{display:flex;align-items:baseline;gap:1px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:28px;letter-spacing:1.5px;line-height:1}
+.brand-row1 .a{color:#fff}
+.brand-row1 .b{color:var(--ac);text-shadow:0 0 12px rgba(0,255,136,.6)}
+.brand-row2{display:flex;align-items:center;gap:8px;font-size:10px}
+.brand-row2 .panel{color:var(--mu);letter-spacing:1.5px;font-weight:600}
+.brand-row2 .online{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:2px 8px;border-radius:10px;
+  background:rgba(0,255,136,0.12);
+  color:var(--ac);font-weight:700;letter-spacing:1px;font-size:9.5px;
+  border:1px solid var(--bd);
+}
+.brand-row2 .online .pulse{
+  width:6px;height:6px;border-radius:50%;background:var(--ac);
+  box-shadow:0 0 6px var(--ac);
+  animation:pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+
+.sec-box{
+  justify-self:center;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:8px 18px;border-radius:10px;
+  background:rgba(0,255,136,0.04);
+  border:1px solid var(--bd-3);
+  min-width:240px;
+}
+.sec-box .title{
+  font-family:'Rajdhani',sans-serif;font-weight:600;
+  color:var(--ac);font-size:11px;letter-spacing:2.5px;text-transform:uppercase;
+}
+.sec-dots{display:flex;gap:5px}
+.sec-dots i{
+  width:5px;height:5px;border-radius:50%;background:rgba(0,255,136,0.5);
+  animation:dotwave 1.6s ease-in-out infinite;
+}
+.sec-dots i:nth-child(1){animation-delay:0s}
+.sec-dots i:nth-child(2){animation-delay:.08s}
+.sec-dots i:nth-child(3){animation-delay:.16s}
+.sec-dots i:nth-child(4){animation-delay:.24s}
+.sec-dots i:nth-child(5){animation-delay:.32s}
+.sec-dots i:nth-child(6){animation-delay:.40s}
+.sec-dots i:nth-child(7){animation-delay:.48s}
+.sec-dots i:nth-child(8){animation-delay:.56s}
+.sec-dots i:nth-child(9){animation-delay:.64s}
+.sec-dots i:nth-child(10){animation-delay:.72s}
+.sec-dots i:nth-child(11){animation-delay:.80s}
+.sec-dots i:nth-child(12){animation-delay:.88s}
+.sec-dots i:nth-child(13){animation-delay:.96s}
+.sec-dots i:nth-child(14){animation-delay:1.04s}
+.sec-dots i:nth-child(15){animation-delay:1.12s}
+.sec-dots i:nth-child(16){animation-delay:1.20s}
+.sec-dots i:nth-child(17){animation-delay:1.28s}
+.sec-dots i:nth-child(18){animation-delay:1.36s}
+.sec-dots i:nth-child(19){animation-delay:1.44s}
+.sec-dots i:nth-child(20){animation-delay:1.52s}
+@keyframes dotwave{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:1;transform:scale(1);box-shadow:0 0 6px var(--ac)}}
+
+.btn-c{
+  background:transparent;color:#fff;
+  border:1px solid var(--ac);border-radius:8px;
+  padding:8px 18px;font-size:12px;font-weight:600;letter-spacing:.5px;
+  cursor:pointer;transition:all .2s;
+  font-family:inherit;
+}
+.btn-c:hover{
+  background:rgba(0,255,136,0.08);
+  box-shadow:0 0 14px rgba(0,255,136,0.4),0 0 28px rgba(0,255,136,0.18);
+}
+
+/* ===== MAIN WRAP ===== */
+.wrap{max-width:1100px;margin:0 auto;padding:18px 18px 24px;display:flex;flex-direction:column;gap:18px;position:relative;z-index:1}
+
+/* ===== KEY INPUT ===== */
+.key-input-wrap{margin-bottom:0}
+.key-input{
+  width:100%;padding:11px 14px;border-radius:10px;
+  background:var(--bg-mini);border:1px solid var(--bd);
+  color:#fff;font-size:13px;font-family:'JetBrains Mono',monospace;
+  outline:none;transition:border-color .2s;
+}
+.key-input:focus{border-color:var(--ac);box-shadow:0 0 0 2px rgba(0,255,136,.15)}
+
+/* ===== META BAR (last update) ===== */
+.meta-bar{
+  display:flex;align-items:center;gap:8px;
+  font-size:12px;color:var(--mu);
+  padding:0 2px;
+}
+.meta-bar .dot{
+  width:7px;height:7px;border-radius:50%;background:var(--ac);
+  box-shadow:0 0 6px var(--ac);
+  animation:pulse 1.4s ease-in-out infinite;
+  flex:none;
+}
+.meta-bar .refresh-ic{
+  margin-left:auto;width:14px;height:14px;color:var(--mu);
+  cursor:pointer;transition:color .2s,transform .4s;
+}
+.meta-bar .refresh-ic:hover{color:var(--ac);transform:rotate(180deg)}
+
+/* ===== CARDS ===== */
+.card{
+  background:linear-gradient(180deg,#0D141D 0%,#091018 100%);
+  border:1px solid var(--bd);
+  border-radius:24px;
+  backdrop-filter:blur(20px);
+  padding:18px 20px;
+  box-shadow:
+    0 0 5px rgba(0,255,136,0.5),
+    0 0 10px rgba(0,255,136,0.45),
+    0 0 20px rgba(0,255,136,0.35),
+    0 0 40px rgba(0,255,136,0.2);
+  position:relative;
+}
+.card-h{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.card-h .ic{
+  width:22px;height:22px;color:var(--ac);
+  display:inline-flex;align-items:center;justify-content:center;flex:none;
+}
+.card-h .ic svg{width:100%;height:100%}
+.card-h h2{
+  font-family:'Rajdhani',sans-serif;font-weight:700;
+  font-size:14px;letter-spacing:2px;color:#fff;text-transform:uppercase;
+  flex:1;
+}
+.card-h .extra{color:var(--mu);font-size:12px;font-weight:600}
+
+/* ===== STATUS SISTEM ===== */
+.status-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.status-cell{
+  background:var(--bg-mini);
+  border:1px solid var(--bd-2);
+  border-radius:12px;
+  padding:12px;
+  display:flex;flex-direction:column;gap:6px;align-items:flex-start;
+  min-width:0;
+}
+.status-cell .ic{width:20px;height:20px;color:var(--ac);opacity:.85}
+.status-cell .ic svg{width:100%;height:100%}
+.status-cell .lbl{font-size:10px;color:var(--mu);font-weight:600;letter-spacing:.5px}
+.status-cell .val{
+  font-family:'Rajdhani',sans-serif;font-weight:700;
+  font-size:24px;color:#fff;line-height:1;
+}
+.status-cell .sub{
+  font-size:9.5px;color:var(--ac);font-weight:600;letter-spacing:1.6px;
+  margin-top:2px;
+}
+
+/* ===== VARIABILE ENV ===== */
+.env-wrap{display:flex;gap:18px;align-items:center}
+.env-list{
+  list-style:none;display:flex;flex-direction:column;gap:8px;
+  flex:0 0 58%;min-width:0;
+}
+.env-row{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:var(--bg-mini);
+  border:1px solid var(--bd-mini);
+  border-radius:8px;padding:10px 14px;
+}
+.env-key{
+  font-family:'JetBrains Mono',monospace;
+  font-size:11.5px;color:var(--tx2);
+}
+.env-badge{
+  padding:3px 10px;border-radius:6px;
+  font-size:10.5px;font-weight:700;letter-spacing:.6px;
+}
+.env-badge.ok{background:var(--ac);color:#000}
+.env-badge.no{background:var(--red);color:#fff}
+.env-art-wrap{
+  flex:0 0 42%;display:flex;align-items:center;justify-content:center;
+}
+.env-art{
+  width:150px;height:auto;max-width:100%;
+  object-fit:contain;
+  opacity:.92;
+  filter:drop-shadow(0 0 14px rgba(0,255,136,.25));
+}
+
+/* ===== BAZA DE DATE ===== */
+.db-grid-row{display:grid;gap:10px;margin-bottom:10px}
+.db-grid-row.r5{grid-template-columns:repeat(5,1fr)}
+.db-grid-row.r4{grid-template-columns:repeat(4,1fr)}
+.db-cell{
+  background:var(--bg-mini);
+  border:1px solid var(--bd-2);
+  border-radius:10px;padding:10px;
+  display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;
+  min-width:0;
+}
+.db-cell .ic{width:24px;height:24px;color:var(--ac);margin-bottom:2px}
+.db-cell .ic svg{width:100%;height:100%}
+.db-cell .val{
+  font-family:'Rajdhani',sans-serif;font-weight:700;
+  font-size:20px;color:#fff;line-height:1;
+}
+.db-cell .lbl{font-size:10.5px;color:var(--mu);font-weight:500}
+.db-foot{
+  display:block;width:100%;margin-top:6px;
+  background:transparent;border:none;cursor:pointer;
+  color:var(--ac);font-size:11px;font-weight:600;
+  letter-spacing:1px;text-align:center;padding:8px;
+  transition:opacity .2s;
+}
+.db-foot:hover{opacity:.7}
+
+/* ===== API FOOTBALL USAGE ===== */
+.api-wrap{display:flex;gap:16px;align-items:center}
+.api-rows{flex:0 0 55%;display:flex;flex-direction:column;gap:8px}
+.api-row{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:13px;
+}
+.api-row .k{color:var(--mu);font-size:12px}
+.api-row .v{color:#fff;font-weight:600;font-family:'Rajdhani',sans-serif;font-size:15px}
+.api-row .v.ac{color:var(--ac)}
+.api-bar{
+  width:100%;height:6px;background:var(--bd-mini);
+  border-radius:3px;overflow:hidden;margin-top:4px;
+}
+.api-bar-fill{
+  height:100%;background:linear-gradient(90deg,var(--ac),var(--ac3));
+  border-radius:3px;
+  box-shadow:0 0 8px rgba(0,255,136,.35);
+  transition:width .5s ease;
+}
+.api-bar-info{color:var(--ac);font-size:11px;font-weight:600;margin-top:4px}
+.circ{
+  flex:0 0 45%;position:relative;
+  display:flex;align-items:center;justify-content:center;
+  height:130px;
+}
+.circ svg{
+  transform:rotate(-90deg);
+  filter:drop-shadow(0 0 8px rgba(0,255,136,.3));
+}
+.circ-bg{fill:none;stroke:var(--bd-mini);stroke-width:8}
+.circ-fg{
+  fill:none;stroke:url(#greenGrad);stroke-width:8;stroke-linecap:round;
+  transition:stroke-dashoffset .6s ease;
+}
+.circ-txt{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.circ-txt .p{
+  font-family:'Rajdhani',sans-serif;font-weight:700;
+  font-size:24px;color:#fff;line-height:1;
+}
+.circ-txt .p .u{font-size:14px;color:var(--ac);margin-left:1px}
+.circ-txt .l{font-size:10px;color:var(--mu);letter-spacing:1.5px;margin-top:3px}
+
+/* ===== MECIURI LIVE ===== */
+.live-counter{
+  background:rgba(0,255,136,0.15);
+  color:var(--ac);font-size:11px;font-weight:700;
+  padding:4px 10px;border-radius:10px;letter-spacing:.5px;
+}
+.live-counter::before{content:'• ';color:var(--ac)}
+.sport-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.sport-tab{
+  display:inline-flex;align-items:center;gap:6px;
+  background:transparent;color:var(--mu);
+  border:1px solid transparent;border-radius:20px;
+  padding:6px 14px;font-size:12px;font-weight:500;
+  cursor:pointer;transition:all .2s;
+  font-family:inherit;
+}
+.sport-tab .em{font-size:14px}
+.sport-tab .sb{font-size:11px;opacity:.7}
+.sport-tab:hover{color:var(--tx2)}
+.sport-tab.active{
+  background:rgba(0,255,136,0.12);
+  border-color:var(--ac);
+  color:var(--ac);
+}
+.live-list{display:flex;flex-direction:column;gap:6px}
+.match-row{
+  display:grid;grid-template-columns:50px 1fr 60px 60px;gap:10px;align-items:center;
+  background:var(--bg-mini);border:1px solid var(--bd-mini);
+  border-radius:8px;padding:8px 12px;font-size:12.5px;
+}
+.match-min{color:var(--ac);font-weight:700;font-family:'JetBrains Mono',monospace}
+.match-teams{color:#fff;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.match-score{color:#fff;font-weight:700;text-align:center;font-family:'Rajdhani',sans-serif;font-size:14px}
+.match-st{color:var(--mu);font-size:10.5px;text-align:right;font-weight:600}
+
+/* ===== CRON / ERRORS / BACKFILL / HEALTH ===== */
+.cron-row{
+  display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;
+  background:var(--bg-mini);border:1px solid var(--bd-mini);
+  border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12px;
+}
+.cron-name{color:#fff;font-weight:600;font-family:'JetBrains Mono',monospace;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cron-time{color:var(--mu);font-size:11px}
+.cron-err{color:var(--red);font-size:10.5px;padding:3px 12px 6px;font-family:'JetBrains Mono',monospace}
+.badge{padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.5px}
+.badge-ok{background:var(--ac);color:#000}
+.badge-er{background:var(--red);color:#fff}
+.badge-yl{background:var(--yellow);color:#000}
+.badge-gr{background:var(--bd-mini);color:var(--mu)}
+.btn-mini{
+  background:transparent;border:1px solid var(--bd);color:var(--ac);
+  font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:6px;
+  cursor:pointer;font-family:inherit;transition:background .2s;
+}
+.btn-mini:hover{background:rgba(0,255,136,.1)}
+
+.err-row{
+  background:var(--bg-mini);border:1px solid rgba(255,77,103,.25);
+  border-radius:8px;padding:8px 12px;margin-bottom:6px;
+}
+.err-job{color:var(--red);font-weight:700;font-size:12px}
+.err-time{color:var(--mu);font-size:10.5px;margin:2px 0}
+.err-msg{color:var(--tx2);font-size:11px;font-family:'JetBrains Mono',monospace;word-break:break-word}
+
+.bf-dot{
+  width:8px;height:8px;border-radius:50%;background:var(--red);
+  margin-right:8px;animation:pulse 1.4s ease-in-out infinite;
+  flex:none;display:inline-block;
+}
+.bf-label{font-size:11.5px;color:var(--tx2);margin:4px 0}
+.bf-bar{width:100%;height:6px;background:var(--bd-mini);border-radius:3px;overflow:hidden;margin:6px 0 10px}
+.bf-bar-fill{height:100%;background:linear-gradient(90deg,var(--ac),var(--ac3));border-radius:3px;transition:width .5s;box-shadow:0 0 8px rgba(0,255,136,.35)}
+.bf-bar-fill.api{background:linear-gradient(90deg,var(--yellow),#ffa726);box-shadow:0 0 8px rgba(255,210,63,.35)}
+.bf-buttons{display:flex;gap:8px;margin-top:8px}
+.bf-start,.bf-stop{
+  flex:1;padding:9px 14px;border-radius:8px;border:none;cursor:pointer;
+  font-weight:700;font-size:12px;letter-spacing:.5px;font-family:inherit;
+}
+.bf-start{background:var(--ac);color:#000}
+.bf-stop{background:var(--red);color:#fff}
+
+.hc-btn{
+  background:transparent;color:var(--ac);
+  border:1px solid var(--ac);border-radius:8px;
+  padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;
+  cursor:pointer;font-family:inherit;transition:all .2s;
+  margin-left:auto;
+}
+.hc-btn:hover{background:rgba(0,255,136,.1);box-shadow:0 0 12px rgba(0,255,136,.3)}
+.hc-btn:disabled{opacity:.5;cursor:not-allowed}
+.hc-test{
+  display:flex;justify-content:space-between;gap:10px;
+  padding:6px 10px;background:var(--bg-mini);border-radius:6px;margin-bottom:4px;
+  font-size:11.5px;
+}
+.hc-test .m{color:var(--tx2)}
+.hc-test .s{font-weight:700;font-size:11px}
+
+.empty{color:var(--mu);font-size:12px;padding:8px 0;text-align:center}
+.empty.err{color:var(--red)}
+.empty.ok{color:var(--ac)}
+
+/* ===== BOTTOM NAV ===== */
+.bnav{
+  position:fixed;bottom:0;left:0;right:0;
+  display:grid;grid-template-columns:repeat(5,1fr);
+  background:rgba(5,7,10,0.95);
+  border-top:1px solid var(--bd-2);
+  backdrop-filter:blur(20px);
+  z-index:100;padding:6px 0 8px;
+}
+.bnav a{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  color:var(--mu);text-decoration:none;
+  font-size:10.5px;font-weight:600;letter-spacing:.3px;
+  padding:6px 4px;
+  transition:color .2s;
+}
+.bnav a .ic{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center}
+.bnav a .ic svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.6}
+.bnav a.active{
+  color:var(--ac);
+  text-shadow:0 0 8px rgba(0,255,136,.4);
+}
+.bnav a.active .ic svg{filter:drop-shadow(0 0 6px rgba(0,255,136,.5))}
+.bnav a.active::before{
+  content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:60%;height:2px;background:var(--ac);
+  box-shadow:0 -4px 15px rgba(0,255,136,0.3),0 0 12px rgba(0,255,136,.4);
+}
+.bnav a{position:relative}
+
+/* ===== TOAST ===== */
+#toast{
+  display:none;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);
+  background:var(--bg-mini);color:#fff;
+  border:1px solid var(--ac);border-radius:10px;
+  padding:10px 18px;font-size:12.5px;font-weight:600;
+  box-shadow:0 0 18px rgba(0,255,136,.3);
+  z-index:200;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width:780px){
+  .header{grid-template-columns:1fr auto;gap:10px;padding:12px 14px}
+  .sec-box{display:none}
+  .wrap{padding:14px 12px 24px;gap:14px}
+  .card{padding:14px 14px;border-radius:18px}
+  .status-grid{grid-template-columns:repeat(2,1fr)}
+  .env-wrap{flex-direction:column;align-items:stretch}
+  .env-list,.env-art-wrap{flex:1 1 auto}
+  .env-art{width:120px}
+  .api-wrap{flex-direction:column;align-items:stretch}
+  .api-rows,.circ{flex:1 1 auto}
+  .db-grid-row.r5{grid-template-columns:repeat(3,1fr)}
+  .db-grid-row.r4{grid-template-columns:repeat(2,1fr)}
+  .match-row{grid-template-columns:42px 1fr 50px 46px;font-size:11.5px;padding:7px 10px}
+  .cron-row{grid-template-columns:1fr auto;row-gap:6px}
+  .cron-row .cron-time{grid-column:1/-1;font-size:10px}
+  .brand-row1{font-size:24px}
+}
+</style>
+</head>
+<body>
+
+<div class="particles">
+  <span></span><span></span><span></span><span></span><span></span>
+  <span></span><span></span><span></span><span></span><span></span>
+  <span></span><span></span><span></span><span></span><span></span>
+  <span></span><span></span><span></span><span></span><span></span>
+</div>
+
+<div class="page">
+
+<header class="header">
+  <div class="brand">
+    <div class="brand-row1"><span class="a">ALOHA</span><span class="b">SCAN</span></div>
+    <div class="brand-row2">
+      <span class="panel">ADMIN PANEL</span>
+      <span class="online"><span class="pulse"></span>ONLINE</span>
+    </div>
+  </div>
+
+  <div class="sec-box">
+    <div class="title">CONEXIUNE SECURIZATĂ</div>
+    <div class="sec-dots">
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </div>
+  </div>
+
+  <button class="btn-c" onclick="saveKeyAndRefresh()">Conectare</button>
+</header>
+
+<main class="wrap">
+
+  <div class="key-input-wrap" id="keyInputWrap">
+    <input id="apiKeyInput" class="key-input" type="password" placeholder="X-Api-Key..." autocomplete="off">
+  </div>
+
+  <div class="meta-bar">
+    <span class="dot"></span>
+    <span id="refreshInfo">— Introdu API key și apasă Conectare —</span>
+    <svg class="refresh-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" onclick="refresh()"><path d="M3 12 A9 9 0 0 1 18.4 5.6 L21 8 M21 4 V8 H17 M21 12 A9 9 0 0 1 5.6 18.4 L3 16 M3 20 V16 H7"/></svg>
+  </div>
+
+  <section class="card">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M7 11 L9 13 L11 9 L13 14 L15 11 L17 11"/><path d="M9 21 H15 M12 17 V21"/></svg></span>
+      <h2>STATUS SISTEM</h2>
+      <span class="extra" id="sysStatusBadge">—</span>
+    </div>
+    <div class="status-grid" id="statusGrid">
+      <div class="status-cell">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/><path d="M12 9 V15 M9 12 H15"/></svg></div>
+        <div class="lbl">Node.js</div>
+        <div class="val" data-k="node">—</div>
+        <div class="sub">VERSIUNE</div>
+      </div>
+      <div class="status-cell">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7 V12 L15.5 14"/></svg></div>
+        <div class="lbl">Uptime</div>
+        <div class="val" data-k="uptime">—</div>
+        <div class="sub">ONLINE</div>
+      </div>
+      <div class="status-cell">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="12" height="12" rx="1.5"/><rect x="9" y="9" width="6" height="6"/><path d="M4 9 H6 M4 12 H6 M4 15 H6 M18 9 H20 M18 12 H20 M18 15 H20 M9 4 V6 M12 4 V6 M15 4 V6 M9 18 V20 M12 18 V20 M15 18 V20"/></svg></div>
+        <div class="lbl">Memorie Heap</div>
+        <div class="val" data-k="mem">—</div>
+        <div class="sub">UTILIZAT</div>
+      </div>
+      <div class="status-cell">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="8" ry="2.5"/><path d="M4 5 V19 C4 20.4 7.6 21.5 12 21.5 C16.4 21.5 20 20.4 20 19 V5"/><path d="M4 12 C4 13.4 7.6 14.5 12 14.5 C16.4 14.5 20 13.4 20 12"/></svg></div>
+        <div class="lbl">Baza de date</div>
+        <div class="val" data-k="db">—</div>
+        <div class="sub">STATUS</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 4 H17 M6 4 L13 12 L6 20 H17"/><path d="M19 4 L13 20"/></svg></span>
+      <h2>VARIABILE ENV</h2>
+    </div>
+    <div class="env-wrap">
+      <ul class="env-list" id="envList"><li class="empty">—</li></ul>
+      <div class="env-art-wrap">
+        <img class="env-art" src="/poze-app/cloud-lock.png" alt="">
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="5" rx="8" ry="2.5"/><path d="M4 5 V19 C4 20.4 7.6 21.5 12 21.5 C16.4 21.5 20 20.4 20 19 V5"/><path d="M4 12 C4 13.4 7.6 14.5 12 14.5 C16.4 14.5 20 13.4 20 12"/></svg></span>
+      <h2>BAZA DE DATE</h2>
+    </div>
+    <div id="dbGrid">
+      <div class="empty">—</div>
+    </div>
+    <button class="db-foot" onclick="document.getElementById('cardCron')?.scrollIntoView({behavior:'smooth'})">VEZI TOATE TABELELE ›</button>
+  </section>
+
+  <section class="card" id="cardAPI">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M13 2 L4 14 H11 L10 22 L20 10 H13 L13 2 Z"/></svg></span>
+      <h2>API FOOTBALL USAGE</h2>
+    </div>
+    <div class="api-wrap">
+      <div class="api-rows" id="apiRows"><div class="empty">—</div></div>
+      <div class="circ">
+        <svg width="130" height="130" viewBox="0 0 130 130">
+          <defs>
+            <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#00FF88"/>
+              <stop offset="100%" stop-color="#00C46A"/>
+            </linearGradient>
+          </defs>
+          <circle class="circ-bg" cx="65" cy="65" r="56"/>
+          <circle class="circ-fg" id="circFg" cx="65" cy="65" r="56" stroke-dasharray="351.86" stroke-dashoffset="351.86"/>
+        </svg>
+        <div class="circ-txt"><div class="p"><span id="circPct">0</span><span class="u">%</span></div><div class="l">UTILIZARE</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="cardLive">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="18" r="1.5" fill="currentColor"/><path d="M8 14 C 9 13, 11 12, 12 12 C 13 12, 15 13, 16 14"/><path d="M5 11 C 7 9, 9 8, 12 8 C 15 8, 17 9, 19 11"/><path d="M2 8 C 5 5, 8 4, 12 4 C 16 4, 19 5, 22 8"/></svg></span>
+      <h2>MECIURI LIVE</h2>
+      <span class="live-counter"><span id="liveCount">0</span> LIVE ›</span>
+    </div>
+    <div class="sport-tabs">
+      <button class="sport-tab active" data-sport="football"><span class="em">⚽</span> Fotbal <span class="sb" id="cFotbal">0</span></button>
+      <button class="sport-tab" data-sport="basketball"><span class="em">🏀</span> Baschet <span class="sb">0</span></button>
+      <button class="sport-tab" data-sport="tennis"><span class="em">🎾</span> Tenis <span class="sb">0</span></button>
+      <button class="sport-tab" data-sport="other"><span class="em">⊞</span> Altele <span class="sb">0</span></button>
+    </div>
+    <div class="live-list" id="liveList"><div class="empty">—</div></div>
+  </section>
+
+  <section class="card" id="cardCron">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7 V12 L15 14"/></svg></span>
+      <h2>CRON JOBS</h2>
+    </div>
+    <div id="cronList"><div class="empty">—</div></div>
+  </section>
+
+  <section class="card" id="cardErrors">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3 L22 21 H2 Z"/><path d="M12 10 V14 M12 17 V18"/></svg></span>
+      <h2>ERORI RECENTE</h2>
+      <span class="extra" id="errCount">0</span>
+    </div>
+    <div id="errList"><div class="empty ok">—</div></div>
+  </section>
+
+  <section class="card" id="cardBackfill">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7 V17 A2 2 0 0 0 6 19 H18 A2 2 0 0 0 20 17 V7"/><path d="M4 7 L12 3 L20 7"/><path d="M9 12 L12 15 L15 12 M12 15 V9"/></svg></span>
+      <h2>BACKFILL DATE ISTORICE</h2>
+    </div>
+    <div id="bf-active" style="display:none">
+      <div style="display:flex;align-items:center;margin-bottom:8px"><span class="bf-dot"></span><span style="color:var(--red);font-size:12px;font-weight:600">ACTIV — Colectez date...</span></div>
+      <div class="bf-label" id="bf-current-info">Sezon — · Ligă —</div>
+      <div class="bf-label">Progres: <span id="bf-pct">0</span>% (<span id="bf-done">0</span>/<span id="bf-total">0</span> perechi)</div>
+      <div class="bf-bar"><div class="bf-bar-fill" id="bf-fill" style="width:0%"></div></div>
+      <div class="bf-label">API azi: <span id="bf-api-used">0</span> / 150,000 — rămase: <span id="bf-api-rem">150,000</span></div>
+      <div class="bf-bar" style="height:4px;margin-bottom:0"><div class="bf-bar-fill api" id="bf-api-fill" style="width:0%"></div></div>
+    </div>
+    <div id="bf-stopped">
+      <div class="bf-label" id="bf-stopped-info">Nicio rulare anterioară</div>
+      <div class="bf-label" id="bf-stopped-api" style="display:none">API azi: <span id="bf-api-used2">0</span> / 150,000</div>
+    </div>
+    <div class="bf-buttons">
+      <button id="bf-start-btn" class="bf-start" onclick="startBF()">▶ START</button>
+      <button id="bf-stop-btn" class="bf-stop" style="display:none" onclick="stopBF()">⏹ STOP</button>
+    </div>
+  </section>
+
+  <section class="card" id="cardHealth">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12 H7 L9 8 L13 16 L15 12 H21"/></svg></span>
+      <h2>HEALTH CHECK</h2>
+      <button class="hc-btn" id="hc-btn" onclick="runHealthCheck()">RULEAZĂ TEST</button>
+    </div>
+    <div style="font-size:12px;color:var(--mu)">Verifică că toate sistemele funcționează</div>
+    <div id="health-results" style="display:none;margin-top:12px"></div>
+  </section>
+
+</main>
+
+<nav class="bnav">
+  <a href="#" class="active" onclick="scrollTo(0,0);return false">
+    <span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+    Dashboard
+  </a>
+  <a href="/">
+    <span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg></span>
+    Matches
+  </a>
+  <a href="#cardCron" onclick="document.getElementById('cardCron')?.scrollIntoView({behavior:'smooth'});return false">
+    <span class="ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="2.5"/><path d="M4 5 V19 C4 20.4 7.6 21.5 12 21.5 C16.4 21.5 20 20.4 20 19 V5"/><path d="M4 12 C4 13.4 7.6 14.5 12 14.5 C16.4 14.5 20 13.4 20 12"/></svg></span>
+    Database
+  </a>
+  <a href="#cardAPI" onclick="document.getElementById('cardAPI')?.scrollIntoView({behavior:'smooth'});return false">
+    <span class="ic"><svg viewBox="0 0 24 24"><path d="M9 7 L4 12 L9 17 M15 7 L20 12 L15 17 M13 5 L11 19"/></svg></span>
+    API
+  </a>
+  <a href="#cardHealth" onclick="document.getElementById('cardHealth')?.scrollIntoView({behavior:'smooth'});return false">
+    <span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2 V5 M12 19 V22 M2 12 H5 M19 12 H22 M4.9 4.9 L7 7 M17 17 L19.1 19.1 M4.9 19.1 L7 17 M17 7 L19.1 4.9"/></svg></span>
+    Settings
+  </a>
+</nav>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+const BASE = '';
+let _key = localStorage.getItem('aloha_admin_key') || '';
+let _timer = null;
+let _bfTimer = null;
+
+if (_key) {
+  document.getElementById('apiKeyInput').value = _key;
+  document.getElementById('keyInputWrap').style.display = 'none';
+  init();
+}
+
+function saveKeyAndRefresh() {
+  _key = document.getElementById('apiKeyInput').value.trim();
+  if (_key) localStorage.setItem('aloha_admin_key', _key);
+  document.getElementById('keyInputWrap').style.display = _key ? 'none' : 'block';
+  init();
+}
+
+function toast(msg, color) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  t.style.borderColor = color || 'var(--ac)';
+  clearTimeout(t._t);
+  t._t = setTimeout(function(){ t.style.display='none'; }, 3000);
+}
+
+async function apiFetch(path) {
+  const r = await fetch(BASE + path, { headers: { 'X-Api-Key': _key } });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  var dt = new Date(d);
+  return dt.toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit'}) + ' ' +
+    dt.toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'});
+}
+function fmtUptime(s) {
+  var h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+  return h + 'h ' + m + 'm';
+}
+function fmtNum(n) { return Number(n||0).toLocaleString('ro-RO'); }
+
+async function loadStatus() {
+  try {
+    var d = await apiFetch('/api/admin/status');
+    document.querySelector('[data-k="node"]').textContent = d.node || '—';
+    document.querySelector('[data-k="uptime"]').textContent = fmtUptime(d.uptime_s || 0);
+    document.querySelector('[data-k="mem"]').textContent = (d.memory_mb || 0) + ' MB';
+    document.querySelector('[data-k="db"]').textContent = d.db || '—';
+    var bg = document.getElementById('sysStatusBadge');
+    if (bg) bg.textContent = d.db === 'OK' ? 'ONLINE' : 'OFFLINE';
+
+    var envList = document.getElementById('envList');
+    if (d.env_keys && d.env_keys.length) {
+      envList.innerHTML = d.env_keys.map(function(k){
+        return '<li class="env-row"><span class="env-key">' + k.key + '</span>'
+          + '<span class="env-badge ' + (k.set?'ok':'no') + '">' + (k.set?'✓ SET':'✗ LIPSĂ') + '</span></li>';
+      }).join('');
+    }
+  } catch(e) {
+    document.querySelector('[data-k="db"]').textContent = 'ERR';
+  }
+}
+
+const DB_ICONS = {
+  fixtures_history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="16" rx="1.5"/><path d="M3 9 H21 M8 3 V7 M16 3 V7"/></svg>',
+  league_stats: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 4 H18 V8 A6 6 0 0 1 6 8 Z"/><path d="M4 4 H6 V8 A2 2 0 0 1 4 8 Z M18 4 H20 V8 A2 2 0 0 1 18 8 Z"/><path d="M9 14 V18 H15 V14"/><rect x="7" y="18" width="10" height="2"/></svg>',
+  referee_stats: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12 L8 8 V16 Z"/><circle cx="14" cy="12" r="5"/><circle cx="14" cy="12" r="2"/></svg>',
+  match_stats: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M12 4 V20 M3 9 H7 V15 H3 M17 9 H21 V15 H17"/><circle cx="12" cy="12" r="2.5"/></svg>',
+  h2h: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="9" r="3"/><circle cx="16" cy="10" r="2.5"/><path d="M3 19 C3 16 5.5 14 9 14 C12.5 14 15 16 15 19"/><path d="M13 18 C13 16 15 14.5 17 14.5 C18.5 14.5 20 15 21 16"/></svg>',
+  standings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="7" r="3"/><path d="M12 10 V14 M9 17 L12 14 L15 17 M7 20 H17"/></svg>',
+  predictions: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>',
+  player_stats: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20 C4 16 8 14 12 14 C16 14 20 16 20 20"/></svg>',
+  live_acum: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="18" r="1.5" fill="currentColor"/><path d="M8 14 C9 13 11 12 12 12 C13 12 15 13 16 14"/><path d="M5 11 C7 9 9 8 12 8 C15 8 17 9 19 11"/></svg>',
+};
+const DB_ROW1 = [
+  ['fixtures_history','fixtures_history'],
+  ['league_stats','league_stats'],
+  ['referee_stats','referee_stats'],
+  ['match_stats','match_stats'],
+  ['h2h','h2h'],
+];
+const DB_ROW2 = [
+  ['standings','standings'],
+  ['predictions','predictions'],
+  ['player_stats','player_stats'],
+  ['live_snapshots','live_acum'],
+];
+function renderDBRow(items, t){
+  return items.map(function(p){
+    var key = p[0], label = p[1];
+    var ic = DB_ICONS[label] || '';
+    return '<div class="db-cell"><div class="ic">' + ic + '</div>'
+      + '<div class="val">' + fmtNum(t[key]) + '</div>'
+      + '<div class="lbl">' + label + '</div></div>';
+  }).join('');
+}
+async function loadDB() {
+  try {
+    var d = await apiFetch('/api/admin/db-stats');
+    var t = d.tables || {};
+    var grid = document.getElementById('dbGrid');
+    grid.innerHTML =
+      '<div class="db-grid-row r5">' + renderDBRow(DB_ROW1, t) + '</div>' +
+      '<div class="db-grid-row r4">' + renderDBRow(DB_ROW2, t) + '</div>';
+  } catch(e) {
+    document.getElementById('dbGrid').innerHTML = '<div class="empty err">' + e.message + '</div>';
+  }
+}
+
+async function loadAPI() {
+  try {
+    var d = await apiFetch('/api/admin/api-usage');
+    var pct = Math.round(d.pct_used || 0);
+    var rows = document.getElementById('apiRows');
+    rows.innerHTML = ''
+      + '<div class="api-row"><span class="k">Plan</span><span class="v ac">' + (d.plan||'?') + '</span></div>'
+      + '<div class="api-row"><span class="k">Expiră</span><span class="v ac">' + (d.plan_end||'?') + '</span></div>'
+      + '<div class="api-row"><span class="k">Utilizate azi</span><span class="v">' + fmtNum(d.requests_today) + '</span></div>'
+      + '<div class="api-row"><span class="k">Rămase</span><span class="v">' + fmtNum(d.remaining) + ' / ' + fmtNum(d.limit_day) + '</span></div>'
+      + '<div class="api-bar"><div class="api-bar-fill" style="width:' + pct + '%"></div></div>'
+      + '<div class="api-bar-info">' + pct + '% utilizat ›</div>';
+    var circ = 351.86;
+    var off = circ * (1 - pct/100);
+    document.getElementById('circFg').setAttribute('stroke-dashoffset', off);
+    document.getElementById('circPct').textContent = pct;
+  } catch(e) {
+    document.getElementById('apiRows').innerHTML = '<div class="empty err">' + e.message + '</div>';
+  }
+}
+
+async function loadLive() {
+  try {
+    var d = await apiFetch('/api/admin/live-matches');
+    document.getElementById('liveCount').textContent = d.count || 0;
+    document.getElementById('cFotbal').textContent = d.count || 0;
+    var list = document.getElementById('liveList');
+    if (!d.matches || !d.matches.length) {
+      list.innerHTML = '<div class="empty">Niciun meci live acum</div>';
+    } else {
+      list.innerHTML = d.matches.slice(0,10).map(function(m){
+        return '<div class="match-row">'
+          + '<span class="match-min">' + (m.minute||'?') + '\'</span>'
+          + '<span class="match-teams">' + (m.home_team||'?') + ' vs ' + (m.away_team||'?') + '</span>'
+          + '<span class="match-score">' + (m.home_goals||0) + '-' + (m.away_goals||0) + '</span>'
+          + '<span class="match-st">' + (m.status_short||'LIVE') + '</span>'
+          + '</div>';
+      }).join('');
+    }
+  } catch(e) {
+    document.getElementById('liveList').innerHTML = '<div class="empty err">' + e.message + '</div>';
+  }
+}
+
+async function triggerCron(job) {
+  try {
+    var r = await fetch(BASE + '/api/admin/trigger-cron', { method:'POST', headers:{'X-Api-Key':_key,'Content-Type':'application/json'}, body: JSON.stringify({job}) });
+    var d = await r.json();
+    if (d.ok) toast('✓ ' + job + ' declanșat'); else toast('✗ ' + (d.error||'Eroare'), 'var(--red)');
+    setTimeout(loadCron, 2000);
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+}
+function statusBadge(s) {
+  if (!s || s === 'never') return '<span class="badge badge-gr">niciodată</span>';
+  if (s === 'success' || s === 'ok') return '<span class="badge badge-ok">✓ OK</span>';
+  if (s === 'error') return '<span class="badge badge-er">✗ Eroare</span>';
+  return '<span class="badge badge-yl">' + s + '</span>';
+}
+async function loadCron() {
+  try {
+    var d = await apiFetch('/api/admin/cron-status');
+    var html = '';
+    (d.jobs||[]).forEach(function(j){
+      html += '<div class="cron-row">'
+        + '<span class="cron-name">' + j.job + '</span>'
+        + '<span class="cron-time">' + fmtDate(j.last_run) + '</span>'
+        + statusBadge(j.status)
+        + '<button class="btn-mini" onclick="triggerCron(\'' + j.job + '\')">▶ RUN</button>'
+        + '</div>';
+      if (j.error_msg) html += '<div class="cron-err">' + j.error_msg + '</div>';
+    });
+    document.getElementById('cronList').innerHTML = html || '<div class="empty">—</div>';
+  } catch(e) {
+    document.getElementById('cronList').innerHTML = '<div class="empty err">' + e.message + '</div>';
+  }
+}
+
+async function loadErrors() {
+  try {
+    var d = await apiFetch('/api/admin/errors');
+    document.getElementById('errCount').textContent = d.count || 0;
+    var list = document.getElementById('errList');
+    if (!d.errors || !d.errors.length) {
+      list.innerHTML = '<div class="empty ok">✓ Nicio eroare recentă</div>';
+    } else {
+      list.innerHTML = d.errors.slice(0,20).map(function(e){
+        return '<div class="err-row">'
+          + '<div class="err-job">' + (e.job_name||'unknown') + '</div>'
+          + '<div class="err-time">' + fmtDate(e.ran_at) + '</div>'
+          + '<div class="err-msg">' + (e.error_msg||'status: ' + e.status) + '</div>'
+          + '</div>';
+      }).join('');
+    }
+  } catch(e) {
+    document.getElementById('errList').innerHTML = '<div class="empty err">' + e.message + '</div>';
+  }
+}
+
+async function startBF() {
+  try {
+    var r = await fetch('/api/backfill/start', { method:'POST', headers:{'X-Api-Key':_key} });
+    var d = await r.json();
+    if (d.error) { toast('✗ ' + d.error, 'var(--red)'); return; }
+    toast('▶ Backfill pornit');
+    refreshBFStatus();
+    if (_bfTimer) clearInterval(_bfTimer);
+    _bfTimer = setInterval(refreshBFStatus, 5000);
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+}
+async function stopBF() {
+  try {
+    await fetch('/api/backfill/stop', { method:'POST', headers:{'X-Api-Key':_key} });
+    toast('⏹ Backfill oprit');
+    refreshBFStatus();
+    if (_bfTimer) { clearInterval(_bfTimer); _bfTimer = null; }
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+}
+async function refreshBFStatus() {
+  try {
+    var r = await fetch('/api/backfill/status', { headers:{'X-Api-Key':_key} });
+    var d = await r.json();
+    var startBtn = document.getElementById('bf-start-btn');
+    var stopBtn  = document.getElementById('bf-stop-btn');
+    var activeDiv  = document.getElementById('bf-active');
+    var stoppedDiv = document.getElementById('bf-stopped');
+    if (!startBtn) return;
+    if (d.running) {
+      startBtn.style.display = 'none'; stopBtn.style.display = 'block';
+      activeDiv.style.display = 'block'; stoppedDiv.style.display = 'none';
+      var info = '';
+      if (d.currentSeason)  info += 'Sezon ' + d.currentSeason;
+      if (d.currentLeague)  info += ' · Ligă ' + d.currentLeague.id + (d.currentLeague.name ? ' (' + d.currentLeague.name + ')' : '');
+      if (d.totalFixtures)  info += ' · Fixture ' + d.currentFixtureIndex + '/' + d.totalFixtures;
+      document.getElementById('bf-current-info').textContent = info || 'Se procesează...';
+      document.getElementById('bf-pct').textContent  = d.progressPct || 0;
+      document.getElementById('bf-done').textContent = (d.completedLeagues || 0).toLocaleString();
+      document.getElementById('bf-total').textContent = (d.totalLeagues || 0).toLocaleString();
+      document.getElementById('bf-fill').style.width = (d.progressPct || 0) + '%';
+      var used = d.apiUsedToday || 0; var rem = d.apiRemainingToday || 150000;
+      document.getElementById('bf-api-used').textContent = used.toLocaleString();
+      document.getElementById('bf-api-rem').textContent  = rem.toLocaleString();
+      document.getElementById('bf-api-fill').style.width = Math.min(100, used/1500) + '%';
+      if (!_bfTimer) _bfTimer = setInterval(refreshBFStatus, 5000);
+    } else {
+      startBtn.style.display = 'block'; stopBtn.style.display = 'none';
+      activeDiv.style.display = 'none'; stoppedDiv.style.display = 'block';
+      var stInfo = document.getElementById('bf-stopped-info');
+      var stApi  = document.getElementById('bf-stopped-api');
+      if (d.completedLeagues > 0) {
+        stInfo.textContent = 'Progres: ' + d.progressPct + '% (' + d.completedLeagues.toLocaleString() + '/' + d.totalLeagues.toLocaleString() + ' perechi) · ETA: ' + d.estimatedTimeRemaining;
+        stApi.style.display = 'block';
+        document.getElementById('bf-api-used2').textContent = (d.apiUsedToday || 0).toLocaleString();
+      } else {
+        stInfo.textContent = 'Nicio rulare anterioară'; stApi.style.display = 'none';
+      }
+      if (_bfTimer) { clearInterval(_bfTimer); _bfTimer = null; }
+    }
+  } catch(e) { console.error('refreshBFStatus:', e.message); }
+}
+
+async function runHealthCheck() {
+  var el = document.getElementById('health-results');
+  var btn = document.getElementById('hc-btn');
+  el.style.display = 'block';
+  el.innerHTML = '<div class="empty">⏳ Rulează teste...</div>';
+  btn.disabled = true; btn.textContent = '⏳...';
+  try {
+    var r = await fetch('/api/health-check', { headers:{'X-Api-Key':_key} });
+    var d = await r.json();
+    var oc = d.overall.includes('✅') ? 'var(--ac)' : d.overall.includes('⚠️') ? 'var(--yellow)' : 'var(--red)';
+    var html = '<div style="font-weight:600;color:' + oc + ';margin-bottom:10px;font-size:13px">' + d.overall + '</div>';
+    Object.entries(d.tests).forEach(function(entry) {
+      var test = entry[1];
+      var c = test.status.startsWith('✅') ? 'var(--ac)' : test.status.startsWith('⚠️') ? 'var(--yellow)' : 'var(--red)';
+      html += '<div class="hc-test"><span class="m">' + test.message + '</span><span class="s" style="color:' + c + '">' + test.status + '</span></div>';
+    });
+    html += '<div style="margin-top:10px;font-size:11px;color:var(--mu)">✅ ' + d.summary.passed + ' trecut · ⚠️ ' + d.summary.warnings + ' avertismente · ❌ ' + d.summary.failed + ' eșuat</div>';
+    if (d.summary.critical_issues && d.summary.critical_issues.length) {
+      html += '<div style="margin-top:4px;font-size:11px;color:var(--red)">Critic: ' + d.summary.critical_issues.join(', ') + '</div>';
+    }
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div class="empty err">❌ ' + e.message + '</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = 'RULEAZĂ TEST';
+  }
+}
+
+document.querySelectorAll('.sport-tab').forEach(function(t){
+  t.addEventListener('click', function(){
+    document.querySelectorAll('.sport-tab').forEach(function(x){ x.classList.remove('active'); });
+    t.classList.add('active');
+    var sp = t.dataset.sport;
+    var list = document.getElementById('liveList');
+    if (sp !== 'football') list.innerHTML = '<div class="empty">Niciun meci ' + sp + ' (date doar pentru fotbal)</div>';
+    else loadLive();
+  });
+});
+
+async function refresh() {
+  document.getElementById('refreshInfo').textContent = 'Actualizare...';
+  await Promise.allSettled([
+    loadStatus(), loadDB(), loadAPI(),
+    loadLive(), loadCron(), loadErrors(),
+    refreshBFStatus(),
+  ]);
+  var now = new Date().toLocaleTimeString('ro-RO');
+  document.getElementById('refreshInfo').textContent = '• Ultima actualizare: ' + now + ' (auto-refresh 30s)';
+}
+
+function init() {
+  if (_timer) clearInterval(_timer);
+  refresh();
+  _timer = setInterval(refresh, 30000);
+}
+</script>
+</body>
+</html>
+=== END ===

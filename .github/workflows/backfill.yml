@@ -1,0 +1,33 @@
+name: Backfill Date Istorice
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Ce vrei să faci?'
+        required: true
+        default: 'start'
+        type: choice
+        options:
+          - start
+          - status
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Backfill pe VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: root
+          password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 2m
+          script: |
+            if [ "${{ github.event.inputs.action }}" = "start" ]; then
+              echo "Pornesc backfill..."
+              curl -sf http://localhost:3000/api/backfill/start && echo "BACKFILL: PORNIT" || echo "BACKFILL: EROARE"
+            else
+              echo "Status backfill:"
+              curl -sf http://localhost:3000/api/backfill/status | python3 -m json.tool || echo "EROARE la status"
+            fi

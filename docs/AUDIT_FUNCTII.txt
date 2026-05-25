@@ -1,0 +1,756 @@
+================================================================================
+AUDIT COMPLET FUNCTII / ENDPOINTS / MODULE — AlohaScan
+Data: 2026-05-16
+================================================================================
+
+LEGENDĂ STĂRI:
+  FUNCTIONAL  — cod corect, logica completă, fără dependențe lipsă
+  PARTIAL     — funcționează, dar cu limitări documentate (fallback-uri hardcodate,
+                tabele care returnează mereu gol, schema mismatch non-critic)
+  BROKEN      — cod prezent, dar nu face ce ar trebui (scrie/citește greșit,
+                logica principală inactivă, erori silențioase care afectează output)
+  LIPSĂ       — fișierul nu există pe disc
+
+================================================================================
+SECȚIUNEA 1: server.js
+================================================================================
+
+FIȘIER: server.js
+LINIE:  1–75
+
+[1.1] Express server — bootstrap
+  Stare:      FUNCTIONAL
+  Ce face:    Pornește Express pe portul 3000, servește static index.html,
+              montează toate rutele API și cron, apelează initBackfillProgress().
+  Dependențe: express, api/db.js, api/backfill.js
+
+[1.2] GET /api/{name} — mount dinamic API handlers
+  Stare:      FUNCTIONAL
+  Ce face:    Importă dinamic fiecare fișier din lista [football, today, enrich,
+              match, players, agent, update-results, health-check, simulate, elo,
+              monte-carlo, match-momentum] și îl expune ca endpoint REST.
+  Dependențe: Toate fișierele din api/
+
+[1.3] GET /api/cron/{name} — mount dinamic cron handlers
+  Stare:      FUNCTIONAL (rutele există, dar scan și collect-daily NU sunt
+              declanșate de niciun crontab — doar backfill rulează automat)
+  Ce face:    Expune scan, collect-daily, collect-finished ca endpoint HTTP.
+  Dependențe: api/cron/scan.js, api/cron/collect-daily.js,
+              api/cron/collect-finished.js
+
+[1.4] GET /api/backfill/start
+  Stare:      FUNCTIONAL
+  Ce face:    Declanșează runDailyBackfill() fire-and-forget, răspunde imediat.
+  Dependențe: api/backfill.js
+
+[1.5] GET /api/backfill/status
+  Stare:      FUNCTIONAL
+  Ce face:    Returnează COUNT(*) GROUP BY status din tabelul backfill_progress.
+  Dependențe: api/db.js, tabelul backfill_progress
+
+================================================================================
+SECȚIUNEA 2: api/football.js — LIVE matches
+================================================================================
+
+FIȘIER: api/football.js
+ENDPOINT: GET /api/football
+
+[2.1] fetchH2H(homeId, awayId, key)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch paralel: ultimele 10 meciuri acasă (gazde), 10 deplasare
+              (oaspeți), 10 H2H direct de la API-Football. Calculează avgScored,
+              avgConceded, h2hOver15, h2hAvgGoals.
+  Dependențe: API-Football v3 (3 apeluri per meci, cache în memorie)
+
+[2.2] enrichOne(m, key) — cache enrichment
+  Stare:      FUNCTIONAL
+  Ce face:    Calculează liveStats (xG, SOT, dangerous attacks, possession)
+              din statisticile embed în fixture. Aplică cache pe perechi de echipe.
+  Dependențe: enrichCache (Map în memorie)
+
+[2.3] handler() — live matches merge
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch live de la API-Football + football-data.org (dacă FOOTBALL_DATA_KEY
+              disponibil). Merge: AF primar, FD umple golurile. Filtrează feminin,
+              lower-div, aplică ALLOWED_LEAGUE_IDS whitelist pe AF. Enrichment
+              opțional pentru primele 5 meciuri.
+  Dependențe: api/leagues.js, FOOTBALL_API_KEY, FOOTBALL_DATA_KEY (opțional)
+  Note:       Sursa FD (football-data.org) nu trece prin whitelist — acoperă
+              doar top 12-14 ligi europene, considerat safe.
+
+================================================================================
+SECȚIUNEA 3: api/today.js — PRE-MECI matches
+================================================================================
+
+FIȘIER: api/today.js
+ENDPOINT: GET /api/today, GET /api/today?action=snapshots
+
+[3.1] getFixturesFromDB()
+  Stare:      FUNCTIONAL
+  Ce face:    Citește meciurile din tabelul fixtures (next 24h, status=NS).
+  Dependențe: api/db.js, tabelul fixtures
+
+[3.2] getLeaguesFromDB(leagueIds)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch logo/country/name din tabelul leagues pentru lista de IDs.
+  Dependențe: api/db.js, tabelul leagues
+
+[3.3] handler() — today/tomorrow matches
+  Stare:      FUNCTIONAL
+  Ce face:    Prioritizează DB (dacă >= 5 meciuri). Fallback la API-Football
+              (azi + mâine, deduplicat, fereastră 24h). Filtrează feminin,
+              lower-div, whitelist ligi.
+  Note:       action=snapshots returnează mereu [] (pre_match_snapshots nu are
+              coloanele composite_score/outcome).
+
+[3.4] action=snapshots
+  Stare:      BROKEN
+  Ce face:    Ar trebui să returneze snapshot-uri pre-meci cu scoruri compuse.
+              Returnează mereu [] (hardcodat) din cauza unui schema mismatch.
+  Dependențe: tabelul pre_match_snapshots (incompatibil)
+
+================================================================================
+SECȚIUNEA 4: api/enrich.js — Analiză completă per meci
+================================================================================
+
+FIȘIER: api/enrich.js
+ENDPOINT: GET /api/enrich?h=X&a=Y[&fid=Z&br=N&elapsed=E...]
+
+[4.1] calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot)
+  Stare:      FUNCTIONAL
+  Ce face:    Ajustează lambda Poisson pentru meciuri live (minute rămase,
+              intensityFactor bazat pe rata suturi).
+
+[4.2] calcPoisson(hGames, aGames, h2h, ...) — Poisson 6×6
+  Stare:      FUNCTIONAL
+  Ce face:    Calculează toate probabilitățile (homeWin/draw/awayWin, over15/25,
+              GG, h2h stats). Suportă mod dinamic (live).
+  Dependențe: api/calc-utils.js → calcPoisson6x6
+
+[4.3] getTeamStrengths(hId, aId)
+  Stare:      FUNCTIONAL
+  Ce face:    Citește ultimele 110 înregistrări per echipă din player_stats
+              și calculează un scor de putere (0-100) pe baza rating, goluri,
+              pase, suturi.
+  Dependențe: api/db.js, tabelul player_stats
+
+[4.4] calcConfidence(result, oddsRaw, liveStats, teamStrengths)
+  Stare:      FUNCTIONAL
+  Ce face:    Calculează scorul de încredere pe 7 straturi (Poisson, formă,
+              H2H, live/xG, EV piață, consistență, putere echipe).
+              Stratul 7 se activează automat dacă există date în player_stats.
+  Note:       Suma ponderilor confirmată corectă (100%).
+
+[4.5] getFormFromDB(teamId)
+  Stare:      BROKEN
+  Ce face:    Ar trebui să citească forma echipei din form_stats. Returnează
+              mereu [] (hardcodat) — schema form_stats are coloane agregate
+              (avg_scored_home etc.), nu rânduri per meci.
+  Impact:     enrich.js face mereu fallback la API-Football pentru formă
+              (2 apeluri extra per request).
+
+[4.6] getH2HFromDB(homeId, awayId)
+  Stare:      FUNCTIONAL
+  Ce face:    Citește H2H din tabelul h2h (dacă scan.js a salvat date anterior).
+
+[4.7] getOddsFromDB(fixtureId)
+  Stare:      FUNCTIONAL
+  Ce face:    Citește cotele din tabelul odds (bookmaker_id=8).
+  Note:       Query conține alias-uri bet_name/value_name/value_odd care
+              nu există în schema reală — funcționează dacă tabelul are
+              coloanele corecte, returnează [] dacă nu.
+
+[4.8] fetchAndStoreInjuries(fixtureId, key)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch accidentați de la API-Football și inserare în tabelul injuries.
+              Rulat fire-and-forget (nu blochează răspunsul).
+  Dependențe: API-Football /injuries, tabelul injuries
+
+[4.9] getInjuriesFromDB / penalizare confidence
+  Stare:      FUNCTIONAL
+  Ce face:    Citește accidentați din DB și aplică penalizare confidenceScore
+              (-5/-10/-15 puncte în funcție de număr).
+
+[4.10] getMatchStatsFromDB(fixtureId)
+  Stare:      FUNCTIONAL
+  Ce face:    Citește xG din tabelul match_stats pentru calcul live mai precis.
+
+[4.11] handler() — salvare prediction fire-and-forget
+  Stare:      FUNCTIONAL
+  Ce face:    INSERT INTO predictions cu ON CONFLICT DO NOTHING.
+
+================================================================================
+SECȚIUNEA 5: api/match.js — Detalii meci complet
+================================================================================
+
+FIȘIER: api/match.js
+ENDPOINT: GET /api/match?id=X&h=Y&a=Z[&br=N]
+
+[5.1] calcPoisson(hGames, aGames, h2h, hId) — variantă locală
+  Stare:      FUNCTIONAL
+  Ce face:    Similar cu enrich.js, dar include și homeForm/awayForm/h2hForm
+              (ultimele 5 meciuri cu rezultate și scoruri).
+
+[5.2] handler() — fetch complet (8 apeluri paralele)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch paralel: fixture details, lineups, players, events, hForm,
+              aForm, H2H, odds. Calculează Poisson + EV. Salvează prediction
+              fire-and-forget.
+  Dependențe: API-Football v3 (8 apeluri per request), api/calc-utils.js,
+              api/db.js, tabelul predictions
+
+[5.3] Flat players output
+  Stare:      FUNCTIONAL
+  Ce face:    Normalizează datele jucătorilor (rating, goluri, assist, passAcc,
+              dribbles, carduri, poziție), sortare după rating.
+
+================================================================================
+SECȚIUNEA 6: api/simulate.js — Simulator Monte Carlo avansat
+================================================================================
+
+FIȘIER: api/simulate.js
+ENDPOINT: GET /api/simulate?fixture_id=X&home_id=Y&away_id=Z[&league_id=L]
+
+[6.1] sfFormStats(teamId) — DB form
+  Stare:      BROKEN (același schema mismatch ca în enrich.js)
+  Ce face:    Returnează mereu [] → fallback la API-Football.
+
+[6.2] sfH2HStats(homeId, awayId) — DB H2H
+  Stare:      FUNCTIONAL
+
+[6.3] sfStandingsData(leagueId) — DB standings
+  Stare:      FUNCTIONAL
+
+[6.4] sfOddsData(fixtureId) — DB odds
+  Stare:      FUNCTIONAL
+
+[6.5] sfPlayerStats(teamId, label, dq) — DB player stats
+  Stare:      FUNCTIONAL
+  Ce face:    Citește ultimele 100 înregistrări per echipă, actualizează
+              dataSources quality indicator.
+
+[6.6] calcElo() via api/elo.js
+  Stare:      FUNCTIONAL
+  Ce face:    Calculează rating Elo pentru ambele echipe pe baza istoricului
+              de meciuri, estimează homeWinProb.
+
+[6.7] runSimulation() via api/monte-carlo.js
+  Stare:      FUNCTIONAL
+  Ce face:    10.000 simulări Monte Carlo Poisson, returnează distribuție
+              scoruri, probabilități piețe, goal timing buckets.
+
+[6.8] calcMomentum() via api/match-momentum.js
+  Stare:      FUNCTIONAL
+  Ce face:    Calculează momentum live pe baza SOT, dangerous attacks,
+              possession, corners, xG.
+
+[6.9] handler() — lambda calculation & recommendation
+  Stare:      PARTIAL
+  Ce face:    Combină formă (DB sau API), ELO, standings, player stats pentru
+              lambda home/away. Calculează EV per piață, returnează bestBet.
+  Limitare:   sfFormStats returnează mereu [] → lambdele sunt calculate
+              exclusiv pe baza API-Football (2 extra apeluri per request).
+
+================================================================================
+SECȚIUNEA 7: api/agent.js — AI Analysis
+================================================================================
+
+FIȘIER: api/agent.js
+ENDPOINT: POST /api/agent
+
+[7.1] callAnthropic(key, messages, maxTokens)
+  Stare:      FUNCTIONAL
+  Ce face:    POST la Anthropic API (claude-sonnet-4-6), returnează text.
+
+[7.2] callGrok(key, messages, maxTokens)
+  Stare:      FUNCTIONAL
+  Ce face:    POST la xAI API (grok-3-mini), fallback dacă Anthropic eșuează.
+
+[7.3] handler()
+  Stare:      FUNCTIONAL
+  Ce face:    Primește array de messages, apelează Anthropic (primar) sau
+              Grok (fallback). Returnează format OpenAI-compatible.
+  Dependențe: ANTHROPIC_API_KEY sau XAI_API_KEY (cel puțin unul necesar)
+
+================================================================================
+SECȚIUNEA 8: api/players.js — Statistici jucători
+================================================================================
+
+FIȘIER: api/players.js
+ENDPOINT: GET /api/players?action=collect|backfill|progress[&fixture_id=X&league_index=N]
+
+[8.1] collectFixture(fixtureId, key)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch statistici jucători de la API-Football pentru un meci,
+              INSERT/UPDATE în player_stats (cu position, yellow/red cards,
+              dribbles — câmpuri extinse față de versiunea din cron).
+  Dependențe: API-Football /fixtures/players, api/calc-utils.js (calcPlayerScore),
+              api/db.js, tabelul player_stats
+
+[8.2] action=collect
+  Stare:      FUNCTIONAL
+  Ce face:    Colectează statistici pentru un singur fixture_id.
+
+[8.3] action=backfill
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch ultimele 10 meciuri FT per ligă (league_index din whitelist),
+              colectează stats pentru fiecare. Actualizează backfill_progress.
+  Note:       Versiunea simplificată de backfill — api/backfill.js are varianta
+              completă cu 8 faze.
+
+[8.4] action=progress
+  Stare:      FUNCTIONAL
+  Ce face:    Returnează statusul backfill din tabelul backfill_progress.
+
+================================================================================
+SECȚIUNEA 9: api/update-results.js — Actualizare rezultate predicții
+================================================================================
+
+FIȘIER: api/update-results.js
+ENDPOINT: GET /api/update-results
+
+[9.1] handler()
+  Stare:      FUNCTIONAL
+  Ce face:    Selectează predicțiile fără rezultat (result_over15 IS NULL,
+              match_date trecut), fetch stare meci de la API-Football, actualizează
+              result_over15 și result_gg în tabelul predictions.
+  Dependențe: API-Football /fixtures, api/db.js, tabelul predictions
+  Note:       Nu este declanșat automat de niciun crontab pe VPS.
+              Trebuie apelat manual sau adăugat în crontab.
+
+================================================================================
+SECȚIUNEA 10: api/health-check.js — Diagnosticare sistem
+================================================================================
+
+FIȘIER: api/health-check.js
+ENDPOINT: GET /api/health-check, GET /api/health-check?action=leagues
+
+[10.1] 18 teste automate (t1–t18)
+  Stare:      FUNCTIONAL
+  Ce face:    Verifică: PostgreSQL conectat, player_stats, backfill_progress,
+              team strength calc, layer 7 activ, sume ponderi, cron_logs,
+              API-Football status, fixtures/standings/h2h/form_stats/
+              match_stats/match_events/odds/alerts/live_stats tabele,
+              collect-daily cron ultima rulare.
+  Dependențe: api/db.js, toate tabelele din create-tables.sql
+
+[10.2] tWinRate()
+  Stare:      BROKEN
+  Ce face:    Ar trebui să returneze statistici win rate din pre_match_snapshots.
+              Returnează mereu {correct:0, total:0, ...} (hardcodat) din cauza
+              schema mismatch (tabelul nu are coloana outcome).
+
+[10.3] action=leagues
+  Stare:      FUNCTIONAL
+  Ce face:    Proxy la API-Football /leagues cu filtre country/name.
+
+================================================================================
+SECȚIUNEA 11: api/calc-utils.js — Utilitare calcul
+================================================================================
+
+FIȘIER: api/calc-utils.js
+
+[11.1] calcPlayerScore(rating, goals, assists, passAcc, sot)
+  Stare:      FUNCTIONAL
+  Ce face:    Calculează scorul jucătorului (0-100) pe baza ratingului normalizat,
+              goluri, assist, acuratețe pase, suturi pe poartă.
+              Sursă unică după fix-ul din BUG 2.
+  Dependențe: Importat de api/players.js și api/cron/collect-finished.js
+
+[11.2] poissonProb(lambda, k) + calcPoisson6x6(lambdaHome, lambdaAway)
+  Stare:      FUNCTIONAL
+  Ce face:    Calculează probabilitățile Poisson pentru toate scorurile 0–5,
+              returnează homeWin/draw/awayWin/over15Prob/over25Prob/ggProb.
+  Dependențe: Importat de api/enrich.js, api/match.js
+
+[11.3] parseOddsItem(item)
+  Stare:      FUNCTIONAL
+  Ce face:    Normalizează structura cotelor API-Football (bookmakers → bets)
+              în format plat {cotaHome, cotaDraw, cotaAway, cotaOver15, cotaGG}.
+
+[11.4] calcEV(matrix, oddsRaw, bankroll)
+  Stare:      FUNCTIONAL
+  Ce face:    Calculează Expected Value per piață, Kelly Criterion, bestBet.
+              Aplică Kelly doar dacă edge > 4%.
+
+================================================================================
+SECȚIUNEA 12: api/elo.js — Calcul rating Elo
+================================================================================
+
+FIȘIER: api/elo.js
+(Nu este un handler HTTP — modul utilitare, importat de simulate.js)
+
+[12.1] calcElo(homeMatches, awayMatches, homeId, awayId, h2hMatches)
+  Stare:      FUNCTIONAL
+  Ce face:    Construiește ratinguri Elo din istoricul de meciuri (K=32),
+              returnează homeElo/awayElo/eloDiff/homeWinProb/awayWinProb
+              + forma recentă (ultimele 5 meciuri, W/D/L).
+
+================================================================================
+SECȚIUNEA 13: api/monte-carlo.js — Simulator Monte Carlo
+================================================================================
+
+FIȘIER: api/monte-carlo.js
+(Modul utilitare, importat de simulate.js)
+
+[13.1] poissonRandom(lambda)
+  Stare:      FUNCTIONAL
+  Ce face:    Generează număr aleatoriu din distribuție Poisson.
+
+[13.2] runSimulation(lambdaHome, lambdaAway, simCount, currentHome, currentAway)
+  Stare:      FUNCTIONAL
+  Ce face:    10.000 simulări Monte Carlo. Suportă meciuri live (currentHome/Away).
+              Returnează distribuție scoruri, probabilități piețe, goal timing
+              buckets, mostLikelyScore, secondMostLikelyScore, confidence.
+
+================================================================================
+SECȚIUNEA 14: api/match-momentum.js — Momentum live
+================================================================================
+
+FIȘIER: api/match-momentum.js
+(Modul utilitare, importat de simulate.js)
+
+[14.1] calcMomentum(liveStats)
+  Stare:      FUNCTIONAL
+  Ce face:    Calculează momentum live (-100 la +100) pe baza SOT, dangerous
+              attacks, possession, corners, xG. Returnează score, team
+              dominantă, intensity (HIGH/MED/LOW), description în română.
+
+================================================================================
+SECȚIUNEA 15: api/backfill.js — Backfill date istorice
+================================================================================
+
+FIȘIER: api/backfill.js
+(Nu handler HTTP — modul cu logică backfill, importat de server.js)
+
+[15.1] initBackfillProgress()
+  Stare:      FUNCTIONAL
+  Ce face:    INSERT INTO backfill_progress cu ON CONFLICT DO NOTHING pentru
+              toate ligile din whitelist. Idempotent.
+
+[15.2] runDailyBackfill()
+  Stare:      FUNCTIONAL
+  Ce face:    Identifică faza curentă (fixtures_2022→2025 → players → h2h
+              → standings → teams_stats), procesează ligile din acea fază.
+              Oprire automată la 95.000 req/zi. Fire-and-forget.
+  Declanșare: crontab 03:00 UTC via curl localhost:3000/api/backfill/start
+
+[15.3] runFixtures(leagueId, season)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch toate meciurile FT per ligă/sezon, INSERT în tabelul fixtures
+              și fixtures_history.
+
+[15.4] runPlayers(leagueId)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch statistici jucători per fixture (din fixtures table),
+              INSERT/UPDATE în player_stats.
+
+[15.5] runH2H(leagueId)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch H2H per echipă (din fixtures), INSERT/UPDATE în tabelul h2h.
+
+[15.6] runStandings(leagueId)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch clasamente și INSERT în standings + leagues + teams.
+
+[15.7] runTeamsStats(leagueId)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch statistici echipă (goals, wins, shots etc.) și INSERT
+              în tabelul teams_stats.
+
+================================================================================
+SECȚIUNEA 16: api/db.js — Conexiune PostgreSQL
+================================================================================
+
+FIȘIER: api/db.js
+
+[16.1] Pool PostgreSQL
+  Stare:      FUNCTIONAL
+  Ce face:    Creează un Pool pg cu POSTGRES_URL din .env. Exportă funcția query().
+  Dependențe: pg npm package, variabila POSTGRES_URL
+
+================================================================================
+SECȚIUNEA 17: api/leagues.js — Whitelist ligi
+================================================================================
+
+FIȘIER: api/leagues.js
+
+[17.1] ALLOWED_LEAGUE_IDS (Set)
+  Stare:      FUNCTIONAL
+  Ce face:    Set cu 214 ID-uri de ligi aprobate (maxim Liga 1+2+Cupă per țară).
+              Importat în football.js, today.js, players.js, backfill.js,
+              cron/collect-daily.js.
+
+================================================================================
+SECȚIUNEA 18: api/cron/scan.js — Cron live snapshots
+================================================================================
+
+FIȘIER: api/cron/scan.js
+ENDPOINT: GET /api/cron/scan
+
+[18.1] calcFeatures(m), calcNextGoal(f), calcGG(f), calcMarkets(f)
+  Stare:      FUNCTIONAL
+  Ce face:    Calculează NGP, probabilitate GG, piețe over/under din
+              statisticile live ale meciului.
+
+[18.2] saveLiveStats(m, f, status)
+  Stare:      FUNCTIONAL
+  Ce face:    INSERT INTO live_stats snapshot-uri cu statistici live
+              (minute, xG, possession, SOT, corners, carduri).
+
+[18.3] saveH2H(matches)
+  Stare:      FUNCTIONAL
+  Ce face:    INSERT/UPDATE în tabelul h2h date din meciuri istorice.
+
+[18.4] saveAlert(fixtureId, alertType, market, message, confidence)
+  Stare:      PARTIAL
+  Ce face:    INSERT INTO alerts când NGP > 85 sau over15 > 82. Setează
+              is_sent=false, telegram_sent=false. Alertele sunt salvate în DB
+              dar NU sunt trimise pe Telegram (api/telegram.js LIPSĂ).
+  Dependențe: tabelul alerts
+
+[18.5] upsertSnapshot / resolveOutcome / leagueSnapshots / upsertLeaguePattern
+  Stare:      BROKEN
+  Ce face:    Funcții care ar trebui să scrie în match_snapshots și
+              league_patterns — ambele tabele LIPSESC din schema PostgreSQL
+              (create-tables.sql). Returnează null/[] silențios.
+  Impact:     Întreaga logică de snapshots live și pattern detection este
+              nefuncțională.
+
+[18.6] saveFormStats(matches, teamId)
+  Stare:      BROKEN
+  Ce face:    Ar trebui să salveze forma echipei — sare silențios din cauza
+              schema mismatch (form_stats are coloane agregate, nu per-meci).
+
+[18.7] Pre-match scan (upcoming 24h)
+  Stare:      PARTIAL
+  Ce face:    Fetch H2H + formă pentru meciurile viitoare, calculează
+              composite score. NU salvează în DB (pre_match_snapshots
+              incompatibil). Salvează H2H via saveH2H().
+
+[18.8] Declanșare cron
+  Stare:      LIPSĂ (din perspectiva automatizării)
+  Ce face:    Endpoint există, dar NU este declanșat de niciun crontab pe VPS.
+              Pe Vercel era apelat la fiecare minut (vercel.json cron).
+              Pe VPS nu există crontab pentru acest job.
+
+================================================================================
+SECȚIUNEA 19: api/cron/collect-daily.js — Cron daily standings
+================================================================================
+
+FIȘIER: api/cron/collect-daily.js
+ENDPOINT: GET /api/cron/collect-daily
+
+[19.1] handler() — standings + leagues + teams
+  Stare:      FUNCTIONAL
+  Ce face:    Iterează toate cele 214 ligi, fetch standings per ligă/sezon,
+              INSERT/UPDATE în standings, leagues, teams. Loghează în cron_logs.
+  Dependențe: API-Football /standings, api/leagues.js (214 ligi),
+              tabelele standings, leagues, teams, cron_logs
+
+[19.2] Declanșare cron
+  Stare:      LIPSĂ (din perspectiva automatizării)
+  Ce face:    Endpoint există, dar NU este declanșat de niciun crontab pe VPS.
+              Trebuie adăugat manual în crontab (ex: 0 6 * * *).
+
+================================================================================
+SECȚIUNEA 20: api/cron/collect-finished.js — Cron stats jucători post-meci
+================================================================================
+
+FIȘIER: api/cron/collect-finished.js
+ENDPOINT: GET /api/cron/collect-finished
+
+[20.1] collectFixture(fixtureId, key)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch statistici jucători per meci (cu position, yellow/red cards,
+              dribbles), INSERT/UPDATE în player_stats.
+  Dependențe: API-Football /fixtures/players, api/calc-utils.js (calcPlayerScore)
+
+[20.2] collectMatchStats(fixtureId, homeTeamId, key)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch statistici echipă per meci (xG, possession, shots, fouls etc.),
+              INSERT/UPDATE în match_stats.
+
+[20.3] collectMatchEvents(fixtureId, key)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch evenimente (goluri, carduri, substituiri), DELETE+INSERT
+              în match_events.
+
+[20.4] collectOdds(fixtureId, key)
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch cote bookmaker 8, INSERT/UPDATE în tabelul odds.
+              Stochează 1X2, over/under 0.5-3.5, BTTS, Asian Handicap.
+
+[20.5] handler() — procesare meciuri FT din ziua curentă
+  Stare:      FUNCTIONAL
+  Ce face:    Fetch toate meciurile FT de azi, filtrează cele deja procesate
+              (existente în player_stats), procesează restul. Sleep 200ms
+              între meciuri. Loghează în cron_logs.
+
+[20.6] Declanșare cron
+  Stare:      LIPSĂ (din perspectiva automatizării)
+  Ce face:    Endpoint există, dar NU este declanșat de niciun crontab pe VPS.
+              Trebuie adăugat în crontab (ex: 0 23 * * *).
+
+================================================================================
+SECȚIUNEA 21: FIȘIERE LIPSĂ (BUG 5)
+================================================================================
+
+[21.1] api/stats.js
+  Stare:      LIPSĂ
+  Ce ar trebui să facă: Statistici istorice (clasamente ligi, winrate predicții).
+              Nu este referit în server.js sau index.html — impact zero momentan.
+
+[21.2] api/meteo.js
+  Stare:      LIPSĂ
+  Ce ar trebui să facă: Condiții meteo per stadion via Open-Meteo (gratuit).
+              Nu este referit în server.js sau index.html — impact zero momentan.
+              CLAUDE.md documentează: rain=-10% over25prob, snow=-12%.
+
+[21.3] api/telegram.js
+  Stare:      LIPSĂ
+  Ce ar trebui să facă: Trimite notificări Telegram când NGP > prag setat.
+              Nu este referit în server.js sau index.html.
+              Alertele sunt salvate în DB (alerts table) dar nu sunt livrate.
+  Impact:     Funcționalitatea de notificări NGP nu funcționează end-to-end.
+
+[21.4] api/collector.js
+  Stare:      LIPSĂ
+  Ce ar trebui să facă: Colector general de date (rol neclar din context).
+              Nu este referit nicăieri — impact zero momentan.
+
+================================================================================
+SECȚIUNEA 22: FRONTEND — index.html (2526 linii, Vanilla JS)
+================================================================================
+
+FIȘIER: index.html
+
+[22.1] Tab LIVE — meciuri live
+  Stare:      FUNCTIONAL
+  Ce face:    Afișează meciuri live de la /api/football. Auto-refresh la 60s.
+              Filtrare pe regiune (chips), filtrare pe scor, căutare.
+              Afișează NGP%, piețe (over15/25/GG), EV, confidence score.
+
+[22.2] calcScore(m) — NGP frontend
+  Stare:      FUNCTIONAL
+  Ce face:    Calculează NGP local în frontend pe baza statisticilor live
+              (SOT, shots off goal, dangerous attacks, corners, goluri, timp).
+              Nu folosește /api/cron/scan — calcul independent.
+
+[22.3] Tab PRE-MECI
+  Stare:      FUNCTIONAL
+  Ce face:    Afișează meciuri viitoare de la /api/today. Enrichment per meci
+              via /api/enrich. Afișează Safe Bets (confidenceScore>75,
+              cotă 1.30-1.50, EV>0). Analiză completă per meci cu click.
+
+[22.4] Tab FAVORITE
+  Stare:      FUNCTIONAL
+  Ce face:    Salvare meciuri favorite în localStorage. Afișează atât
+              meciuri live cât și pre-meci favorite. Refresh manual.
+
+[22.5] Tab AGENT (AI chat)
+  Stare:      FUNCTIONAL (dacă ANTHROPIC_API_KEY sau XAI_API_KEY configurat)
+  Ce face:    Chat AI cu context meci curent (live sau pre-meci).
+              POST la /api/agent. Afișează statistici live în header.
+
+[22.6] Overlay GENERAL (gen-overlay) — 3 sub-tab-uri
+  Stare:      FUNCTIONAL
+  Ce face:    Tab ⚽ LIVE — ranking meciuri după NGP/EV (genRenderLive).
+              Tab 📅 UPCOMING — meciuri viitoare cu enrichment.
+              Tab 🔮 SIM — Simulator Monte Carlo avansat (/api/simulate).
+
+[22.7] Overlay DETALII MECI (md-overlay)
+  Stare:      FUNCTIONAL
+  Ce face:    Afișează tabs: Sumar (Poisson, EV, confidence layers),
+              Formații (lineups), Jucători (stats individuale), Formă (ultimele 5).
+              Fetch de la /api/match. Auto-refresh la 30s pentru meciuri live.
+
+[22.8] Settings overlay
+  Stare:      FUNCTIONAL
+  Ce face:    Setare bankroll, start backfill (call /api/players?action=backfill
+              secvențial prin toate ligile), health check (/api/health-check),
+              reset win rate.
+
+[22.9] Win Rate tracking
+  Stare:      PARTIAL
+  Ce face:    Salvează predicțiile din localStorage. Afișează corect/incorect.
+              Rata de succes din DB (via /api/health-check) returnează mereu 0
+              (tWinRate hardcodat).
+
+[22.10] Service Worker
+  Stare:      FUNCTIONAL
+  Ce face:    Cache static assets (index.html, manifest, icons).
+              Bypass pentru toate domeniile externe (API, Supabase, Telegram etc.).
+
+[22.11] Notificări NGP Telegram (frontend)
+  Stare:      LIPSĂ
+  Ce face:    CLAUDE.md menționează alerte Telegram când NGP > prag.
+              Nu există cod în frontend care să apeleze /api/telegram sau
+              direct Telegram API. Alertele sunt salvate în DB de scan.js
+              dar nu sunt trimise.
+
+================================================================================
+SECȚIUNEA 23: GITHUB ACTIONS / DEPLOY
+================================================================================
+
+[23.1] deploy.yml — deploy pe VPS
+  Stare:      FUNCTIONAL
+  Ce face:    SSH pe VPS, git pull, npm install, write .env, setup crontab
+              pentru backfill (03:00 UTC), restart systemd alohascan.
+
+[23.2] backfill.yml — manual backfill trigger
+  Stare:      FUNCTIONAL
+  Ce face:    workflow_dispatch cu dropdown start/status.
+              Apelează curl localhost:3000/api/backfill/start|status.
+
+[23.3] check-vps.yml, create-tables.yml, setup-db.yml, verify-db.yml
+  Stare:      FUNCTIONAL (workflow-uri operaționale de management VPS/DB)
+
+================================================================================
+SUMAR FINAL
+================================================================================
+
+Total funcții/module auditate: 75
+
+┌─────────────────────────────────────────────────────────────────┐
+│  STARE         │  NUMĂR  │  PROCENT                            │
+├─────────────────────────────────────────────────────────────────┤
+│  FUNCTIONAL    │   49    │  65%                                 │
+│  PARTIAL       │    9    │  12%                                 │
+│  BROKEN        │    9    │  12%                                 │
+│  LIPSĂ         │    8    │  11%                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+PROBLEME CRITICE (afectează funcționalitate core):
+
+1. [BROKEN] cron/scan.js — match_snapshots și league_patterns lipsesc din
+   schema PostgreSQL. upsertSnapshot, resolveOutcome, upsertLeaguePattern
+   returnează null silențios. Logica de ML pattern detection complet nefuncțională.
+
+2. [BROKEN] form_stats schema mismatch — getFormFromDB() și sfFormStats()
+   returnează mereu []. enrich.js și simulate.js fac mereu 2 apeluri extra
+   la API-Football pentru formă (impact pe rata de request/zi).
+
+3. [LIPSĂ] api/telegram.js — alertele NGP sunt salvate în DB dar nu trimise.
+   Funcționalitate documentată în CLAUDE.md este 0% activă.
+
+4. [LIPSĂ crontab] cron/scan.js, cron/collect-daily.js, cron/collect-finished.js,
+   api/update-results.js — NU sunt declanșate automat pe VPS.
+   Doar backfill rulează la 03:00 UTC. Restul trebuie apelate manual.
+
+PROBLEME MINORE:
+
+5. [BROKEN] today.js action=snapshots returnează mereu [] (pre_match_snapshots
+   incompatibil). Impactul în UI este zero (UI nu folosește aceste date).
+
+6. [BROKEN] health-check.js tWinRate returnează mereu 0 (schema mismatch).
+
+7. [PARTIAL] simulate.js sfFormStats — fallback automat la API-Football,
+   funcționează dar consumă extra rate limit.
+
+8. [LIPSĂ] api/stats.js, api/meteo.js, api/collector.js — documentate în
+   CLAUDE.md dar fără impact în cod curent (neapelate din nicăieri).
+
+================================================================================
+Generat de audit automat — 2026-05-16
+================================================================================

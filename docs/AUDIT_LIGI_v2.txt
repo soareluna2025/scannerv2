@@ -1,0 +1,389 @@
+================================================================================
+AUDIT ALLOWED_LEAGUE_IDS — api/leagues.js  (versiunea v2)
+Data: 2026-05-16  |  Stare după eliminarea a 27 ID-uri non-whitelisted
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. TOTAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ID-uri unice în Set:   214
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. DEFALCARE PE REGIUNI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Europa         : 70 ligi  (29 țări)
+  Americas       : 53 ligi  (18 țări)
+  Asia           : 55 ligi  (20 țări/regiuni)
+  Africa         : 20 ligi  (9 țări)
+  Internaționale : 16 competiții
+  ─────────────────────────────
+  TOTAL          : 214
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. LISTA COMPLETĂ PE REGIUNI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── EUROPA — 70 ligi, 29 țări ────────────────────────────────────────────────
+
+  England       [4] ⚠️  39  Premier League (L1)
+                        40  Championship (L2)
+                        45  FA Cup
+                        48  EFL Cup (Carabao Cup)    ← a 2-a cupă
+
+  Spain         [3]     140 La Liga (L1)
+                        141 Segunda Division (L2)
+                        143 Copa del Rey
+
+  Germany       [3]     78  Bundesliga (L1)
+                        79  2. Bundesliga (L2)
+                        81  DFB Pokal
+
+  Italy         [3]     135 Serie A (L1)
+                        136 Serie B (L2)
+                        137 Coppa Italia
+
+  France        [3]     61  Ligue 1
+                        62  Ligue 2
+                        66  Coupe de France
+
+  Netherlands   [3]     88  Eredivisie (L1)
+                        89  Eerste Divisie (L2)
+                        90  KNVB Cup
+
+  Portugal      [3]     94  Primeira Liga (L1)
+                        95  Liga Portugal 2 (L2)
+                        96  Taca de Portugal
+
+  Belgium       [3]     144 Pro League (L1)
+                        145 Challenger Pro League (L2)
+                        146 Belgian Cup
+
+  Turkey        [3]     203 Super Lig (L1)
+                        204 TFF First League (L2)
+                        205 Turkish Cup
+
+  Scotland      [3]     179 Premiership (L1)
+                        180 Championship (L2)
+                        184 Scottish Cup
+
+  Czech Rep.    [3]     345 Fortuna Liga (L1)
+                        346 FNL (L2)
+                        347 MOL Cup
+
+  Austria       [3]     218 Bundesliga (L1)
+                        219 2. Liga (L2)
+                        221 ÖFB Cup
+
+  Switzerland   [3]     207 Super League (L1)
+                        208 Challenge League (L2)
+                        209 Swiss Cup
+
+  Denmark       [3]     119 Superliga (L1)
+                        120 1st Division (L2)
+                        123 DBU Pokalen
+
+  Norway        [3]     103 Eliteserien (L1)
+                        104 First Division (L2)
+                        105 Norwegian Cup
+
+  Sweden        [3]     113 Allsvenskan (L1)
+                        114 Superettan (L2)
+                        115 Svenska Cupen
+
+  Poland        [3]     106 Ekstraklasa (L1)
+                        107 I Liga (L2)
+                        108 Polish Cup
+
+  Croatia       [3]     210 Prva HNL (L1)
+                        211 Druga HNL (L2)
+                        212 Croatian Cup
+
+  Serbia        [1] ⚠️  392 SuperLiga (L1)           ← lipsă L2 și Cupă
+
+  Romania       [3]     783 Superliga (L1)
+                        785 Liga II (L2)
+                        787 Cupa Romaniei
+
+  Greece        [3]     551 Super League 1 (L1)
+                        552 Super League 2 (L2)
+                        556 Greek Cup
+
+  Hungary       [1] ⚠️  271 Nemzeti Bajnokság I (L1) ← lipsă L2 și Cupă
+
+  Bulgaria      [1] ⚠️  172 First Professional Lg (L1)← lipsă L2 și Cupă
+
+  Slovakia      [1] ⚠️  332 Super Liga (L1)           ← lipsă L2 și Cupă
+
+  Finland       [1] ⚠️  244 Veikkausliiga (L1)        ← lipsă L2 și Cupă
+
+  Ukraine       [1] ⚠️  333 Premier League (L1)       ← lipsă L2 și Cupă
+
+  Russia        [1] ⚠️  235 Premier League (L1)       ← lipsă L2 și Cupă
+
+  Belarus       [1] ⚠️  116 Vysheyshaya Liga (L1)     ← lipsă L2 și Cupă
+
+  Kazakhstan    [1] ⚠️  389 Premier League (L1)       ← lipsă L2 și Cupă
+
+── AMERICAS — 53 ligi, 18 țări ──────────────────────────────────────────────
+
+  Brazil        [3]     71  Serie A (L1)
+                        72  Serie B (L2)
+                        73  Copa do Brasil
+
+  Argentina     [3]     128 Primera Division (L1)
+                        131 Primera Nacional (L2)
+                        132 Copa Argentina
+
+  Mexico        [3]     262 Liga MX (L1)
+                        263 Liga Expansion (L2)
+                        264 Copa MX
+
+  Colombia      [4] ⚠️  239 Primera A (L1)
+                        240 Primera B (L2)
+                        241 Copa Colombia
+                        713 Superliga (Copa)          ← a 2-a cupă
+
+  Chile         [3]     265 Primera Division (L1)
+                        266 Primera B (L2)
+                        267 Copa Chile
+
+  Uruguay       [3]     268 Primera Division (L1)
+                        269 Segunda Division (L2)
+                        270 Copa Uruguay
+
+  Peru          [3]     281 Liga 1 (L1)
+                        282 Liga 2 (L2)
+                        283 Copa Peru
+
+  Ecuador       [3]     286 LigaPro Serie A (L1)
+                        287 LigaPro Serie B (L2)
+                        735 Copa Ecuador
+
+  Paraguay      [3]     278 Primera Division (L1)
+                        279 Division Intermedia (L2)
+                        280 Copa Paraguay
+
+  Bolivia       [3]     273 Primera Division (L1)
+                        274 Liga de Ascenso (L2)
+                        276 Copa Bolivia
+
+  Venezuela     [3]     153 Liga FUTVE (L1)
+                        154 Segunda Division (L2)
+                        155 Copa Venezuela
+
+  USA           [3]     253 MLS (L1)
+                        255 USL Championship (L2)
+                        257 US Open Cup
+
+  Canada        [2] ⚠️  321 Canadian Premier League  ← lipsă L2
+                        322 Canadian Championship (Cup)
+
+  Costa Rica    [3]     258 Primera Division (L1)
+                        259 Segunda Division (L2)
+                        260 Copa Costa Rica
+
+  Honduras      [3]     261 Liga Nacional (L1)
+                        319 Liga de Ascenso (L2)
+                        320 Copa Honduras
+
+  Guatemala     [3]     339 Liga Nacional (L1)
+                        338 Primera Division (L2)
+                        248 Copa Guatemala
+
+  El Salvador   [3]     344 Primera Division (L1)
+                        349 Segunda Division (L2)
+                        350 Copa El Salvador
+
+  Nicaragua     [2] ⚠️  256 Primera Division (L1)    ← lipsă Cupă
+                        380 Segunda Division (L2)
+
+── ASIA — 55 ligi, 20 țări/regiuni ──────────────────────────────────────────
+
+  Saudi Arabia  [3]     307 Saudi Pro League (L1)
+                        308 First Division (L2)
+                        313 King Cup
+
+  Japan         [3]     98  J1 League (L1)
+                        99  J2 League (L2)
+                        100 Emperor's Cup
+
+  South Korea   [3]     292 K League 1 (L1)
+                        293 K League 2 (L2)
+                        294 Korean FA Cup
+
+  Iran          [3]     290 Persian Gulf Pro Lg (L1)
+                        291 Azadegan League (L2)
+                        295 Hazfi Cup
+
+  Qatar         [3]     19  Qatar Stars League (L1)
+                        21  QSL (L2)
+                        22  Emir Cup
+
+  UAE           [3]     433 Pro League (L1)
+                        434 First Division (L2)
+                        435 UAE Cup
+
+  China         [3]     169 Super League (L1)
+                        170 League One (L2)
+                        171 FA Cup
+
+  Thailand      [3]     296 Thai League 1 (L1)
+                        297 Thai League 2 (L2)
+                        298 Thai FA Cup
+
+  Uzbekistan    [1] ⚠️  335 Super League (L1)         ← lipsă L2 și Cupă
+
+  Australia     [2] ⚠️  188 A-League Men (L1)         ← lipsă L2
+                        189 Australia Cup
+
+  India         [3]     323 ISL (L1)
+                        324 I-League (L2)
+                        325 Durand Cup
+
+  Malaysia      [3]     518 Super League (L1)
+                        519 Premier League (L2)
+                        520 Malaysia Cup
+
+  Indonesia     [3]     391 Liga 1 (L1)
+                        460 Liga 2 (L2)
+                        461 Indonesian Cup
+
+  Vietnam       [3]     340 V.League 1 (L1)
+                        341 V.League 2 (L2)
+                        342 Vietnamese Cup
+
+  Iraq          [3]     302 Premier League (L1)
+                        303 Division 1 (L2)
+                        304 Iraqi Cup
+
+  Jordan        [3]     474 Pro League (L1)
+                        475 Division 1 (L2)
+                        494 Jordan Cup
+
+  Kuwait        [3]     299 Premier League (L1)
+                        300 Division 1 (L2)
+                        493 Emir Cup
+
+  Oman          [3]     309 Professional League (L1)
+                        491 Division 1 (L2)
+                        492 Sultan Qaboos Cup
+
+  Hong Kong     [3]     499 Premier League (L1)
+                        500 First Division (L2)
+                        503 HK FA Cup
+
+  Singapore     [1] ⚠️  502 Premier League (L1)       ← lipsă L2 și Cupă
+                                                         (Cup ID 503 = duplicat HK)
+
+── AFRICA — 20 ligi, 9 țări ─────────────────────────────────────────────────
+
+  Egypt         [3]     233 Premier League (L1)
+                        234 Second Division (L2)
+                        238 Egyptian Cup
+
+  Morocco       [3]     200 Botola Pro (L1)
+                        201 Botola 2 (L2)
+                        822 Coupe du Trône
+
+  Tunisia       [3]     202 Ligue 1
+                        377 Ligue 2
+                        378 Coupe de Tunisie
+
+  Algeria       [3]     197 Ligue Professionnelle 1
+                        198 Ligue Professionnelle 2
+                        199 Coupe d'Algérie
+
+  South Africa  [3]     288 Premier Division (PSL)
+                        670 National First Division
+                        671 Nedbank Cup
+
+  Nigeria       [1] ⚠️  399 NPFL (L1)                 ← lipsă L2 și Cupă
+
+  Ghana         [1] ⚠️  289 Premier League (L1)        ← lipsă L2 și Cupă
+
+  Ivory Coast   [1] ⚠️  383 Ligue 1                    ← lipsă L2 și Cupă
+
+  Kenya         [2] ⚠️  357 Premier League (L1)        ← lipsă Cupă
+                        358 National Super League (L2)   (Cup ID 500 = duplicat HK)
+
+── INTERNAȚIONALE — 16 competiții ──────────────────────────────────────────
+
+    1   World Cup
+    2   UEFA Champions League
+    3   UEFA Europa League
+    4   Euro Championship
+    5   UEFA Nations League
+    6   FIFA Club World Cup
+    9   Copa America
+    10  CONCACAF Champions Cup
+    11  Copa Sudamericana (CONMEBOL)
+    12  CAF Champions League
+    13  Copa Libertadores (CONMEBOL)
+    17  AFC Champions League
+    18  AFC Cup
+    20  CAF Confederation Cup
+    26  CONCACAF Nations League
+    848 UEFA Conference League
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. ANOMALII DETECTATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── Țări cu MAI MULT de 3 competiții (2 cazuri) ──────────────────────────
+
+    England  [4]  — are FA Cup (45) + EFL Cup (48)  → a 2-a cupă
+    Colombia [4]  — are Copa Colombia (241) + Superliga (713) → a 2-a cupă
+
+  ── Țări cu MAI PUȚIN de 3 competiții (16 cazuri) ───────────────────────
+
+    Cu doar 1 ligă (lipsă L2 și Cupă) — 14 țări:
+      Europa : Serbia (392), Hungary (271), Bulgaria (172), Slovakia (332),
+               Finland (244), Ukraine (333), Russia (235), Belarus (116),
+               Kazakhstan (389)
+      Asia   : Uzbekistan (335), Singapore (502)
+      Africa : Nigeria (399), Ghana (289), Ivory Coast (383)
+
+    Cu 2 ligi (lipsă 1 competiție) — 4 țări:
+      Canada    [2] — lipsă Liga 2
+      Nicaragua [2] — lipsă Cupă
+      Australia [2] — lipsă Liga 2
+      Kenya     [2] — lipsă Cupă (ID 500 era duplicat cu HK First Division)
+
+  ── Duplicate (rezolvate anterior) ──────────────────────────────────────
+
+    ID 503 — era atribuit atât la HK FA Cup cât și la Singapore Cup
+             → Singapore Cup comentat; rămâne HK FA Cup
+    ID 500 — era atribuit atât la HK First Division cât și la Kenya FKF Cup
+             → Kenya FKF Cup comentat; rămâne HK First Division
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. COMPARAȚIE CU ȚINTA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Total actual  :  214
+  Ținta         :  178
+  Diferență     :  +36 (36 ligi în plus față de plan)
+
+  ── De unde vin cele 36 în plus ──────────────────────────────────────────
+
+    +2  England și Colombia au fiecare câte o cupă extra         (48, 713)
+    +34 din acoperire mai mare decât planul:
+        Dacă planul are 70 țări × 3 ligi + 16 internaționale = 226 minus
+        anomalii (14 țări cu 1 ligă, 4 țări cu 2 ligi) ajungem la ~214.
+        Diferența de 36 față de 178 vine din țări incluse în cod
+        dar care nu fac parte din planul final de 70 țări.
+
+  ── Opțiuni pentru a reduce de la 214 la 178 ────────────────────────────
+
+    Opțiunea A — Elimini 2 ligi extra (48, 713) → 212 → mai trebuie -34
+    Opțiunea B — Elimini țări întregi:
+                 34 ligi = ~11-12 țări cu câte 3 ligi fiecare
+                 sau ~17 țări cu câte 2 ligi fiecare
+    Opțiunea C — Combinat: elimini cupele extra (48, 713)
+                 + elimini ~10-11 țări cu scoruri de relevanță mai mici
+
+    Decizia aparține utilizatorului — care 10-11 țări se scot din plan.
+
+================================================================================

@@ -1,0 +1,2194 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>AlohaScan · ADMIN</title>
+<link rel="apple-touch-icon" href="/admin-apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/admin-apple-touch-icon.png">
+<link rel="manifest" href="/admin-manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AlohaAdmin">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+html,body{width:100%;overflow-x:hidden}
+
+:root{
+  --bg:            #000000;
+  --surface-0:     #06080C;
+  --surface-1:     rgba(15,20,28,0.65);
+  --surface-1-s:   rgba(15,20,28,0.85);
+  --surface-2:     rgba(20,26,36,0.7);
+  --surface-3:     rgba(28,34,46,0.85);
+  --bd:            rgba(255,255,255,0.06);
+  --bd-2:          rgba(255,255,255,0.10);
+  --bd-acc:        rgba(34,211,238,0.22);
+
+  --ac:            #22D3EE;
+  --ac-2:          #06B6D4;
+  --ac-3:          #0891B2;
+  --ac-soft:       rgba(34,211,238,0.10);
+  --ac-glow:       rgba(34,211,238,0.20);
+
+  --tx:            #F2F4F7;
+  --tx-2:          #A0AABA;
+  --mu:            #6A7382;
+  --mu-2:          #4A525E;
+
+  --red:           #FF5C72;
+  --red-soft:      rgba(255,92,114,0.10);
+  --yellow:        #FFCB47;
+
+  --shadow-card:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    inset 0 -1px 0 rgba(0,0,0,0.3),
+    0 1px 2px rgba(0,0,0,0.5),
+    0 8px 24px rgba(0,0,0,0.4),
+    0 24px 60px rgba(0,0,0,0.35);
+  --shadow-card-hover:
+    inset 0 1px 0 rgba(255,255,255,0.09),
+    inset 0 -1px 0 rgba(0,0,0,0.3),
+    0 2px 4px rgba(0,0,0,0.5),
+    0 14px 36px rgba(34,211,238,0.06),
+    0 32px 80px rgba(0,0,0,0.45);
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+body{
+  background:var(--bg);
+  color:var(--tx);
+  font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  font-size:14px;
+  line-height:1.45;
+  min-height:100vh;
+  padding-bottom:max(80px, calc(64px + env(safe-area-inset-bottom, 0px)));
+  position:relative;
+  font-feature-settings:'cv02','cv03','cv04','cv11';
+}
+
+::selection{background:var(--ac-glow);color:var(--tx)}
+
+/* ----- custom scrollbar ----- */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.06);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.12)}
+
+/* ===== ORBS BACKGROUND (3D depth ambient) ===== */
+.orbs{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.orb{
+  position:absolute;border-radius:50%;
+  filter:blur(120px);opacity:.35;
+  will-change:transform;
+}
+.orb-1{
+  width:620px;height:620px;left:-180px;top:-160px;
+  background:radial-gradient(circle,#22D3EE 0%,transparent 70%);
+  animation:drift1 42s ease-in-out infinite;
+}
+.orb-2{
+  width:780px;height:780px;right:-260px;top:32%;
+  background:radial-gradient(circle,#1A3D6E 0%,transparent 70%);
+  animation:drift2 52s ease-in-out infinite;
+  opacity:.28;
+}
+.orb-3{
+  width:520px;height:520px;left:35%;bottom:-220px;
+  background:radial-gradient(circle,#22D3EE 0%,transparent 70%);
+  animation:drift3 48s ease-in-out infinite;
+  opacity:.22;
+}
+@keyframes drift1{
+  0%,100%{transform:translate(0,0)}
+  33%{transform:translate(90px,-60px)}
+  66%{transform:translate(-50px,80px)}
+}
+@keyframes drift2{
+  0%,100%{transform:translate(0,0)}
+  50%{transform:translate(-120px,60px)}
+}
+@keyframes drift3{
+  0%,100%{transform:translate(0,0)}
+  33%{transform:translate(-80px,-40px)}
+  66%{transform:translate(70px,-70px)}
+}
+
+/* ===== PAGE ===== */
+.page{position:relative;z-index:1;min-height:100vh;max-width:760px;margin:0 auto;padding-left:env(safe-area-inset-left, 0px);padding-right:env(safe-area-inset-right, 0px)}
+
+/* ===== HEADER ===== */
+.header{
+  position:sticky;top:0;z-index:50;
+  display:grid;grid-template-columns:auto 1fr auto;
+  align-items:center;gap:18px;
+  padding:max(60px, calc(20px + env(safe-area-inset-top, 0px))) 22px 14px;
+  background:linear-gradient(180deg,rgba(6,8,12,0.98),rgba(6,8,12,0.95));
+  backdrop-filter:blur(30px) saturate(140%);
+  -webkit-backdrop-filter:blur(30px) saturate(140%);
+  border-bottom:1px solid var(--bd);
+  box-shadow:0 1px 0 rgba(0,0,0,0.5),0 4px 30px rgba(0,0,0,0.3);
+}
+
+.brand{display:flex;flex-direction:column;gap:5px;min-width:0}
+.brand-1{
+  display:flex;align-items:baseline;gap:1px;
+  font-family:'Rajdhani',sans-serif;font-weight:600;
+  font-size:26px;letter-spacing:1px;line-height:1;
+}
+.brand-1 .a{color:var(--tx)}
+.brand-1 .b{
+  background:linear-gradient(135deg,var(--ac),var(--ac-3));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  font-weight:700;
+}
+.brand-2{display:flex;align-items:center;gap:9px;font-size:10px}
+.brand-2 .panel{
+  color:var(--mu);letter-spacing:1.8px;font-weight:600;text-transform:uppercase;
+}
+.brand-2 .online{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:3px 10px;border-radius:20px;
+  background:rgba(34,211,238,0.08);
+  color:var(--ac);font-weight:600;letter-spacing:1px;font-size:9px;
+  border:1px solid rgba(34,211,238,0.18);
+  text-transform:uppercase;
+}
+.brand-2 .online .dot{
+  width:6px;height:6px;border-radius:50%;background:var(--ac);
+  box-shadow:0 0 8px rgba(34,211,238,0.6);
+  animation:soft-pulse 2s ease-in-out infinite;
+}
+@keyframes soft-pulse{
+  0%,100%{opacity:1}
+  50%{opacity:.55}
+}
+
+.sec-box{
+  justify-self:center;
+  display:flex;align-items:center;gap:12px;
+  padding:9px 18px;border-radius:12px;
+  background:linear-gradient(180deg,rgba(20,26,36,0.7),rgba(15,20,28,0.5));
+  backdrop-filter:blur(20px);
+  border:1px solid var(--bd);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.05),0 4px 18px rgba(0,0,0,0.3);
+}
+.sec-box .title{
+  font-family:'Inter',sans-serif;font-weight:500;
+  color:var(--tx-2);font-size:10.5px;letter-spacing:2px;text-transform:uppercase;
+}
+.sec-dots{display:flex;gap:4px;align-items:center}
+.sec-dots i{
+  width:4px;height:4px;border-radius:50%;background:rgba(34,211,238,0.4);
+  animation:dotwave 1.8s ease-in-out infinite;
+}
+.sec-dots i:nth-child(1){animation-delay:0s}
+.sec-dots i:nth-child(2){animation-delay:.10s}
+.sec-dots i:nth-child(3){animation-delay:.20s}
+.sec-dots i:nth-child(4){animation-delay:.30s}
+.sec-dots i:nth-child(5){animation-delay:.40s}
+.sec-dots i:nth-child(6){animation-delay:.50s}
+.sec-dots i:nth-child(7){animation-delay:.60s}
+.sec-dots i:nth-child(8){animation-delay:.70s}
+.sec-dots i:nth-child(9){animation-delay:.80s}
+.sec-dots i:nth-child(10){animation-delay:.90s}
+.sec-dots i:nth-child(11){animation-delay:1.0s}
+.sec-dots i:nth-child(12){animation-delay:1.1s}
+@keyframes dotwave{
+  0%,100%{opacity:.25;transform:scale(.85)}
+  50%{opacity:1;transform:scale(1);background:var(--ac)}
+}
+
+.btn-c{
+  background:linear-gradient(180deg,rgba(34,211,238,0.12),rgba(6,182,212,0.05));
+  color:var(--tx);
+  border:1px solid rgba(34,211,238,0.35);border-radius:10px;
+  padding:9px 20px;font-size:12px;font-weight:600;letter-spacing:.3px;
+  cursor:pointer;
+  font-family:inherit;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.06),0 2px 8px rgba(0,0,0,0.3);
+  transition:all .25s var(--ease);
+}
+.btn-c:hover{
+  background:linear-gradient(180deg,rgba(34,211,238,0.22),rgba(6,182,212,0.08));
+  border-color:rgba(34,211,238,0.55);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.1),0 4px 16px rgba(34,211,238,0.2),0 2px 8px rgba(0,0,0,0.3);
+  transform:translateY(-1px);
+}
+.btn-c:active{transform:translateY(0)}
+
+/* ===== MAIN WRAP ===== */
+.wrap{
+  max-width:1140px;margin:0 auto;
+  padding:22px 22px 28px;
+  display:flex;flex-direction:column;gap:24px;
+  position:relative;z-index:1;
+}
+
+/* ===== KEY INPUT ===== */
+.key-input{
+  width:100%;padding:13px 16px;border-radius:12px;
+  background:var(--surface-1-s);
+  backdrop-filter:blur(20px);
+  border:1px solid var(--bd-2);
+  color:var(--tx);font-size:13px;
+  font-family:'JetBrains Mono',monospace;
+  outline:none;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 2px 8px rgba(0,0,0,0.3);
+  transition:border-color .2s,box-shadow .2s;
+}
+.key-input::placeholder{color:var(--mu)}
+.key-input:focus{
+  border-color:rgba(34,211,238,0.4);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 0 0 3px rgba(34,211,238,0.1),0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* ===== META BAR ===== */
+.meta-bar{
+  display:flex;align-items:center;gap:10px;
+  font-size:11.5px;color:var(--mu);
+  padding:0 4px;
+  letter-spacing:.2px;
+}
+.meta-bar .dot{
+  width:6px;height:6px;border-radius:50%;background:var(--ac);
+  box-shadow:0 0 8px rgba(34,211,238,0.5);
+  animation:soft-pulse 2s ease-in-out infinite;
+  flex:none;
+}
+.meta-bar .refresh-ic{
+  margin-left:auto;width:14px;height:14px;color:var(--mu);
+  cursor:pointer;transition:color .2s,transform .5s var(--ease);
+}
+.meta-bar .refresh-ic:hover{color:var(--ac);transform:rotate(180deg)}
+
+/* ===== CARDS — glassmorphism + 3D depth ===== */
+.card{
+  position:relative;
+  background:linear-gradient(180deg,rgba(15,20,28,0.78),rgba(8,12,18,0.62));
+  backdrop-filter:blur(40px) saturate(140%);
+  -webkit-backdrop-filter:blur(40px) saturate(140%);
+  border:1px solid var(--bd);
+  border-radius:22px;
+  padding:24px 24px;
+  box-shadow:var(--shadow-card),0 0 0 1px rgba(34,211,238,.04);
+  transform:translateZ(0);
+  transition:transform .4s var(--ease),box-shadow .4s var(--ease),border-color .3s;
+  isolation:isolate;
+}
+.card::before{
+  /* subtle accent corner — top-left highlight */
+  content:'';position:absolute;inset:0;border-radius:inherit;
+  padding:1px;
+  background:linear-gradient(135deg,
+    rgba(34,211,238,0.25) 0%,
+    rgba(255,255,255,0.05) 25%,
+    transparent 55%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+          mask-composite:exclude;
+  pointer-events:none;
+  opacity:.7;
+  transition:opacity .3s;
+}
+.card:hover{
+  transform:translateY(-3px) translateZ(0);
+  box-shadow:var(--shadow-card-hover);
+}
+.card:hover::before{opacity:1}
+
+.card-h{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:20px;
+}
+.card-h .ic{
+  width:26px;height:26px;color:var(--ac);
+  display:inline-flex;align-items:center;justify-content:center;flex:none;
+  filter:drop-shadow(0 0 8px rgba(34,211,238,0.35));
+}
+.card-h .ic svg{width:100%;height:100%}
+.card-h h2{
+  font-family:'Inter',sans-serif;font-weight:700;
+  font-size:13.5px;letter-spacing:2px;color:var(--tx);
+  text-transform:uppercase;flex:1;
+}
+/* ===== COLLAPSE/EXPAND chevron ===== */
+.card-chev{
+  margin-left:8px;flex:none;
+  width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,0.04);
+  border:1px solid var(--bd);
+  border-radius:9px;
+  color:var(--ac);cursor:pointer;
+  transition:background .2s,border-color .2s;
+  padding:0;
+}
+.card-chev:hover{background:rgba(34,211,238,.10);border-color:var(--bd-acc)}
+.card-chev svg{width:16px;height:16px;transition:transform .3s cubic-bezier(.4,0,.2,1)}
+.card:not(.collapsed) .card-chev svg{transform:rotate(180deg)}
+.card.collapsed{padding:14px 22px}
+.card.collapsed .card-h{margin-bottom:0}
+.card.collapsed > *:not(.card-h){display:none !important}
+.card-h .extra{
+  color:var(--mu);font-size:11px;font-weight:500;
+  letter-spacing:.5px;
+}
+
+/* ===== STATUS SISTEM ===== */
+.status-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:12px;
+}
+.status-cell{
+  position:relative;
+  background:linear-gradient(180deg,rgba(20,26,36,0.6),rgba(15,20,28,0.4));
+  border:1px solid var(--bd);
+  border-radius:14px;
+  padding:14px;
+  display:flex;flex-direction:column;gap:6px;
+  min-width:0;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 2px 8px rgba(0,0,0,0.25);
+  transition:transform .3s var(--ease),border-color .3s;
+}
+.status-cell:hover{
+  border-color:var(--bd-acc);
+  transform:translateY(-2px);
+}
+.status-cell .ic{width:22px;height:22px;color:var(--ac);opacity:.9;filter:drop-shadow(0 0 6px rgba(34,211,238,0.25))}
+.status-cell .ic svg{width:100%;height:100%}
+.status-cell .lbl{
+  font-size:11px;color:var(--mu);font-weight:500;letter-spacing:.3px;
+  margin-top:6px;
+}
+.status-cell .val{
+  font-family:'Rajdhani',sans-serif;font-weight:700;
+  font-size:28px;color:var(--tx);line-height:1;
+  font-variant-numeric:tabular-nums;
+  margin-top:6px;
+}
+.status-cell .sub{
+  font-size:9.5px;color:var(--ac);font-weight:700;letter-spacing:1.8px;
+  margin-top:4px;text-transform:uppercase;
+  opacity:.95;
+}
+
+/* ===== VARIABILE ENV ===== */
+.env-wrap{display:flex;gap:18px;align-items:center}
+.env-list{
+  list-style:none;display:flex;flex-direction:column;gap:8px;
+  flex:0 0 58%;min-width:0;
+}
+.env-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:linear-gradient(180deg,rgba(20,26,36,0.6),rgba(15,20,28,0.4));
+  border:1px solid var(--bd);
+  border-radius:10px;padding:10px 14px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 1px 2px rgba(0,0,0,0.2);
+  transition:border-color .25s,transform .25s var(--ease);
+}
+.env-row:hover{border-color:var(--bd-2);transform:translateX(2px)}
+.env-key{
+  font-family:'JetBrains Mono',monospace;
+  font-size:11.5px;color:var(--tx-2);font-weight:500;
+}
+.env-badge{
+  padding:4px 10px;border-radius:6px;
+  font-size:10px;font-weight:700;letter-spacing:.5px;
+  text-transform:uppercase;
+}
+.env-badge.ok{
+  background:linear-gradient(180deg,var(--ac),var(--ac-2));
+  color:#03110A;
+  box-shadow:0 1px 3px rgba(34,211,238,0.35),inset 0 1px 0 rgba(255,255,255,0.2),0 0 14px rgba(34,211,238,.25);
+  animation:envSetPulse 3s ease-in-out infinite;
+}
+@keyframes envSetPulse{
+  0%,100%{box-shadow:0 1px 3px rgba(34,211,238,0.35),inset 0 1px 0 rgba(255,255,255,0.2),0 0 14px rgba(34,211,238,.25)}
+  50%{box-shadow:0 1px 3px rgba(34,211,238,0.5),inset 0 1px 0 rgba(255,255,255,0.3),0 0 20px rgba(34,211,238,.45)}
+}
+.env-badge.no{
+  background:linear-gradient(180deg,var(--red),#E54B61);
+  color:#fff;
+  box-shadow:0 1px 3px rgba(255,92,114,0.25),inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.env-art-wrap{
+  flex:0 0 42%;display:flex;align-items:center;justify-content:center;
+}
+.env-art{
+  width:160px;height:auto;max-width:100%;
+  object-fit:contain;opacity:.95;
+  filter:drop-shadow(0 8px 24px rgba(34,211,238,0.12)) drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  transition:transform .5s var(--ease),filter .3s;
+}
+.env-art:hover{
+  transform:translateY(-3px) scale(1.02);
+  filter:drop-shadow(0 14px 32px rgba(34,211,238,0.18)) drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+}
+
+/* ===== BAZA DE DATE ===== */
+.db-grid-row{display:grid;gap:10px;margin-bottom:10px}
+.db-grid-row.r5{grid-template-columns:repeat(5,1fr)}
+.db-grid-row.r4{grid-template-columns:repeat(4,1fr)}
+.db-cell{
+  position:relative;
+  background:linear-gradient(180deg,rgba(20,26,36,0.65),rgba(15,20,28,0.45));
+  border:1px solid var(--bd);
+  border-radius:14px;padding:16px 10px;
+  display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center;
+  min-width:0;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 2px 8px rgba(0,0,0,0.25);
+  transition:transform .3s var(--ease),border-color .3s,box-shadow .3s;
+}
+.db-cell:hover{
+  transform:translateY(-4px);
+  border-color:var(--bd-acc);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.06),0 10px 24px rgba(0,0,0,0.4),0 4px 14px rgba(34,211,238,0.12);
+}
+.db-cell .ic{width:28px;height:28px;color:var(--ac);margin-bottom:4px;opacity:.95;filter:drop-shadow(0 0 6px rgba(34,211,238,0.25))}
+.db-cell .ic svg{width:100%;height:100%}
+.db-cell .val{
+  font-family:'Rajdhani',sans-serif;font-weight:700;
+  font-size:24px;color:var(--tx);line-height:1;
+  font-variant-numeric:tabular-nums;
+}
+.db-cell .lbl{
+  font-size:10.5px;color:var(--mu);font-weight:500;
+  letter-spacing:.3px;
+}
+.db-foot{
+  display:block;width:100%;margin-top:8px;
+  background:transparent;border:none;cursor:pointer;
+  color:var(--ac);font-size:11px;font-weight:600;
+  letter-spacing:1.2px;text-align:center;padding:10px;
+  text-transform:uppercase;
+  transition:color .2s,letter-spacing .25s;
+  font-family:inherit;
+}
+.db-foot:hover{color:#fff;letter-spacing:1.5px}
+
+/* ===== WOW pack universal — breathing glow pe carduri expand ===== */
+.card:not(.collapsed){position:relative;overflow:hidden}
+.card:not(.collapsed)::after{
+  content:'';position:absolute;inset:-2px;border-radius:24px;pointer-events:none;
+  background:radial-gradient(circle at 70% 30%,rgba(34,211,238,.08) 0%,transparent 50%);
+  animation:cardBreath 5s ease-in-out infinite;
+  z-index:0;
+}
+@keyframes cardBreath{
+  0%,100%{opacity:.4}
+  50%{opacity:.9}
+}
+/* Continutul stay above ambient glow */
+.card > *:not(.card-h){position:relative;z-index:1}
+/* Pulse pe valori accent care primesc countup */
+.value-pulse{animation:valuePulse .5s ease-out}
+@keyframes valuePulse{
+  0%{text-shadow:0 0 0 rgba(34,211,238,0)}
+  50%{text-shadow:0 0 16px rgba(34,211,238,.7)}
+  100%{text-shadow:0 0 8px rgba(34,211,238,.3)}
+}
+.api-wrap{display:flex;gap:18px;align-items:center;position:relative;z-index:1}
+.api-rows{flex:0 0 55%;display:flex;flex-direction:column;gap:9px}
+.api-row{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:13px;
+}
+.api-row .k{color:var(--mu);font-size:11.5px;font-weight:500}
+.api-row .v{
+  color:var(--tx);font-weight:700;
+  font-family:'Rajdhani',sans-serif;font-size:17px;
+  font-variant-numeric:tabular-nums;
+  transition:color .3s,text-shadow .3s;
+}
+.api-row .v.ac{
+  color:var(--ac);
+  text-shadow:0 0 12px rgba(34,211,238,.4);
+}
+.api-bar{
+  position:relative;
+  width:100%;height:8px;
+  background:rgba(255,255,255,0.06);
+  border-radius:4px;overflow:hidden;margin-top:6px;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,0.5);
+}
+.api-bar-fill{
+  position:relative;
+  height:100%;
+  background:linear-gradient(90deg,var(--ac-3),var(--ac),#67E8F9);
+  border-radius:4px;
+  box-shadow:0 0 12px rgba(34,211,238,0.5),0 0 4px rgba(34,211,238,0.8);
+  transition:width 1.4s cubic-bezier(.25,.46,.45,.94);
+  overflow:hidden;
+}
+.api-bar-fill::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.45) 50%,transparent 100%);
+  animation:apiShimmer 2.4s linear infinite;
+}
+@keyframes apiShimmer{
+  0%{transform:translateX(-100%)}
+  100%{transform:translateX(200%)}
+}
+.api-bar-info{
+  color:var(--ac);font-size:11px;font-weight:700;
+  margin-top:8px;letter-spacing:.5px;
+  text-shadow:0 0 8px rgba(34,211,238,.4);
+}
+.circ{
+  flex:0 0 45%;position:relative;
+  display:flex;align-items:center;justify-content:center;
+  height:170px;
+}
+.circ svg{
+  transform:rotate(-90deg);
+  filter:drop-shadow(0 4px 14px rgba(34,211,238,0.45));
+  animation:circGlow 3s ease-in-out infinite;
+}
+@keyframes circGlow{
+  0%,100%{filter:drop-shadow(0 4px 14px rgba(34,211,238,0.45))}
+  50%{filter:drop-shadow(0 6px 22px rgba(34,211,238,0.75)) drop-shadow(0 0 8px rgba(103,232,249,0.4))}
+}
+.circ-bg{fill:none;stroke:rgba(255,255,255,0.06);stroke-width:10}
+.circ-fg{
+  fill:none;stroke:url(#greenGrad);stroke-width:10;stroke-linecap:round;
+  transition:stroke-dashoffset 1.6s cubic-bezier(.25,.46,.45,.94);
+  filter:drop-shadow(0 0 8px rgba(34,211,238,.6));
+}
+.circ-txt{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.circ-txt .p{
+  font-family:'Rajdhani',sans-serif;font-weight:700;
+  font-size:34px;
+  background:linear-gradient(135deg,#fff 0%,var(--ac) 100%);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;
+  line-height:1;font-variant-numeric:tabular-nums;
+  text-shadow:0 0 30px rgba(34,211,238,.3);
+}
+.circ-txt .p .u{
+  font-size:16px;color:var(--ac);margin-left:2px;font-weight:600;
+  -webkit-text-fill-color:var(--ac);background:none;
+}
+.circ-txt .l{
+  font-size:10px;color:var(--mu);
+  letter-spacing:2px;margin-top:6px;text-transform:uppercase;
+  font-weight:600;
+}
+
+/* ===== MECIURI LIVE ===== */
+.live-counter{
+  display:inline-flex;align-items:center;gap:6px;
+  background:linear-gradient(180deg,rgba(34,211,238,0.14),rgba(6,182,212,0.08));
+  color:var(--ac);font-size:10.5px;font-weight:600;
+  padding:5px 11px;border-radius:14px;letter-spacing:.5px;
+  border:1px solid rgba(34,211,238,0.22);
+  text-transform:uppercase;
+}
+.live-counter::before{
+  content:'';width:6px;height:6px;border-radius:50%;background:var(--ac);
+  box-shadow:0 0 6px rgba(34,211,238,0.6);
+  animation:soft-pulse 1.6s ease-in-out infinite;
+}
+.sport-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.sport-tab{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  background:rgba(255,255,255,0.03);
+  color:var(--mu);
+  border:1px solid var(--bd);border-radius:24px;
+  padding:9px 12px;font-size:12px;font-weight:600;
+  cursor:pointer;
+  transition:all .25s var(--ease);
+  font-family:inherit;
+  white-space:nowrap;min-width:0;
+}
+.sport-tab .em{font-size:15px}
+.sport-tab .sb{
+  font-size:11px;font-weight:700;
+  background:rgba(255,255,255,0.06);
+  padding:2px 8px;border-radius:12px;min-width:22px;text-align:center;
+}
+.sport-tab:hover{
+  color:var(--tx-2);
+  border-color:var(--bd-2);
+  background:rgba(255,255,255,0.05);
+}
+.sport-tab.active{
+  background:linear-gradient(180deg,rgba(34,211,238,0.22),rgba(6,182,212,0.10));
+  border-color:rgba(34,211,238,0.5);
+  color:var(--ac);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.10),0 4px 12px rgba(34,211,238,0.15);
+}
+.sport-tab.active .sb{
+  background:rgba(34,211,238,0.20);
+  color:var(--ac);
+}
+.live-list{display:flex;flex-direction:column;gap:7px}
+.match-row{
+  display:grid;grid-template-columns:50px 1fr 64px 64px;
+  gap:12px;align-items:center;
+  background:linear-gradient(180deg,rgba(20,26,36,0.5),rgba(15,20,28,0.3));
+  border:1px solid var(--bd);
+  border-radius:10px;padding:10px 14px;font-size:12.5px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.03),0 1px 2px rgba(0,0,0,0.2);
+  transition:border-color .25s,transform .25s var(--ease);
+}
+.match-row:hover{border-color:var(--bd-2);transform:translateX(2px)}
+.match-min{
+  color:var(--ac);font-weight:700;
+  font-family:'JetBrains Mono',monospace;
+  font-variant-numeric:tabular-nums;
+}
+.match-teams{
+  color:var(--tx);font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.match-score{
+  color:var(--tx);font-weight:600;text-align:center;
+  font-family:'Rajdhani',sans-serif;font-size:15px;
+  font-variant-numeric:tabular-nums;
+}
+.match-st{
+  color:var(--mu);font-size:10px;text-align:right;font-weight:600;
+  letter-spacing:.4px;text-transform:uppercase;
+}
+
+/* ===== CRON / ERRORS / BACKFILL / HEALTH ===== */
+.cron-row{
+  display:grid;grid-template-columns:1fr auto auto auto;gap:12px;align-items:center;
+  background:linear-gradient(180deg,rgba(20,26,36,0.5),rgba(15,20,28,0.3));
+  border:1px solid var(--bd);
+  border-radius:10px;padding:10px 14px;margin-bottom:7px;font-size:12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);
+  transition:border-color .25s;
+}
+.cron-row:hover{border-color:var(--bd-2)}
+.cron-name{
+  color:var(--tx);font-weight:500;
+  font-family:'JetBrains Mono',monospace;font-size:11.5px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.cron-time{
+  color:var(--mu);font-size:10.5px;
+  font-variant-numeric:tabular-nums;
+}
+.cron-err{
+  color:var(--red);font-size:10.5px;
+  padding:5px 14px 8px;
+  font-family:'JetBrains Mono',monospace;
+}
+.badge{
+  padding:3px 9px;border-radius:6px;
+  font-size:9.5px;font-weight:700;letter-spacing:.5px;
+  text-transform:uppercase;
+}
+.badge-ok{
+  background:linear-gradient(180deg,var(--ac),var(--ac-2));color:#03110A;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.badge-er{
+  background:linear-gradient(180deg,var(--red),#E54B61);color:#fff;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.badge-yl{background:linear-gradient(180deg,var(--yellow),#E5B53F);color:#1A1100}
+.badge-gr{background:rgba(255,255,255,0.06);color:var(--mu)}
+.btn-mini{
+  background:rgba(34,211,238,0.08);
+  border:1px solid rgba(34,211,238,0.25);
+  color:var(--ac);
+  font-size:10.5px;font-weight:600;
+  padding:5px 11px;border-radius:7px;
+  cursor:pointer;font-family:inherit;
+  transition:all .2s var(--ease);
+  letter-spacing:.3px;
+}
+.btn-mini:hover{
+  background:rgba(34,211,238,0.15);
+  border-color:rgba(34,211,238,0.4);
+  transform:translateY(-1px);
+}
+
+.err-row{
+  background:linear-gradient(180deg,rgba(40,20,25,0.55),rgba(30,15,20,0.3));
+  border:1px solid rgba(255,92,114,0.18);
+  border-radius:10px;padding:10px 14px;margin-bottom:7px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);
+}
+.err-job{
+  color:var(--red);font-weight:700;font-size:12px;
+  letter-spacing:.3px;
+}
+.err-time{color:var(--mu);font-size:10.5px;margin:3px 0;font-variant-numeric:tabular-nums}
+.err-msg{
+  color:var(--tx-2);font-size:11px;
+  font-family:'JetBrains Mono',monospace;word-break:break-word;
+}
+
+.bf-dot{
+  width:8px;height:8px;border-radius:50%;background:var(--red);
+  margin-right:9px;
+  box-shadow:0 0 8px rgba(255,92,114,0.5);
+  animation:soft-pulse 1.6s ease-in-out infinite;
+  flex:none;display:inline-block;
+}
+.bf-label{font-size:11.5px;color:var(--tx-2);margin:5px 0;font-variant-numeric:tabular-nums}
+.bf-bar{
+  width:100%;height:6px;
+  background:rgba(255,255,255,0.06);
+  border-radius:3px;overflow:hidden;margin:7px 0 11px;
+  box-shadow:inset 0 1px 1px rgba(0,0,0,0.4);
+}
+.bf-bar-fill{
+  position:relative;
+  height:100%;
+  background:linear-gradient(90deg,var(--ac-3),var(--ac),#67E8F9);
+  border-radius:3px;
+  transition:width 1s cubic-bezier(.25,.46,.45,.94);
+  box-shadow:0 0 10px rgba(34,211,238,0.45);
+  overflow:hidden;
+}
+.bf-bar-fill::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.4) 50%,transparent 100%);
+  animation:apiShimmer 2.4s linear infinite;
+}
+.bf-bar-fill.api{
+  background:linear-gradient(90deg,#E5B53F,var(--yellow));
+  box-shadow:0 0 8px rgba(255,203,71,0.25);
+}
+.bf-buttons{display:flex;gap:10px;margin-top:10px}
+.bf-start,.bf-stop{
+  flex:1;padding:11px 16px;border-radius:10px;border:none;cursor:pointer;
+  font-weight:700;font-size:12px;letter-spacing:.4px;
+  font-family:inherit;text-transform:uppercase;
+  transition:all .25s var(--ease);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.2),0 2px 6px rgba(0,0,0,0.3);
+}
+.bf-start{
+  background:linear-gradient(180deg,var(--ac),var(--ac-2));color:#03110A;
+}
+.bf-start:hover{
+  background:linear-gradient(180deg,#1AE08C,var(--ac));
+  transform:translateY(-1px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 6px 14px rgba(34,211,238,0.25);
+}
+.bf-stop{
+  background:linear-gradient(180deg,var(--red),#E54B61);color:#fff;
+}
+.bf-stop:hover{
+  background:linear-gradient(180deg,#FF7385,var(--red));
+  transform:translateY(-1px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 6px 14px rgba(255,92,114,0.25);
+}
+
+.hc-btn{
+  background:rgba(34,211,238,0.08);
+  color:var(--ac);
+  border:1px solid rgba(34,211,238,0.3);border-radius:9px;
+  padding:7px 14px;font-size:10.5px;font-weight:600;letter-spacing:.5px;
+  cursor:pointer;font-family:inherit;
+  transition:all .25s var(--ease);
+  margin-left:auto;text-transform:uppercase;
+}
+.hc-btn:hover{
+  background:rgba(34,211,238,0.16);
+  border-color:rgba(34,211,238,0.5);
+  transform:translateY(-1px);
+}
+.hc-btn:disabled{opacity:.5;cursor:not-allowed}
+.hc-test{
+  display:flex;justify-content:space-between;gap:12px;
+  padding:7px 12px;
+  background:rgba(20,26,36,0.5);
+  border:1px solid var(--bd);
+  border-radius:8px;margin-bottom:5px;
+  font-size:11.5px;
+}
+.hc-test .m{color:var(--tx-2)}
+.hc-test .s{font-weight:700;font-size:11px}
+
+.empty{
+  color:var(--mu);font-size:12px;
+  padding:10px 0;text-align:center;
+  font-style:italic;
+}
+.empty.err{color:var(--red);font-style:normal}
+.empty.ok{color:var(--ac);font-style:normal}
+
+/* ===== BOTTOM NAV — glassmorphism ===== */
+.bnav{
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:760px;
+  display:grid;grid-template-columns:repeat(5,1fr);
+  background:linear-gradient(180deg,rgba(6,8,12,0.96),rgba(6,8,12,1));
+  backdrop-filter:blur(30px) saturate(140%);
+  -webkit-backdrop-filter:blur(30px) saturate(140%);
+  border-top:1px solid var(--bd);
+  z-index:100;padding:4px 0 max(6px, env(safe-area-inset-bottom, 0px));
+  box-shadow:0 -4px 30px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.bnav a{
+  position:relative;
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  color:var(--mu);text-decoration:none;
+  font-size:10px;font-weight:500;letter-spacing:.3px;
+  padding:4px 4px;
+  transition:color .25s;
+}
+.bnav a .ic{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center}
+.bnav a .ic svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.6}
+.bnav a:hover{color:var(--tx-2)}
+.bnav a.active{
+  color:var(--ac);
+}
+.bnav a.active .ic svg{filter:drop-shadow(0 0 6px rgba(34,211,238,0.4))}
+.bnav a.active::before{
+  content:'';position:absolute;top:-1px;left:50%;
+  transform:translateX(-50%);
+  width:40px;height:2px;border-radius:0 0 2px 2px;
+  background:linear-gradient(90deg,transparent,var(--ac),transparent);
+  box-shadow:0 0 10px rgba(34,211,238,0.5);
+}
+
+/* ===== TOAST ===== */
+#toast{
+  display:none;position:fixed;bottom:96px;left:50%;
+  transform:translateX(-50%);
+  background:linear-gradient(180deg,rgba(15,20,28,0.95),rgba(8,12,18,0.9));
+  backdrop-filter:blur(20px);
+  color:var(--tx);
+  border:1px solid rgba(34,211,238,0.4);border-radius:12px;
+  padding:11px 20px;font-size:12.5px;font-weight:500;
+  box-shadow:0 8px 24px rgba(0,0,0,0.5),0 0 20px rgba(34,211,238,0.15);
+  z-index:200;
+  animation:toastIn .3s var(--ease);
+}
+@keyframes toastIn{
+  from{transform:translateX(-50%) translateY(10px);opacity:0}
+  to{transform:translateX(-50%) translateY(0);opacity:1}
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width:780px){
+  .header{grid-template-columns:1fr auto;gap:12px;padding:max(60px, calc(16px + env(safe-area-inset-top, 0px))) 16px 12px}
+  .sec-box{display:none}
+  .wrap{padding:16px 14px 28px;gap:16px}
+  .card{padding:16px 16px;border-radius:18px}
+  .status-grid{grid-template-columns:repeat(2,1fr)}
+  .env-wrap{flex-direction:column;align-items:stretch;gap:14px}
+  .env-list,.env-art-wrap{flex:1 1 auto}
+  .env-art{width:130px}
+  .api-wrap{flex-direction:column;align-items:stretch;gap:14px}
+  .api-rows,.circ{flex:1 1 auto}
+  .db-grid-row.r5{grid-template-columns:repeat(3,1fr)}
+  .db-grid-row.r4{grid-template-columns:repeat(2,1fr)}
+  .match-row{grid-template-columns:42px 1fr 52px 48px;font-size:11.5px;padding:9px 12px}
+  .cron-row{grid-template-columns:1fr auto;row-gap:8px}
+  .cron-row .cron-time{grid-column:1/-1;font-size:10px}
+  .brand-1{font-size:23px}
+  .orb-1,.orb-2,.orb-3{filter:blur(80px)}
+}
+
+@media (max-width:380px){
+  .status-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .status-cell{padding:11px}
+  .status-cell .val{font-size:20px}
+}
+/* ─── SPLASH SCREEN (PNG logo + fade-in) ───────────────────────── */
+#splash{position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden}
+#spl-logo{width:min(320px,70vw);height:auto;display:block;animation:splFadeIn 1.2s cubic-bezier(.25,.46,.45,.94) both}
+@keyframes splFadeIn{0%{opacity:0;transform:scale(.85)}100%{opacity:1;transform:scale(1)}}
+#spl-hint{opacity:0;color:rgba(255,255,255,.5);font-size:13px;margin-top:24px;letter-spacing:.6px;font-family:-apple-system,sans-serif;pointer-events:none;animation:splHintPulse 2.2s ease-in-out infinite 1.4s}
+@keyframes splHintPulse{0%,100%{opacity:.3}50%{opacity:.85}}
+#spl-logo.spl-idle{animation:splLogoPulse 3s ease-in-out infinite}
+@keyframes splLogoPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+#spl-logo.spl-tapped{animation:splZoomAbsorb .55s cubic-bezier(.55,0,1,.45) forwards!important}
+@keyframes splZoomAbsorb{0%{transform:scale(1);opacity:1}60%{transform:scale(6);opacity:1}100%{transform:scale(12);opacity:0}}
+#splash.spl-exit{animation:splBgFade .35s ease-in .4s forwards}
+@keyframes splBgFade{to{opacity:0}}
+</style>
+</head>
+<body>
+
+<!-- SPLASH SCREEN -->
+<div id="splash" onclick="splashTap()">
+  <img id="spl-logo" src="/admin-icons/source-square.png" alt="AlohaAdmin">
+  <div id="spl-hint">Apasă pentru a continua</div>
+</div>
+<script>
+(function(){
+  var tapped = false;
+  window.splashTap = function(){
+    if(tapped) return;
+    tapped = true;
+    var logo = document.getElementById('spl-logo');
+    var splash = document.getElementById('splash');
+    if(logo){ logo.classList.remove('spl-idle'); logo.classList.add('spl-tapped'); }
+    if(splash) splash.classList.add('spl-exit');
+    setTimeout(function(){ if(splash) splash.style.display = 'none'; }, 750);
+  };
+  // Expus pentru logout — re-afiseaza splash
+  window.showSplash = function(){
+    tapped = false;
+    var splash = document.getElementById('splash');
+    var logo = document.getElementById('spl-logo');
+    if(splash){
+      splash.style.display = 'flex';
+      splash.style.opacity = '1';
+      splash.classList.remove('spl-exit');
+    }
+    if(logo) logo.classList.remove('spl-tapped', 'spl-idle');
+    setTimeout(function(){
+      if(logo && !tapped) logo.classList.add('spl-idle');
+    }, 1500);
+  };
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      var logo = document.getElementById('spl-logo');
+      if(logo && !tapped) logo.classList.add('spl-idle');
+    }, 1500);
+  });
+})();
+</script>
+
+<div class="orbs" aria-hidden="true">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<div class="page">
+
+<header class="header">
+  <div class="brand">
+    <div class="brand-1"><span class="a">ALOHA</span><span class="b">ADMIN</span></div>
+    <div class="brand-2">
+      <span class="panel">Admin Panel</span>
+      <span class="online"><span class="dot"></span>Online</span>
+    </div>
+  </div>
+
+  <div class="sec-box">
+    <div class="title">Conexiune Securizată</div>
+    <div class="sec-dots">
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </div>
+  </div>
+
+  <button class="btn-c" id="btnAuth" onclick="onAuthClick()">Conectare</button>
+</header>
+
+<main class="wrap">
+
+  <div class="key-input-wrap" id="keyInputWrap">
+    <input id="apiKeyInput" class="key-input" type="password" placeholder="X-Api-Key..." autocomplete="off">
+  </div>
+
+  <div class="meta-bar">
+    <span class="dot"></span>
+    <span id="refreshInfo">— Introdu API key și apasă Conectare —</span>
+    <svg class="refresh-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" onclick="refresh()"><path d="M3 12 A9 9 0 0 1 18.4 5.6 L21 8 M21 4 V8 H17 M21 12 A9 9 0 0 1 5.6 18.4 L3 16 M3 20 V16 H7"/></svg>
+  </div>
+
+  <section class="card" id="cardStatus">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M7 11 L9 13 L11 9 L13 14 L15 11 L17 11"/><path d="M9 21 H15 M12 17 V21"/></svg></span>
+      <h2>Status Sistem</h2>
+      <span class="extra" id="sysStatusBadge">—</span>
+    </div>
+    <div class="status-grid" id="statusGrid">
+      <div class="status-cell">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/><path d="M12 9 V15 M9 12 H15"/></svg></div>
+        <div class="lbl">Node.js</div>
+        <div class="val" data-k="node">—</div>
+        <div class="sub">Versiune</div>
+      </div>
+      <div class="status-cell">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7 V12 L15.5 14"/></svg></div>
+        <div class="lbl">Uptime</div>
+        <div class="val" data-k="uptime">—</div>
+        <div class="sub">Online</div>
+      </div>
+      <div class="status-cell">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="12" height="12" rx="1.5"/><rect x="9" y="9" width="6" height="6"/><path d="M4 9 H6 M4 12 H6 M4 15 H6 M18 9 H20 M18 12 H20 M18 15 H20 M9 4 V6 M12 4 V6 M15 4 V6 M9 18 V20 M12 18 V20 M15 18 V20"/></svg></div>
+        <div class="lbl">Memorie Heap</div>
+        <div class="val" data-k="mem">—</div>
+        <div class="sub">Utilizat</div>
+      </div>
+      <div class="status-cell">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="8" ry="2.5"/><path d="M4 5 V19 C4 20.4 7.6 21.5 12 21.5 C16.4 21.5 20 20.4 20 19 V5"/><path d="M4 12 C4 13.4 7.6 14.5 12 14.5 C16.4 14.5 20 13.4 20 12"/></svg></div>
+        <div class="lbl">Baza de date</div>
+        <div class="val" data-k="db">—</div>
+        <div class="sub">Status</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="cardEnv">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 4 H17 M6 4 L13 12 L6 20 H17"/><path d="M19 4 L13 20"/></svg></span>
+      <h2>Variabile ENV</h2>
+    </div>
+    <div class="env-wrap">
+      <ul class="env-list" id="envList"><li class="empty">—</li></ul>
+    </div>
+  </section>
+
+  <section class="card" id="cardDB">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="5" rx="8" ry="2.5"/><path d="M4 5 V19 C4 20.4 7.6 21.5 12 21.5 C16.4 21.5 20 20.4 20 19 V5"/><path d="M4 12 C4 13.4 7.6 14.5 12 14.5 C16.4 14.5 20 13.4 20 12"/></svg></span>
+      <h2>Baza de Date</h2>
+    </div>
+    <div id="dbGrid">
+      <div class="empty">—</div>
+    </div>
+    <button class="db-foot" onclick="document.getElementById('cardCron')?.scrollIntoView({behavior:'smooth'})">Vezi toate tabelele ›</button>
+  </section>
+
+  <section class="card" id="cardAPI">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M13 2 L4 14 H11 L10 22 L20 10 H13 L13 2 Z"/></svg></span>
+      <h2>API Football Usage</h2>
+    </div>
+    <div class="api-wrap">
+      <div class="api-rows" id="apiRows"><div class="empty">—</div></div>
+      <div class="circ">
+        <svg width="140" height="140" viewBox="0 0 130 130">
+          <defs>
+            <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#22D3EE"/>
+              <stop offset="100%" stop-color="#0891B2"/>
+            </linearGradient>
+          </defs>
+          <circle class="circ-bg" cx="65" cy="65" r="56"/>
+          <circle class="circ-fg" id="circFg" cx="65" cy="65" r="56" stroke-dasharray="351.86" stroke-dashoffset="351.86"/>
+        </svg>
+        <div class="circ-txt"><div class="p"><span id="circPct">0</span><span class="u">%</span></div><div class="l">Utilizare</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="cardLive">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="18" r="1.5" fill="currentColor"/><path d="M8 14 C 9 13, 11 12, 12 12 C 13 12, 15 13, 16 14"/><path d="M5 11 C 7 9, 9 8, 12 8 C 15 8, 17 9, 19 11"/><path d="M2 8 C 5 5, 8 4, 12 4 C 16 4, 19 5, 22 8"/></svg></span>
+      <h2>Meciuri Live</h2>
+      <span class="live-counter"><span id="liveCount">0</span> LIVE</span>
+    </div>
+    <div class="sport-tabs">
+      <button class="sport-tab active" data-sport="football"><span class="em">⚽</span> Fotbal <span class="sb" id="cFotbal">0</span></button>
+      <button class="sport-tab" data-sport="hockey"><span class="em">🏒</span> Hochei <span class="sb">0</span></button>
+      <button class="sport-tab" data-sport="tennis"><span class="em">🎾</span> Tenis <span class="sb">0</span></button>
+    </div>
+    <div class="live-list" id="liveList"><div class="empty">—</div></div>
+  </section>
+
+  <section class="card" id="cardCron">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7 V12 L15 14"/></svg></span>
+      <h2>Cron Jobs</h2>
+    </div>
+    <div id="cronList"><div class="empty">—</div></div>
+  </section>
+
+  <section class="card" id="cardErrors">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3 L22 21 H2 Z"/><path d="M12 10 V14 M12 17 V18"/></svg></span>
+      <h2>Erori Recente</h2>
+      <span class="extra" id="errCount">0</span>
+      <select id="errDays" onchange="loadErrors()" style="background:rgba(255,255,255,.05);border:1px solid var(--bor);color:var(--tx);padding:5px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-left:auto;margin-right:6px">
+        <option value="1">1 zi</option>
+        <option value="7">7 zile</option>
+        <option value="14" selected>14 zile</option>
+        <option value="30">30 zile</option>
+        <option value="all">Toate</option>
+      </select>
+    </div>
+    <div id="errList"><div class="empty ok">—</div></div>
+    <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+      <button class="hc-btn" onclick="clearErrors(7)">🗑 Cur&#259;&#539;&#259; &gt;7 zile</button>
+      <button class="hc-btn" onclick="clearErrors(30)">🗑 Cur&#259;&#539;&#259; &gt;30 zile</button>
+      <button class="hc-btn" onclick="clearErrors('all')" style="border-color:#ef4444;color:#ef4444">⚠ Șterge TOATE</button>
+    </div>
+  </section>
+
+  <section class="card" id="cardBackfill">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7 V17 A2 2 0 0 0 6 19 H18 A2 2 0 0 0 20 17 V7"/><path d="M4 7 L12 3 L20 7"/><path d="M9 12 L12 15 L15 12 M12 15 V9"/></svg></span>
+      <h2>Backfill Date Istorice</h2>
+    </div>
+    <div id="bf-active" style="display:none">
+      <div style="display:flex;align-items:center;margin-bottom:10px"><span class="bf-dot"></span><span style="color:var(--red);font-size:11.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase">Activ — Colectez date...</span></div>
+      <div class="bf-label" id="bf-current-info">Sezon — · Ligă —</div>
+      <div class="bf-label">Progres: <span id="bf-pct">0</span>% (<span id="bf-done">0</span>/<span id="bf-total">0</span> perechi)</div>
+      <div class="bf-bar"><div class="bf-bar-fill" id="bf-fill" style="width:0%"></div></div>
+      <div class="bf-label">API azi: <span id="bf-api-used">0</span> / 150,000 — rămase: <span id="bf-api-rem">150,000</span></div>
+      <div class="bf-bar" style="height:4px;margin-bottom:0"><div class="bf-bar-fill api" id="bf-api-fill" style="width:0%"></div></div>
+    </div>
+    <div id="bf-stopped">
+      <div class="bf-label" id="bf-stopped-info">Nicio rulare anterioară</div>
+      <div class="bf-label" id="bf-stopped-api" style="display:none">API azi: <span id="bf-api-used2">0</span> / 150,000</div>
+    </div>
+    <div class="bf-buttons">
+      <button id="bf-start-btn" class="bf-start" onclick="startBF()">▶ Start</button>
+      <button id="bf-stop-btn" class="bf-stop" style="display:none" onclick="stopBF()">⏹ Stop</button>
+    </div>
+  </section>
+
+  <section class="card" id="cardHealth">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12 H7 L9 8 L13 16 L15 12 H21"/></svg></span>
+      <h2>Health Check</h2>
+      <button class="hc-btn" id="hc-btn" onclick="runHealthCheck()">Rulează Test</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu)">Verifică că toate sistemele funcționează</div>
+    <div id="health-results" style="display:none;margin-top:14px"></div>
+  </section>
+
+  <section class="card" id="cardWinRate">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></span>
+      <h2>Win Rate Patterns</h2>
+      <select id="wr-days" onchange="loadWinRatePatterns()" style="background:rgba(255,255,255,.05);border:1px solid var(--bor);color:var(--tx);padding:5px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-left:auto;margin-right:6px">
+        <option value="7">7 zile</option>
+        <option value="14">14 zile</option>
+        <option value="30" selected>30 zile</option>
+        <option value="60">60 zile</option>
+        <option value="90">90 zile</option>
+      </select>
+      <button class="hc-btn" id="wr-btn" onclick="loadWinRatePatterns()">Reîncarcă</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">Performanță reală pe dimensiuni multiple — din <code>prediction_log</code> tabel</div>
+    <div id="wr-results" style="margin-top:14px">
+      <div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">Apasă „Reîncarcă" pentru a afișa datele</div>
+    </div>
+  </section>
+
+  <section class="card" id="cardCalibration">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg></span>
+      <h2>Calibrare Probabilități</h2>
+      <button class="hc-btn" onclick="loadCalibration()" style="margin-left:auto">Reîncarcă</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">Tabele calibrare pre-meci (predictions) + LIVE (match_events). Generate săptămânal duminică 05:00 / 05:30.</div>
+    <div id="cal-results" style="margin-top:8px">
+      <div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">Apasă „Reîncarcă"</div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="hc-btn" onclick="triggerCalibration('recalibrate-tables')">▶ Recalibrează pre-meci</button>
+      <button class="hc-btn" onclick="triggerCalibration('calibrate-live')">▶ Recalibrează LIVE</button>
+    </div>
+  </section>
+
+  <section class="card" id="cardBets">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6M7 16h8"/></svg></span>
+      <h2>Statistici Bilete &amp; ROI</h2>
+      <button class="hc-btn" onclick="loadBetsAggregate()" style="margin-left:auto">Reîncarcă</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">Pariuri salvate de utilizator — ROI per piață / ligă / interval cotă.</div>
+    <div id="bets-results" style="margin-top:8px">
+      <div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">Apasă „Reîncarcă"</div>
+    </div>
+  </section>
+
+  <section class="card" id="cardScannerControl">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><polygon points="10,8 16,12 10,16"/></svg></span>
+      <h2>Control Scanner</h2>
+      <span id="scanner-state-badge" style="margin-left:auto;font-size:11px;font-weight:700;padding:4px 10px;border-radius:5px;background:rgba(34,197,94,.15);color:#22c55e">▶ Activ</span>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:10px">Pauza scanner pentru a conserva quota API in timpul calatoriilor sau backfill agresiv. La reluare, continua de unde a ramas.</div>
+    <button id="scanner-toggle-btn" onclick="toggleScanner()" class="hc-btn" style="width:100%;padding:12px;font-size:13px">⏸ Pauza Scanner</button>
+  </section>
+
+  <section class="card" id="cardApiTrend">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></span>
+      <h2>Trend Consum API</h2>
+      <select id="api-trend-days" onchange="loadApiTrend()" style="background:rgba(255,255,255,.05);border:1px solid var(--bor);color:var(--tx);padding:5px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-left:auto;margin-right:6px">
+        <option value="7" selected>7 zile</option>
+        <option value="14">14 zile</option>
+        <option value="30">30 zile</option>
+        <option value="60">60 zile</option>
+      </select>
+      <button class="hc-btn" onclick="loadApiTrend()">Reîncarcă</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">Activitate cron-uri pe zi (din cron_logs). Util pentru a detecta spike-uri sau zile cu probleme.</div>
+    <div id="api-trend-results" style="margin-top:8px">
+      <div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">Apasă „Reîncarcă"</div>
+    </div>
+  </section>
+
+  <section class="card" id="cardDbCleanup">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></span>
+      <h2>Cleanup DB</h2>
+      <button class="hc-btn" onclick="loadDbCleanupPreview()" style="margin-left:auto">Reîncarcă</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:10px">Sterge date vechi din tabele non-critice pentru a elibera spatiu. Minim 7 zile (siguranta).</div>
+    <div id="db-cleanup-results" style="margin-top:8px">
+      <div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">Apasă „Reîncarcă" pentru preview</div>
+    </div>
+  </section>
+
+  <section class="card" id="cardLeagues">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>
+      <h2>Inteligență Ligi (Insights)</h2>
+      <button class="hc-btn" onclick="loadLeaguesInsights()" style="margin-left:auto">Reîncarcă</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">Win Rate per ligă pe predicții Over 1.5 (≥70%, 180 zile). Baseline așteptat: 70%.</div>
+    <div id="leagues-results" style="margin-top:8px">
+      <div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">Apasă „Reîncarcă"</div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="bnav">
+  <a href="#" class="active" onclick="scrollTo(0,0);return false">
+    <span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+    Dashboard
+  </a>
+  <a href="/">
+    <span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg></span>
+    Matches
+  </a>
+  <a href="#cardCron" onclick="document.getElementById('cardCron')?.scrollIntoView({behavior:'smooth'});return false">
+    <span class="ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="2.5"/><path d="M4 5 V19 C4 20.4 7.6 21.5 12 21.5 C16.4 21.5 20 20.4 20 19 V5"/><path d="M4 12 C4 13.4 7.6 14.5 12 14.5 C16.4 14.5 20 13.4 20 12"/></svg></span>
+    Database
+  </a>
+  <a href="#cardAPI" onclick="document.getElementById('cardAPI')?.scrollIntoView({behavior:'smooth'});return false">
+    <span class="ic"><svg viewBox="0 0 24 24"><path d="M9 7 L4 12 L9 17 M15 7 L20 12 L15 17 M13 5 L11 19"/></svg></span>
+    API
+  </a>
+  <a href="#cardHealth" onclick="document.getElementById('cardHealth')?.scrollIntoView({behavior:'smooth'});return false">
+    <span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2 V5 M12 19 V22 M2 12 H5 M19 12 H22 M4.9 4.9 L7 7 M17 17 L19.1 19.1 M4.9 19.1 L7 17 M17 7 L19.1 4.9"/></svg></span>
+    Settings
+  </a>
+</nav>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+const BASE = '';
+let _key = localStorage.getItem('aloha_admin_key') || '';
+let _timer = null;
+let _bfTimer = null;
+
+if (_key) {
+  document.getElementById('apiKeyInput').value = _key;
+  document.getElementById('keyInputWrap').style.display = 'none';
+  init();
+} else {
+  // Setam butonul la 'Conectare' chiar si fara key
+  setTimeout(function(){ if(typeof updateAuthBtn==='function') updateAuthBtn(); }, 0);
+}
+
+function saveKeyAndRefresh() {
+  _key = document.getElementById('apiKeyInput').value.trim();
+  if (_key) localStorage.setItem('aloha_admin_key', _key);
+  document.getElementById('keyInputWrap').style.display = _key ? 'none' : 'block';
+  updateAuthBtn();
+  init();
+}
+
+function logout() {
+  if (!confirm('Te deconectezi din admin?')) return;
+  localStorage.removeItem('aloha_admin_key');
+  _key = '';
+  if (_timer) { clearInterval(_timer); _timer = null; }
+  if (_bfTimer) { clearInterval(_bfTimer); _bfTimer = null; }
+  document.getElementById('keyInputWrap').style.display = 'block';
+  document.getElementById('apiKeyInput').value = '';
+  document.getElementById('refreshInfo').textContent = '— Introdu API key și apasă Conectare —';
+  updateAuthBtn();
+  if (typeof showSplash === 'function') showSplash();
+  toast('Deconectat', '#f59e0b');
+}
+
+function onAuthClick() {
+  if (_key) logout();
+  else saveKeyAndRefresh();
+}
+
+function updateAuthBtn() {
+  var btn = document.getElementById('btnAuth');
+  if (!btn) return;
+  btn.textContent = _key ? 'Deconectare' : 'Conectare';
+}
+
+function toast(msg, color) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  t.style.borderColor = color || 'var(--ac)';
+  clearTimeout(t._t);
+  t._t = setTimeout(function(){ t.style.display='none'; }, 3000);
+}
+
+async function apiFetch(path) {
+  const r = await fetch(BASE + path, { headers: { 'X-Api-Key': _key } });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  var dt = new Date(d);
+  return dt.toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit'}) + ' ' +
+    dt.toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'});
+}
+function fmtUptime(s) {
+  var h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+  return h + 'h ' + m + 'm';
+}
+function fmtNum(n) { return Number(n||0).toLocaleString('ro-RO'); }
+
+async function loadStatus() {
+  try {
+    var d = await apiFetch('/api/admin/status');
+    document.querySelector('[data-k="node"]').textContent = d.node || '—';
+    document.querySelector('[data-k="uptime"]').textContent = fmtUptime(d.uptime_s || 0);
+    // Memory cu countup
+    var memEl = document.querySelector('[data-k="mem"]');
+    var prevMem = window._prevMem || 0;
+    var newMem = d.memory_mb || 0;
+    animateNumber(memEl, prevMem, newMem, 1200, function(n){return Math.round(n) + ' MB';});
+    window._prevMem = newMem;
+    document.querySelector('[data-k="db"]').textContent = d.db || '—';
+    var bg = document.getElementById('sysStatusBadge');
+    if (bg) bg.textContent = d.db === 'OK' ? 'ONLINE' : 'OFFLINE';
+
+    var envList = document.getElementById('envList');
+    if (d.env_keys && d.env_keys.length) {
+      envList.innerHTML = d.env_keys.map(function(k){
+        return '<li class="env-row"><span class="env-key">' + k.key + '</span>'
+          + '<span class="env-badge ' + (k.set?'ok':'no') + '">' + (k.set?'✓ SET':'✗ LIPSĂ') + '</span></li>';
+      }).join('');
+    }
+  } catch(e) {
+    document.querySelector('[data-k="db"]').textContent = 'ERR';
+  }
+}
+
+const DB_ICONS = {
+  fixtures_history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="16" rx="1.5"/><path d="M3 9 H21 M8 3 V7 M16 3 V7"/></svg>',
+  league_stats: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 4 H18 V8 A6 6 0 0 1 6 8 Z"/><path d="M4 4 H6 V8 A2 2 0 0 1 4 8 Z M18 4 H20 V8 A2 2 0 0 1 18 8 Z"/><path d="M9 14 V18 H15 V14"/><rect x="7" y="18" width="10" height="2"/></svg>',
+  referee_stats: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12 L8 8 V16 Z"/><circle cx="14" cy="12" r="5"/><circle cx="14" cy="12" r="2"/></svg>',
+  match_stats: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M12 4 V20 M3 9 H7 V15 H3 M17 9 H21 V15 H17"/><circle cx="12" cy="12" r="2.5"/></svg>',
+  h2h: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="9" r="3"/><circle cx="16" cy="10" r="2.5"/><path d="M3 19 C3 16 5.5 14 9 14 C12.5 14 15 16 15 19"/><path d="M13 18 C13 16 15 14.5 17 14.5 C18.5 14.5 20 15 21 16"/></svg>',
+  standings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="7" r="3"/><path d="M12 10 V14 M9 17 L12 14 L15 17 M7 20 H17"/></svg>',
+  predictions: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>',
+  player_stats: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20 C4 16 8 14 12 14 C16 14 20 16 20 20"/></svg>',
+  live_acum: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="18" r="1.5" fill="currentColor"/><path d="M8 14 C9 13 11 12 12 12 C13 12 15 13 16 14"/><path d="M5 11 C7 9 9 8 12 8 C15 8 17 9 19 11"/></svg>',
+};
+const DB_ROW1 = [
+  ['fixtures_history','fixtures_history'],
+  ['league_stats','league_stats'],
+  ['referee_stats','referee_stats'],
+  ['match_stats','match_stats'],
+  ['h2h','h2h'],
+];
+const DB_ROW2 = [
+  ['standings','standings'],
+  ['predictions','predictions'],
+  ['player_stats','player_stats'],
+  ['live_snapshots','live_acum'],
+];
+function renderDBRow(items, t){
+  return items.map(function(p){
+    var key = p[0], label = p[1];
+    var ic = DB_ICONS[label] || '';
+    var prev = (window._dbPrev||{})[key] || 0;
+    return '<div class="db-cell"><div class="ic">' + ic + '</div>'
+      + '<div class="val" data-target="' + (t[key]||0) + '" data-prev="' + prev + '">' + fmtNum(prev) + '</div>'
+      + '<div class="lbl">' + label + '</div></div>';
+  }).join('');
+}
+async function loadDB() {
+  try {
+    var d = await apiFetch('/api/admin/db-stats');
+    var t = d.tables || {};
+    var grid = document.getElementById('dbGrid');
+    grid.innerHTML =
+      '<div class="db-grid-row r5">' + renderDBRow(DB_ROW1, t) + '</div>' +
+      '<div class="db-grid-row r4">' + renderDBRow(DB_ROW2, t) + '</div>';
+    // Animatie countup pe toate celulele DB
+    setTimeout(function(){
+      grid.querySelectorAll('.db-cell .val').forEach(function(el, idx){
+        var to = parseInt(el.getAttribute('data-target'), 10) || 0;
+        var from = parseInt(el.getAttribute('data-prev'), 10) || 0;
+        // Stagger: fiecare celula incepe cu 50ms delay
+        setTimeout(function(){
+          animateNumber(el, from, to, 1400, function(n){return fmtNum(Math.round(n));});
+          // Pulse glow la valoare diferita
+          if (to !== from) el.classList.add('value-pulse');
+        }, idx * 50);
+      });
+    }, 30);
+    // Salveaza valorile pentru urmatorul refresh
+    window._dbPrev = {};
+    Object.keys(t).forEach(function(k){window._dbPrev[k]=t[k];});
+  } catch(e) {
+    document.getElementById('dbGrid').innerHTML = '<div class="empty err">' + e.message + '</div>';
+  }
+}
+
+// Countup animat pentru numere
+function animateNumber(el, from, to, duration, formatter) {
+  if (!el) return;
+  if (!duration) duration = 1200;
+  if (!formatter) formatter = function(n){return Math.round(n);};
+  var start = null;
+  function step(ts) {
+    if (!start) start = ts;
+    var t = Math.min((ts - start) / duration, 1);
+    // ease-out cubic
+    var eased = 1 - Math.pow(1 - t, 3);
+    var val = from + (to - from) * eased;
+    el.textContent = formatter(val);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+async function loadAPI() {
+  try {
+    var d = await apiFetch('/api/admin/api-usage');
+    var pct = Math.round(d.pct_used || 0);
+    var rows = document.getElementById('apiRows');
+    // Salveaza valorile anterioare pentru countup (default 0 la prima incarcare)
+    var prevUsed = window._apiPrev?.used || 0;
+    var prevRem = window._apiPrev?.rem || 0;
+    var prevPct = window._apiPrev?.pct || 0;
+    window._apiPrev = {used: d.requests_today, rem: d.remaining, pct: pct};
+
+    rows.innerHTML = ''
+      + '<div class="api-row"><span class="k">Plan</span><span class="v ac">' + (d.plan||'?') + '</span></div>'
+      + '<div class="api-row"><span class="k">Expiră</span><span class="v ac">' + (d.plan_end||'?') + '</span></div>'
+      + '<div class="api-row"><span class="k">Utilizate azi</span><span class="v" id="apiUsed">' + fmtNum(prevUsed) + '</span></div>'
+      + '<div class="api-row"><span class="k">Rămase</span><span class="v"><span id="apiRem">' + fmtNum(prevRem) + '</span> / ' + fmtNum(d.limit_day) + '</span></div>'
+      + '<div class="api-bar"><div class="api-bar-fill" style="width:' + prevPct + '%"></div></div>'
+      + '<div class="api-bar-info"><span id="apiPctBar">' + prevPct + '</span>% utilizat ›</div>';
+
+    // Animatii countup (cu delay mic ca DOM-ul sa fie attached)
+    setTimeout(function(){
+      animateNumber(document.getElementById('apiUsed'), prevUsed, d.requests_today, 1200, function(n){return fmtNum(Math.round(n));});
+      animateNumber(document.getElementById('apiRem'), prevRem, d.remaining, 1200, function(n){return fmtNum(Math.round(n));});
+      animateNumber(document.getElementById('apiPctBar'), prevPct, pct, 1400);
+      // Bara liniara se umple cu transition CSS
+      var bar = rows.querySelector('.api-bar-fill');
+      if (bar) requestAnimationFrame(function(){bar.style.width = pct + '%';});
+    }, 50);
+
+    // Cerc - animatie arc
+    var circ = 351.86;
+    var off = circ * (1 - pct/100);
+    document.getElementById('circFg').setAttribute('stroke-dashoffset', off);
+    // Countup pct in centru cerc
+    var pctEl = document.getElementById('circPct');
+    if (pctEl) animateNumber(pctEl, prevPct, pct, 1500);
+  } catch(e) {
+    document.getElementById('apiRows').innerHTML = '<div class="empty err">' + e.message + '</div>';
+  }
+}
+
+async function loadLive() {
+  try {
+    var d = await apiFetch('/api/admin/live-matches');
+    var newCount = d.count || 0;
+    var prevCount = window._prevLiveCount || 0;
+    animateNumber(document.getElementById('liveCount'), prevCount, newCount, 1000);
+    animateNumber(document.getElementById('cFotbal'), prevCount, newCount, 1000);
+    window._prevLiveCount = newCount;
+    var list = document.getElementById('liveList');
+    if (!d.matches || !d.matches.length) {
+      list.innerHTML = '<div class="empty">Niciun meci live acum</div>';
+    } else {
+      list.innerHTML = d.matches.slice(0,10).map(function(m){
+        return '<div class="match-row">'
+          + '<span class="match-min">' + (m.minute||'?') + '\'</span>'
+          + '<span class="match-teams">' + (m.home_team||'?') + ' vs ' + (m.away_team||'?') + '</span>'
+          + '<span class="match-score">' + (m.home_goals||0) + '-' + (m.away_goals||0) + '</span>'
+          + '<span class="match-st">' + (m.status_short||'LIVE') + '</span>'
+          + '</div>';
+      }).join('');
+    }
+  } catch(e) {
+    document.getElementById('liveList').innerHTML = '<div class="empty err">' + e.message + '</div>';
+  }
+}
+
+async function triggerCron(job) {
+  try {
+    var r = await fetch(BASE + '/api/admin/trigger-cron', { method:'POST', headers:{'X-Api-Key':_key,'Content-Type':'application/json'}, body: JSON.stringify({job}) });
+    var d = await r.json();
+    if (d.ok) toast('✓ ' + job + ' declanșat'); else toast('✗ ' + (d.error||'Eroare'), 'var(--red)');
+    setTimeout(loadCron, 2000);
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+}
+function statusBadge(s) {
+  if (!s || s === 'never') return '<span class="badge badge-gr">niciodată</span>';
+  if (s === 'success' || s === 'ok') return '<span class="badge badge-ok">✓ OK</span>';
+  if (s === 'error') return '<span class="badge badge-er">✗ Eroare</span>';
+  return '<span class="badge badge-yl">' + s + '</span>';
+}
+async function loadCron() {
+  try {
+    var d = await apiFetch('/api/admin/cron-status');
+    var html = '';
+    (d.jobs||[]).forEach(function(j){
+      html += '<div class="cron-row">'
+        + '<span class="cron-name">' + j.job + '</span>'
+        + '<span class="cron-time">' + fmtDate(j.last_run) + '</span>'
+        + statusBadge(j.status)
+        + '<button class="btn-mini" onclick="triggerCron(\'' + j.job + '\')">▶ RUN</button>'
+        + '</div>';
+      if (j.error_msg) html += '<div class="cron-err">' + j.error_msg + '</div>';
+    });
+    document.getElementById('cronList').innerHTML = html || '<div class="empty">—</div>';
+  } catch(e) {
+    document.getElementById('cronList').innerHTML = '<div class="empty err">' + e.message + '</div>';
+  }
+}
+
+async function loadErrors() {
+  try {
+    var sel = document.getElementById('errDays');
+    var val = sel ? sel.value : '14';
+    var qs = val === 'all' ? '?all=1' : '?days=' + val;
+    var d = await apiFetch('/api/admin/errors' + qs);
+    var ec = document.getElementById('errCount');
+    ec.textContent = (d.count || 0) + (d.total_all_time && d.total_all_time !== d.count ? ' / ' + d.total_all_time : '');
+    var list = document.getElementById('errList');
+    if (!d.errors || !d.errors.length) {
+      list.innerHTML = '<div class="empty ok">✓ Nicio eroare în acest interval</div>';
+    } else {
+      list.innerHTML = d.errors.slice(0,30).map(function(e){
+        return '<div class="err-row">'
+          + '<div class="err-job">' + (e.job_name||'unknown') + '</div>'
+          + '<div class="err-time">' + fmtDate(e.ran_at) + '</div>'
+          + '<div class="err-msg">' + (e.error_msg||'status: ' + e.status) + '</div>'
+          + '</div>';
+      }).join('');
+    }
+  } catch(e) {
+    document.getElementById('errList').innerHTML = '<div class="empty err">' + e.message + '</div>';
+  }
+}
+
+async function clearErrors(scope) {
+  var confirmMsg;
+  if (scope === 'all')          confirmMsg = '⚠ Șterge TOATE erorile? Aceast&#259; ac&#539;iune e ireversibil&#259;.';
+  else if (scope === 7)         confirmMsg = 'Șterge erorile mai vechi de 7 zile?';
+  else if (scope === 30)        confirmMsg = 'Șterge erorile mai vechi de 30 zile?';
+  else                          confirmMsg = 'Șterge erori?';
+  if (!confirm(confirmMsg)) return;
+  try {
+    var qs = scope === 'all' ? '?all=1' : '?days=' + scope;
+    var r = await fetch(BASE + '/api/admin/clear-errors' + qs, {
+      method: 'DELETE',
+      headers: { 'X-Api-Key': _key },
+    });
+    var d = await r.json();
+    if (d.ok) {
+      toast('🗑 ' + d.deleted + ' erori șterse', '#22c55e');
+      loadErrors();
+    } else {
+      toast('✗ ' + (d.error || 'eroare'), '#ef4444');
+    }
+  } catch(e) {
+    toast('✗ ' + e.message, '#ef4444');
+  }
+}
+
+async function startBF() {
+  try {
+    var r = await fetch('/api/backfill/start', { method:'POST', headers:{'X-Api-Key':_key} });
+    var d = await r.json();
+    if (d.error) { toast('✗ ' + d.error, 'var(--red)'); return; }
+    toast('▶ Backfill pornit');
+    refreshBFStatus();
+    if (_bfTimer) clearInterval(_bfTimer);
+    _bfTimer = setInterval(refreshBFStatus, 5000);
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+}
+async function stopBF() {
+  try {
+    await fetch('/api/backfill/stop', { method:'POST', headers:{'X-Api-Key':_key} });
+    toast('⏹ Backfill oprit');
+    refreshBFStatus();
+    if (_bfTimer) { clearInterval(_bfTimer); _bfTimer = null; }
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+}
+async function refreshBFStatus() {
+  try {
+    var r = await fetch('/api/backfill/status', { headers:{'X-Api-Key':_key} });
+    var d = await r.json();
+    var startBtn = document.getElementById('bf-start-btn');
+    var stopBtn  = document.getElementById('bf-stop-btn');
+    var activeDiv  = document.getElementById('bf-active');
+    var stoppedDiv = document.getElementById('bf-stopped');
+    if (!startBtn) return;
+    if (d.running) {
+      startBtn.style.display = 'none'; stopBtn.style.display = 'block';
+      activeDiv.style.display = 'block'; stoppedDiv.style.display = 'none';
+      var info = '';
+      if (d.currentSeason)  info += 'Sezon ' + d.currentSeason;
+      if (d.currentLeague)  info += ' · Ligă ' + d.currentLeague.id + (d.currentLeague.name ? ' (' + d.currentLeague.name + ')' : '');
+      if (d.totalFixtures)  info += ' · Fixture ' + d.currentFixtureIndex + '/' + d.totalFixtures;
+      document.getElementById('bf-current-info').textContent = info || 'Se procesează...';
+      document.getElementById('bf-pct').textContent  = d.progressPct || 0;
+      document.getElementById('bf-done').textContent = (d.completedLeagues || 0).toLocaleString();
+      document.getElementById('bf-total').textContent = (d.totalLeagues || 0).toLocaleString();
+      document.getElementById('bf-fill').style.width = (d.progressPct || 0) + '%';
+      var used = d.apiUsedToday || 0; var rem = d.apiRemainingToday || 150000;
+      document.getElementById('bf-api-used').textContent = used.toLocaleString();
+      document.getElementById('bf-api-rem').textContent  = rem.toLocaleString();
+      document.getElementById('bf-api-fill').style.width = Math.min(100, used/1500) + '%';
+      if (!_bfTimer) _bfTimer = setInterval(refreshBFStatus, 5000);
+    } else {
+      startBtn.style.display = 'block'; stopBtn.style.display = 'none';
+      activeDiv.style.display = 'none'; stoppedDiv.style.display = 'block';
+      var stInfo = document.getElementById('bf-stopped-info');
+      var stApi  = document.getElementById('bf-stopped-api');
+      if (d.completedLeagues > 0) {
+        stInfo.textContent = 'Progres: ' + d.progressPct + '% (' + d.completedLeagues.toLocaleString() + '/' + d.totalLeagues.toLocaleString() + ' perechi) · ETA: ' + d.estimatedTimeRemaining;
+        stApi.style.display = 'block';
+        document.getElementById('bf-api-used2').textContent = (d.apiUsedToday || 0).toLocaleString();
+      } else {
+        stInfo.textContent = 'Nicio rulare anterioară'; stApi.style.display = 'none';
+      }
+      if (_bfTimer) { clearInterval(_bfTimer); _bfTimer = null; }
+    }
+  } catch(e) { console.error('refreshBFStatus:', e.message); }
+}
+
+async function runHealthCheck() {
+  var el = document.getElementById('health-results');
+  var btn = document.getElementById('hc-btn');
+  el.style.display = 'block';
+  el.innerHTML = '<div class="empty">⏳ Rulează teste...</div>';
+  btn.disabled = true; btn.textContent = '⏳...';
+  try {
+    var r = await fetch('/api/health-check', { headers:{'X-Api-Key':_key} });
+    var d = await r.json();
+    var oc = d.overall.includes('✅') ? 'var(--ac)' : d.overall.includes('⚠️') ? 'var(--yellow)' : 'var(--red)';
+    var html = '<div style="font-weight:600;color:' + oc + ';margin-bottom:10px;font-size:13px">' + d.overall + '</div>';
+    Object.entries(d.tests).forEach(function(entry) {
+      var test = entry[1];
+      var c = test.status.startsWith('✅') ? 'var(--ac)' : test.status.startsWith('⚠️') ? 'var(--yellow)' : 'var(--red)';
+      html += '<div class="hc-test"><span class="m">' + test.message + '</span><span class="s" style="color:' + c + '">' + test.status + '</span></div>';
+    });
+    html += '<div style="margin-top:10px;font-size:11px;color:var(--mu)">✅ ' + d.summary.passed + ' trecut · ⚠️ ' + d.summary.warnings + ' avertismente · ❌ ' + d.summary.failed + ' eșuat</div>';
+    if (d.summary.critical_issues && d.summary.critical_issues.length) {
+      html += '<div style="margin-top:4px;font-size:11px;color:var(--red)">Critic: ' + d.summary.critical_issues.join(', ') + '</div>';
+    }
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div class="empty err">❌ ' + e.message + '</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = 'RULEAZĂ TEST';
+  }
+}
+
+document.querySelectorAll('.sport-tab').forEach(function(t){
+  t.addEventListener('click', function(){
+    document.querySelectorAll('.sport-tab').forEach(function(x){ x.classList.remove('active'); });
+    t.classList.add('active');
+    var sp = t.dataset.sport;
+    var list = document.getElementById('liveList');
+    if (sp !== 'football') list.innerHTML = '<div class="empty">Niciun meci ' + sp + ' (date doar pentru fotbal)</div>';
+    else loadLive();
+  });
+});
+
+async function refresh() {
+  document.getElementById('refreshInfo').textContent = 'Actualizare...';
+  await Promise.allSettled([
+    loadStatus(), loadDB(), loadAPI(),
+    loadLive(), loadCron(), loadErrors(),
+    refreshBFStatus(), loadScannerState(),
+  ]);
+  var now = new Date().toLocaleTimeString('ro-RO');
+  document.getElementById('refreshInfo').textContent = '• Ultima actualizare: ' + now + ' (auto-refresh 30s)';
+}
+
+function init() {
+  if (_timer) clearInterval(_timer);
+  updateAuthBtn();
+  initCollapsibles();
+  refresh();
+  _timer = setInterval(refresh, 30000);
+}
+
+// Adauga chevron pe fiecare card si gestioneaza collapse/expand cu persistenta
+function initCollapsibles() {
+  if (window._collapsiblesInit) return;
+  window._collapsiblesInit = true;
+  var cards = document.querySelectorAll('.card');
+  cards.forEach(function(card){
+    var id = card.id || '';
+    if (!id) return;
+    var header = card.querySelector('.card-h');
+    if (!header || header.querySelector('.card-chev')) return;
+    // Buton chevron
+    var chev = document.createElement('button');
+    chev.className = 'card-chev';
+    chev.setAttribute('aria-label', 'Toggle card');
+    chev.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+    chev.onclick = function(e){
+      e.stopPropagation();
+      var isCollapsed = card.classList.toggle('collapsed');
+      localStorage.setItem('cardCollapse_' + id, isCollapsed ? '1' : '0');
+    };
+    header.appendChild(chev);
+    // Restore from localStorage — DEFAULT colapsat
+    var saved = localStorage.getItem('cardCollapse_' + id);
+    if (saved === '0') {
+      // User a expandat manual — pastreaza
+      card.classList.remove('collapsed');
+    } else {
+      // Default sau salvat '1' — colapsat
+      card.classList.add('collapsed');
+    }
+  });
+}
+
+// ── Win Rate Patterns ──────────────────────────────────────────────────
+async function loadWinRatePatterns(){
+  var btn = document.getElementById('wr-btn');
+  var out = document.getElementById('wr-results');
+  if (btn) btn.disabled = true;
+  out.innerHTML = '<div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">⏳ Se încarcă…</div>';
+  try {
+    var days = document.getElementById('wr-days').value;
+    var d    = await apiFetch('/api/admin/win-rate-patterns?days=' + days + '&minSamples=5');
+    if (!d.ok) { out.innerHTML = '<div style="color:#ef4444;padding:12px">Eroare: ' + (d.error||'unknown') + '</div>'; return; }
+    out.innerHTML = renderWinRatePatterns(d);
+  } catch (e) {
+    out.innerHTML = '<div style="color:#ef4444;padding:12px">Eroare fetch: ' + e.message + '</div>';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function renderWinRatePatterns(d){
+  var o = d.overall || {};
+  var wrColor = function(wr){
+    if (wr === null || typeof wr !== 'number') return 'var(--mu)';
+    if (wr >= 70) return '#22c55e';
+    if (wr >= 55) return '#f59e0b';
+    return '#ef4444';
+  };
+  var sampleFlag = function(n){
+    if (n < 10)  return '<span style="font-size:9px;color:#ef4444">⚠ mic</span>';
+    if (n < 30)  return '<span style="font-size:9px;color:#f59e0b">⚡ mediu</span>';
+    return '<span style="font-size:9px;color:#22c55e">✓ solid</span>';
+  };
+  var renderBucketRow = function(label, n, wr, wins){
+    var barW = wr === null ? 0 : Math.max(2, Math.min(100, wr));
+    var clr = wrColor(wr);
+    return '<div style="display:grid;grid-template-columns:80px 1fr 70px 50px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px">'
+      + '<div style="font-weight:600">' + label + '</div>'
+      + '<div style="background:rgba(255,255,255,.05);border-radius:4px;height:8px;overflow:hidden"><div style="width:' + barW + '%;height:100%;background:' + clr + '"></div></div>'
+      + '<div style="font-weight:700;color:' + clr + ';text-align:right">' + (wr === null ? '—' : wr.toFixed(1) + '%') + '</div>'
+      + '<div style="font-size:10px;color:var(--mu);text-align:right">' + wins + '/' + n + ' ' + sampleFlag(n) + '</div>'
+      + '</div>';
+  };
+
+  var h = '';
+  // Overall
+  h += '<div style="background:rgba(255,255,255,.03);border-radius:8px;padding:12px;margin-bottom:14px">';
+  h += '<div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Overall ' + d.meta.days + ' zile · result_over15 (Over 1.5 hit)</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center">';
+  h += '<div><div style="font-size:18px;font-weight:800;color:var(--tx)">' + o.total + '</div><div style="font-size:9px;color:var(--mu);text-transform:uppercase">Total alerte</div></div>';
+  h += '<div><div style="font-size:18px;font-weight:800;color:#22c55e">' + o.wins + '</div><div style="font-size:9px;color:var(--mu);text-transform:uppercase">Wins</div></div>';
+  h += '<div><div style="font-size:18px;font-weight:800;color:#ef4444">' + o.losses + '</div><div style="font-size:9px;color:var(--mu);text-transform:uppercase">Losses</div></div>';
+  h += '<div><div style="font-size:18px;font-weight:800;color:#f59e0b">' + o.pending + '</div><div style="font-size:9px;color:var(--mu);text-transform:uppercase">Pending</div></div>';
+  h += '<div><div style="font-size:22px;font-weight:800;color:' + wrColor(o.winRate) + '">' + (o.winRate === null ? '—' : o.winRate.toFixed(1) + '%') + '</div><div style="font-size:9px;color:var(--mu);text-transform:uppercase">Win Rate</div></div>';
+  h += '</div></div>';
+
+  // Per bucket over15_prob (predictia modelului) — calibrare empirica
+  if (d.byNgpBucket && d.byNgpBucket.length){
+    h += '<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📊 Calibrare Over 1.5 prediction</div>';
+    d.byNgpBucket.forEach(function(b){ h += renderBucketRow(b.range + '%', b.n, b.winRate, b.wins); });
+    h += '</div>';
+  }
+  // Per confidence bucket
+  if (d.byScoreState && d.byScoreState.length){
+    h += '<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🎯 Per confidence score</div>';
+    d.byScoreState.forEach(function(b){ h += renderBucketRow(b.state.replace('confidence ', ''), b.n, b.winRate, b.wins); });
+    h += '</div>';
+  }
+  // Per league
+  if (d.byLeague && d.byLeague.length){
+    h += '<div><div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🌍 Top ligi (sorted by win rate)</div>';
+    d.byLeague.slice(0, 15).forEach(function(b){ h += renderBucketRow(b.league.substring(0, 20), b.n, b.winRate, b.wins); });
+    h += '</div>';
+  }
+
+  if (!o.total){
+    h += '<div style="color:#f59e0b;padding:12px;background:rgba(245,158,11,.05);border-left:3px solid #f59e0b;border-radius:4px;font-size:12px">⚠ Nicio alertă în această perioadă. Mărește intervalul de zile sau alege alt modul.</div>';
+  }
+
+  h += '<div style="font-size:10px;color:var(--mu);margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)">Snapshot la ' + new Date(d.meta.asOf).toLocaleString('ro-RO') + '</div>';
+  return h;
+}
+
+// ──────────────────────────────────────────────────────────────
+// CALIBRARE (pre-meci + LIVE)
+async function loadCalibration() {
+  var el = document.getElementById('cal-results');
+  el.innerHTML = '<div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">⏳ Încarcă...</div>';
+  try {
+    var d = await apiFetch('/api/admin/calibration');
+    if (!d.ok) { el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + (d.error || 'unknown') + '</div>'; return; }
+    var brierColor = function(b) {
+      if (b === null) return 'var(--mu)';
+      if (b < 0.15) return '#22c55e';
+      if (b < 0.22) return '#f59e0b';
+      return '#ef4444';
+    };
+    var h = '';
+    // PRE-MECI
+    h += '<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:6px">📊 PRE-MECI calibration_tables</div>';
+    if (!d.pre.length) {
+      h += '<div style="color:var(--mu);font-size:11px;padding:8px">Tabela goală — rulează cron-ul de recalibrare.</div>';
+    } else {
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:14px">';
+      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:6px">Modul</th><th style="padding:6px;text-align:right">n</th><th style="padding:6px;text-align:right">Brier</th><th style="padding:6px;text-align:right">Buckets</th><th style="padding:6px;text-align:right">Updated</th></tr></thead><tbody>';
+      d.pre.forEach(function(r) {
+        var clr = brierColor(r.brier);
+        var bn = Array.isArray(r.buckets) ? r.buckets.length : 0;
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:6px;font-family:monospace">' + r.module + '</td>';
+        h += '<td style="padding:6px;text-align:right">' + r.sample_size.toLocaleString() + '</td>';
+        h += '<td style="padding:6px;text-align:right;color:' + clr + ';font-weight:700">' + (r.brier !== null ? r.brier.toFixed(3) : '—') + '</td>';
+        h += '<td style="padding:6px;text-align:right">' + bn + '</td>';
+        h += '<td style="padding:6px;text-align:right;font-size:10px;color:var(--mu)">' + new Date(r.updated).toLocaleDateString('ro-RO') + '</td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+    // LIVE
+    h += '<div style="font-weight:700;font-size:13px;color:#6366f1;margin:14px 0 6px">🎯 LIVE calibration_live</div>';
+    if (!d.live.length) {
+      h += '<div style="color:var(--mu);font-size:11px;padding:8px">Tabela goală — rulează cron-ul de calibrare LIVE.</div>';
+    } else {
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px">';
+      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:6px">Market</th><th style="padding:6px;text-align:right">Buckets</th><th style="padding:6px;text-align:right">Samples</th><th style="padding:6px;text-align:right">Updated</th></tr></thead><tbody>';
+      d.live.forEach(function(r) {
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:6px;font-family:monospace">' + r.market + '</td>';
+        h += '<td style="padding:6px;text-align:right">' + r.buckets + '</td>';
+        h += '<td style="padding:6px;text-align:right">' + r.samples.toLocaleString() + '</td>';
+        h += '<td style="padding:6px;text-align:right;font-size:10px;color:var(--mu)">' + new Date(r.updated).toLocaleDateString('ro-RO') + '</td></tr>';
+      });
+      h += '</tbody></table>';
+      h += '<div style="margin-top:8px;font-size:10px;color:var(--mu)">Total bucket-uri LIVE: ' + d.live_total + ' (max teoretic 6×7×3 = 126)</div>';
+    }
+    h += '<div style="margin-top:10px;font-size:10px;color:var(--mu);padding:8px;background:rgba(34,197,94,.05);border-left:2px solid #22c55e;border-radius:4px;line-height:1.5">💡 Brier scor: <b style="color:#22c55e">&lt;0.15 excelent</b>, <b style="color:#f59e0b">0.15-0.22 ok</b>, <b style="color:#ef4444">&gt;0.22 slab</b>. Cu mai multe date, scorul scade automat.</div>';
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare fetch: ' + e.message + '</div>';
+  }
+}
+
+async function triggerCalibration(jobName) {
+  if (!confirm('Rulez „' + jobName + '"? Poate dura 30-90 secunde.')) return;
+  try {
+    var r = await fetch(BASE + '/api/admin/trigger-cron', {
+      method: 'POST',
+      headers: { 'X-Api-Key': _key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job: jobName }),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      toast('Cron „' + jobName + '" pornit (fire-and-forget). Reîncarcă peste 1-2 min.', '#22c55e');
+    } else {
+      toast('Eroare: ' + (d.error || 'unknown'), '#ef4444');
+    }
+  } catch (e) { toast('Eroare: ' + e.message, '#ef4444'); }
+}
+
+// ──────────────────────────────────────────────────────────────
+// STATISTICI BILETE / ROI
+async function loadBetsAggregate() {
+  var el = document.getElementById('bets-results');
+  el.innerHTML = '<div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">⏳ Încarcă...</div>';
+  try {
+    var d = await apiFetch('/api/admin/bets-aggregate');
+    if (!d.ok) { el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + (d.error || 'unknown') + '</div>'; return; }
+    if (d.empty) { el.innerHTML = '<div style="color:var(--mu);padding:10px;font-size:12px">' + d.message + '</div>'; return; }
+    var g = d.global;
+    var roi = g.staked > 0 ? +(g.netProfit / g.staked * 100).toFixed(1) : null;
+    var wr  = (g.wins + g.losses) > 0 ? +(g.wins / (g.wins + g.losses) * 100).toFixed(1) : null;
+    var roiClr = roi === null ? 'var(--mu)' : roi > 5 ? '#22c55e' : roi >= -5 ? '#f59e0b' : '#ef4444';
+    var profitClr = g.netProfit > 0 ? '#22c55e' : g.netProfit < 0 ? '#ef4444' : 'var(--mu)';
+    var h = '';
+    // Global stats card
+    h += '<div style="background:rgba(255,255,255,.03);border-radius:8px;padding:12px;margin-bottom:14px">';
+    h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;font-size:11px">';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#22c55e">' + g.wins + '</div><div style="color:var(--mu)">WIN</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#ef4444">' + g.losses + '</div><div style="color:var(--mu)">LOSS</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#f59e0b">' + g.pending + '</div><div style="color:var(--mu)">PEND</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:var(--tx)">' + (wr === null ? '—' : wr + '%') + '</div><div style="color:var(--mu)">WR</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#6366f1">' + g.multi + '</div><div style="color:var(--mu)">MULTI</div></div>';
+    h += '</div>';
+    h += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bor);display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;font-size:11px">';
+    h += '<div><div style="color:var(--mu)">Miză total</div><div style="font-weight:700">' + g.staked.toFixed(4) + ' LTC</div></div>';
+    h += '<div><div style="color:var(--mu)">Profit net</div><div style="font-weight:800;color:' + profitClr + ';font-size:14px">' + (g.netProfit >= 0 ? '+' : '') + g.netProfit.toFixed(4) + ' LTC</div></div>';
+    h += '<div><div style="color:var(--mu)">ROI</div><div style="font-weight:800;color:' + roiClr + ';font-size:14px">' + (roi === null ? '—' : (roi >= 0 ? '+' : '') + roi + '%') + '</div></div>';
+    h += '</div></div>';
+
+    // Per market
+    if (d.by_market.length) {
+      h += '<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:6px">🎯 Per Piață</div>';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px">';
+      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:5px">Piață</th><th style="padding:5px;text-align:right">N</th><th style="padding:5px;text-align:right">W/L</th><th style="padding:5px;text-align:right">WR%</th><th style="padding:5px;text-align:right">Profit LTC</th><th style="padding:5px;text-align:right">ROI%</th></tr></thead><tbody>';
+      d.by_market.forEach(function(r) {
+        var roiC = r.roi === null ? 'var(--mu)' : r.roi > 5 ? '#22c55e' : r.roi >= -5 ? '#f59e0b' : '#ef4444';
+        var pC = r.profit > 0 ? '#22c55e' : r.profit < 0 ? '#ef4444' : 'var(--mu)';
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
+        h += '<td style="padding:5px">' + r.market + '</td>';
+        h += '<td style="padding:5px;text-align:right">' + r.total + '</td>';
+        h += '<td style="padding:5px;text-align:right;font-size:10px"><span style="color:#22c55e">' + r.wins + '</span>/<span style="color:#ef4444">' + r.losses + '</span></td>';
+        h += '<td style="padding:5px;text-align:right;font-weight:700">' + (r.winRate === null ? '—' : r.winRate + '%') + '</td>';
+        h += '<td style="padding:5px;text-align:right;color:' + pC + '">' + (r.profit > 0 ? '+' : '') + r.profit.toFixed(4) + '</td>';
+        h += '<td style="padding:5px;text-align:right;color:' + roiC + ';font-weight:700">' + (r.roi === null ? '—' : (r.roi >= 0 ? '+' : '') + r.roi + '%') + '</td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table>';
+    }
+
+    // Per cota bucket
+    if (d.by_cota.length) {
+      h += '<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:6px">📊 Per Interval Cotă</div>';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px">';
+      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:5px">Cotă</th><th style="padding:5px;text-align:right">N</th><th style="padding:5px;text-align:right">W/L</th><th style="padding:5px;text-align:right">WR%</th><th style="padding:5px;text-align:right">Profit</th></tr></thead><tbody>';
+      d.by_cota.forEach(function(r) {
+        var pC = r.profit > 0 ? '#22c55e' : r.profit < 0 ? '#ef4444' : 'var(--mu)';
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
+        h += '<td style="padding:5px;font-family:monospace">' + r.bucket + '</td>';
+        h += '<td style="padding:5px;text-align:right">' + r.total + '</td>';
+        h += '<td style="padding:5px;text-align:right;font-size:10px"><span style="color:#22c55e">' + r.wins + '</span>/<span style="color:#ef4444">' + r.losses + '</span></td>';
+        h += '<td style="padding:5px;text-align:right;font-weight:700">' + (r.winRate === null ? '—' : r.winRate + '%') + '</td>';
+        h += '<td style="padding:5px;text-align:right;color:' + pC + '">' + (r.profit > 0 ? '+' : '') + r.profit.toFixed(4) + '</td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table>';
+    }
+
+    // Per liga
+    if (d.by_league.length) {
+      h += '<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:6px">🏆 Per Ligă (top 15)</div>';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:5px">Liga</th><th style="padding:5px;text-align:right">N</th><th style="padding:5px;text-align:right">WR%</th><th style="padding:5px;text-align:right">Profit LTC</th></tr></thead><tbody>';
+      d.by_league.forEach(function(r) {
+        var pC = r.profit > 0 ? '#22c55e' : r.profit < 0 ? '#ef4444' : 'var(--mu)';
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
+        h += '<td style="padding:5px">' + r.league + '</td>';
+        h += '<td style="padding:5px;text-align:right">' + r.total + '</td>';
+        h += '<td style="padding:5px;text-align:right;font-weight:700">' + (r.winRate === null ? '—' : r.winRate + '%') + '</td>';
+        h += '<td style="padding:5px;text-align:right;color:' + pC + '">' + (r.profit > 0 ? '+' : '') + r.profit.toFixed(4) + '</td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table>';
+    }
+
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare fetch: ' + e.message + '</div>';
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// SCANNER CONTROL (pauza/resume)
+async function loadScannerState() {
+  try {
+    var d = await apiFetch('/api/admin/scanner-state');
+    var badge = document.getElementById('scanner-state-badge');
+    var btn = document.getElementById('scanner-toggle-btn');
+    if (d.paused) {
+      badge.innerHTML = '⏸ Pauzat';
+      badge.style.background = 'rgba(245,158,11,.15)';
+      badge.style.color = '#f59e0b';
+      btn.innerHTML = '▶ Reia Scanner';
+    } else {
+      badge.innerHTML = '▶ Activ';
+      badge.style.background = 'rgba(34,197,94,.15)';
+      badge.style.color = '#22c55e';
+      btn.innerHTML = '⏸ Pauza Scanner';
+    }
+  } catch(e) { /* silent */ }
+}
+async function toggleScanner() {
+  try {
+    var r = await fetch(BASE + '/api/admin/scanner-toggle', {
+      method: 'POST', headers: { 'X-Api-Key': _key }
+    });
+    var d = await r.json();
+    if (d.ok) {
+      toast(d.paused ? '⏸ Scanner pauzat' : '▶ Scanner reluat', '#22c55e');
+      loadScannerState();
+    } else {
+      toast('✗ ' + (d.error || 'eroare'), '#ef4444');
+    }
+  } catch(e) { toast('✗ ' + e.message, '#ef4444'); }
+}
+
+// ──────────────────────────────────────────────────────────────
+// TREND API USAGE (grafic bar)
+async function loadApiTrend() {
+  var el = document.getElementById('api-trend-results');
+  el.innerHTML = '<div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">⏳ Încarcă...</div>';
+  try {
+    var days = document.getElementById('api-trend-days').value;
+    var d = await apiFetch('/api/admin/api-trend?days=' + days);
+    if (!d.ok || !d.data.length) {
+      el.innerHTML = '<div style="color:var(--mu);padding:10px;font-size:12px">Niciuna date in interval</div>';
+      return;
+    }
+    // Calc max pentru scaling bars
+    var maxCalls = Math.max.apply(null, d.data.map(function(r){return r.calls;}));
+    var h = '';
+    // Summary cards
+    h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:12px;font-size:11px">';
+    h += '<div style="background:rgba(34,197,94,.06);padding:8px;border-radius:6px"><div style="font-size:16px;font-weight:800;color:#22c55e">' + d.total_calls.toLocaleString() + '</div><div style="color:var(--mu)">Total apeluri</div></div>';
+    h += '<div style="background:rgba(99,102,241,.06);padding:8px;border-radius:6px"><div style="font-size:16px;font-weight:800;color:#a5b4fc">' + d.total_runs.toLocaleString() + '</div><div style="color:var(--mu)">Rulari cron</div></div>';
+    h += '<div style="background:rgba(239,68,68,.06);padding:8px;border-radius:6px"><div style="font-size:16px;font-weight:800;color:#ef4444">' + d.total_errors + '</div><div style="color:var(--mu)">Erori</div></div>';
+    h += '</div>';
+    // Bar chart
+    h += '<div style="font-size:11px;color:var(--mu);margin-bottom:6px;font-weight:700">📊 Apeluri / zi</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:4px">';
+    d.data.forEach(function(r){
+      var widthPct = maxCalls > 0 ? (r.calls / maxCalls * 100) : 0;
+      var clr = r.errors > 0 ? '#f59e0b' : '#22c55e';
+      var dateStr = new Date(r.day).toLocaleDateString('ro-RO', {day:'2-digit',month:'2-digit'});
+      h += '<div style="display:grid;grid-template-columns:50px 1fr 90px;gap:6px;align-items:center;font-size:11px">';
+      h += '<div style="color:var(--mu)">' + dateStr + '</div>';
+      h += '<div style="background:rgba(255,255,255,.04);border-radius:4px;height:14px;overflow:hidden;position:relative">';
+      h += '<div style="width:' + widthPct + '%;height:100%;background:' + clr + ';border-radius:4px"></div>';
+      h += '</div>';
+      h += '<div style="text-align:right;color:var(--tx);font-weight:600">' + r.calls.toLocaleString() + (r.errors > 0 ? ' <span style="color:#ef4444">⚠'+r.errors+'</span>' : '') + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + e.message + '</div>';
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// DB CLEANUP
+async function loadDbCleanupPreview() {
+  var el = document.getElementById('db-cleanup-results');
+  el.innerHTML = '<div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">⏳ Calculează...</div>';
+  try {
+    var d = await apiFetch('/api/admin/db-cleanup-preview');
+    if (!d.ok) { el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare</div>'; return; }
+    var labels = {
+      'predictions': 'Predicții (după created_at)',
+      'cron_logs': 'Logs cron (după ran_at)',
+      'alerts': 'Alerte (după created_at)',
+      'live_stats': 'Live stats (după recorded_at)',
+      'prematch_enrichment_log': 'Log prematch (după logged_at)',
+    };
+    var h = '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+    h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:6px">Tabel</th><th style="padding:6px;text-align:right">Total</th><th style="padding:6px;text-align:right">>30z</th><th style="padding:6px;text-align:right">>90z</th><th style="padding:6px;text-align:right">>180z</th><th style="padding:6px">Curăță</th></tr></thead><tbody>';
+    Object.entries(d.preview).forEach(function(entry){
+      var table = entry[0], data = entry[1];
+      if (data.error) {
+        h += '<tr><td colspan="6" style="padding:5px;color:#ef4444;font-size:10px">' + table + ': ' + data.error + '</td></tr>';
+        return;
+      }
+      h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
+      h += '<td style="padding:5px"><b>' + (labels[table] || table) + '</b></td>';
+      h += '<td style="padding:5px;text-align:right">' + data.total.toLocaleString() + '</td>';
+      h += '<td style="padding:5px;text-align:right;color:#f59e0b">' + data.older_30d.toLocaleString() + '</td>';
+      h += '<td style="padding:5px;text-align:right;color:#ef4444">' + data.older_90d.toLocaleString() + '</td>';
+      h += '<td style="padding:5px;text-align:right;color:#ef4444">' + data.older_180d.toLocaleString() + '</td>';
+      h += '<td style="padding:5px;display:flex;gap:3px">';
+      if (data.older_90d > 0)  h += '<button class="hc-btn" style="padding:3px 6px;font-size:10px" onclick="dbCleanup(\''+table+'\',90)">90z</button>';
+      if (data.older_180d > 0) h += '<button class="hc-btn" style="padding:3px 6px;font-size:10px" onclick="dbCleanup(\''+table+'\',180)">180z</button>';
+      h += '</td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div style="font-size:10px;color:var(--mu);margin-top:10px;padding:8px;background:rgba(99,102,241,.05);border-left:2px solid #6366f1;border-radius:4px;line-height:1.4">💡 <b>Recomandare</b>: pastreaza ultimele 90 zile pentru cron_logs si live_stats. Predictions le pastreaza 180+ zile (folosite pentru calibrare).</div>';
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + e.message + '</div>';
+  }
+}
+
+async function dbCleanup(table, days) {
+  if (!confirm('Șterge din ' + table + ' rândurile mai vechi de ' + days + ' zile?\nAceastă acțiune e ireversibilă.')) return;
+  try {
+    var r = await fetch(BASE + '/api/admin/db-cleanup', {
+      method: 'POST',
+      headers: { 'X-Api-Key': _key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: table, days: days }),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      toast('🗑 ' + d.deleted.toLocaleString() + ' randuri sterse din ' + d.label, '#22c55e');
+      loadDbCleanupPreview();
+    } else {
+      toast('✗ ' + (d.error || 'eroare'), '#ef4444');
+    }
+  } catch (e) { toast('✗ ' + e.message, '#ef4444'); }
+}
+
+// ──────────────────────────────────────────────────────────────
+// INTELIGENȚĂ LIGI
+async function loadLeaguesInsights() {
+  var el = document.getElementById('leagues-results');
+  el.innerHTML = '<div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">⏳ Încarcă...</div>';
+  try {
+    var d = await apiFetch('/api/admin/leagues-insights');
+    if (!d.ok) { el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + (d.error || 'unknown') + '</div>'; return; }
+    var h = '';
+    // Summary
+    h += '<div style="background:rgba(255,255,255,.03);border-radius:8px;padding:10px;margin-bottom:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;font-size:11px">';
+    h += '<div><div style="font-size:18px;font-weight:800;color:var(--tx)">' + d.total_leagues + '</div><div style="color:var(--mu)">Total ligi</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#22c55e">' + d.counts.overperformers + '</div><div style="color:var(--mu)">Over (+10pp)</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#f59e0b">' + d.counts.on_target + '</div><div style="color:var(--mu)">On target</div></div>';
+    h += '<div><div style="font-size:18px;font-weight:800;color:#ef4444">' + d.counts.underperformers + '</div><div style="color:var(--mu)">Under (-10pp)</div></div>';
+    h += '</div>';
+    // Table
+    h += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+    if (d.message) {
+      h += '<div style="color:#f59e0b;padding:12px;background:rgba(245,158,11,.05);border-left:3px solid #f59e0b;border-radius:4px;font-size:12px;margin-bottom:12px">⚠ ' + d.message + '</div>';
+    }
+    h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:5px">Ligă</th><th style="padding:5px">Țară</th><th style="padding:5px;text-align:right">N</th><th style="padding:5px;text-align:right">WR%</th><th style="padding:5px;text-align:right">vs Baseline</th><th style="padding:5px">Sugestie</th></tr></thead><tbody>';
+    d.leagues.forEach(function(r) {
+      var wrClr = r.winRate === null ? 'var(--mu)' : r.winRate >= 80 ? '#22c55e' : r.winRate >= 60 ? '#f59e0b' : '#ef4444';
+      var diffClr = r.diffFromBaseline === null ? 'var(--mu)' : r.diffFromBaseline >= 10 ? '#22c55e' : r.diffFromBaseline <= -10 ? '#ef4444' : 'var(--mu)';
+      h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
+      h += '<td style="padding:5px">' + r.league + '</td>';
+      h += '<td style="padding:5px;font-size:10px;color:var(--mu)">' + r.country + '</td>';
+      h += '<td style="padding:5px;text-align:right">' + r.total + '</td>';
+      h += '<td style="padding:5px;text-align:right;color:' + wrClr + ';font-weight:700">' + (r.winRate === null ? '—' : r.winRate + '%') + '</td>';
+      h += '<td style="padding:5px;text-align:right;color:' + diffClr + ';font-weight:700">' + (r.diffFromBaseline === null ? '—' : (r.diffFromBaseline >= 0 ? '+' : '') + r.diffFromBaseline + 'pp') + '</td>';
+      h += '<td style="padding:5px;font-size:10px">' + r.suggestion + '</td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div style="margin-top:10px;font-size:10px;color:var(--mu);padding:8px;background:rgba(99,102,241,.05);border-left:2px solid #6366f1;border-radius:4px;line-height:1.5">💡 Filtru: predicții cu prob ≥ 70% Over 1.5, min 10 samples, 180 zile. Baseline așteptat: ' + d.baseline + '%.</div>';
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare fetch: ' + e.message + '</div>';
+  }
+}
+</script>
+</body>
+</html>

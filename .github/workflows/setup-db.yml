@@ -1,0 +1,134 @@
+name: Setup PostgreSQL on VPS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-db:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install PostgreSQL on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: root
+          password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 10m
+          script: |
+            export PATH="/snap/bin:$PATH"
+            trap '' TERM
+
+            # 1. Instaleaza PostgreSQL
+            echo "=== 1. Instalare PostgreSQL ==="
+            apt-get update -qq
+            apt-get install -y postgresql postgresql-contrib -qq
+            echo "PostgreSQL instalat OK"
+
+            # 2. Porneste si activeaza serviciul
+            echo "=== 2. Pornire serviciu ==="
+            systemctl start postgresql
+            systemctl enable postgresql
+            systemctl is-active postgresql && echo "PostgreSQL: ACTIV" || echo "PostgreSQL: EROARE"
+
+            # 3. Creeaza user, baza de date si drepturi (python3, fara heredoc)
+            echo "=== 3. Creare user si baza de date ==="
+            python3 -c "
+            import subprocess
+
+            def psql(cmd):
+                r = subprocess.run(['sudo','-u','postgres','psql','-c',cmd],
+                                   capture_output=True, text=True)
+                print(r.stdout.strip() or r.stderr.strip())
+                return r.returncode
+
+            psql(\"CREATE USER alohascan WITH PASSWORD 'Firenze225854';\")
+            psql('CREATE DATABASE elefant OWNER alohascan;')
+            psql('GRANT ALL PRIVILEGES ON DATABASE elefant TO alohascan;')
+            psql(\"ALTER USER alohascan CREATEDB;\")
+            print('User si baza de date create OK')
+            "
+
+            # 4. Configureaza pg_hba.conf pentru conexiuni locale
+            echo "=== 4. Configurare pg_hba.conf ==="
+            python3 -c "
+            import subprocess, glob
+
+            # Gaseste pg_hba.conf
+            result = subprocess.run(['find','/etc/postgresql','-name','pg_hba.conf'],
+                                    capture_output=True, text=True)
+            hba = result.stdout.strip().split('\n')[0]
+            if not hba:
+                print('EROARE: pg_hba.conf nu a fost gasit')
+                exit(1)
+            print('pg_hba.conf:', hba)
+
+            content = open(hba).read()
+
+            # Adauga regula pentru userul alohascan daca nu exista deja
+            rule = 'local   elefant         alohascan                               md5\n'
+            rule2 = 'host    elefant         alohascan       127.0.0.1/32            md5\n'
+            rule3 = 'host    elefant         alohascan       ::1/128                 md5\n'
+
+            if 'alohascan' not in content:
+                # Insereaza inaintea primei linii locale/host existente
+                lines = content.splitlines(keepends=True)
+                insert_at = len(lines)
+                for i, line in enumerate(lines):
+                    if line.strip() and not line.startswith('#') and ('local' in line or 'host' in line):
+                        insert_at = i
+                        break
+                lines.insert(insert_at, rule3)
+                lines.insert(insert_at, rule2)
+                lines.insert(insert_at, rule)
+                open(hba, 'w').write(''.join(lines))
+                print('pg_hba.conf actualizat OK')
+            else:
+                print('pg_hba.conf deja configurat')
+            "
+
+            # 5. Restart PostgreSQL pentru a aplica configuratia
+            echo "=== 5. Restart PostgreSQL ==="
+            systemctl restart postgresql
+            sleep 2
+            systemctl is-active postgresql && echo "PostgreSQL: ACTIV dupa restart" || echo "PostgreSQL: EROARE la restart"
+
+            # 6. Adauga POSTGRES_URL in .env fara sa sterga variabilele existente
+            echo "=== 6. Actualizare .env ==="
+            python3 -c "
+            import os
+
+            env_path = '/root/scannerv2/.env'
+            postgres_url = 'postgresql://alohascan:Firenze225854@localhost:5432/elefant'
+
+            # Citeste .env existent
+            existing = []
+            if os.path.exists(env_path):
+                existing = open(env_path).read().splitlines()
+
+            # Elimina POSTGRES_URL daca exista deja (pentru a nu dubla)
+            existing = [l for l in existing if not l.startswith('POSTGRES_URL=')]
+
+            # Adauga noua valoare
+            existing.append('POSTGRES_URL=' + postgres_url)
+
+            open(env_path, 'w').write('\n'.join(existing) + '\n')
+            chmod = os.chmod(env_path, 0o600)
+            print('.env actualizat:')
+            for l in existing:
+                key = l.split('=')[0] if '=' in l else l
+                print(' -', key)
+            "
+
+            # 7. Verificare finala
+            echo "=== 7. Verificare finala ==="
+            PGPASSWORD=Firenze225854 psql -U alohascan -h 127.0.0.1 -d elefant -c "\l" 2>&1 || \
+            sudo -u postgres psql -c "\l" 2>&1 | grep elefant || echo "Verificare directa"
+
+            echo ""
+            echo "================================================"
+            echo "  PostgreSQL instalat cu succes!"
+            echo "  User:     alohascan"
+            echo "  Baza:     elefant"
+            echo "  URL:      postgresql://alohascan:***@localhost:5432/elefant"
+            echo "================================================"
+            echo "DONE: $(date)"

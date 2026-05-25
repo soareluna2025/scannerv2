@@ -94,7 +94,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Serbia
   392,   // SuperLiga
-  393,   // Prva Liga (Liga 2)
   394,   // Kup Srbije
 
   // Romania
@@ -109,42 +108,34 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Hungary
   271,   // Nemzeti Bajnokság I (Liga 1)
-  272,   // Nemzeti Bajnokság II (Liga 2)
-  275,   // Magyar Kupa (Cup)
+  275,   // Magyar Kupa
 
   // Bulgaria
   172,   // First Professional League
-  173,   // Second Professional League (Liga 2)
   174,   // Bulgarian Cup
 
   // Slovakia
   332,   // Super Liga (Liga 1)
-  506,   // 2. liga (Liga 2)
   680,   // Slovak Cup
 
   // Finland
   244,   // Veikkausliiga (Liga 1)
-  245,   // Ykkönen (Liga 2)
   246,   // Finnish Cup
 
   // Ukraine
   333,   // Premier League
-  334,   // Persha Liha (Liga 2)
   336,   // Ukrainian Cup
 
   // Russia
   235,   // Premier League
-  236,   // First League (Liga 2)
   237,   // Russian Cup
 
   // Belarus
   116,   // Vysheyshaya Liga (Liga 1)
-  117,   // 1. Division (Liga 2)
   486,   // Belarusian Cup
 
   // Kazakhstan
   389,   // Premier League
-  388,   // 1. Division (Liga 2)
   498,   // Kazakhstan Cup
 
   // ── AMERICAS ─────────────────────────────────────────────────
@@ -209,7 +200,9 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   253,   // MLS
   255,   // USL Championship (Liga 2)
   257,   // US Open Cup
-  909,   // MLS Next Pro (Liga 3)
+  909,   // MLS Next Pro (nivel 3)
+  // EXCLUSE INTENȚIONAT (sub nivel 2):
+  //   USL League One, USL League Two, NISA — filtrate și prin LOWER_DIV_TERMS
 
   // Canada
   321,   // Canadian Premier League
@@ -238,6 +231,9 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Nicaragua
   256,   // Primera Division
   380,   // Segunda Division (Liga 2)
+
+  // Panama
+  306,   // Primera División
 
   // ── ASIA ─────────────────────────────────────────────────────
 
@@ -283,8 +279,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Uzbekistan
   335,   // Super League
-  631,   // Pro League (Liga 2)
-  632,   // Uzbek Cup
 
   // Australia
   188,   // A-League Men
@@ -330,14 +324,17 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   491,   // Division 1 (Liga 2)
   492,   // Sultan Qaboos Cup
 
+  // Bahrain
+  415,   // Premier League
+
   // Hong Kong
   499,   // Premier League
-  500,   // First Division (Liga 2)
-  503,   // HK FA Cup
 
   // Singapore
   502,   // Premier League
-  503,   // Singapore Cup
+
+  // Philippines
+  483,   // PFL (Philippine Football League)
 
   // ── AFRICA ───────────────────────────────────────────────────
 
@@ -368,23 +365,20 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Nigeria
   399,   // NPFL
-  666,   // Nigeria National League (Liga 2)
   667,   // Nigerian FA Cup
 
   // Ghana
   289,   // Premier League
-  417,   // Division One (Liga 2)
   418,   // Ghana FA Cup
 
   // Ivory Coast
   383,   // Ligue 1
-  384,   // Ligue 2
   385,   // Coupe de Côte d'Ivoire
 
   // Kenya
   357,   // Premier League
   358,   // National Super League (Liga 2)
-  500,   // FKF Cup
+  // 500 — FKF Cup Kenya (ID duplicat cu HK First Division — omis)
 
   // ── INTERNAȚIONALE ───────────────────────────────────────────
 

@@ -1,0 +1,162 @@
+================================================================
+  ALOHASCAN - SINTEZA MIGRARII PE VPS VULTR
+  Data: 15 Mai 2026
+================================================================
+
+----------------------------------------------------------------
+1. PUNCTUL DE PLECARE
+----------------------------------------------------------------
+- Aplicatia AlohaScan rula pe Vercel (serverless functions)
+- Decizie: migrare completa pe VPS Vultr (300 USD platit anticipat)
+- Constrangere: utilizatorul este pe iPhone tot timpul
+
+----------------------------------------------------------------
+2. CONFIGURARE VPS
+----------------------------------------------------------------
+- VPS Vultr: IP 192.248.183.230, Ubuntu 22.04, user root
+- Hostname: Aloha
+- Node.js 20.20.2 instalat via snap (repo Ubuntu avea v12 vechi)
+- npm 10.8.2
+- Repo clonat: github.com/soareluna2025/scannerv2
+
+----------------------------------------------------------------
+3. PROBLEME INTAMPINATE SI REZOLVARILE
+----------------------------------------------------------------
+
+PROBLEMA: Port 22 blocat din container Claude
+SOLUTIE:  GitHub Actions SSH via appleboy/ssh-action
+
+PROBLEMA: SSH key corupta la copy-paste pe mobil
+SOLUTIE:  Autentificare cu parola in loc de cheie SSH
+
+PROBLEMA: Node.js v12 in loc de v20
+SOLUTIE:  snap install node --classic --channel=20
+
+PROBLEMA: PM2 trimitea SIGTERM si oprea sesiunea SSH
+SOLUTIE:  Inlocuit PM2 cu systemd service
+
+PROBLEMA: Heredoc in YAML rupea parsing-ul workflow-ului
+SOLUTIE:  Toate fisierele scrise cu python3 string literals
+
+PROBLEMA: Port 80 ocupat de Coolify (pre-instalat de Vultr)
+SOLUTIE:  docker stop + fuser -k 80/tcp inainte de nginx
+
+PROBLEMA: Cheile API lipseau din .env
+SOLUTIE:  GitHub Secrets - scrise automat la fiecare deploy
+
+----------------------------------------------------------------
+4. ARHITECTURA FINALA
+----------------------------------------------------------------
+
+  Internet
+     |
+  Coolify / Traefik (port 80) -- pre-instalat de Vultr
+     |
+  nginx (reverse proxy)
+     |
+  Node.js server.js (port 3000)
+     |
+  systemd service "alohascan" (auto-restart la reboot)
+
+  Baza de date: Supabase (PostgreSQL) via REST API
+  Date fotbal:  API-Football v3 (plan Mega - 150.000 req/zi)
+
+----------------------------------------------------------------
+5. GITHUB SECRETS CONFIGURATE
+----------------------------------------------------------------
+
+  VPS_IP           - IP-ul VPS-ului Vultr
+  VPS_PASSWORD     - Parola root SSH
+  API_FOOTBALL_KEY - Date fotbal (api-sports.io)
+  SUPABASE_URL     - URL proiect Supabase
+  SUPABASE_KEY     - Service role key Supabase
+  VERCEL_TOKEN     - Token Vercel (ramas din configuratia veche)
+
+----------------------------------------------------------------
+6. CRON JOBS ACTIVE (fiecare ora)
+----------------------------------------------------------------
+
+  :00  /api/cron/scan             - scan general meciuri
+  :15  /api/cron/collect-daily    - statistici zilnice
+  :30  /api/update-results        - actualizeaza rezultate
+  :45  /api/cron/collect-finished - stats jucatori meciuri FT
+
+----------------------------------------------------------------
+7. FLUX DE LUCRU FINAL (deploy automat)
+----------------------------------------------------------------
+
+  Push pe branch "main"
+     |
+  GitHub Actions se activeaza automat
+     |
+  SSH pe VPS (192.248.183.230) cu parola din Secrets
+     |
+  git pull + npm install
+     |
+  Scrie .env cu cheile API din GitHub Secrets
+     |
+  Restart serviciu systemd "alohascan"
+     |
+  Configurare cron-uri orare
+     |
+  DEPLOY COMPLET - ZERO interventie manuala
+
+----------------------------------------------------------------
+8. STATUS CURENT (15 Mai 2026, ora 19:53)
+----------------------------------------------------------------
+
+Aplicatie live: http://192.248.183.230
+
+Health Check: 9 PASS, 9 warnings
+
+PASS:
+  - Supabase conectat, tabel player_stats accesibil
+  - 42.427 jucatori din 482+ meciuri
+  - 191/191 ligi procesate
+  - Team strength calculat corect pentru Everton
+  - Stratul 7 ACTIV - Everton (32) vs Manchester City (40)
+  - Suma ponderilor = 100% (ambele configuratii)
+  - Ultimul cron: acum 2 minute (ok)
+  - API-Football activ: 5.571/150.000 req/zi
+  - collect-daily: success
+
+WARNINGS (temporare - se populeaza automat de cron-uri in <1 ora):
+  - fixtures gol
+  - standings gol
+  - h2h gol
+  - form_stats gol
+  - match_stats gol
+  - match_events gol
+  - odds gol
+  - alerts NGP - nicio alerta generata inca
+  - live_stats gol in ultimele 24h
+
+----------------------------------------------------------------
+9. INFORMATII IMPORTANTE DE RETINUT
+----------------------------------------------------------------
+
+  VPS IP:           192.248.183.230
+  VPS User:         root
+  Repo GitHub:      github.com/soareluna2025/scannerv2
+  Branch principal: main
+  Fisiere pe VPS:   /root/scannerv2/
+  Log cron-uri:     /var/log/alohascan-cron.log
+  Serviciu:         systemctl status alohascan
+
+  PENTRU A ADAUGA CHEI API NOI:
+  1. Mergi la: github.com/soareluna2025/scannerv2/settings/secrets/actions
+  2. Apasa "New repository secret"
+  3. Adauga numele si valoarea cheii
+  4. Spune-mi mie sa actualizez deploy.yml
+  5. Push pe main - se aplica automat
+
+================================================================
+  CHEI RAMASE DE ADAUGAT (optional, pentru functii complete)
+================================================================
+
+  ANTHROPIC_API_KEY  - pentru agentul AI (butonul Agent din app)
+  TELEGRAM_BOT_TOKEN - pentru alerte NGP pe Telegram
+  TELEGRAM_CHAT_ID   - chat ID destinatar Telegram
+  FOOTBALL_DATA_KEY  - sursa secundara date fotbal
+
+================================================================

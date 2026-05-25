@@ -1,4 +1,15 @@
+export function calcPlayerScore(rating, goals, assists, passAcc, sot) {
+  const ratingNorm = rating ? (rating / 10 * 100) : 50;
+  const goalsScore  = Math.min(100, (goals  || 0) * 25);
+  const assistScore = Math.min(100, (assists || 0) * 20);
+  const passScore   = passAcc != null ? parseFloat(passAcc) : 50;
+  const shotScore   = Math.min(100, (sot    || 0) * 15);
+  const score = Math.round(ratingNorm * 0.35 + goalsScore * 0.20 + assistScore * 0.15 + passScore * 0.20 + shotScore * 0.10);
+  return isNaN(score) ? 0 : score;
+}
+
 function poissonProb(lambda, k) {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
   let result = Math.exp(-lambda);
   for (let i = 1; i <= k; i++) result *= lambda / i;
   return result;
@@ -53,7 +64,7 @@ export function parseOddsItem(item) {
   return (result.cotaHome || result.cotaOver15) ? result : null;
 }
 
-export function calcEV(matrix, oddsRaw, bankroll) {
+export function calcEV(matrix, oddsRaw) {
   const ev = { hasOdds: false };
   if (!oddsRaw) return ev;
 
@@ -79,13 +90,6 @@ export function calcEV(matrix, oddsRaw, bankroll) {
   if (cotaOver15) ev.evOver15 = (matrix.over15Prob / 100) - (1 / cotaOver15);
   if (cotaGG)     ev.evGG     = (matrix.ggProb     / 100) - (1 / cotaGG);
 
-  function kelly(edge, br) {
-    if (edge == null || edge < 0.04) return 0;
-    return Math.min(br * edge * 0.5, br * 0.04);
-  }
-  ev.kellyOver15 = kelly(ev.evOver15, bankroll);
-  ev.kellyGG     = kelly(ev.evGG, bankroll);
-
   const candidates = [
     { name: 'Over 1.5',    ev: ev.evOver15, cota: cotaOver15 },
     { name: 'GG',          ev: ev.evGG,     cota: cotaGG     },
@@ -98,20 +102,15 @@ export function calcEV(matrix, oddsRaw, bankroll) {
     ev.bestBet   = candidates[0].name;
     ev.bestEV    = candidates[0].ev;
     ev.bestCota  = candidates[0].cota;
-    ev.bestKelly = kelly(candidates[0].ev, bankroll);
   }
 
   const r3 = v => v != null ? Math.round(v * 1000) / 1000 : null;
-  const r2 = v => v != null ? Math.round(v * 100)  / 100  : null;
   ev.evHome      = r3(ev.evHome);
   ev.evDraw      = r3(ev.evDraw);
   ev.evAway      = r3(ev.evAway);
   ev.evOver15    = r3(ev.evOver15);
   ev.evGG        = r3(ev.evGG);
   ev.bestEV      = r3(ev.bestEV);
-  ev.kellyOver15 = r2(ev.kellyOver15);
-  ev.kellyGG     = r2(ev.kellyGG);
-  ev.bestKelly   = r2(ev.bestKelly);
 
   return ev;
 }
