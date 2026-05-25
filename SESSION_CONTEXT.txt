@@ -3016,6 +3016,22 @@ NEXT STEPS (prioritizat):
 
 [25.05 ~15:xx] - P6 FIX: collect-venues.js geocodare Nominatim + OpenElevation
                  Commit: 10efb9c (feature) / 4dbef39 (main)
+
+[25.05 ~16:00] - diagnostic-db.sql: fix coloane gresite + sectiunea K (teste 14-22)
+                 Commit: a964a9f (main)
+                 Fixuri: A2 odds.updated_at→collected_at; h2h.updated_at→match_date; injuries.updated_at→created_at
+                         D4 over25_rate→failed_to_score_rate; F2 goals_for_avg→avg_goals_for
+                         H1 captured_at→created_at; K8 kickoff_time→match_date
+                 Adaugat: Sectiunea K cu K1-K9 (T14-T22):
+                   K1(T14) prematch predictions — fixtures colectate + freshness
+                   K2(T15) prematch predictions — sample payload (ce returneaza API)
+                   K3(T16) standings — detaliu per liga + top 10 ligi updated
+                   K4(T17) injuries — fixtures unice + freshness
+                   K5(T18) h2h — perechi unice + acoperire lunara
+                   K6(T19) player_stats — echipe/jucatori unici + adaugate 30z
+                   K7(T20) coach_stats style — exista? + distributie valori
+                   K8(T21) fixtures NS — meciuri pe zile urmatoarele 7 zile
+                   K9(T22) match_events — total goluri/carduri/substitutii + freshness
                  Bug: lat=null, lng=null hardcodat → OpenElevation niciodata apelat → 4604 venues cu altitude NULL
                  Fix: geocodeCity() via Nominatim OSM (gratuit, fara cheie) → lat/lng → altitude_m
                  Sleep 1.1s/req (Nominatim rate limit 1/s). Prioritizeaza venues fara altitude existente.
