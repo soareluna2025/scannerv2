@@ -92,39 +92,49 @@ async function processVenues(LIMIT) {
       if (!cityGroups.has(key)) cityGroups.set(key, []);
       cityGroups.get(key).push(r);
     }
-    console.log(`[collect-venues] ${toProcess.length} venues, ${cityGroups.size} orase unice`);
+    const cityKeys = [...cityGroups.keys()];
+    console.log(`[collect-venues] ${toProcess.length} venues, ${cityKeys.length} orase unice`);
 
     const collected = [];
+    const CONCURRENCY = 10; // geocodare paralela — Open-Meteo suporta
 
-    // Per oras unic: geocodare (1 apel Nominatim) + elevation (1 apel) + UPDATE imediat toate venues din oras
-    for (const [key, venues] of cityGroups) {
-      const [city, country] = key.split('|');
-      const coords = await geocodeCity(city, country);
-      await sleep(150); // Open-Meteo geocoding — fara rate limit strict
+    for (let i = 0; i < cityKeys.length; i += CONCURRENCY) {
+      const batch = cityKeys.slice(i, i + CONCURRENCY);
 
-      if (!coords) {
-        console.warn(`[collect-venues] geocodare esec: ${city} (${country})`);
-        continue;
-      }
+      // Geocodare paralela pentru batch-ul curent
+      const geoResults = await Promise.all(batch.map(async key => {
+        const [city, country] = key.split('|');
+        const coords = await geocodeCity(city, country);
+        return { key, coords };
+      }));
 
-      const { lat, lng } = coords;
-      const elevArr = await getAltitudeBatch([{ lat, lng }]);
-      const altitude = elevArr[0] ?? 0;
-      const climate = climateZone(lat);
+      // Elevation batch pentru orasele geocodate cu succes
+      const withCoords = geoResults.filter(r => r.coords);
+      const elevations = withCoords.length
+        ? await getAltitudeBatch(withCoords.map(r => r.coords))
+        : [];
 
-      for (const v of venues) {
-        try {
-          await query(`
-            UPDATE venues
-            SET latitude = $1, longitude = $2, altitude_m = $3, climate_zone = $4, updated_at = NOW()
-            WHERE venue_id = $5
-          `, [lat, lng, altitude, climate, v.vid]);
-          collected.push({ id: v.vid, city, altitude });
-        } catch (e) {
-          console.warn(`[collect-venues] UPDATE esec venue ${v.vid}:`, e.message);
+      // UPDATE imediat toate venues din orasele procesate
+      for (let j = 0; j < withCoords.length; j++) {
+        const { key, coords } = withCoords[j];
+        const { lat, lng } = coords;
+        const altitude = elevations[j] ?? 0;
+        const climate = climateZone(lat);
+        for (const v of cityGroups.get(key)) {
+          try {
+            await query(`
+              UPDATE venues
+              SET latitude = $1, longitude = $2, altitude_m = $3, climate_zone = $4, updated_at = NOW()
+              WHERE venue_id = $5
+            `, [lat, lng, altitude, climate, v.vid]);
+            collected.push({ id: v.vid, city: key.split('|')[0], altitude });
+          } catch (e) {
+            console.warn(`[collect-venues] UPDATE esec venue ${v.vid}:`, e.message);
+          }
         }
       }
-      console.log(`[collect-venues] ${city}: alt=${altitude}m → ${venues.length} venues actualizate`);
+
+      await sleep(200); // pauza scurta intre batch-uri
     }
     console.log(`[collect-venues] done: ${collected.length}/${toProcess.length} venues procesate`);
 
@@ -139,7 +149,7 @@ async function processVenues(LIMIT) {
 export default async function handler(req, res) {
   try {
     await ensureColumns();
-    const LIMIT = parseInt(req.query?.limit || '500', 10);
+    const LIMIT = parseInt(req.query?.limit || '5000', 10);
 
     const { rows: pending } = await query(`
       SELECT COUNT(*)::int AS n FROM venues WHERE altitude_m IS NULL AND city IS NOT NULL
