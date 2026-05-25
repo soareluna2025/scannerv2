@@ -11,7 +11,7 @@ echo "[$(date '+%H:%M:%S')] START collect-team-stats loop | limit=$LIMIT season=
 
 while true; do
   RUN=$((RUN + 1))
-  RESULT=$(curl -s "http://localhost:3001/api/cron/collect-team-stats?limit=$LIMIT&season=$SEASON")
+  RESULT=$(curl -s "http://localhost:3000/api/cron/collect-team-stats?limit=$LIMIT&season=$SEASON")
 
   OK=$(echo "$RESULT" | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const r=JSON.parse(d);process.stdout.write(String(r.ok))}catch(e){process.stdout.write('false')}})")
   PAIRS=$(echo "$RESULT" | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const r=JSON.parse(d);process.stdout.write(String(r.pairs_found||0))}catch(e){process.stdout.write('0')}})")
