@@ -3037,6 +3037,14 @@ NEXT STEPS (prioritizat):
                  Sleep 1.1s/req (Nominatim rate limit 1/s). Prioritizeaza venues fara altitude existente.
                  Cron duminica 04:00, LIMIT=200/run. Manual: /api/cron/collect-venues?limit=500
 
+[25.05 ~18:30] - AUDIT HYBRID V2 + 3 FIX-URI in enrich.js
+                 Commit: c215aa3 (main)
+                 FIX CRITIC P6: venue altitude era complet nefunctional (fixtureId/venueId undefined
+                   in handler scope → if(venueId) sarit mereu → 0 adjustmente aplicate)
+                   Eliminata functia moarta getVenueAndMeteoImpact(). Logica mutata direct cu venueInfo.
+                 FIX MINOR: eliminat hdr si br neutilizate din handler
+                 FIX logPrediction: venue_surface, referee_name, injuries_home/away acum populate real
+
 [25.05 ~17:00] - HYBRID V2: standings lambda blend + Layer 8 API Consensus integrate in enrich.js
                  Commit: d73df50 (main)
                  getStandingsForTeam(): citeste goals_for/against/played din standings
@@ -3080,7 +3088,7 @@ NEXT STEPS (prioritizat):
   ✅ predictions: P5 FIX (partial) — DO UPDATE prematch (cel mai recent, nu primul)
   ✅ venues: P6 FIX COMPLET — 4604/4604 venues cu altitude_m populat (25.05 ~17:52)
              4331 geocodate real (Open-Meteo) + 273 fallback altitude=0
-             Impact activ in enrich.js: La Paz/Johannesburg/MexicoCity → -6% to -15% Over
+             AUDIT FIX: logica altitude acum functionala (era broken — fixtureId/venueId undefined)
   ⚠️  Brier Score: 0.1950 — Faza 0 observare (nu calibrare). Checkpoint: 8 iun 2026
   ✅ standings lambda blend: 60% form_recent + 40% seasonal_avg din standings (2,138 echipe)
      getStandingsForTeam() — goals_for/against/played per team+league
