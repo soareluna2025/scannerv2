@@ -4591,7 +4591,7 @@ function removeSelection(pickKey){
   setSelections(sels);
 }
 function clearSelections(){
-  if(!confirm('&Scaron;tergi toate selec&#539;iile?'))return;
+  if(!confirm('Ștergi toate selecțiile?'))return;
   setSelections([]);
 }
 function updateMultiPreview(){
@@ -4610,11 +4610,11 @@ async function createSingles(){
   var sels=getSelections();
   if(!sels.length)return;
   var stake=parseFloat(getStoredStake());
-  if(!stake||stake<=0){alert('Miz&#259; invalid&#259;');return;}
+  if(!stake||stake<=0){alert('Miză invalidă');return;}
   // Valideaza cotele
   for(var i=0;i<sels.length;i++){
     var c=parseFloat(sels[i].cota);
-    if(!c||c<=1){alert('Cot&#259; invalid&#259; pentru '+sels[i].home+' vs '+sels[i].away);return;}
+    if(!c||c<=1){alert('Cotă invalidă pentru '+sels[i].home+' vs '+sels[i].away);return;}
   }
   if(!confirm('Creezi '+sels.length+' bilete single, '+stake+' LTC fiecare?'))return;
   try{
@@ -4636,9 +4636,9 @@ async function createCombinat(){
   var sels=getSelections();
   if(sels.length<2)return;
   var stake=parseFloat(getStoredStake());
-  if(!stake||stake<=0){alert('Miz&#259; invalid&#259;');return;}
+  if(!stake||stake<=0){alert('Miză invalidă');return;}
   var totalCota=sels.reduce(function(p,s){return p*(parseFloat(s.cota)||1);},1);
-  if(!confirm('Creezi bilet combinat din '+sels.length+' pick-uri, cot&#259; total&#259; '+totalCota.toFixed(2)+', miz&#259; '+stake+' LTC?\\nC&acirc;&scaron;tig poten&#539;ial: '+(totalCota*stake).toFixed(4)+' LTC'))return;
+  if(!confirm('Creezi bilet combinat din '+sels.length+' pick-uri, cotă totală '+totalCota.toFixed(2)+', miză '+stake+' LTC?\nCâștig potențial: '+(totalCota*stake).toFixed(4)+' LTC'))return;
   // Legs JSON
   var legs=sels.map(function(s){return {
     fid:s.fid, home:s.home, away:s.away, league:s.league,
@@ -4778,7 +4778,7 @@ async function submitBet(){
     stake: parseFloat(document.getElementById('bet-stake').value),
     expected_prob: parseFloat(document.getElementById('bet-prob').value)||null,
   };
-  if(!data.market||!data.cota||!data.stake){alert('Pia&#539;a, cota si miza sunt obligatorii');return;}
+  if(!data.market||!data.cota||!data.stake){alert('Piața, cota și miza sunt obligatorii');return;}
   try{
     var r=await fetch('/api/bets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
     var d=await r.json();
@@ -4798,7 +4798,7 @@ async function resolveBet(id,outcome){
 }
 
 async function deleteBet(id){
-  if(!confirm('Stergi pariul?'))return;
+  if(!confirm('Ștergi pariul?'))return;
   try{
     await fetch('/api/bets?id='+id,{method:'DELETE'});
     loadBets();

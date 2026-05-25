@@ -1362,7 +1362,7 @@ async function clearErrors(scope) {
     });
     var d = await r.json();
     if (d.ok) {
-      toast('🗑 ' + d.deleted + ' erori &scaron;terse', '#22c55e');
+      toast('🗑 ' + d.deleted + ' erori șterse', '#22c55e');
       loadErrors();
     } else {
       toast('✗ ' + (d.error || 'eroare'), '#ef4444');
@@ -1857,7 +1857,7 @@ async function loadDbCleanupPreview() {
 }
 
 async function dbCleanup(table, days) {
-  if (!confirm('Sterge din ' + table + ' randurile mai vechi de ' + days + ' zile?\nAceasta actiune e ireversibila.')) return;
+  if (!confirm('Șterge din ' + table + ' rândurile mai vechi de ' + days + ' zile?\nAceastă acțiune e ireversibilă.')) return;
   try {
     var r = await fetch(BASE + '/api/admin/db-cleanup', {
       method: 'POST',
