@@ -2999,6 +2999,26 @@ NEXT STEPS (prioritizat):
 ================================================================================
 
 ================================================================================
+  ⚠️  IMPORTANT — WORKFLOW GIT (Claude Code pe web, repo remote):
+  ---------------------------------------------------------------
+  Există DOUĂ locuri de push — ambele necesare:
+
+  1. FEATURE BRANCH (claude/...):
+     - git commit + git push origin claude/...
+     - Scop: arhivă sesiune, hook stop-check
+     - NU declanșează deploy pe VPS
+
+  2. MAIN (obligatoriu pentru VPS):
+     - Se face via GitHub MCP tool: mcp__github__push_files (branch: main)
+     - Declanșează GitHub Actions → SSH → git reset --hard + npm install + restart
+     - FĂRĂ push pe main = codul NU ajunge pe VPS
+
+  Repo-ul local are istorii divergente față de origin/main (clone fresh la fiecare
+  sesiune web) — git push origin main direct EȘUEAZĂ cu "unrelated histories".
+  Soluție: întotdeauna folosește mcp__github__push_files pentru main.
+================================================================================
+
+================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
 ================================================================================
