@@ -315,6 +315,7 @@ const ALLOWED_JOBS = {
   'collect-venues':     '/api/cron/collect-venues',
   'collect-coaches':    '/api/cron/collect-coaches',
   'coach-stats':        '/api/cron/coach-stats',
+  'referee-extended':   '/api/cron/referee-extended',
 };
 
 router.post('/trigger-cron', async (req, res) => {

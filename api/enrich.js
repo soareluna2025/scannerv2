@@ -7,6 +7,41 @@ const PRE_MATCH_STATUSES = new Set(['NS']);
 const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
 const FINISHED_STATUSES = new Set(['FT','AET','PEN','SUSP','ABD','AWD','WO']);
 
+// Referee impact: home bias + cards markets adjustments
+async function getRefereeImpact(refereeName) {
+  const impact = { homeWin: 1, over25: 1, cards: 1, over35Cards: null, source: [] };
+  if (!refereeName) return impact;
+  try {
+    const { rows } = await query(`
+      SELECT total_matches, home_win_rate, avg_yellow_cards, pct_over_3_5_cards, pct_over_4_5_cards, card_bias_score
+      FROM referee_stats WHERE referee_name = $1
+    `, [refereeName]);
+    const r = rows[0];
+    if (!r || Number(r.total_matches) < 5) return impact;
+    // Home bias adjustment
+    if (r.home_win_rate != null) {
+      if (Number(r.home_win_rate) > 55) {
+        impact.homeWin *= 1.10;
+        impact.source.push(`home_bias(${Number(r.home_win_rate).toFixed(0)}%)`);
+      } else if (Number(r.home_win_rate) < 35) {
+        impact.homeWin *= 0.90;
+        impact.source.push(`away_bias(${Number(r.home_win_rate).toFixed(0)}%)`);
+      }
+    }
+    // Cards prediction (separate market)
+    if (r.pct_over_3_5_cards != null) {
+      impact.over35Cards = +Number(r.pct_over_3_5_cards).toFixed(0);
+      impact.source.push(`o3.5cards(${impact.over35Cards}%)`);
+    }
+    // Card-happy referee → mai multe stop-uri → mai putin Over goluri
+    if (r.avg_yellow_cards > 5) {
+      impact.over25 *= 0.95;
+      impact.source.push(`cardy_ref(${Number(r.avg_yellow_cards).toFixed(1)})`);
+    }
+  } catch (e) { /* silent */ }
+  return impact;
+}
+
 // Coach impact: returneaza multiplicatori pe baza style + tenure
 // Tenure < 90 zile → bounce effect (+8% offensive). Tenure > 3 ani → veteran stability (+3%).
 // Style 'offensive' boost over 2.5. Style 'defensive' boost under + clean sheet.
@@ -651,7 +686,6 @@ export default async function handler(req, res) {
     try {
       const homeImp = await getCoachImpact(hId);
       const awayImp = await getCoachImpact(aId);
-      // Combina cele 2 cu media geometrica (echivalent multiplicare conservatoare)
       const combine = (a, b) => Math.sqrt(a * b);
       const o15 = combine(homeImp.over15, awayImp.over15);
       const o25 = combine(homeImp.over25, awayImp.over25);
@@ -661,6 +695,19 @@ export default async function handler(req, res) {
         result.over25Prob = Math.max(0, Math.min(100, result.over25Prob * o25));
         result.ggProb    = Math.max(0, Math.min(100, result.ggProb    * ggm));
         result._coachImpact = `H:${homeImp.source.join(',')}|A:${awayImp.source.join(',')}`;
+      }
+    } catch (_) { /* silent */ }
+
+    // Referee impact (Faza 3 Hybrid) — home bias + cards prediction
+    try {
+      if (ref) {
+        const refImp = await getRefereeImpact(ref);
+        if (refImp.source.length > 0) {
+          result.homeWin = Math.max(0, Math.min(100, result.homeWin * refImp.homeWin));
+          result.over25Prob = Math.max(0, Math.min(100, result.over25Prob * refImp.over25));
+          if (refImp.over35Cards != null) result.refOver35Cards = refImp.over35Cards;
+          result._refereeImpact = refImp.source.join(',');
+        }
       }
     } catch (_) { /* silent */ }
 

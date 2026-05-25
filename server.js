@@ -51,7 +51,7 @@ for (const name of apiFiles) {
 }
 
 // Cron routes
-const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'learning-analysis', 'recalibrate-tables', 'calibrate-live', 'collect-venues', 'collect-coaches', 'coach-stats'];
+const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'learning-analysis', 'recalibrate-tables', 'calibrate-live', 'collect-venues', 'collect-coaches', 'coach-stats', 'referee-extended'];
 for (const name of cronFiles) {
   app.all(`/api/cron/${name}`, async (req, res) => {
     try {  // catch-block jos logheaza in cron_logs
