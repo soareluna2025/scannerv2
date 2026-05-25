@@ -3054,9 +3054,10 @@ NEXT STEPS (prioritizat):
   ✅ injuries: P3 FIX — getInjuriesFromDB() fallback din prematch_data (978 fixtures)
   ✅ odds NS: P4 FIX — getOddsFromDB() fallback din prematch_data (982 fixtures)
   ✅ predictions: P5 FIX (partial) — DO UPDATE prematch (cel mai recent, nu primul)
-  ✅ venues: P6 FIX — geocodeCity Nominatim + OpenElevation (cron duminica, 200/run)
+  ✅ venues: P6 FIX COMPLET — 4604/4604 venues cu altitude_m populat (25.05 ~17:52)
+             4331 geocodate real (Open-Meteo) + 273 fallback altitude=0
+             Impact activ in enrich.js: La Paz/Johannesburg/MexicoCity → -6% to -15% Over
   ⚠️  Brier Score: 0.1950 — Faza 0 observare (nu calibrare). Checkpoint: 8 iun 2026
-  ⚠️  venues altitude: populare in curs (cron duminica, ~23 saptamani pt 4604)
   ❌ prematch predictions (900 fixtures): COLECTATE dar IGNORATE in enrich.js
   ❌ standings (2,484 randuri): COLECTATE dar IGNORATE in enrich.js
   ❌ Consensus Engine: NEFACUT
