@@ -35,11 +35,20 @@ async function ensureTable() {
       resolved_at   TIMESTAMP
     )
   `);
-  // Migratie pentru bilete combinate
+  // Migratii lazy pentru tabele existente din versiuni anterioare (fara aceste coloane)
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS outcome TEXT DEFAULT 'PENDING'`).catch(() => {});
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS payout NUMERIC(10,2)`).catch(() => {});
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS profit NUMERIC(10,2)`).catch(() => {});
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS expected_prob NUMERIC(5,2)`).catch(() => {});
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS notes TEXT`).catch(() => {});
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP`).catch(() => {});
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS league_name TEXT`).catch(() => {});
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS league_id INT`).catch(() => {});
+  await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS selection TEXT`).catch(() => {});
   await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS is_multi BOOLEAN DEFAULT FALSE`).catch(() => {});
   await query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS legs JSONB`).catch(() => {});
-  await query(`CREATE INDEX IF NOT EXISTS idx_bets_outcome ON bets(outcome)`);
-  await query(`CREATE INDEX IF NOT EXISTS idx_bets_placed ON bets(placed_at DESC)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_bets_outcome ON bets(outcome)`).catch(() => {});
+  await query(`CREATE INDEX IF NOT EXISTS idx_bets_placed ON bets(placed_at DESC)`).catch(() => {});
 }
 
 export default async function handler(req, res) {
