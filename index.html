@@ -4420,7 +4420,7 @@ function switchFavSub(which){
 }
 
 // Deschide/inchide pickerul de piete pe un card de favorit
-function toggleFavPicker(fid){
+async function toggleFavPicker(fid){
   var box=document.getElementById('fav-picker-'+fid);
   if(!box)return;
   if(box.style.display==='block'){box.style.display='none';return;}
@@ -4431,6 +4431,30 @@ function toggleFavPicker(fid){
   // Foloseste enrich data live updated cand este disponibil
   var ed=item.type==='live'?(ST.ms.find(function(x){return x.fixture&&x.fixture.id===fid;})||{}).enrichData:_pmEnrich[fid];
   ed=ed||item.ed;
+  // AUTO-FETCH: daca enrich lipseste, il aducem din API (durata ~1-2s)
+  if(!ed && item.m && item.m.teams){
+    var hid=item.m.teams.home&&item.m.teams.home.id;
+    var aid=item.m.teams.away&&item.m.teams.away.id;
+    if(hid && aid){
+      box.style.display='block';
+      box.innerHTML='<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;color:var(--mu);font-size:11px"><div class="spin" style="width:14px;height:14px;border:2px solid rgba(99,102,241,.3);border-top-color:#6366f1;border-radius:50%;animation:spin 0.8s linear infinite"></div> Calculez probabilitati...</div>';
+      try{
+        var er=await fetch(enrichUrl(hid, aid, item.m));
+        var fetched=await er.json();
+        if(fetched && !fetched.error){
+          ed=fetched;
+          // Cache pentru utilizari viitoare (in cache-ul corespunzator type-ului)
+          if(item.type==='live')_genLiveEnrich[fid]=fetched;
+          else _pmEnrich[fid]=fetched;
+          // Updateaza si item.ed pentru persistenta in localStorage favs
+          item.ed=fetched;
+          var allFavs=loadFavs();
+          var idxF=allFavs.items.findIndex(function(x){return x.fid===fid;});
+          if(idxF>=0){allFavs.items[idxF].ed=fetched;saveFavs(allFavs);}
+        }
+      }catch(e){console.warn('[fav-picker] auto-fetch enrich fail:',e.message);}
+    }
+  }
   // Piete posibile cu probabilitati calibrate
   var markets=[];
   function addMkt(label,raw,cat,sub,thr){
