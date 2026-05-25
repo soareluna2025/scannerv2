@@ -2921,6 +2921,83 @@ NEXT STEPS (prioritizat):
                  Brier estimat post-calibrare: 0.18 (de la 0.28).
   Commit: 72be9fc
 
+
+[25.05 ~13:00] - SESIUNE NOUA: Aloha Hybrid Intelligence System v2
+                 Context recuperat din SESSION_CONTEXT + SINTEZA files + commits.
+                 Stare initiala identificata:
+                 - coach_stats TABLE lipsea din DB (creat lazy in handler, niciodata apelat)
+                 - collect-team-stats.js pierdut (push esuat in sesiunea anterioara)
+                 - venues cu altitude = 0 (collect-venues rulat dar fara OpenElevation)
+                 - referee-extended pe main dar neexecutat pe VPS (home_win_rate lipsa)
+
+[25.05 ~13:05] - ETAPA 4 HYBRID V2: collect-team-stats.js RESCRIS + INTEGRAT
+                 - api/cron/collect-team-stats.js: colector /teams/statistics per
+                   (team_id, league_id, season=2025), LIMIT 40/run, skip echipe
+                   actualizate in ultimele 7 zile, populeaza teams_stats
+                 - Bug fix: fixture_date -> match_date (numele corect al coloanei)
+                 - scripts/collect-team-stats-now.sh + collect-team-stats-loop.sh
+                 - server.js: adaugat collect-team-stats in cronFiles array
+                 - scripts/create-tables.sql: adaugat coach_career + coach_stats
+                   CREATE TABLE IF NOT EXISTS (elimina lazy creation)
+                 Commit: c6f48fd, c8d53d8, 6e33a6e, f16dde5
+
+[25.05 ~13:11] - VPS: calea corecta identificata: /root/scannerv2 (nu /var/www/alohascan)
+                 WorkingDirectory din systemd service: /root/scannerv2
+                 Port server: 3000 (nu 3001 cum era in scripturi — FIXAT)
+                 systemctl restart alohascan -> active (running)
+
+[25.05 ~13:20] - DB: tabele create manual in Termius:
+                 CREATE TABLE coach_career (deja exista - SKIP)
+                 CREATE TABLE coach_stats -> SUCCESS
+                 Stare DB dupa creare:
+                   coach_career: 35,649 randuri
+                   coaches: 10,686 randuri
+                   coach_stats: 0 (gol, de agregat)
+                   referee_stats: 233 randuri
+                   teams_stats: 0 (gol, de populat)
+                   teams total: 7,595
+                   venues: 4,604
+                   venues cu altitude: 0
+
+[25.05 ~13:23] - coach_stats AGREGAT:
+                 curl http://localhost:3000/api/cron/coach-stats
+                 -> 3,997 antrenori agregati din coach_career + fixtures_history
+                 Sample: Guardiola 66.7% WR, Pellegrini 50%, Farke 42.9%
+                 ZERO API calls — agregare SQL pura
+
+[25.05 ~13:39] - teams_stats POPULAT complet (Loop 41 runde):
+                 bash scripts/collect-team-stats-loop.sh
+                 Run #1-40: 40 echipe/run, Run #41: pairs=0 DONE
+                 Total upserted: 1,576 perechi (team_id, league_id, season=2025)
+                 API calls folosite: ~1,576 (din planul 150k/zi)
+                 Sursa: API-Football /teams/statistics per echipa
+
+[25.05 ~13:40] - referee-extended RULAT (primul batch):
+                 bash scripts/referee-extended-now.sh
+                 -> 130 arbitri actualizati cu: home_win_rate, draw_rate,
+                    away_win_rate, pct_over_3_5_cards, pct_over_4_5_cards,
+                    avg_yellow_h1/h2, card_bias_score
+                 ZERO API calls — agregare SQL din fixtures_history + match_stats
+                 scripts/referee-extended-loop.sh creat pentru run complet
+
+================================================================================
+  STARE HYBRID V2 LA 25.05 ~14:00:
+  ✅ L3 Coach Impact: 3,997 coach_stats agregati
+  ✅ L4 Referee basic: referee_stats existent
+  ✅ L4+ Referee Extended: home_win_rate + card_bias populat (partial, loop in curs)
+  ✅ L5 Venue cod: collect-venues.js pe main
+  ✅ L6 Weather: meteo impact in enrich.js
+  🔄 L1 Team Strength: teams_stats 1,576 perechi (COMPLET pentru meciuri active)
+  ❌ L2 Player Context: injuries/suspensions impact — NEFACUT
+  ❌ L5 Altitude DB: altitude_m = 0, collect-venues cu OpenElevation nerulatat
+  ❌ L7 Calibrare istorica: recalibrate-tables + calibrate-live nerulatat
+  ❌ L8 API Predictions: api_predictions tabel + collector — NEFACUT
+  ❌ Consensus Engine: 3/3 STRONG / 2/3 MEDIUM / SKIP — NEFACUT
+  ❌ api_comparison tabel — NEFACUT
+  ❌ UI Consensus Engine — NEFACUT
+  ❌ Brier Score benchmark final — NEFACUT
+================================================================================
+
 ================================================================================
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
