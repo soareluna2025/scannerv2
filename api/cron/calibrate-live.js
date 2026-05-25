@@ -56,10 +56,10 @@ export default async function handler(req, res) {
     const { rows: matches } = await query(`
       SELECT fh.fixture_id, fh.home_goals, fh.away_goals, fh.status_short
       FROM fixtures_history fh
-      WHERE fh.match_date > NOW() - INTERVAL '365 days'
+      WHERE fh.match_date > NOW() - INTERVAL '730 days'
         AND fh.status_short IN ('FT','AET','PEN')
         AND fh.home_goals IS NOT NULL
-      LIMIT 5000
+      LIMIT 20000
     `).catch((e) => { console.error('[calibrate-live] fixtures query failed:', e.message); return { rows: [] }; });
 
     if (!matches.length) {
