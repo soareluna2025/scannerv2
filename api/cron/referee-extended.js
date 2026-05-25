@@ -23,10 +23,13 @@ async function ensureColumns() {
 }
 
 export default async function handler(req, res) {
+  const limit = parseInt(req.query?.limit || '50', 10);
+
   try {
     await ensureColumns();
 
     // 1. Home/Away/Draw win rates per referee din fixtures_history
+    // Doar arbitri neactualizati in ultimele 7 zile (evita loop infinit)
     const { rows: outcomes } = await query(`
       SELECT
         referee AS rname,
@@ -39,9 +42,15 @@ export default async function handler(req, res) {
         AND status_short IN ('FT','AET','PEN')
         AND home_goals IS NOT NULL
         AND match_date > NOW() - INTERVAL '24 months'
+        AND NOT EXISTS (
+          SELECT 1 FROM referee_stats rs
+          WHERE rs.referee_name = fixtures_history.referee
+            AND rs.updated_at > NOW() - INTERVAL '7 days'
+        )
       GROUP BY referee
       HAVING COUNT(*) >= 5
-    `).catch((e) => {
+      LIMIT $1
+    `, [limit]).catch((e) => {
       console.error('[ref-ext] outcomes query:', e.message);
       return { rows: [] };
     });
@@ -132,9 +141,25 @@ export default async function handler(req, res) {
       VALUES ('referee-extended', NOW(), 'success', $1)
     `, [upserts]).catch(() => {});
 
+    const { rows: rem } = await query(`
+      SELECT COUNT(DISTINCT referee)::int AS n
+      FROM fixtures_history
+      WHERE referee IS NOT NULL AND referee != ''
+        AND status_short IN ('FT','AET','PEN')
+        AND home_goals IS NOT NULL
+        AND match_date > NOW() - INTERVAL '24 months'
+        AND NOT EXISTS (
+          SELECT 1 FROM referee_stats rs
+          WHERE rs.referee_name = fixtures_history.referee
+            AND rs.updated_at > NOW() - INTERVAL '7 days'
+        )
+      HAVING COUNT(*) >= 5
+    `).catch(() => ({ rows: [{ n: 0 }] }));
+
     return res.status(200).json({
       ok: true,
       referees_updated: upserts,
+      remaining: rem[0]?.n ?? 0,
       sample: outcomes.slice(0, 5).map(o => ({
         ref: o.rname,
         total: Number(o.total),
