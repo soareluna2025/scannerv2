@@ -842,6 +842,21 @@ body{
     if(splash) splash.classList.add('spl-exit');
     setTimeout(function(){ if(splash) splash.style.display = 'none'; }, 750);
   };
+  // Expus pentru logout — re-afiseaza splash
+  window.showSplash = function(){
+    tapped = false;
+    var splash = document.getElementById('splash');
+    var logo = document.getElementById('spl-logo');
+    if(splash){
+      splash.style.display = 'flex';
+      splash.style.opacity = '1';
+      splash.classList.remove('spl-exit');
+    }
+    if(logo) logo.classList.remove('spl-tapped', 'spl-idle');
+    setTimeout(function(){
+      if(logo && !tapped) logo.classList.add('spl-idle');
+    }, 1500);
+  };
   document.addEventListener('DOMContentLoaded', function(){
     setTimeout(function(){
       var logo = document.getElementById('spl-logo');
@@ -1201,9 +1216,12 @@ function logout() {
   localStorage.removeItem('aloha_admin_key');
   _key = '';
   if (_timer) { clearInterval(_timer); _timer = null; }
+  if (_bfTimer) { clearInterval(_bfTimer); _bfTimer = null; }
   document.getElementById('keyInputWrap').style.display = 'block';
+  document.getElementById('apiKeyInput').value = '';
   document.getElementById('refreshInfo').textContent = '— Introdu API key și apasă Conectare —';
   updateAuthBtn();
+  if (typeof showSplash === 'function') showSplash();
   toast('Deconectat', '#f59e0b');
 }
 
