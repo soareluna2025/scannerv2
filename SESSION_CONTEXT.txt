@@ -3058,10 +3058,17 @@ NEXT STEPS (prioritizat):
              4331 geocodate real (Open-Meteo) + 273 fallback altitude=0
              Impact activ in enrich.js: La Paz/Johannesburg/MexicoCity → -6% to -15% Over
   ⚠️  Brier Score: 0.1950 — Faza 0 observare (nu calibrare). Checkpoint: 8 iun 2026
-  ❌ prematch predictions (900 fixtures): COLECTATE dar IGNORATE in enrich.js
-  ❌ standings (2,484 randuri): COLECTATE dar IGNORATE in enrich.js
+  ✅ standings lambda blend: 60% form_recent + 40% seasonal_avg din standings (2,138 echipe)
+     getStandingsForTeam() — goals_for/against/played per team+league
+     aplicat cand form >= 3 matches SI standings disponibil
+  ✅ Layer 8 API Consensus: alinierea Poisson nostru cu poisson_distribution API-Football
+     getPrematchPredictions() — citeste prematch_data WHERE data_type='predictions'
+     score8 = 100 - |theirHomeWin - ourHomeWin| * 2, greutate 8% in confidence score
+     coverage 91% (1,413/1,556 fixtures cu prematch predictions)
+     breakdown.apiConsensus adaugat in raspuns
   ❌ Consensus Engine: NEFACUT
   ❌ UI Consensus Engine: NEFACUT
+  Commit: 58db4bd
 ================================================================================
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
