@@ -219,7 +219,7 @@ export default async function handler(req, res) {
     const fixtures = fxData.response || [];
 
     if (!fixtures.length) {
-      await logCron(0, 0, 'ok', null);
+      await logCron(0, 0, 'success', null);
       return res.status(200).json({ ok: true, message: 'No FT fixtures today', date: today });
     }
 
@@ -269,7 +269,7 @@ export default async function handler(req, res) {
       await sleep(200);
     }
 
-    await logCron(toProcess.length, totalPlayers, 'ok', null);
+    await logCron(toProcess.length, totalPlayers, 'success', null);
     return res.status(200).json({
       ok: true,
       date: today,
