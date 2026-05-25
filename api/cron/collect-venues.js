@@ -78,42 +78,46 @@ async function processVenues(LIMIT) {
       return;
     }
 
-    // Pas 1: geocodare unica per oras (nu per venue) — economiseste apeluri Nominatim
-    const cityCache = new Map(); // "city|country" → {lat, lng} | null
-    const uniqueCities = [...new Set(toProcess.map(r => `${r.city}|${r.country ?? ''}`))];
-    console.log(`[collect-venues] ${toProcess.length} venues, ${uniqueCities.length} orase unice`);
+    // Grupeaza venues pe oras unic
+    const cityGroups = new Map();
+    for (const r of toProcess) {
+      const key = `${r.city}|${r.country ?? ''}`;
+      if (!cityGroups.has(key)) cityGroups.set(key, []);
+      cityGroups.get(key).push(r);
+    }
+    console.log(`[collect-venues] ${toProcess.length} venues, ${cityGroups.size} orase unice`);
 
-    for (const key of uniqueCities) {
+    const collected = [];
+
+    // Per oras unic: geocodare (1 apel Nominatim) + elevation (1 apel) + UPDATE imediat toate venues din oras
+    for (const [key, venues] of cityGroups) {
       const [city, country] = key.split('|');
       const coords = await geocodeCity(city, country);
-      cityCache.set(key, coords);
       await sleep(1100); // Nominatim rate limit: 1 req/s
-    }
 
-    // Pas 2: elevation batch pentru toate coordonatele obtinute (un singur request API)
-    const withCoords = toProcess
-      .map(r => ({ ...r, coords: cityCache.get(`${r.city}|${r.country ?? ''}`) }))
-      .filter(r => r.coords);
-
-    const elevations = await getAltitudeBatch(withCoords.map(r => r.coords));
-
-    // Pas 3: UPDATE batch in DB
-    const collected = [];
-    for (let i = 0; i < withCoords.length; i++) {
-      const r = withCoords[i];
-      const { lat, lng } = r.coords;
-      const altitude = elevations[i] ?? 0;
-      const climate = climateZone(lat);
-      try {
-        await query(`
-          UPDATE venues
-          SET latitude = $1, longitude = $2, altitude_m = $3, climate_zone = $4, updated_at = NOW()
-          WHERE venue_id = $5
-        `, [lat, lng, altitude, climate, r.vid]);
-        collected.push({ id: r.vid, city: r.city, lat, altitude });
-      } catch (e) {
-        console.warn(`[collect-venues] UPDATE esec venue ${r.vid}:`, e.message);
+      if (!coords) {
+        console.warn(`[collect-venues] geocodare esec: ${city} (${country})`);
+        continue;
       }
+
+      const { lat, lng } = coords;
+      const elevArr = await getAltitudeBatch([{ lat, lng }]);
+      const altitude = elevArr[0] ?? 0;
+      const climate = climateZone(lat);
+
+      for (const v of venues) {
+        try {
+          await query(`
+            UPDATE venues
+            SET latitude = $1, longitude = $2, altitude_m = $3, climate_zone = $4, updated_at = NOW()
+            WHERE venue_id = $5
+          `, [lat, lng, altitude, climate, v.vid]);
+          collected.push({ id: v.vid, city, altitude });
+        } catch (e) {
+          console.warn(`[collect-venues] UPDATE esec venue ${v.vid}:`, e.message);
+        }
+      }
+      console.log(`[collect-venues] ${city}: alt=${altitude}m → ${venues.length} venues actualizate`);
     }
     console.log(`[collect-venues] done: ${collected.length}/${toProcess.length} venues procesate`);
 
