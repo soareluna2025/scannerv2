@@ -2980,22 +2980,38 @@ NEXT STEPS (prioritizat):
                  ZERO API calls — agregare SQL din fixtures_history + match_stats
                  scripts/referee-extended-loop.sh creat pentru run complet
 
+[25.05 ~14:25] - FIX CRITIC referee-extended INFINITE LOOP:
+                 BUG: lipsea filtrul NOT EXISTS updated_at > 7 days → aceiasi 233
+                 arbitri procesati la fiecare run → 755+ runde, 98k+ upserts
+                 FIX: adaugat NOT EXISTS (rs.updated_at > NOW() - 7d) in outcomes query
+                      + LIMIT $1 (50/run default) + remaining count in response
+                 Loop fix: bash scripts/referee-extended-loop.sh -> Run #1 updated=0 DONE
+
+[25.05 ~14:55] - DIAGNOSTIC COMPLET DB rulat pe VPS (scripts/diagnostic-db.sh)
+                 Commit: 1893585 (feature branch) + fceca62 (main via MCP)
+                 Vezi sectiunea 14 pentru toate rezultatele.
+
 ================================================================================
-  STARE HYBRID V2 LA 25.05 ~14:00:
-  ✅ L3 Coach Impact: 3,997 coach_stats agregati
-  ✅ L4 Referee basic: referee_stats existent
-  ✅ L4+ Referee Extended: home_win_rate + card_bias populat (partial, loop in curs)
-  ✅ L5 Venue cod: collect-venues.js pe main
-  ✅ L6 Weather: meteo impact in enrich.js
-  🔄 L1 Team Strength: teams_stats 1,576 perechi (COMPLET pentru meciuri active)
-  ❌ L2 Player Context: injuries/suspensions impact — NEFACUT
-  ❌ L5 Altitude DB: altitude_m = 0, collect-venues cu OpenElevation nerulatat
-  ❌ L7 Calibrare istorica: recalibrate-tables + calibrate-live nerulatat
-  ❌ L8 API Predictions: api_predictions tabel + collector — NEFACUT
-  ❌ Consensus Engine: 3/3 STRONG / 2/3 MEDIUM / SKIP — NEFACUT
-  ❌ api_comparison tabel — NEFACUT
-  ❌ UI Consensus Engine — NEFACUT
-  ❌ Brier Score benchmark final — NEFACUT
+  STARE HYBRID V2 LA 25.05 ~15:00 (dupa diagnostic):
+  ✅ L0 Poisson: activ, lambda din form_stats/teams_stats/league_stats
+  ✅ L1 Form: form_stats 6,368 randuri, updated azi — dar JOIN doar 23% din fixtures!
+  ✅ L2 Team Strength: player_stats 1.84M randuri, 1,731 echipe (backfill complet)
+  ✅ L3 Coach Impact: 3,997 coach_stats (style+tenure_days EXISTA in DB)
+  ✅ L4 Referee: 233 arbitri, 130 cu extended stats (home_win_rate, card_bias)
+  ✅ L5 Teams Stats: 1,576 perechi, 35/35 upcoming fixtures au JOIN complet
+  ✅ L6 Odds: 543k randuri in DB, 982 fixtures in prematch_data
+  ✅ H2H: 2,369 meciuri, 1,386 perechi unice
+  🔄 L4+ Referee Extended: 130/233 cu stats complete (103 fara home_win_rate)
+  ⚠️  form_stats JOIN GAP: doar 8-9/35 fixtures viitoare au JOIN activ (23%)
+  ⚠️  collect-finished BROKEN: 50 rulari, 0 succese — odds/match_stats NU se colecteaza
+  ⚠️  Brier Score: 0.1950 (target ≤ 0.13) — sample 622 predictii verificate
+  ❌ venues altitude: 4,604 NULL — OpenElevation nerulatat
+  ❌ injuries table: 4 randuri (golita) — date in prematch_data dar NU in tabel
+  ❌ prematch predictions (900 fixtures): COLECTATE dar IGNORATE in enrich.js
+  ❌ standings (2,484 randuri): COLECTATE dar IGNORATE in enrich.js
+  ❌ odds prematch: 982 fixtures in prematch_data, dar C2 arata 0 in odds JOIN
+  ❌ Consensus Engine: NEFACUT
+  ❌ UI Consensus Engine: NEFACUT
 ================================================================================
 
 ================================================================================
