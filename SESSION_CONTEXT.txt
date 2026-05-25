@@ -3094,7 +3094,11 @@ NEXT STEPS (prioritizat):
      S1 winner direction, S2 over/under, S3 lambda alignment
      boost +-5 la confidenceScore, breakdown.consensus + _consensusDetails in raspuns
      Commit: 22807f6
-  ❌ UI Consensus Engine: NEFACUT
+  ✅ UI Consensus Engine: index.html — sectiune vizuala in detaliile meciului
+     breakdown bars: API L8 + Consensus adaugate (9 straturi)
+     sectiune purple cu scor, bara, label RIDICAT/MEDIU/SCAZUT, boost badge
+     detalii semnale: directie castig, over/under, lambda total
+     Commit: c283293
   ✅ prediction_log: CREAT MANUAL PE VPS (tabel 37) — logPrediction() functional
      era missing → silent failure in enrich.js; acum accept INSERT-uri
   ✅ model_weights: CREAT MANUAL PE VPS (tabel 38) — 23 valori default in 8 module
