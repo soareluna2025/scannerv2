@@ -312,6 +312,7 @@ const ALLOWED_JOBS = {
   'recalibrate-tables': '/api/cron/recalibrate-tables',
   'calibrate-live':     '/api/cron/calibrate-live',
   'learning-analysis':  '/api/cron/learning-analysis',
+  'collect-venues':     '/api/cron/collect-venues',
 };
 
 router.post('/trigger-cron', async (req, res) => {

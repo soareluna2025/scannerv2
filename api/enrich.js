@@ -7,6 +7,62 @@ const PRE_MATCH_STATUSES = new Set(['NS']);
 const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
 const FINISHED_STATUSES = new Set(['FT','AET','PEN','SUSP','ABD','AWD','WO']);
 
+// Returneaza multiplicatori pe Over1.5, Over2.5, GG pe baza venue + meteo.
+// Default toate la 1.0 (no effect). Apel safe — daca lipsesc date, returneaza neutru.
+//
+// Bazat pe studii: altitudine > 2000m reduce ~15% intensitatea oaspetilor,
+// vant > 30 km/h face long-balls dificile, ploaie intensa creste cards.
+async function getVenueAndMeteoImpact(fixtureId, venueId, meteoData) {
+  const impact = { over15: 1, over25: 1, gg: 1, cards: 1, source: [] };
+  // Venue altitude
+  if (venueId) {
+    try {
+      const { rows } = await query(
+        `SELECT altitude_m, surface FROM venues WHERE venue_id = $1`,
+        [venueId]
+      );
+      const v = rows[0];
+      if (v) {
+        if (v.altitude_m > 2500) {
+          impact.over15 *= 0.78; impact.over25 *= 0.70;
+          impact.source.push(`altitude_extreme(${v.altitude_m}m)`);
+        } else if (v.altitude_m > 2000) {
+          impact.over15 *= 0.88; impact.over25 *= 0.82;
+          impact.source.push(`altitude_high(${v.altitude_m}m)`);
+        } else if (v.altitude_m > 1500) {
+          impact.over15 *= 0.94; impact.over25 *= 0.90;
+          impact.source.push(`altitude_mid(${v.altitude_m}m)`);
+        }
+        if (v.surface === 'artificial') {
+          impact.over25 *= 1.05;
+          impact.source.push('artificial_turf');
+        }
+      }
+    } catch (e) { /* silent */ }
+  }
+  // Meteo
+  if (meteoData) {
+    const { temperature, wind_kmh, precipitation_mm } = meteoData;
+    if (wind_kmh > 30) {
+      impact.over25 *= 0.90; impact.cards *= 1.05;
+      impact.source.push(`wind(${Math.round(wind_kmh)}kmh)`);
+    }
+    if (precipitation_mm > 5) {
+      impact.over25 *= 0.92; impact.cards *= 1.20;
+      impact.source.push(`rain(${precipitation_mm}mm)`);
+    }
+    if (temperature > 32) {
+      impact.over15 *= 0.92; impact.over25 *= 0.88;
+      impact.source.push(`hot(${Math.round(temperature)}C)`);
+    }
+    if (temperature < 2) {
+      impact.over25 *= 0.96;
+      impact.source.push(`cold(${Math.round(temperature)}C)`);
+    }
+  }
+  return impact;
+}
+
 function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
   if (!elapsed || elapsed <= 0) return { lambda: lambdaBase, dynamic: false };
   const minutesLeft = Math.max(1, 90 - elapsed);
@@ -381,7 +437,7 @@ async function getVenueForFixture(fixtureId) {
     const venueId = Array.isArray(payload) ? payload[0]?.fixture?.venue?.id : null;
     if (!venueId) return null;
     const v = await query(
-      'SELECT surface, latitude, longitude FROM venues WHERE venue_id = $1',
+      'SELECT surface, latitude, longitude, altitude_m, climate_zone, capacity FROM venues WHERE venue_id = $1',
       [venueId]
     );
     return v.rows[0] || null;
@@ -531,11 +587,18 @@ export default async function handler(req, res) {
       result._teamsStatsUsed = true;
     }
 
-    // Venue surface adjustment — artificial turf increases goals/corners
-    if (venueInfo?.surface === 'artificial') {
-      result.over15Prob = Math.min(100, result.over15Prob + 5);
-      result.over25Prob = Math.min(100, result.over25Prob + 3);
-      result._venueSurface = 'artificial';
+    // Venue + altitude + meteo amplificat (Faza 1 Hybrid)
+    if (venueInfo) {
+      const venueMeteo = result.weather || null;
+      const imp = await getVenueAndMeteoImpact(fixtureId, venueId, venueMeteo);
+      if (imp.source.length > 0) {
+        result.over15Prob = Math.max(0, Math.min(100, result.over15Prob * imp.over15));
+        result.over25Prob = Math.max(0, Math.min(100, result.over25Prob * imp.over25));
+        result.ggProb    = Math.max(0, Math.min(100, result.ggProb    * imp.gg));
+        result._venueMeteoImpact = imp.source.join(',');
+      }
+      result._venueSurface = venueInfo.surface;
+      result._venueAltitude = venueInfo.altitude_m;
     }
 
     // Ajustare Over 2.5 bazată pe stilul arbitrului
