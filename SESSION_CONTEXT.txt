@@ -3014,6 +3014,13 @@ NEXT STEPS (prioritizat):
                  NOTE: Brier 0.1950 NU se schimba imediat (622 predictii existente neafectate)
                        Roadmap: Faza 0 (observare) pana 20 iulie. Faza 1 trigger: Brier<=0.16 + sample>=2000
 
+[25.05 ~15:xx] - P6 FIX: collect-venues.js geocodare Nominatim + OpenElevation
+                 Commit: 10efb9c (feature) / 4dbef39 (main)
+                 Bug: lat=null, lng=null hardcodat → OpenElevation niciodata apelat → 4604 venues cu altitude NULL
+                 Fix: geocodeCity() via Nominatim OSM (gratuit, fara cheie) → lat/lng → altitude_m
+                 Sleep 1.1s/req (Nominatim rate limit 1/s). Prioritizeaza venues fara altitude existente.
+                 Cron duminica 04:00, LIMIT=200/run. Manual: /api/cron/collect-venues?limit=500
+
 ================================================================================
   STARE HYBRID V2 LA 25.05 ~15:00 (dupa diagnostic):
   ✅ L0 Poisson: activ, lambda din form_stats/teams_stats/league_stats
@@ -3031,8 +3038,9 @@ NEXT STEPS (prioritizat):
   ✅ injuries: P3 FIX — getInjuriesFromDB() fallback din prematch_data (978 fixtures)
   ✅ odds NS: P4 FIX — getOddsFromDB() fallback din prematch_data (982 fixtures)
   ✅ predictions: P5 FIX (partial) — DO UPDATE prematch (cel mai recent, nu primul)
+  ✅ venues: P6 FIX — geocodeCity Nominatim + OpenElevation (cron duminica, 200/run)
   ⚠️  Brier Score: 0.1950 — Faza 0 observare (nu calibrare). Checkpoint: 8 iun 2026
-  ❌ venues altitude: 4,604 NULL — OpenElevation nerulatat (P6 PENDING)
+  ⚠️  venues altitude: populare in curs (cron duminica, ~23 saptamani pt 4604)
   ❌ prematch predictions (900 fixtures): COLECTATE dar IGNORATE in enrich.js
   ❌ standings (2,484 randuri): COLECTATE dar IGNORATE in enrich.js
   ❌ Consensus Engine: NEFACUT
