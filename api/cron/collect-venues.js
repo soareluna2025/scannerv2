@@ -40,10 +40,11 @@ async function geocodeCity(city, country) {
 async function getAltitude(lat, lng) {
   if (!lat || !lng) return null;
   try {
-    const url = `https://api.open-elevation.com/api/v1/lookup?locations=${lat},${lng}`;
+    // Open-Meteo elevation — acelasi provider ca weather, stabil si gratuit
+    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lng}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     const d = await res.json();
-    const m = d.results?.[0]?.elevation;
+    const m = d.elevation?.[0];
     return typeof m === 'number' ? Math.round(m) : null;
   } catch (e) {
     return null;
@@ -80,21 +81,31 @@ async function processVenues(LIMIT) {
         const coords = await geocodeCity(r.city, r.country);
         const lat = coords?.lat ?? null;
         const lng = coords?.lng ?? null;
-        const altitude = (lat != null && lng != null) ? await getAltitude(lat, lng) : null;
+        // Daca geocodarea reuseste, incercam elevation; fallback la 0 (sea level)
+        // ca sa nu blocam progresul daca Open-Meteo are probleme temporare
+        let altitude = null;
+        if (lat != null && lng != null) {
+          altitude = await getAltitude(lat, lng) ?? 0;
+        }
         const climate = climateZone(lat);
 
-        await query(`
-          UPDATE venues
-          SET latitude = COALESCE($1, latitude),
-              longitude = COALESCE($2, longitude),
-              altitude_m = COALESCE($3, altitude_m),
-              climate_zone = COALESCE($4, climate_zone),
-              updated_at = NOW()
-          WHERE venue_id = $5
-        `, [lat, lng, altitude, climate, r.vid]);
+        // Doar daca am obtinut cel putin lat/lng actualizam — altfel sarim
+        if (lat == null) {
+          console.warn(`[collect-venues] geocodare esec: ${r.city} (${r.country})`);
+        } else {
+          await query(`
+            UPDATE venues
+            SET latitude = COALESCE($1, latitude),
+                longitude = COALESCE($2, longitude),
+                altitude_m = COALESCE($3, altitude_m),
+                climate_zone = COALESCE($4, climate_zone),
+                updated_at = NOW()
+            WHERE venue_id = $5
+          `, [lat, lng, altitude, climate, r.vid]);
 
-        collected.push({ id: r.vid, city: r.city, lat, altitude });
-        console.log(`[collect-venues] ${r.city} (${r.country}) → lat=${lat} alt=${altitude}m`);
+          collected.push({ id: r.vid, city: r.city, lat, altitude });
+          console.log(`[collect-venues] ${r.city} (${r.country}) → lat=${lat} alt=${altitude}m`);
+        }
       } catch (e) {
         console.warn(`[collect-venues] venue ${r.vid} (${r.city}):`, e.message);
       }
