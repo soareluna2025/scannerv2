@@ -89,61 +89,6 @@ async function getCoachImpact(teamId) {
   return impact;
 }
 
-// Returneaza multiplicatori pe Over1.5, Over2.5, GG pe baza venue + meteo.
-// Default toate la 1.0 (no effect). Apel safe — daca lipsesc date, returneaza neutru.
-//
-// Bazat pe studii: altitudine > 2000m reduce ~15% intensitatea oaspetilor,
-// vant > 30 km/h face long-balls dificile, ploaie intensa creste cards.
-async function getVenueAndMeteoImpact(fixtureId, venueId, meteoData) {
-  const impact = { over15: 1, over25: 1, gg: 1, cards: 1, source: [] };
-  // Venue altitude
-  if (venueId) {
-    try {
-      const { rows } = await query(
-        `SELECT altitude_m, surface FROM venues WHERE venue_id = $1`,
-        [venueId]
-      );
-      const v = rows[0];
-      if (v) {
-        if (v.altitude_m > 2500) {
-          impact.over15 *= 0.78; impact.over25 *= 0.70;
-          impact.source.push(`altitude_extreme(${v.altitude_m}m)`);
-        } else if (v.altitude_m > 2000) {
-          impact.over15 *= 0.88; impact.over25 *= 0.82;
-          impact.source.push(`altitude_high(${v.altitude_m}m)`);
-        } else if (v.altitude_m > 1500) {
-          impact.over15 *= 0.94; impact.over25 *= 0.90;
-          impact.source.push(`altitude_mid(${v.altitude_m}m)`);
-        }
-        if (v.surface === 'artificial') {
-          impact.over25 *= 1.05;
-          impact.source.push('artificial_turf');
-        }
-      }
-    } catch (e) { /* silent */ }
-  }
-  // Meteo
-  if (meteoData) {
-    const { temperature, wind_kmh, precipitation_mm } = meteoData;
-    if (wind_kmh > 30) {
-      impact.over25 *= 0.90; impact.cards *= 1.05;
-      impact.source.push(`wind(${Math.round(wind_kmh)}kmh)`);
-    }
-    if (precipitation_mm > 5) {
-      impact.over25 *= 0.92; impact.cards *= 1.20;
-      impact.source.push(`rain(${precipitation_mm}mm)`);
-    }
-    if (temperature > 32) {
-      impact.over15 *= 0.92; impact.over25 *= 0.88;
-      impact.source.push(`hot(${Math.round(temperature)}C)`);
-    }
-    if (temperature < 2) {
-      impact.over25 *= 0.96;
-      impact.source.push(`cold(${Math.round(temperature)}C)`);
-    }
-  }
-  return impact;
-}
 
 function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
   if (!elapsed || elapsed <= 0) return { lambda: lambdaBase, dynamic: false };
@@ -664,12 +609,11 @@ export default async function handler(req, res) {
   const key = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
   if (!key) return res.status(500).json({ error: 'API_FOOTBALL_KEY neconfigurat' });
 
-  const { h, a, fid, hn, an, lg, lgid, dt, br, elapsed, hg, ag, soth, sota, ref, status_short } = req.query;
+  const { h, a, fid, hn, an, lg, lgid, dt, elapsed, hg, ag, soth, sota, ref, status_short } = req.query;
   if (!h || !a) return res.status(400).json({ error: 'Parametri h si a sunt necesari' });
 
-  const hId      = Number(h);
-  const aId      = Number(a);
-  const hdr      = { 'x-apisports-key': key };
+  const hId = Number(h);
+  const aId = Number(a);
 
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats + venue in parallel ---
@@ -784,18 +728,31 @@ export default async function handler(req, res) {
       result._standingsBlend = `H(${stnH.avgScored}/${stnH.avgConceded})|A(${stnA.avgScored}/${stnA.avgConceded})`;
     }
 
-    // Venue + altitude + meteo amplificat (Faza 1 Hybrid)
+    // Venue + altitude impact (Faza 1 Hybrid)
     if (venueInfo) {
-      const venueMeteo = result.weather || null;
-      const imp = await getVenueAndMeteoImpact(fixtureId, venueId, venueMeteo);
-      if (imp.source.length > 0) {
-        result.over15Prob = Math.max(0, Math.min(100, result.over15Prob * imp.over15));
-        result.over25Prob = Math.max(0, Math.min(100, result.over25Prob * imp.over25));
-        result.ggProb    = Math.max(0, Math.min(100, result.ggProb    * imp.gg));
-        result._venueMeteoImpact = imp.source.join(',');
+      const altM    = Number(venueInfo.altitude_m) || 0;
+      const surface = venueInfo.surface || null;
+      const impSrc  = [];
+      if (altM > 2500) {
+        result.over15Prob = Math.max(0, Math.min(100, result.over15Prob * 0.78));
+        result.over25Prob = Math.max(0, Math.min(100, result.over25Prob * 0.70));
+        impSrc.push(`altitude_extreme(${altM}m)`);
+      } else if (altM > 2000) {
+        result.over15Prob = Math.max(0, Math.min(100, result.over15Prob * 0.88));
+        result.over25Prob = Math.max(0, Math.min(100, result.over25Prob * 0.82));
+        impSrc.push(`altitude_high(${altM}m)`);
+      } else if (altM > 1500) {
+        result.over15Prob = Math.max(0, Math.min(100, result.over15Prob * 0.94));
+        result.over25Prob = Math.max(0, Math.min(100, result.over25Prob * 0.90));
+        impSrc.push(`altitude_mid(${altM}m)`);
       }
-      result._venueSurface = venueInfo.surface;
-      result._venueAltitude = venueInfo.altitude_m;
+      if (surface === 'artificial') {
+        result.over25Prob = Math.max(0, Math.min(100, result.over25Prob * 1.05));
+        impSrc.push('artificial_turf');
+      }
+      if (impSrc.length) result._venueMeteoImpact = impSrc.join(',');
+      result._venueSurface  = surface;
+      result._venueAltitude = altM || null;
     }
 
     // Coach impact (Faza 2 Hybrid) — aplicat pentru ambele echipe agregat
@@ -925,9 +882,13 @@ export default async function handler(req, res) {
             league_name: lg, home_team: hn, away_team: an, match_date: dt || null,
             minute: parseInt(elapsed) || 0,
             score: elapsed > 0 ? `${parseInt(req.query.hg)||0}-${parseInt(req.query.ag)||0}` : '0-0',
+            venue_surface: venueInfo?.surface || null,
+            referee_name:  ref || null,
             module: 'OVER15',
             predicted_value: payload.over15Prob, threshold_used: 65,
             lambda_home: payload.lambdaHome, lambda_away: payload.lambdaAway,
+            injuries_home: Array.isArray(injuries) ? injuries.filter(i => i.team_id === hId).length : 0,
+            injuries_away: Array.isArray(injuries) ? injuries.filter(i => i.team_id === aId).length : 0,
             layer1: payload.breakdown?.poisson     ?? null,
             layer2: payload.breakdown?.forma        ?? null,
             layer3: payload.breakdown?.h2h          ?? null,
@@ -950,9 +911,13 @@ export default async function handler(req, res) {
               fixture_id: Number(fid), league_id: lgid ? Number(lgid) : null,
               league_name: lg, home_team: hn, away_team: an, match_date: dt || null,
               minute: parseInt(elapsed) || 0,
+              venue_surface: venueInfo?.surface || null,
+              referee_name:  ref || null,
               module: 'CONFIDENCE',
               predicted_value: payload.confidenceScore, threshold_used: 70,
               lambda_home: payload.lambdaHome, lambda_away: payload.lambdaAway,
+              injuries_home: Array.isArray(injuries) ? injuries.filter(i => i.team_id === hId).length : 0,
+              injuries_away: Array.isArray(injuries) ? injuries.filter(i => i.team_id === aId).length : 0,
               layer1: payload.breakdown?.poisson     ?? null,
               layer2: payload.breakdown?.forma        ?? null,
               layer3: payload.breakdown?.h2h          ?? null,
