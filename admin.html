@@ -1050,6 +1050,46 @@ body{
     </div>
   </section>
 
+  <section class="card" id="cardScannerControl">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><polygon points="10,8 16,12 10,16"/></svg></span>
+      <h2>Control Scanner</h2>
+      <span id="scanner-state-badge" style="margin-left:auto;font-size:11px;font-weight:700;padding:4px 10px;border-radius:5px;background:rgba(34,197,94,.15);color:#22c55e">▶ Activ</span>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:10px">Pauza scanner pentru a conserva quota API in timpul calatoriilor sau backfill agresiv. La reluare, continua de unde a ramas.</div>
+    <button id="scanner-toggle-btn" onclick="toggleScanner()" class="hc-btn" style="width:100%;padding:12px;font-size:13px">⏸ Pauza Scanner</button>
+  </section>
+
+  <section class="card" id="cardApiTrend">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></span>
+      <h2>Trend Consum API</h2>
+      <select id="api-trend-days" onchange="loadApiTrend()" style="background:rgba(255,255,255,.05);border:1px solid var(--bor);color:var(--tx);padding:5px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-left:auto;margin-right:6px">
+        <option value="7" selected>7 zile</option>
+        <option value="14">14 zile</option>
+        <option value="30">30 zile</option>
+        <option value="60">60 zile</option>
+      </select>
+      <button class="hc-btn" onclick="loadApiTrend()">Reîncarcă</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">Activitate cron-uri pe zi (din cron_logs). Util pentru a detecta spike-uri sau zile cu probleme.</div>
+    <div id="api-trend-results" style="margin-top:8px">
+      <div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">Apasă „Reîncarcă"</div>
+    </div>
+  </section>
+
+  <section class="card" id="cardDbCleanup">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></span>
+      <h2>Cleanup DB</h2>
+      <button class="hc-btn" onclick="loadDbCleanupPreview()" style="margin-left:auto">Reîncarcă</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:10px">Sterge date vechi din tabele non-critice pentru a elibera spatiu. Minim 7 zile (siguranta).</div>
+    <div id="db-cleanup-results" style="margin-top:8px">
+      <div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">Apasă „Reîncarcă" pentru preview</div>
+    </div>
+  </section>
+
   <section class="card" id="cardLeagues">
     <div class="card-h">
       <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>
@@ -1438,7 +1478,7 @@ async function refresh() {
   await Promise.allSettled([
     loadStatus(), loadDB(), loadAPI(),
     loadLive(), loadCron(), loadErrors(),
-    refreshBFStatus(),
+    refreshBFStatus(), loadScannerState(),
   ]);
   var now = new Date().toLocaleTimeString('ro-RO');
   document.getElementById('refreshInfo').textContent = '• Ultima actualizare: ' + now + ' (auto-refresh 30s)';
@@ -1693,6 +1733,145 @@ async function loadBetsAggregate() {
   } catch (e) {
     el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare fetch: ' + e.message + '</div>';
   }
+}
+
+// ──────────────────────────────────────────────────────────────
+// SCANNER CONTROL (pauza/resume)
+async function loadScannerState() {
+  try {
+    var d = await apiFetch('/api/admin/scanner-state');
+    var badge = document.getElementById('scanner-state-badge');
+    var btn = document.getElementById('scanner-toggle-btn');
+    if (d.paused) {
+      badge.innerHTML = '⏸ Pauzat';
+      badge.style.background = 'rgba(245,158,11,.15)';
+      badge.style.color = '#f59e0b';
+      btn.innerHTML = '▶ Reia Scanner';
+    } else {
+      badge.innerHTML = '▶ Activ';
+      badge.style.background = 'rgba(34,197,94,.15)';
+      badge.style.color = '#22c55e';
+      btn.innerHTML = '⏸ Pauza Scanner';
+    }
+  } catch(e) { /* silent */ }
+}
+async function toggleScanner() {
+  try {
+    var r = await fetch(BASE + '/api/admin/scanner-toggle', {
+      method: 'POST', headers: { 'X-Api-Key': _key }
+    });
+    var d = await r.json();
+    if (d.ok) {
+      toast(d.paused ? '⏸ Scanner pauzat' : '▶ Scanner reluat', '#22c55e');
+      loadScannerState();
+    } else {
+      toast('✗ ' + (d.error || 'eroare'), '#ef4444');
+    }
+  } catch(e) { toast('✗ ' + e.message, '#ef4444'); }
+}
+
+// ──────────────────────────────────────────────────────────────
+// TREND API USAGE (grafic bar)
+async function loadApiTrend() {
+  var el = document.getElementById('api-trend-results');
+  el.innerHTML = '<div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">⏳ Încarcă...</div>';
+  try {
+    var days = document.getElementById('api-trend-days').value;
+    var d = await apiFetch('/api/admin/api-trend?days=' + days);
+    if (!d.ok || !d.data.length) {
+      el.innerHTML = '<div style="color:var(--mu);padding:10px;font-size:12px">Niciuna date in interval</div>';
+      return;
+    }
+    // Calc max pentru scaling bars
+    var maxCalls = Math.max.apply(null, d.data.map(function(r){return r.calls;}));
+    var h = '';
+    // Summary cards
+    h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:12px;font-size:11px">';
+    h += '<div style="background:rgba(34,197,94,.06);padding:8px;border-radius:6px"><div style="font-size:16px;font-weight:800;color:#22c55e">' + d.total_calls.toLocaleString() + '</div><div style="color:var(--mu)">Total apeluri</div></div>';
+    h += '<div style="background:rgba(99,102,241,.06);padding:8px;border-radius:6px"><div style="font-size:16px;font-weight:800;color:#a5b4fc">' + d.total_runs.toLocaleString() + '</div><div style="color:var(--mu)">Rulari cron</div></div>';
+    h += '<div style="background:rgba(239,68,68,.06);padding:8px;border-radius:6px"><div style="font-size:16px;font-weight:800;color:#ef4444">' + d.total_errors + '</div><div style="color:var(--mu)">Erori</div></div>';
+    h += '</div>';
+    // Bar chart
+    h += '<div style="font-size:11px;color:var(--mu);margin-bottom:6px;font-weight:700">📊 Apeluri / zi</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:4px">';
+    d.data.forEach(function(r){
+      var widthPct = maxCalls > 0 ? (r.calls / maxCalls * 100) : 0;
+      var clr = r.errors > 0 ? '#f59e0b' : '#22c55e';
+      var dateStr = new Date(r.day).toLocaleDateString('ro-RO', {day:'2-digit',month:'2-digit'});
+      h += '<div style="display:grid;grid-template-columns:50px 1fr 90px;gap:6px;align-items:center;font-size:11px">';
+      h += '<div style="color:var(--mu)">' + dateStr + '</div>';
+      h += '<div style="background:rgba(255,255,255,.04);border-radius:4px;height:14px;overflow:hidden;position:relative">';
+      h += '<div style="width:' + widthPct + '%;height:100%;background:' + clr + ';border-radius:4px"></div>';
+      h += '</div>';
+      h += '<div style="text-align:right;color:var(--tx);font-weight:600">' + r.calls.toLocaleString() + (r.errors > 0 ? ' <span style="color:#ef4444">⚠'+r.errors+'</span>' : '') + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + e.message + '</div>';
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// DB CLEANUP
+async function loadDbCleanupPreview() {
+  var el = document.getElementById('db-cleanup-results');
+  el.innerHTML = '<div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">⏳ Calculează...</div>';
+  try {
+    var d = await apiFetch('/api/admin/db-cleanup-preview');
+    if (!d.ok) { el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare</div>'; return; }
+    var labels = {
+      'predictions': 'Predicții (după created_at)',
+      'cron_logs': 'Logs cron (după ran_at)',
+      'alerts': 'Alerte (după created_at)',
+      'live_stats': 'Live stats (după recorded_at)',
+      'prematch_enrichment_log': 'Log prematch (după logged_at)',
+    };
+    var h = '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+    h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:6px">Tabel</th><th style="padding:6px;text-align:right">Total</th><th style="padding:6px;text-align:right">>30z</th><th style="padding:6px;text-align:right">>90z</th><th style="padding:6px;text-align:right">>180z</th><th style="padding:6px">Curăță</th></tr></thead><tbody>';
+    Object.entries(d.preview).forEach(function(entry){
+      var table = entry[0], data = entry[1];
+      if (data.error) {
+        h += '<tr><td colspan="6" style="padding:5px;color:#ef4444;font-size:10px">' + table + ': ' + data.error + '</td></tr>';
+        return;
+      }
+      h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
+      h += '<td style="padding:5px"><b>' + (labels[table] || table) + '</b></td>';
+      h += '<td style="padding:5px;text-align:right">' + data.total.toLocaleString() + '</td>';
+      h += '<td style="padding:5px;text-align:right;color:#f59e0b">' + data.older_30d.toLocaleString() + '</td>';
+      h += '<td style="padding:5px;text-align:right;color:#ef4444">' + data.older_90d.toLocaleString() + '</td>';
+      h += '<td style="padding:5px;text-align:right;color:#ef4444">' + data.older_180d.toLocaleString() + '</td>';
+      h += '<td style="padding:5px;display:flex;gap:3px">';
+      if (data.older_90d > 0)  h += '<button class="hc-btn" style="padding:3px 6px;font-size:10px" onclick="dbCleanup(\''+table+'\',90)">90z</button>';
+      if (data.older_180d > 0) h += '<button class="hc-btn" style="padding:3px 6px;font-size:10px" onclick="dbCleanup(\''+table+'\',180)">180z</button>';
+      h += '</td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div style="font-size:10px;color:var(--mu);margin-top:10px;padding:8px;background:rgba(99,102,241,.05);border-left:2px solid #6366f1;border-radius:4px;line-height:1.4">💡 <b>Recomandare</b>: pastreaza ultimele 90 zile pentru cron_logs si live_stats. Predictions le pastreaza 180+ zile (folosite pentru calibrare).</div>';
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + e.message + '</div>';
+  }
+}
+
+async function dbCleanup(table, days) {
+  if (!confirm('Sterge din ' + table + ' randurile mai vechi de ' + days + ' zile?\nAceasta actiune e ireversibila.')) return;
+  try {
+    var r = await fetch(BASE + '/api/admin/db-cleanup', {
+      method: 'POST',
+      headers: { 'X-Api-Key': _key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: table, days: days }),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      toast('🗑 ' + d.deleted.toLocaleString() + ' randuri sterse din ' + d.label, '#22c55e');
+      loadDbCleanupPreview();
+    } else {
+      toast('✗ ' + (d.error || 'eroare'), '#ef4444');
+    }
+  } catch (e) { toast('✗ ' + e.message, '#ef4444'); }
 }
 
 // ──────────────────────────────────────────────────────────────

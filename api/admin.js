@@ -3,6 +3,7 @@
 
 import express      from 'express';
 import { query }    from './db.js';
+import { getScannerPaused, setScannerPaused } from './cron/scanner.js';
 
 const router = express.Router();
 
@@ -880,6 +881,136 @@ router.get('/leagues-insights', async (req, res) => {
       },
       leagues: insights,
     });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── GET /api/admin/scanner-state ─────────────────────────────────────────────
+router.get('/scanner-state', (req, res) => {
+  res.json({ ok: true, paused: getScannerPaused() });
+});
+
+// ── POST /api/admin/scanner-toggle ───────────────────────────────────────────
+router.post('/scanner-toggle', (req, res) => {
+  const newState = !getScannerPaused();
+  setScannerPaused(newState);
+  res.json({ ok: true, paused: newState });
+});
+
+// ── GET /api/admin/api-trend ─────────────────────────────────────────────────
+// Trend ultimele 7/30 zile pe consum API. Sursa: cron_logs cu job_name like '%api%'
+// sau setting backfill_api_used. Aproximam din numar fixtures procesate per zi.
+router.get('/api-trend', async (req, res) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query?.days || '7', 10), 1), 60);
+
+    // Fetch din cron_logs grupat pe zi (fixtures_processed e proxy bun pentru API calls)
+    const { rows } = await query(`
+      SELECT
+        DATE(ran_at) AS day,
+        SUM(COALESCE(fixtures_processed, 0))::int AS calls,
+        COUNT(*)::int AS runs,
+        COUNT(*) FILTER (WHERE status = 'error' OR error_msg IS NOT NULL)::int AS errors
+      FROM cron_logs
+      WHERE ran_at > NOW() - INTERVAL '${days} days'
+      GROUP BY DATE(ran_at)
+      ORDER BY day DESC
+    `).catch(() => ({ rows: [] }));
+
+    res.json({
+      ok: true,
+      days,
+      total_calls: rows.reduce((s, r) => s + Number(r.calls), 0),
+      total_runs: rows.reduce((s, r) => s + Number(r.runs), 0),
+      total_errors: rows.reduce((s, r) => s + Number(r.errors), 0),
+      data: rows.map(r => ({
+        day: r.day,
+        calls: Number(r.calls),
+        runs: Number(r.runs),
+        errors: Number(r.errors),
+      })),
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── POST /api/admin/db-cleanup ───────────────────────────────────────────────
+// Stergere date vechi din tabele non-critice. Body: {table, days}
+// Tabele permise: predictions, cron_logs, alerts, live_stats, prematch_enrichment_log
+router.post('/db-cleanup', async (req, res) => {
+  try {
+    const { table, days } = req.body || {};
+    const ALLOWED = {
+      'predictions':              { col: 'created_at', label: 'Predictii' },
+      'cron_logs':                { col: 'ran_at',     label: 'Logs cron' },
+      'alerts':                   { col: 'created_at', label: 'Alerte' },
+      'live_stats':               { col: 'recorded_at',label: 'Stats live' },
+      'prematch_enrichment_log':  { col: 'logged_at',  label: 'Log prematch' },
+    };
+    if (!ALLOWED[table]) {
+      return res.status(400).json({ ok: false, error: `Tabel invalid. Permise: ${Object.keys(ALLOWED).join(', ')}` });
+    }
+    const d = parseInt(days, 10);
+    if (!d || d < 7) {
+      return res.status(400).json({ ok: false, error: 'days trebuie >= 7 (siguranta)' });
+    }
+    const { col } = ALLOWED[table];
+    // Verifica daca coloana exista
+    const checkCol = await query(`
+      SELECT EXISTS(
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = $1 AND column_name = $2
+      ) AS exists
+    `, [table, col]);
+    if (!checkCol.rows[0]?.exists) {
+      return res.status(400).json({ ok: false, error: `Coloana ${col} lipseste in ${table}` });
+    }
+    const result = await query(`DELETE FROM ${table} WHERE ${col} < NOW() - INTERVAL '${d} days'`);
+    res.json({
+      ok: true,
+      table,
+      label: ALLOWED[table].label,
+      deleted: result.rowCount || 0,
+      olderThanDays: d,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── GET /api/admin/db-cleanup-preview ─────────────────────────────────────────
+// Preview: cate randuri ar fi sterse fara sa execute
+router.get('/db-cleanup-preview', async (req, res) => {
+  try {
+    const ALLOWED = {
+      'predictions': 'created_at',
+      'cron_logs': 'ran_at',
+      'alerts': 'created_at',
+      'live_stats': 'recorded_at',
+      'prematch_enrichment_log': 'logged_at',
+    };
+    const preview = {};
+    for (const [table, col] of Object.entries(ALLOWED)) {
+      try {
+        const { rows: chk } = await query(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name=$1 AND column_name=$2) AS e`, [table, col]);
+        if (!chk[0]?.e) { preview[table] = { error: 'col missing' }; continue; }
+        const { rows: total } = await query(`SELECT COUNT(*)::int AS n FROM ${table}`);
+        const { rows: old30 } = await query(`SELECT COUNT(*)::int AS n FROM ${table} WHERE ${col} < NOW() - INTERVAL '30 days'`);
+        const { rows: old90 } = await query(`SELECT COUNT(*)::int AS n FROM ${table} WHERE ${col} < NOW() - INTERVAL '90 days'`);
+        const { rows: old180 } = await query(`SELECT COUNT(*)::int AS n FROM ${table} WHERE ${col} < NOW() - INTERVAL '180 days'`);
+        preview[table] = {
+          total: Number(total[0].n),
+          older_30d: Number(old30[0].n),
+          older_90d: Number(old90[0].n),
+          older_180d: Number(old180[0].n),
+        };
+      } catch (e) {
+        preview[table] = { error: e.message };
+      }
+    }
+    res.json({ ok: true, preview });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

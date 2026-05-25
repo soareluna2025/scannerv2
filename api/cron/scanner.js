@@ -740,6 +740,15 @@ async function ensureTables() {
   }
 }
 
+// Flag pauza scanner (accesibil din admin endpoint)
+let scannerPaused = false;
+export function getScannerPaused() { return scannerPaused; }
+export function setScannerPaused(v) {
+  scannerPaused = !!v;
+  console.log(`[scanner] ${scannerPaused ? '⏸ PAUSED' : '▶ RESUMED'} via admin`);
+  return scannerPaused;
+}
+
 export function startScanner() {
   if (!FOOTBALL_KEY) {
     console.log('[scanner] No FOOTBALL_API_KEY — scanner disabled');
@@ -748,13 +757,21 @@ export function startScanner() {
 
   ensureTables();
 
-  // Rulare imediată la startup
-  scanLive10s();
-  scanPreMatch();
+  // Wrappers care respecta scannerPaused
+  function runIfActive(fn, name) {
+    return async function() {
+      if (scannerPaused) return;
+      try { await fn(); } catch (e) { console.error(`[scanner/${name}]`, e.message); }
+    };
+  }
 
-  setInterval(scanLive10s,    10_000);      // la fiecare 10s
-  setInterval(scanLiveStats,  60_000);      // la fiecare 60s
-  setInterval(scanPreMatch,  3_600_000);    // la fiecare 60min
+  // Rulare imediată la startup
+  runIfActive(scanLive10s, 'live10s')();
+  runIfActive(scanPreMatch, 'preMatch')();
+
+  setInterval(runIfActive(scanLive10s,    'live10s'),    10_000);
+  setInterval(runIfActive(scanLiveStats,  'liveStats'),  60_000);
+  setInterval(runIfActive(scanPreMatch,   'preMatch'),  3_600_000);
 
   console.log('[scanner] Started — live/10s, stats/60s, prematch/1h');
 }
