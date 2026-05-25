@@ -145,7 +145,7 @@ export default async function handler(req, res) {
       pending_before: pending[0]?.n || 0,
       done_before: doneRows[0]?.n || 0,
       total_venues_in_db: totalRows[0]?.n || 0,
-      estimated_minutes: Math.ceil((Math.min(LIMIT, pending[0]?.n || LIMIT) * 10) / 60),
+      estimated_minutes: Math.ceil((Math.min(LIMIT, pending[0]?.n || LIMIT) * 0.5 * 1.1) / 60) + 1,
       message: 'Procesare in background. Verifica cron_logs sau venues WHERE altitude_m IS NOT NULL.',
     });
 
