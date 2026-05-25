@@ -20,19 +20,26 @@ async function ensureColumns() {
   await query(`ALTER TABLE venues ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`).catch(() => {});
 }
 
-// Geocodare oras/tara → lat/lng via Nominatim (OSM, gratuit, fara cheie, max 1 req/s)
+// Geocodare oras/tara → lat/lng via Open-Meteo Geocoding (acelasi provider ca weather+elevation)
+// Fara cheie API, fara rate limit strict (vs Nominatim care blocheaza IP-uri)
 async function geocodeCity(city, country) {
   if (!city) return null;
   try {
-    const q = encodeURIComponent(`${city}${country ? ', ' + country : ''}`);
-    const url = `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`;
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'AlohaScan/1.0 (soareluna2025@protonmail.com)' },
-      signal: AbortSignal.timeout(8000),
-    });
+    const q = encodeURIComponent(city);
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${q}&count=5&language=en&format=json`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     const d = await res.json();
-    if (!Array.isArray(d) || !d.length) return null;
-    return { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
+    if (!d.results?.length) return null;
+    // Incearca sa potriveasca tara daca avem mai multe rezultate
+    let result = d.results[0];
+    if (country && d.results.length > 1) {
+      const match = d.results.find(r =>
+        r.country?.toLowerCase() === country.toLowerCase() ||
+        r.country_code?.toLowerCase() === country.slice(0, 2).toLowerCase()
+      );
+      if (match) result = match;
+    }
+    return { lat: result.latitude, lng: result.longitude };
   } catch (_) { return null; }
 }
 
@@ -93,7 +100,7 @@ async function processVenues(LIMIT) {
     for (const [key, venues] of cityGroups) {
       const [city, country] = key.split('|');
       const coords = await geocodeCity(city, country);
-      await sleep(1100); // Nominatim rate limit: 1 req/s
+      await sleep(150); // Open-Meteo geocoding — fara rate limit strict
 
       if (!coords) {
         console.warn(`[collect-venues] geocodare esec: ${city} (${country})`);
