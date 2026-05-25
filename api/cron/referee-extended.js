@@ -142,18 +142,21 @@ export default async function handler(req, res) {
     `, [upserts]).catch(() => {});
 
     const { rows: rem } = await query(`
-      SELECT COUNT(DISTINCT referee)::int AS n
-      FROM fixtures_history
-      WHERE referee IS NOT NULL AND referee != ''
-        AND status_short IN ('FT','AET','PEN')
-        AND home_goals IS NOT NULL
-        AND match_date > NOW() - INTERVAL '24 months'
-        AND NOT EXISTS (
-          SELECT 1 FROM referee_stats rs
-          WHERE rs.referee_name = fixtures_history.referee
-            AND rs.updated_at > NOW() - INTERVAL '7 days'
-        )
-      HAVING COUNT(*) >= 5
+      SELECT COUNT(*)::int AS n FROM (
+        SELECT referee
+        FROM fixtures_history
+        WHERE referee IS NOT NULL AND referee != ''
+          AND status_short IN ('FT','AET','PEN')
+          AND home_goals IS NOT NULL
+          AND match_date > NOW() - INTERVAL '24 months'
+          AND NOT EXISTS (
+            SELECT 1 FROM referee_stats rs
+            WHERE rs.referee_name = fixtures_history.referee
+              AND rs.updated_at > NOW() - INTERVAL '7 days'
+          )
+        GROUP BY referee
+        HAVING COUNT(*) >= 5
+      ) sub
     `).catch(() => ({ rows: [{ n: 0 }] }));
 
     return res.status(200).json({
