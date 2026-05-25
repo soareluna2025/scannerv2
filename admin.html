@@ -2,7 +2,7 @@
 <html lang="ro">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>AlohaScan · ADMIN</title>
 <link rel="apple-touch-icon" href="/admin-apple-touch-icon.png">
 <link rel="icon" type="image/png" href="/admin-apple-touch-icon.png">
@@ -67,7 +67,7 @@ body{
   font-size:14px;
   line-height:1.45;
   min-height:100vh;
-  padding-bottom:96px;
+  padding-bottom:calc(96px + env(safe-area-inset-bottom, 0px));
   position:relative;
   font-feature-settings:'cv02','cv03','cv04','cv11';
 }
@@ -734,11 +734,11 @@ body{
 .bnav{
   position:fixed;bottom:0;left:0;right:0;
   display:grid;grid-template-columns:repeat(5,1fr);
-  background:linear-gradient(180deg,rgba(6,8,12,0.7),rgba(6,8,12,0.95));
+  background:linear-gradient(180deg,rgba(6,8,12,0.96),rgba(6,8,12,1));
   backdrop-filter:blur(30px) saturate(140%);
   -webkit-backdrop-filter:blur(30px) saturate(140%);
   border-top:1px solid var(--bd);
-  z-index:100;padding:8px 0 10px;
+  z-index:100;padding:8px 0 calc(10px + env(safe-area-inset-bottom, 0px));
   box-shadow:0 -4px 30px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.04);
 }
 .bnav a{
@@ -892,9 +892,6 @@ body{
     </div>
     <div class="env-wrap">
       <ul class="env-list" id="envList"><li class="empty">—</li></ul>
-      <div class="env-art-wrap">
-        <img class="env-art" src="/poze-app/cloud-lock.png" alt="">
-      </div>
     </div>
   </section>
 
