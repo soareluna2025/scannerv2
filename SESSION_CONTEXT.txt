@@ -1,0 +1,5 @@
+================================================================================
+  SESSION_CONTEXT.txt — AlohaScan Scanner V2
+  Audit complet: 2026-05-17
+  CITEȘTE ACEST FIȘIER LA ÎNCEPUTUL ORICĂREI SESIUNI NOI
+================================================================================
