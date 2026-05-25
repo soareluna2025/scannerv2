@@ -3052,6 +3052,15 @@ NEXT STEPS (prioritizat):
                  model_weights: 23 valori default in 8 module (NGP/OVER15/OVER25/GG/CONFIDENCE/CARDS/CORNERS/GENERATOR)
                  Script reutilizabil: psql -U alohascan -d elefant -f scripts/create-model-weights.sql
 
+[25.05 ~18:00] - Consensus Engine implementat: api/utils/consensus-engine.js
+                 Commit: 22807f6 (main)
+                 calcConsensus(result, apiPred) — 3 semnale independente:
+                   S1: winner direction (H/D/A) din predictions.percent vs homeWin/draw/awayWin
+                   S2: over/under direction din under_over signal vs over15/25Prob
+                   S3: lambda alignment din teams.last_5.goals.average vs lambdaTotal
+                 Output: consensusScore 0-100, boost +-5 la confidenceScore
+                 Raspuns enrich: breakdown.consensus + _consensusDetails
+
 ================================================================================
   STARE HYBRID V2 LA 25.05 ~15:00 (dupa diagnostic):
   ✅ L0 Poisson: activ, lambda din form_stats/teams_stats/league_stats
@@ -3081,7 +3090,10 @@ NEXT STEPS (prioritizat):
      score8 = 100 - |theirHomeWin - ourHomeWin| * 2, greutate 8% in confidence score
      coverage 91% (1,413/1,556 fixtures cu prematch predictions)
      breakdown.apiConsensus adaugat in raspuns
-  ❌ Consensus Engine: NEFACUT
+  ✅ Consensus Engine: api/utils/consensus-engine.js — calcConsensus(result, apiPred)
+     S1 winner direction, S2 over/under, S3 lambda alignment
+     boost +-5 la confidenceScore, breakdown.consensus + _consensusDetails in raspuns
+     Commit: 22807f6
   ❌ UI Consensus Engine: NEFACUT
   ✅ prediction_log: CREAT MANUAL PE VPS (tabel 37) — logPrediction() functional
      era missing → silent failure in enrich.js; acum accept INSERT-uri
