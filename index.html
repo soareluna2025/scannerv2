@@ -737,11 +737,6 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
 <!-- MODAL: ISTORIC CALIBRARE -->
 <div id="hist-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto" onclick="if(event.target===this)this.style.display='none'">
   <div style="background:#0f172a;min-height:100%;max-width:600px;margin:0 auto;padding:0">
-    <!-- Header STICKY ca X-ul sa fie mereu vizibil cand scrollezi -->
-    <div style="position:sticky;top:0;background:#0f172a;display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--bor);z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.3)">
-      <div style="font-size:16px;font-weight:800;color:#a5b4fc">📊 ISTORIC CALIBRARE</div>
-      <button onclick="document.getElementById('hist-modal').style.display='none'" style="background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);width:40px;height:40px;border-radius:10px;font-size:20px;font-weight:800;cursor:pointer">✕</button>
-    </div>
     <div id="hist-modal-body" style="padding:16px">
       <div style="text-align:center;color:var(--mu);padding:30px;font-size:12px">Se încarcă...</div>
     </div>
