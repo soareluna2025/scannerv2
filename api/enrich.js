@@ -263,7 +263,7 @@ async function getTeamStrengths(hId, aId) {
   }
 }
 
-function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData) {
+function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPred = null) {
   const score1 = result.over15Prob ?? 50;
   const elapsed  = liveStats?.elapsed ?? 0;
   const sotTotal = liveStats?.sot     ?? null;
@@ -351,14 +351,29 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData) {
     score7 = Math.round((h + a) / 2);
   }
 
+  // Layer 8 — API Consensus: alinierea Poisson nostru cu cel al API-Football
+  let score8 = null;
+  if (apiPred) {
+    try {
+      const poissonDist = apiPred.comparison?.poisson_distribution;
+      if (poissonDist?.home) {
+        const theirHome = parseFloat(poissonDist.home);
+        const ourHome   = result.homeWin ?? 33;
+        const diff = Math.abs(theirHome - ourHome);
+        score8 = Math.max(0, Math.min(100, 100 - diff * 2));
+      }
+    } catch (_) { /* silent */ }
+  }
+
   const layers = [
-    { score: score1, w: 0.22 },
-    { score: score2, w: 0.20 },
+    { score: score1, w: 0.20 },
+    { score: score2, w: 0.18 },
     { score: score3, w: 0.10 },
-    { score: score4, w: 0.15 },
+    { score: score4, w: 0.14 },
     { score: score5, w: 0 }, // EV — exclus din scor (informativ in breakdown)
     { score: score6, w: 0.05 },
-    { score: score7, w: 0.20 },
+    { score: score7, w: 0.18 },
+    { score: score8, w: 0.08 },
   ].filter(l => l.score !== null).filter(l => l.w > 0);
   const totalW = layers.reduce((s, l) => s + l.w, 0);
   const confidenceScore = Math.round(layers.reduce((s, l) => s + l.score * (l.w / totalW), 0));
@@ -389,6 +404,7 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData) {
       ev:           Math.round(score5),
       consistenta:  Math.round(score6),
       ...(hasStr ? { putereEchipe: score7 } : {}),
+      ...(score8 != null ? { apiConsensus: Math.round(score8) } : {}),
     },
     teamStrengthHome,
     teamStrengthAway,
@@ -530,6 +546,38 @@ async function fetchAndStoreInjuries(fixtureId) {
   } catch (_) {}
 }
 
+async function getStandingsForTeam(teamId, leagueId) {
+  if (!teamId || !leagueId) return null;
+  try {
+    const { rows } = await query(
+      `SELECT goals_for, goals_against, played FROM standings
+       WHERE team_id = $1 AND league_id = $2
+       ORDER BY season DESC LIMIT 1`,
+      [Number(teamId), Number(leagueId)]
+    );
+    const s = rows[0];
+    if (!s || s.played < 5) return null;
+    return {
+      avgScored:   +(s.goals_for    / s.played).toFixed(2),
+      avgConceded: +(s.goals_against / s.played).toFixed(2),
+    };
+  } catch (_) { return null; }
+}
+
+async function getPrematchPredictions(fixtureId) {
+  if (!fixtureId) return null;
+  try {
+    const { rows } = await query(
+      `SELECT payload FROM prematch_data WHERE fixture_id = $1 AND data_type = 'predictions'
+       ORDER BY collected_at DESC LIMIT 1`,
+      [fixtureId]
+    );
+    if (!rows.length) return null;
+    const arr = rows[0].payload;
+    return Array.isArray(arr) && arr[0] ? arr[0] : null;
+  } catch (_) { return null; }
+}
+
 async function getTeamStatsFromDB(teamId, leagueId) {
   try {
     const r = leagueId
@@ -624,7 +672,7 @@ export default async function handler(req, res) {
 
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats + venue in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo] = await Promise.all([
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred] = await Promise.all([
       getFormFromDB(hId),
       getFormFromDB(aId),
       getH2HFromDB(hId, aId),
@@ -635,6 +683,9 @@ export default async function handler(req, res) {
       getLeagueStats(lgid),
       getRefereeStats(ref || null),
       fid ? getVenueForFixture(Number(fid)) : Promise.resolve(null),
+      lgid ? getStandingsForTeam(hId, lgid) : Promise.resolve(null),
+      lgid ? getStandingsForTeam(aId, lgid) : Promise.resolve(null),
+      fid  ? getPrematchPredictions(Number(fid)) : Promise.resolve(null),
     ]);
 
     // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
@@ -716,6 +767,22 @@ export default async function handler(req, res) {
       result._teamsStatsUsed = true;
     }
 
+    // Standings lambda blend — 60% form recent + 40% medie sezonala (Hybrid V2)
+    if (!formInsufficient && stnH && stnA) {
+      const stnLambdaH = (stnH.avgScored + stnA.avgConceded) / 2;
+      const stnLambdaA = (stnA.avgScored + stnH.avgConceded) / 2;
+      result.lambdaHome  = +(result.lambdaHome * 0.6 + stnLambdaH * 0.4).toFixed(2);
+      result.lambdaAway  = +(result.lambdaAway * 0.6 + stnLambdaA * 0.4).toFixed(2);
+      result.lambdaTotal = +(result.lambdaHome + result.lambdaAway).toFixed(2);
+      const mxStn = calcPoisson6x6(result.lambdaHome, result.lambdaAway);
+      Object.assign(result, {
+        over15Prob: mxStn.over15Prob, over25Prob: mxStn.over25Prob,
+        ggProb: mxStn.ggProb, homeWin: mxStn.homeWin,
+        draw: mxStn.draw, awayWin: mxStn.awayWin,
+      });
+      result._standingsBlend = `H(${stnH.avgScored}/${stnH.avgConceded})|A(${stnA.avgScored}/${stnA.avgConceded})`;
+    }
+
     // Venue + altitude + meteo amplificat (Faza 1 Hybrid)
     if (venueInfo) {
       const venueMeteo = result.weather || null;
@@ -791,7 +858,7 @@ export default async function handler(req, res) {
       da, yc, elapsed: elapsedNum,
     } : null;
 
-    const confData = calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData);
+    const confData = calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPred);
 
     if (elapsed && parseInt(elapsed) > 0) {
       confData.breakdown.xg_source = xgSource;
