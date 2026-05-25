@@ -35,7 +35,7 @@ SELECT 'match_events',               MAX(created_at)::date               FROM ma
 UNION ALL
 SELECT 'form_stats',                 MAX(updated_at)::date               FROM form_stats
 UNION ALL
-SELECT 'odds',                       MAX(updated_at)::date               FROM odds
+SELECT 'odds',                       MAX(collected_at)::date             FROM odds
 UNION ALL
 SELECT 'referee_stats',              MAX(updated_at)::date               FROM referee_stats
 UNION ALL
@@ -45,9 +45,9 @@ SELECT 'teams_stats',                MAX(updated_at)::date               FROM te
 UNION ALL
 SELECT 'standings',                  MAX(updated_at)::date               FROM standings
 UNION ALL
-SELECT 'h2h',                        MAX(updated_at)::date               FROM h2h
+SELECT 'h2h',                        MAX(match_date)::date               FROM h2h
 UNION ALL
-SELECT 'injuries',                   MAX(updated_at)::date               FROM injuries
+SELECT 'injuries',                   MAX(created_at)::date               FROM injuries
 ORDER BY ultima_data DESC NULLS LAST;
 
 -- ═══════════════════════════════════════════════════════════════════
@@ -160,9 +160,9 @@ END AS status_tenure;
 SELECT
   COUNT(*)                              AS total,
   COUNT(win_rate)                       AS cu_win_rate,
-  COUNT(goals_for_avg)                  AS cu_goals_for_avg,
+  COUNT(avg_goals_for)                  AS cu_avg_goals_for,
   COUNT(clean_sheet_rate)               AS cu_clean_sheet_rate,
-  COUNT(over25_rate)                    AS cu_over25_rate
+  COUNT(failed_to_score_rate)           AS cu_failed_to_score_rate
 FROM coach_stats;
 
 \echo ''
@@ -208,9 +208,9 @@ FROM venues;
 SELECT
   COUNT(DISTINCT fixture_id)                                          AS fixtures_cu_injuries,
   COUNT(*)                                                            AS total_randuri,
-  COUNT(*) FILTER (WHERE updated_at > NOW() - INTERVAL '7 days')     AS recente_7z,
-  COUNT(*) FILTER (WHERE updated_at > NOW() - INTERVAL '30 days')    AS recente_30z,
-  MAX(updated_at)::timestamp(0)                                       AS ultima_actualizare
+  COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')     AS recente_7z,
+  COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')    AS recente_30z,
+  MAX(created_at)::timestamp(0)                                       AS ultima_actualizare
 FROM injuries;
 
 \echo ''
@@ -219,8 +219,8 @@ SELECT
   COUNT(DISTINCT fixture_id)                                          AS fixtures_cu_cote,
   COUNT(DISTINCT bookmaker_id)                                        AS bookmakers,
   COUNT(DISTINCT bet_name)                                            AS tipuri_piete,
-  MAX(updated_at)::timestamp(0)                                       AS ultima_cota,
-  COUNT(*) FILTER (WHERE updated_at > NOW() - INTERVAL '24 hours')   AS actualizate_azi
+  MAX(collected_at)::timestamp(0)                                     AS ultima_cota,
+  COUNT(*) FILTER (WHERE collected_at > NOW() - INTERVAL '24 hours') AS actualizate_azi
 FROM odds;
 
 \echo ''
@@ -321,7 +321,7 @@ LEFT JOIN coach_stats cs ON cs.coach_id = c.coach_id;
 
 \echo ''
 \echo '── F2. Sample antrenori cu stats (JOIN OK?)'
-SELECT c.name, c.team_id, cs.win_rate, cs.goals_for_avg, cs.goals_against_avg
+SELECT c.name, c.team_id, cs.win_rate, cs.avg_goals_for, cs.avg_goals_against
 FROM coaches c
 JOIN coach_stats cs ON cs.coach_id = c.coach_id
 WHERE cs.win_rate IS NOT NULL
@@ -409,9 +409,9 @@ LIMIT 10;
 \echo '── H1. Meciuri live (match_snapshots, ultimele 3h)'
 SELECT
   COUNT(DISTINCT fixture_id)      AS fixtures_live,
-  MAX(captured_at)::timestamp(0)  AS ultima_captura
+  MAX(created_at)::timestamp(0)   AS ultima_captura
 FROM match_snapshots
-WHERE captured_at > NOW() - INTERVAL '3 hours';
+WHERE created_at > NOW() - INTERVAL '3 hours';
 
 \echo ''
 \echo '── H2. Alerte NGP (ultimele 24h)'
@@ -420,7 +420,7 @@ SELECT
   COUNT(*)                                            AS total,
   COUNT(*) FILTER (WHERE telegram_ok)                 AS trimise_telegram
 FROM alerts
-WHERE created_at > NOW() - INTERVAL '24 hours'
+WHERE sent_at > NOW() - INTERVAL '24 hours'
 GROUP BY alert_type;
 
 \echo ''
@@ -445,7 +445,7 @@ SELECT
   COUNT(*) - COUNT(result_over15)                             AS neverificate,
   COUNT(*) FILTER (WHERE result_over15 = true)                AS over15_reale,
   COUNT(*) FILTER (WHERE over15_prob > 65)                    AS predictii_confident,
-  MAX(predicted_at)::date                                     AS ultima_predictie
+  MAX(updated_at)::date                                       AS ultima_predictie
 FROM predictions;
 
 \echo ''
@@ -516,6 +516,116 @@ SELECT sursa, status FROM (
          ELSE 'GOL' END
   FROM standings
 ) x ORDER BY ord;
+
+-- ═══════════════════════════════════════════════════════════════════
+\echo ''
+\echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+\echo '  K. TESTE SUPLIMENTARE 14-22'
+\echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+
+\echo ''
+\echo '── K1 (T14). prematch_data — predictions API colectate'
+SELECT
+  COUNT(DISTINCT fixture_id)                                              AS fixtures_cu_predictions,
+  COUNT(*)                                                                AS randuri_total,
+  MAX(collected_at)::timestamp(0)                                         AS ultima_colectare,
+  COUNT(*) FILTER (WHERE collected_at > NOW() - INTERVAL '7 days')        AS recente_7z
+FROM prematch_data
+WHERE data_type = 'predictions';
+
+\echo ''
+\echo '── K2 (T15). prematch_data — sample payload predictions (ce returneaza API-Football)'
+SELECT
+  fixture_id,
+  collected_at::timestamp(0),
+  jsonb_pretty(payload::jsonb) AS payload_sample
+FROM prematch_data
+WHERE data_type = 'predictions'
+  AND jsonb_array_length(payload::jsonb) > 0
+ORDER BY collected_at DESC
+LIMIT 2;
+
+\echo ''
+\echo '── K3 (T16). standings — freshness detaliat + top ligi'
+SELECT
+  COUNT(*)                                                             AS total_randuri,
+  COUNT(DISTINCT league_id)                                            AS ligi_unice,
+  MAX(updated_at)::timestamp(0)                                        AS ultima_actualizare,
+  COUNT(*) FILTER (WHERE updated_at > NOW() - INTERVAL '7 days')      AS recente_7z,
+  COUNT(*) FILTER (WHERE updated_at > NOW() - INTERVAL '30 days')     AS recente_30z
+FROM standings;
+
+SELECT league_id, COUNT(*) AS echipe, MAX(updated_at)::date AS updated
+FROM standings
+GROUP BY league_id
+ORDER BY updated DESC
+LIMIT 10;
+
+\echo ''
+\echo '── K4 (T17). injuries — fixture_id unice cu date'
+SELECT
+  COUNT(DISTINCT fixture_id)                                           AS fixtures_unice,
+  COUNT(*)                                                             AS total_jucatori,
+  COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')      AS recente_7z,
+  MAX(created_at)::timestamp(0)                                        AS ultima_actualizare
+FROM injuries;
+
+\echo ''
+\echo '── K5 (T18). h2h — recenta si acoperire lunara'
+SELECT
+  COUNT(*)                                                             AS total_meciuri,
+  COUNT(DISTINCT home_team_id::text || '-' || away_team_id::text)     AS perechi_unice,
+  MAX(match_date)::date                                                AS cel_mai_recent,
+  COUNT(*) FILTER (WHERE match_date > NOW() - INTERVAL '3 months')    AS ultimele_3_luni,
+  COUNT(*) FILTER (WHERE match_date > NOW() - INTERVAL '12 months')   AS ultimul_an
+FROM h2h;
+
+\echo ''
+\echo '── K6 (T19). player_stats — recenta ultimului backfill'
+SELECT
+  COUNT(*)                                                             AS total_randuri,
+  COUNT(DISTINCT team_id)                                              AS echipe_unice,
+  COUNT(DISTINCT player_id)                                            AS jucatori_unici,
+  MAX(created_at)::date                                                AS ultima_data,
+  COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')     AS adaugate_30z
+FROM player_stats;
+
+\echo ''
+\echo '── K7 (T20). coach_stats — coloana style exista + sample valori'
+SELECT CASE
+  WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='coach_stats' AND column_name='style')
+  THEN 'DA — coloana style exista'
+  ELSE 'NU — style LIPSESTE (getCoachImpact() returneaza impact=1 mereu!)'
+END AS status_style;
+
+SELECT style, COUNT(*) AS nr
+FROM coach_stats
+WHERE style IS NOT NULL
+GROUP BY style ORDER BY nr DESC;
+
+\echo ''
+\echo '── K8 (T21). fixtures NS — meciuri viitoare urmatoarele 7 zile'
+SELECT
+  DATE(match_date)                                                     AS data,
+  COUNT(*)                                                             AS meciuri,
+  COUNT(DISTINCT league_id)                                            AS ligi
+FROM fixtures
+WHERE status_short = 'NS'
+  AND match_date BETWEEN NOW() AND NOW() + INTERVAL '7 days'
+GROUP BY DATE(match_date)
+ORDER BY data;
+
+\echo ''
+\echo '── K9 (T22). match_events — recenta + tipuri evenimente'
+SELECT
+  COUNT(*)                                                             AS total_events,
+  COUNT(DISTINCT fixture_id)                                           AS fixtures_cu_events,
+  MAX(created_at)::date                                                AS ultima_data,
+  COUNT(*) FILTER (WHERE type = 'Goal')                                AS goluri,
+  COUNT(*) FILTER (WHERE type = 'Card')                                AS carduri,
+  COUNT(*) FILTER (WHERE type = 'subst')                               AS substitutii,
+  COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')      AS recente_7z
+FROM match_events;
 
 \echo ''
 \echo '╔══════════════════════════════════════════════════════════════════════╗'
