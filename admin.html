@@ -404,7 +404,12 @@ body{
 .env-badge.ok{
   background:linear-gradient(180deg,var(--ac),var(--ac-2));
   color:#03110A;
-  box-shadow:0 1px 3px rgba(34,211,238,0.25),inset 0 1px 0 rgba(255,255,255,0.2);
+  box-shadow:0 1px 3px rgba(34,211,238,0.35),inset 0 1px 0 rgba(255,255,255,0.2),0 0 14px rgba(34,211,238,.25);
+  animation:envSetPulse 3s ease-in-out infinite;
+}
+@keyframes envSetPulse{
+  0%,100%{box-shadow:0 1px 3px rgba(34,211,238,0.35),inset 0 1px 0 rgba(255,255,255,0.2),0 0 14px rgba(34,211,238,.25)}
+  50%{box-shadow:0 1px 3px rgba(34,211,238,0.5),inset 0 1px 0 rgba(255,255,255,0.3),0 0 20px rgba(34,211,238,.45)}
 }
 .env-badge.no{
   background:linear-gradient(180deg,var(--red),#E54B61);
@@ -466,19 +471,26 @@ body{
 }
 .db-foot:hover{color:#fff;letter-spacing:1.5px}
 
-/* ===== API FOOTBALL USAGE — WOW pack ===== */
-#cardAPI:not(.collapsed){
-  position:relative;overflow:hidden;
-}
-#cardAPI:not(.collapsed)::after{
+/* ===== WOW pack universal — breathing glow pe carduri expand ===== */
+.card:not(.collapsed){position:relative;overflow:hidden}
+.card:not(.collapsed)::after{
   content:'';position:absolute;inset:-2px;border-radius:24px;pointer-events:none;
-  background:radial-gradient(circle at 70% 50%,rgba(34,211,238,.10) 0%,transparent 50%);
-  animation:apiCardBreath 4s ease-in-out infinite;
+  background:radial-gradient(circle at 70% 30%,rgba(34,211,238,.08) 0%,transparent 50%);
+  animation:cardBreath 5s ease-in-out infinite;
   z-index:0;
 }
-@keyframes apiCardBreath{
-  0%,100%{opacity:.5}
-  50%{opacity:1}
+@keyframes cardBreath{
+  0%,100%{opacity:.4}
+  50%{opacity:.9}
+}
+/* Continutul stay above ambient glow */
+.card > *:not(.card-h){position:relative;z-index:1}
+/* Pulse pe valori accent care primesc countup */
+.value-pulse{animation:valuePulse .5s ease-out}
+@keyframes valuePulse{
+  0%{text-shadow:0 0 0 rgba(34,211,238,0)}
+  50%{text-shadow:0 0 16px rgba(34,211,238,.7)}
+  100%{text-shadow:0 0 8px rgba(34,211,238,.3)}
 }
 .api-wrap{display:flex;gap:18px;align-items:center;position:relative;z-index:1}
 .api-rows{flex:0 0 55%;display:flex;flex-direction:column;gap:9px}
@@ -733,11 +745,18 @@ body{
   box-shadow:inset 0 1px 1px rgba(0,0,0,0.4);
 }
 .bf-bar-fill{
+  position:relative;
   height:100%;
-  background:linear-gradient(90deg,var(--ac-3),var(--ac));
+  background:linear-gradient(90deg,var(--ac-3),var(--ac),#67E8F9);
   border-radius:3px;
-  transition:width .6s var(--ease);
-  box-shadow:0 0 8px rgba(34,211,238,0.3);
+  transition:width 1s cubic-bezier(.25,.46,.45,.94);
+  box-shadow:0 0 10px rgba(34,211,238,0.45);
+  overflow:hidden;
+}
+.bf-bar-fill::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.4) 50%,transparent 100%);
+  animation:apiShimmer 2.4s linear infinite;
 }
 .bf-bar-fill.api{
   background:linear-gradient(90deg,#E5B53F,var(--yellow));
@@ -1339,7 +1358,12 @@ async function loadStatus() {
     var d = await apiFetch('/api/admin/status');
     document.querySelector('[data-k="node"]').textContent = d.node || '—';
     document.querySelector('[data-k="uptime"]').textContent = fmtUptime(d.uptime_s || 0);
-    document.querySelector('[data-k="mem"]').textContent = (d.memory_mb || 0) + ' MB';
+    // Memory cu countup
+    var memEl = document.querySelector('[data-k="mem"]');
+    var prevMem = window._prevMem || 0;
+    var newMem = d.memory_mb || 0;
+    animateNumber(memEl, prevMem, newMem, 1200, function(n){return Math.round(n) + ' MB';});
+    window._prevMem = newMem;
     document.querySelector('[data-k="db"]').textContent = d.db || '—';
     var bg = document.getElementById('sysStatusBadge');
     if (bg) bg.textContent = d.db === 'OK' ? 'ONLINE' : 'OFFLINE';
@@ -1384,8 +1408,9 @@ function renderDBRow(items, t){
   return items.map(function(p){
     var key = p[0], label = p[1];
     var ic = DB_ICONS[label] || '';
+    var prev = (window._dbPrev||{})[key] || 0;
     return '<div class="db-cell"><div class="ic">' + ic + '</div>'
-      + '<div class="val">' + fmtNum(t[key]) + '</div>'
+      + '<div class="val" data-target="' + (t[key]||0) + '" data-prev="' + prev + '">' + fmtNum(prev) + '</div>'
       + '<div class="lbl">' + label + '</div></div>';
   }).join('');
 }
@@ -1397,6 +1422,22 @@ async function loadDB() {
     grid.innerHTML =
       '<div class="db-grid-row r5">' + renderDBRow(DB_ROW1, t) + '</div>' +
       '<div class="db-grid-row r4">' + renderDBRow(DB_ROW2, t) + '</div>';
+    // Animatie countup pe toate celulele DB
+    setTimeout(function(){
+      grid.querySelectorAll('.db-cell .val').forEach(function(el, idx){
+        var to = parseInt(el.getAttribute('data-target'), 10) || 0;
+        var from = parseInt(el.getAttribute('data-prev'), 10) || 0;
+        // Stagger: fiecare celula incepe cu 50ms delay
+        setTimeout(function(){
+          animateNumber(el, from, to, 1400, function(n){return fmtNum(Math.round(n));});
+          // Pulse glow la valoare diferita
+          if (to !== from) el.classList.add('value-pulse');
+        }, idx * 50);
+      });
+    }, 30);
+    // Salveaza valorile pentru urmatorul refresh
+    window._dbPrev = {};
+    Object.keys(t).forEach(function(k){window._dbPrev[k]=t[k];});
   } catch(e) {
     document.getElementById('dbGrid').innerHTML = '<div class="empty err">' + e.message + '</div>';
   }
@@ -1464,8 +1505,11 @@ async function loadAPI() {
 async function loadLive() {
   try {
     var d = await apiFetch('/api/admin/live-matches');
-    document.getElementById('liveCount').textContent = d.count || 0;
-    document.getElementById('cFotbal').textContent = d.count || 0;
+    var newCount = d.count || 0;
+    var prevCount = window._prevLiveCount || 0;
+    animateNumber(document.getElementById('liveCount'), prevCount, newCount, 1000);
+    animateNumber(document.getElementById('cFotbal'), prevCount, newCount, 1000);
+    window._prevLiveCount = newCount;
     var list = document.getElementById('liveList');
     if (!d.matches || !d.matches.length) {
       list.innerHTML = '<div class="empty">Niciun meci live acum</div>';
