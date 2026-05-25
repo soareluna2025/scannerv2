@@ -3006,6 +3006,14 @@ NEXT STEPS (prioritizat):
                  getOddsFromDB() acum citeste si din prematch_data (982 fixtures)
                  daca odds table e goala pentru acel fixture — salveaza API quota
 
+[25.05 ~15:xx] - P5 FIX (partial): predictions DO NOTHING → DO UPDATE in enrich.js
+                 Commit: fec962c (feature) / 464c648 (main)
+                 Bug: predictions salva PRIMA predictie per meci (cu date minime, zile inainte)
+                 Fix: DO UPDATE cu WHERE result_over15 IS NULL = mereu ultima predictie prematch
+                 Efect: predictiile viitoare vor folosi date complete (injuries+odds+lineup)
+                 NOTE: Brier 0.1950 NU se schimba imediat (622 predictii existente neafectate)
+                       Roadmap: Faza 0 (observare) pana 20 iulie. Faza 1 trigger: Brier<=0.16 + sample>=2000
+
 ================================================================================
   STARE HYBRID V2 LA 25.05 ~15:00 (dupa diagnostic):
   ✅ L0 Poisson: activ, lambda din form_stats/teams_stats/league_stats
@@ -3022,7 +3030,8 @@ NEXT STEPS (prioritizat):
   ✅ form_stats JOIN: P2 NON-ISSUE — enrich.js citeste fixtures_history direct
   ✅ injuries: P3 FIX — getInjuriesFromDB() fallback din prematch_data (978 fixtures)
   ✅ odds NS: P4 FIX — getOddsFromDB() fallback din prematch_data (982 fixtures)
-  ⚠️  Brier Score: 0.1950 (target ≤ 0.13) — sample 622 predictii verificate (P5 PENDING)
+  ✅ predictions: P5 FIX (partial) — DO UPDATE prematch (cel mai recent, nu primul)
+  ⚠️  Brier Score: 0.1950 — Faza 0 observare (nu calibrare). Checkpoint: 8 iun 2026
   ❌ venues altitude: 4,604 NULL — OpenElevation nerulatat (P6 PENDING)
   ❌ prematch predictions (900 fixtures): COLECTATE dar IGNORATE in enrich.js
   ❌ standings (2,484 randuri): COLECTATE dar IGNORATE in enrich.js

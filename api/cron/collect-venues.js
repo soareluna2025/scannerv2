@@ -21,6 +21,22 @@ async function ensureColumns() {
   await query(`ALTER TABLE venues ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`).catch(() => {});
 }
 
+// Geocodare oras/tara → lat/lng via Nominatim (OSM, gratuit, fara cheie, max 1 req/s)
+async function geocodeCity(city, country) {
+  if (!city) return null;
+  try {
+    const q = encodeURIComponent(`${city}${country ? ', ' + country : ''}`);
+    const url = `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'AlohaScan/1.0 (soareluna2025@protonmail.com)' },
+      signal: AbortSignal.timeout(8000),
+    });
+    const d = await res.json();
+    if (!Array.isArray(d) || !d.length) return null;
+    return { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
+  } catch (_) { return null; }
+}
+
 // Lookup altitude prin Open-Elevation (gratuit, fara cheie)
 async function getAltitude(lat, lng) {
   if (!lat || !lng) return null;
@@ -46,22 +62,30 @@ function climateZone(lat) {
   return 'polar';
 }
 
-// Colecteaza un singur venue: API-Football + Open-Elevation
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Colecteaza un singur venue: API-Football + Nominatim geocodare + Open-Elevation altitudine
 async function collectOne(venueId) {
   try {
     const res = await fetchApiFootball(`/venues?id=${venueId}`);
     const d = await res.json();
     const v = d.response?.[0];
     if (!v) return null;
-    // Coordinatele nu vin din /venues — vor fi NULL deocamdata
-    // (Open-Elevation necesita lat/lng dar nu avem; lasam null pentru viitor)
-    const lat = null, lng = null;
+
+    // Geocodeaza orasul → lat/lng (necesare pentru Open-Elevation)
+    // Respecta rate limit Nominatim: apelantul trebuie sa adauge sleep(1100) dupa fiecare apel
+    const coords = await geocodeCity(v.city, v.country);
+    const lat = coords?.lat ?? null;
+    const lng = coords?.lng ?? null;
+
     let altitude = null;
     if (lat != null && lng != null) altitude = await getAltitude(lat, lng);
     const climate = climateZone(lat);
+
     await query(`
-      INSERT INTO venues (venue_id, name, address, city, country, capacity, surface, image, altitude_m, climate_zone, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+      INSERT INTO venues (venue_id, name, address, city, country, capacity, surface, image,
+                          latitude, longitude, altitude_m, climate_zone, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
       ON CONFLICT (venue_id) DO UPDATE SET
         name = EXCLUDED.name,
         address = EXCLUDED.address,
@@ -70,15 +94,17 @@ async function collectOne(venueId) {
         capacity = EXCLUDED.capacity,
         surface = EXCLUDED.surface,
         image = EXCLUDED.image,
+        latitude  = COALESCE(EXCLUDED.latitude,  venues.latitude),
+        longitude = COALESCE(EXCLUDED.longitude, venues.longitude),
         altitude_m = COALESCE(EXCLUDED.altitude_m, venues.altitude_m),
         climate_zone = COALESCE(EXCLUDED.climate_zone, venues.climate_zone),
         updated_at = NOW()
     `, [
       v.id, v.name || null, v.address || null, v.city || null, v.country || null,
       v.capacity || null, v.surface || null, v.image || null,
-      altitude, climate,
+      lat, lng, altitude, climate,
     ]);
-    return { id: v.id, name: v.name, city: v.city, altitude };
+    return { id: v.id, name: v.name, city: v.city, lat, lng, altitude };
   } catch (e) {
     console.warn(`[collect-venues] venue ${venueId}:`, e.message);
     return null;
@@ -91,8 +117,16 @@ export default async function handler(req, res) {
     // Limit per rulare ca sa nu epuizam quota
     const LIMIT = parseInt(req.query?.limit || '200', 10);
 
-    // Identifica venue_id-uri din TOATE sursele (teams + fixtures) fara intrare in venues
-    const { rows: missing } = await query(`
+    // Prioritate 1: venues existente fara altitude (necesita geocodare + OpenElevation)
+    // Prioritate 2: venue_id-uri noi (nu exista in venues)
+    const { rows: noAlt } = await query(`
+      SELECT venue_id AS vid FROM venues
+      WHERE altitude_m IS NULL AND city IS NOT NULL
+      ORDER BY venue_id
+      LIMIT $1
+    `, [LIMIT]).catch(() => ({ rows: [] }));
+
+    const { rows: missing } = noAlt.length < LIMIT ? await query(`
       SELECT DISTINCT vid FROM (
         SELECT venue_id AS vid FROM teams WHERE venue_id IS NOT NULL
         UNION
@@ -100,15 +134,16 @@ export default async function handler(req, res) {
       ) sources
       WHERE vid NOT IN (SELECT venue_id FROM venues)
       LIMIT $1
-    `, [LIMIT]).catch(() => ({ rows: [] }));
+    `, [LIMIT - noAlt.length]).catch(() => ({ rows: [] })) : { rows: [] };
 
+    const toProcess = [...noAlt, ...missing];
     const collected = [];
 
-    // Strategie 1: direct venue_id known
-    for (const r of missing) {
+    // Strategie 1: direct venue_id known — cu sleep pentru Nominatim (max 1 req/s)
+    for (const r of toProcess) {
       const out = await collectOne(r.vid);
       if (out) collected.push(out);
-      await new Promise(r => setTimeout(r, 100));
+      await sleep(1100); // Nominatim rate limit: 1 req/s
     }
 
     // Strategie 2 (fallback): folosim /teams?id=X care returneaza ATAT team cat si venue
