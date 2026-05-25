@@ -91,21 +91,55 @@ export default async function handler(req, res) {
     // Limit per rulare ca sa nu epuizam quota
     const LIMIT = parseInt(req.query?.limit || '200', 10);
 
-    // Identifica venue_id-uri din fixtures fara intrare in venues
+    // Identifica venue_id-uri din TOATE sursele (teams + fixtures) fara intrare in venues
     const { rows: missing } = await query(`
-      SELECT DISTINCT venue_id AS vid
-      FROM fixtures
-      WHERE venue_id IS NOT NULL
-        AND venue_id NOT IN (SELECT venue_id FROM venues)
+      SELECT DISTINCT vid FROM (
+        SELECT venue_id AS vid FROM teams WHERE venue_id IS NOT NULL
+        UNION
+        SELECT venue_id AS vid FROM fixtures WHERE venue_id IS NOT NULL
+      ) sources
+      WHERE vid NOT IN (SELECT venue_id FROM venues)
       LIMIT $1
     `, [LIMIT]).catch(() => ({ rows: [] }));
 
     const collected = [];
+
+    // Strategie 1: direct venue_id known
     for (const r of missing) {
       const out = await collectOne(r.vid);
       if (out) collected.push(out);
-      // Mini pauza intre call-uri
       await new Promise(r => setTimeout(r, 100));
+    }
+
+    // Strategie 2 (fallback): daca nimic gasit prin venue_id, iteram prin teams si fetch /venues?team=X
+    if (missing.length === 0 && collected.length === 0) {
+      const { rows: teams } = await query(`
+        SELECT team_id, name FROM teams
+        WHERE team_id NOT IN (SELECT DISTINCT venue_id FROM venues WHERE venue_id IS NOT NULL)
+        ORDER BY team_id
+        LIMIT $1
+      `, [LIMIT]).catch(() => ({ rows: [] }));
+      for (const t of teams) {
+        try {
+          const r = await fetchApiFootball(`/venues?team=${t.team_id}`);
+          const d = await r.json();
+          const v = d.response?.[0];
+          if (!v || !v.id) continue;
+          // UPSERT in teams pentru viitor
+          await query(`UPDATE teams SET venue_id = $1 WHERE team_id = $2`, [v.id, t.team_id]).catch(() => {});
+          const climate = climateZone(null);
+          await query(`
+            INSERT INTO venues (venue_id, name, address, city, country, capacity, surface, image, climate_zone, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+            ON CONFLICT (venue_id) DO UPDATE SET
+              name = EXCLUDED.name, city = EXCLUDED.city, capacity = EXCLUDED.capacity,
+              surface = EXCLUDED.surface, updated_at = NOW()
+          `, [v.id, v.name || null, v.address || null, v.city || null, v.country || null,
+              v.capacity || null, v.surface || null, v.image || null, climate]).catch(() => {});
+          collected.push({ id: v.id, name: v.name, city: v.city, team: t.name });
+          await new Promise(r => setTimeout(r, 100));
+        } catch (e) { /* skip */ }
+      }
     }
 
     await query(`
