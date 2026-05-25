@@ -111,12 +111,7 @@ async function collectOne(venueId) {
   }
 }
 
-export default async function handler(req, res) {
-  try {
-    await ensureColumns();
-    // Limit per rulare ca sa nu epuizam quota
-    const LIMIT = parseInt(req.query?.limit || '200', 10);
-
+async function processVenues(LIMIT) {
     // Prioritate 1: venues existente fara altitude (necesita geocodare + OpenElevation)
     // Prioritate 2: venue_id-uri noi (nu exista in venues)
     const { rows: noAlt } = await query(`
@@ -184,17 +179,37 @@ export default async function handler(req, res) {
       VALUES ('collect-venues', NOW(), 'success', $1)
     `, [collected.length]).catch(() => {});
 
-    const { rows: totalRows } = await query(`SELECT COUNT(*)::int AS n FROM venues`).catch(() => ({ rows: [{ n: 0 }] }));
+    console.log(`[collect-venues] done: ${collected.length} venues procesate`);
+}
 
-    return res.status(200).json({
+export default async function handler(req, res) {
+  try {
+    await ensureColumns();
+    const LIMIT = parseInt(req.query?.limit || '200', 10);
+
+    const { rows: pending } = await query(`
+      SELECT COUNT(*)::int AS n FROM venues WHERE altitude_m IS NULL AND city IS NOT NULL
+    `).catch(() => ({ rows: [{ n: 0 }] }));
+
+    const { rows: totalRows } = await query(`SELECT COUNT(*)::int AS n FROM venues`).catch(() => ({ rows: [{ n: 0 }] }));
+    const { rows: doneRows } = await query(`SELECT COUNT(*)::int AS n FROM venues WHERE altitude_m IS NOT NULL`).catch(() => ({ rows: [{ n: 0 }] }));
+
+    // Raspunde imediat — procesarea dureaza minute, nu secunde
+    res.status(202).json({
       ok: true,
-      missing_count: missing.length,
-      collected: collected.length,
+      status: 'started',
+      limit: LIMIT,
+      pending_before: pending[0]?.n || 0,
+      done_before: doneRows[0]?.n || 0,
       total_venues_in_db: totalRows[0]?.n || 0,
-      sample: collected.slice(0, 5),
+      estimated_minutes: Math.ceil((Math.min(LIMIT, pending[0]?.n || LIMIT) * 10) / 60),
+      message: 'Procesare in background. Verifica cron_logs sau venues WHERE altitude_m IS NOT NULL.',
     });
+
+    // Fire-and-forget: proceseaza in background fara sa blocheze raspunsul
+    setImmediate(() => processVenues(LIMIT).catch(e => console.error('[collect-venues]', e.message)));
   } catch (e) {
     console.error('[collect-venues]', e.message);
-    return res.status(500).json({ ok: false, error: e.message });
+    if (!res.headersSent) res.status(500).json({ ok: false, error: e.message });
   }
 }
