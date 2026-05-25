@@ -24,23 +24,28 @@ async function ensureColumns() {
 // Fara cheie API, fara rate limit strict (vs Nominatim care blocheaza IP-uri)
 async function geocodeCity(city, country) {
   if (!city) return null;
-  try {
-    const q = encodeURIComponent(city);
-    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${q}&count=5&language=en&format=json`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    const d = await res.json();
-    if (!d.results?.length) return null;
-    // Incearca sa potriveasca tara daca avem mai multe rezultate
-    let result = d.results[0];
-    if (country && d.results.length > 1) {
-      const match = d.results.find(r =>
-        r.country?.toLowerCase() === country.toLowerCase() ||
-        r.country_code?.toLowerCase() === country.slice(0, 2).toLowerCase()
-      );
-      if (match) result = match;
-    }
-    return { lat: result.latitude, lng: result.longitude };
-  } catch (_) { return null; }
+  // Curata city name: "Eastbourne, East Sussex" → "Eastbourne"
+  const cityClean = city.split(',')[0].trim();
+  const toTry = cityClean !== city ? [cityClean, city] : [city];
+  for (const name of toTry) {
+    try {
+      const q = encodeURIComponent(name);
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${q}&count=5&language=en&format=json`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      const d = await res.json();
+      if (!d.results?.length) continue;
+      let result = d.results[0];
+      if (country && d.results.length > 1) {
+        const match = d.results.find(r =>
+          r.country?.toLowerCase() === country.toLowerCase() ||
+          r.country_code?.toLowerCase() === country.slice(0, 2).toLowerCase()
+        );
+        if (match) result = match;
+      }
+      return { lat: result.latitude, lng: result.longitude };
+    } catch (_) { continue; }
+  }
+  return null;
 }
 
 // Lookup altitude prin Open-Elevation (gratuit, fara cheie)
