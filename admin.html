@@ -522,16 +522,17 @@ body{
   box-shadow:0 0 6px rgba(34,211,238,0.6);
   animation:soft-pulse 1.6s ease-in-out infinite;
 }
-.sport-tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.sport-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
 .sport-tab{
-  display:inline-flex;align-items:center;gap:8px;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
   background:rgba(255,255,255,0.03);
   color:var(--mu);
   border:1px solid var(--bd);border-radius:24px;
-  padding:9px 16px;font-size:12px;font-weight:600;
+  padding:9px 12px;font-size:12px;font-weight:600;
   cursor:pointer;
   transition:all .25s var(--ease);
   font-family:inherit;
+  white-space:nowrap;min-width:0;
 }
 .sport-tab .em{font-size:15px}
 .sport-tab .sb{
