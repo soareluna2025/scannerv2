@@ -2015,7 +2015,7 @@ function mdRenderSumar(d){
     }
     if(en.breakdown){
       var bd=en.breakdown;
-      var bItems=[['Poisson',bd.poisson],['Formă',bd.forma],['H2H',bd.h2h],['Live',bd.live],['EV',bd.ev],['Consistență',bd.consistenta],['Putere Echipe',bd.putereEchipe]];
+      var bItems=[['Poisson',bd.poisson],['Formă',bd.forma],['H2H',bd.h2h],['Live',bd.live],['EV',bd.ev],['Consistență',bd.consistenta],['Putere Echipe',bd.putereEchipe],['API L8',bd.apiConsensus],['Consensus',bd.consensus]];
       out+='<div class="conf-breakdown">';
       bItems.forEach(function(b){
         if(b[1]==null)return;
@@ -2024,6 +2024,33 @@ function mdRenderSumar(d){
           '<div class="conf-bd-bar"><div class="conf-bd-fill" style="width:'+b[1]+'%;background:'+bc+'"></div></div>'+
           '<div class="conf-bd-val">'+b[1]+'%</div></div>';
       });
+      out+='</div>';
+    }
+    // Consensus Engine section
+    if(en._consensusDetails&&en.breakdown&&en.breakdown.consensus!=null){
+      var cscore=en.breakdown.consensus;
+      var cscolor=cscore>=75?'#22c55e':cscore>=50?'#f59e0b':'#ef4444';
+      var cslabel=cscore>=75?'RIDICAT':cscore>=50?'MEDIU':'SCĂZUT';
+      var cboost=cscore>=75?'+5':cscore<=30?'-5':'0';
+      var cboostClr=cscore>=75?'#22c55e':cscore<=30?'#ef4444':'#94a3b8';
+      out+='<div class="pi-section" style="margin-top:8px;border-color:rgba(139,92,246,.25);background:rgba(139,92,246,.05)">';
+      out+='<div class="pi-title" style="color:#a78bfa">🔗 Consensus Engine</div>';
+      out+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">';
+      out+='<div style="font-size:20px;font-weight:900;color:'+cscolor+'">'+cscore+'</div>';
+      out+='<div style="flex:1"><div class="conf-bd-bar" style="height:6px"><div class="conf-bd-fill" style="width:'+cscore+'%;background:'+cscolor+'"></div></div></div>';
+      out+='<div style="font-size:10px;font-weight:700;color:'+cscolor+'">'+cslabel+'</div>';
+      out+='<div style="font-size:10px;padding:2px 6px;border-radius:6px;background:'+cboostClr+'20;color:'+cboostClr+';font-weight:700">'+cboost+'</div>';
+      out+='</div>';
+      var cd=en._consensusDetails;
+      var sigRows=[];
+      if(cd.winner){var wok=cd.winner.ours===cd.winner.api;sigRows.push(['Direcție câștig','API:'+cd.winner.api+' Noi:'+cd.winner.ours,wok?'✓':'✗',wok?'#22c55e':'#ef4444']);}
+      if(cd.overUnder){var ouok=cd.overUnder.score===100;sigRows.push(['Over/Under',cd.overUnder.signal+' / '+cd.overUnder.ourDir,ouok?'✓':'✗',ouok?'#22c55e':'#ef4444']);}
+      if(cd.lambda){var ldiff=Math.abs(cd.lambda.api-cd.lambda.ours);var lclr=ldiff<0.3?'#22c55e':ldiff<0.7?'#f59e0b':'#ef4444';sigRows.push(['Lambda total','API:'+cd.lambda.api+' / Noi:'+cd.lambda.ours,'±'+ldiff.toFixed(2),lclr]);}
+      if(sigRows.length){
+        out+='<div style="display:flex;flex-direction:column;gap:4px">';
+        sigRows.forEach(function(r){out+='<div style="display:flex;align-items:center;gap:6px;font-size:10px"><div style="color:var(--mu2);width:95px;flex-shrink:0">'+r[0]+'</div><div style="color:var(--tx);flex:1">'+r[1]+'</div><div style="color:'+r[3]+';font-weight:700;min-width:32px;text-align:right">'+r[2]+'</div></div>';});
+        out+='</div>';
+      }
       out+='</div>';
     }
     // Player Intelligence section
