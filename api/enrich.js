@@ -2,6 +2,7 @@ import { calcPoisson6x6, parseOddsItem, calcEV } from './calc-utils.js';
 import { query } from './db.js';
 import { logPrediction } from './log-prediction.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
+import { calcConsensus } from './utils/consensus-engine.js';
 
 const PRE_MATCH_STATUSES = new Set(['NS']);
 const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
@@ -862,6 +863,14 @@ export default async function handler(req, res) {
 
     if (elapsed && parseInt(elapsed) > 0) {
       confData.breakdown.xg_source = xgSource;
+    }
+
+    // --- Consensus Engine: multi-signal alignment API vs model ---
+    const consensusData = calcConsensus(result, apiPred);
+    if (consensusData) {
+      confData.confidenceScore = Math.max(5, Math.min(100, confData.confidenceScore + consensusData.boost));
+      confData.breakdown.consensus = consensusData.consensusScore;
+      confData._consensusDetails = consensusData.details;
     }
 
     // --- Injuries adjustment ---
