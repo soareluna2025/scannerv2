@@ -3,6 +3,7 @@ import { query } from './db.js';
 import { logPrediction } from './log-prediction.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
 import { calcConsensus } from './utils/consensus-engine.js';
+import { getWeight } from './weights.js';
 
 const PRE_MATCH_STATUSES = new Set(['NS']);
 const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
@@ -863,6 +864,24 @@ export default async function handler(req, res) {
       }
     }
 
+    // Model-weights lambda multiplier — auto-calibrare per ligă din learning-analysis
+    if (lgid) {
+      const lgKey = `league_${lgid}`;
+      const mult = getWeight('OVER15', lgKey, 'lambda_multiplier') ?? 1.0;
+      if (mult !== 1.0) {
+        result.lambdaHome  = +(result.lambdaHome  * mult).toFixed(2);
+        result.lambdaAway  = +(result.lambdaAway  * mult).toFixed(2);
+        result.lambdaTotal = +(result.lambdaHome + result.lambdaAway).toFixed(2);
+        const mxW = calcPoisson6x6(result.lambdaHome, result.lambdaAway);
+        Object.assign(result, {
+          over15Prob: mxW.over15Prob, over25Prob: mxW.over25Prob,
+          ggProb: mxW.ggProb, homeWin: mxW.homeWin,
+          draw: mxW.draw, awayWin: mxW.awayWin,
+        });
+        result._lambdaMultiplier = mult.toFixed(3);
+      }
+    }
+
     // Venue + altitude impact (Faza 1 Hybrid)
     if (venueInfo) {
       const altM    = Number(venueInfo.altitude_m) || 0;
@@ -1088,18 +1107,26 @@ export default async function handler(req, res) {
 
         // Salveaza/actualizeaza predicția pre-meci — mereu ultima versiune (DO UPDATE)
         // WHERE result_over15 IS NULL garanteaza ca nu suprascrie dupa ce meciul s-a jucat
+        const apiHomePct = apiPred ? (parseFloat(apiPred.predictions?.percent?.home) || null) : null;
+        const apiDrawPct = apiPred ? (parseFloat(apiPred.predictions?.percent?.draw) || null) : null;
+        const apiAwayPct = apiPred ? (parseFloat(apiPred.predictions?.percent?.away) || null) : null;
         query(
           `INSERT INTO predictions (fixture_id, home_team, away_team, league_name, league_id, match_date,
             lambda_home, lambda_away, lambda_total, over15_prob, over25_prob, gg_prob,
-            home_score_rate, away_score_rate, h2h_over15, confidence)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+            home_score_rate, away_score_rate, h2h_over15, confidence,
+            api_home_pct, api_draw_pct, api_away_pct)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
           ON CONFLICT (fixture_id) DO UPDATE SET
             lambda_home=EXCLUDED.lambda_home, lambda_away=EXCLUDED.lambda_away,
             lambda_total=EXCLUDED.lambda_total,
             over15_prob=EXCLUDED.over15_prob, over25_prob=EXCLUDED.over25_prob,
             gg_prob=EXCLUDED.gg_prob, home_score_rate=EXCLUDED.home_score_rate,
             away_score_rate=EXCLUDED.away_score_rate, h2h_over15=EXCLUDED.h2h_over15,
-            confidence=EXCLUDED.confidence, updated_at=NOW()
+            confidence=EXCLUDED.confidence,
+            api_home_pct=COALESCE(EXCLUDED.api_home_pct, predictions.api_home_pct),
+            api_draw_pct=COALESCE(EXCLUDED.api_draw_pct, predictions.api_draw_pct),
+            api_away_pct=COALESCE(EXCLUDED.api_away_pct, predictions.api_away_pct),
+            updated_at=NOW()
           WHERE predictions.result_over15 IS NULL`,
           [
             Number(fid), hn || '', an || '', lg || '', lgid ? Number(lgid) : null, dt || null,
@@ -1107,6 +1134,7 @@ export default async function handler(req, res) {
             payload.over15Prob, payload.over25Prob, payload.ggProb,
             payload.homeScoreRate, payload.awayScoreRate, payload.h2hOver15,
             payload.confidenceScore || null,
+            apiHomePct, apiDrawPct, apiAwayPct,
           ]
         ).catch(() => {});
       }

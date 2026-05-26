@@ -22,11 +22,9 @@ export default async function handler(req, res) {
 
   try {
     // Select predictions without results where match_date has passed
-    // Limit 200/run — 200 * 500ms = 100s, safe in cron window
     const pendingRes = await query(
       `SELECT id, fixture_id FROM predictions
-       WHERE result_over15 IS NULL AND match_date < NOW()
-       LIMIT 200`
+       WHERE result_over15 IS NULL AND match_date < NOW()`
     );
 
     const pending = pendingRes.rows;
@@ -53,11 +51,17 @@ export default async function handler(req, res) {
 
         const pr = await query(
           `UPDATE predictions SET
-             result_over15 = $1,
-             result_gg     = $2,
-             updated_at    = NOW()
-           WHERE fixture_id = $3`,
-          [(hg + ag) >= 2, hg > 0 && ag > 0, pred.fixture_id]
+             result_over15  = $1,
+             result_gg      = $2,
+             result_winner  = $3,
+             updated_at     = NOW()
+           WHERE fixture_id = $4`,
+          [
+            (hg + ag) >= 2,
+            hg > 0 && ag > 0,
+            hg > ag ? 'home' : ag > hg ? 'away' : 'draw',
+            pred.fixture_id,
+          ]
         );
         if (pr.rowCount > 0) {
           updated++;

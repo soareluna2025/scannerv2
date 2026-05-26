@@ -3469,6 +3469,30 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Verificare: node --check api/enrich.js OK
   Commit: f092982
 
+[26.05 ~10:00] - SISTEM AUTO-PREDICȚIE + FEEDBACK LOOP COMPLET:
+  1. scripts/migrations/add-prediction-api-columns.sql — coloane noi: api_home_pct,
+     api_draw_pct, api_away_pct, result_winner (rulează manual pe VPS cu psql)
+  2. api/cron/auto-predict.js (NOU) — cron 00:30 zilnic, generează predicții
+     automate pentru TOATE meciurile NS din next 36h (fără interacțiune umană)
+     Query: fixtures WHERE status='NS' AND match_date <= NOW()+36h AND no recent prediction
+     Apel: http://localhost:3000/api/enrich per fixture, 300ms sleep, LIMIT 500
+  3. api/enrich.js — 3 modificări:
+     a) Import getWeight din weights.js
+     b) Bloc lambda_multiplier per ligă după injury penalty (getWeight OVER15 lambda_multiplier)
+     c) predictions INSERT extins cu api_home_pct/draw_pct/away_pct ($17,$18,$19)
+        — extrage din apiPred.predictions.percent.home/draw/away
+        — COALESCE la DO UPDATE: nu suprascrie cu NULL dacă API n-a dat date
+  4. api/cron/learning-analysis.js — Pasul 6 adăugat:
+     Compară avg(over15_prob) predictat vs rata reală per ligă (MIN_SAMPLES=20)
+     Calculează lambda_multiplier = actual_rate/avg_predicted (clamped 0.80-1.20)
+     Scrie în model_weights — enrich.js îl citește și ajustează lambda automat
+     Feedback loop COMPLET: auto-predict → update-results → learning-analysis → enrich
+  5. api/update-results.js — fix LIMIT 200 eliminat + result_winner adăugat
+     ($4 instead of $3 for fixture_id after adding result_winner param)
+  6. server.js — 'auto-predict' adăugat în cronFiles array
+  7. deploy.yml — C16 cron 00:30 pentru auto-predict + grep filter adăugat
+  Verificare: node --check toate fișierele OK
+
 ================================================================================
   ⚠️  IMPORTANT — WORKFLOW GIT (Claude Code pe web, repo remote):
   ---------------------------------------------------------------

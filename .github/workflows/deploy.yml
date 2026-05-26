@@ -73,6 +73,7 @@ jobs:
             C13="30 1 * * * curl -sf http://localhost:3000/api/cron/collect-players-season >> $LOG 2>&1"
             C14="0 2 * * * curl -sf http://localhost:3000/api/cron/collect-squads >> $LOG 2>&1"
             C15="0 * * * * curl -sf http://localhost:3000/api/cron/cazarma-router >> $LOG 2>&1"
+            C16="30 0 * * * curl -sf http://localhost:3000/api/cron/auto-predict >> $LOG 2>&1"
 
             (
               crontab -l 2>/dev/null \
@@ -91,7 +92,8 @@ jobs:
                 | grep -v 'api/cron/collect-players-season' \
                 | grep -v 'api/cron/collect-squads' \
                 | grep -v 'backup-db.sh' \
-                | grep -v 'api/cron/cazarma-router'
+                | grep -v 'api/cron/cazarma-router' \
+                | grep -v 'api/cron/auto-predict'
               echo "$C0"
               echo "$C2"
               echo "$C3"
@@ -107,6 +109,7 @@ jobs:
               echo "$C13"
               echo "$C14"
               echo "$C15"
+              echo "$C16"
             ) | crontab -
 
             echo "CRONTAB ACTIV:"

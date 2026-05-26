@@ -221,11 +221,55 @@ export default async function handler(req, res) {
       }
     }
 
+    // ── PASUL 6: Lambda multiplier per ligă ─────────────────────
+    // Compară predicțiile over15_prob vs rata reală — calculează factor de corecție
+    const { rows: byLeagueLambda } = await query(`
+      SELECT league_id,
+        COUNT(*) AS n,
+        AVG(over15_prob) AS avg_predicted,
+        AVG(CASE WHEN result_over15 THEN 100.0 ELSE 0.0 END) AS actual_rate
+      FROM predictions
+      WHERE result_over15 IS NOT NULL
+        AND league_id IS NOT NULL
+        AND updated_at > NOW() - INTERVAL '90 days'
+      GROUP BY league_id
+      HAVING COUNT(*) >= ${MIN_SAMPLES}
+    `);
+
+    for (const row of byLeagueLambda) {
+      const n          = Number(row.n);
+      const avgPred    = Number(row.avg_predicted);
+      const actualRate = Number(row.actual_rate);
+      if (avgPred < 1) continue;
+
+      const rawMult = actualRate / avgPred;
+      const mult    = Math.max(0.80, Math.min(1.20, rawMult));
+
+      // Actualizează doar dacă bias-ul depășește 5%
+      if (Math.abs(mult - 1.0) < 0.05) continue;
+
+      const cl = confidenceLevel(n);
+      await query(
+        `INSERT INTO model_weights (module, context_key, weight_name, weight_value, default_value, sample_size, win_rate, confidence_level, last_updated)
+         VALUES ($1, $2, 'lambda_multiplier', $3, 1.0, $4, $5, $6, NOW())
+         ON CONFLICT (module, context_key, weight_name) DO UPDATE SET
+           weight_value=EXCLUDED.weight_value, sample_size=EXCLUDED.sample_size,
+           win_rate=EXCLUDED.win_rate, confidence_level=EXCLUDED.confidence_level,
+           last_updated=NOW()`,
+        ['OVER15', `league_${row.league_id}`, +mult.toFixed(4), n, +actualRate.toFixed(1), cl]
+      );
+      adjustments++;
+      log.push({
+        type: 'lambda_mult', league_id: row.league_id,
+        mult: +mult.toFixed(4), avg_predicted: +avgPred.toFixed(1),
+        actual_rate: +actualRate.toFixed(1), n,
+      });
+    }
+
     // ── PASUL 5: Log în cron_logs ────────────────────────────────
     await query(
-      `INSERT INTO cron_logs (job_name, ran_at, status, fixtures_processed, error_msg)
-       VALUES ('learning-analysis', NOW(), 'ok', $1, NULL)`,
-      [analyzed]
+      `INSERT INTO cron_logs (job_name, status, error_msg)
+       VALUES ('learning-analysis', 'success', NULL)`
     ).catch(() => {});
 
     const elapsed = ((Date.now() - started) / 1000).toFixed(1);
