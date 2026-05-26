@@ -5,7 +5,7 @@
      Sistem functional 95% conform planului. Zero probleme critice.
      Toate componentele active: Confidence 8 layere, NGP, Poisson, Scanner,
      Backfill, Auto-predict, Learning Engine, Deploy, Filtre ligi.
-     Singurul layer neimplementat: L2 (lineups/suspendari in lambda).
+     ✅ Toate layerele implementate — inclusiv L2 (lineups în lambda) la 27.05 01:40.
   CITEȘTE ACEST FIȘIER LA ÎNCEPUTUL ORICĂREI SESIUNI NOI
 ================================================================================
 
@@ -3566,3 +3566,15 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   NOTĂ: Actualizează secțiunea 12 după FIECARE acțiune nouă.
   FORMAT: [ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash
 ================================================================================
+
+[27.05 ~01:40] - L2 IMPLEMENTAT — Confirmed Lineup Strength Factor în enrich.js | Commit: 136e054
+  - Funcție nouă getLineupStrengthFactor(fixtureId, homeId, awayId) adăugată în enrich.js
+  - Citește startXI din prematch_data (stage 6-7, data_type='lineups')
+  - Calculează scor mediu per titular din players_season (formula: rating*0.45 + goals*0.20 + passAcc*0.20 + sot*0.15)
+  - Ajustează lambdaHome/lambdaAway cu factor ±12% max (0.88–1.12)
+  - Condiție activare: minim 7/11 titulari cu date în players_season
+  - Fallback automat la 1.0 dacă nu există date (zero impact)
+  - Inserție în pipeline: după Top Scorer Factor (step 4), înainte de Injury Penalty (step 5)
+  - Zero apeluri API extra — refolosește date colectate de prematch-enrichment cron
+  - Rezultat adăugat în response: _lineupFactor = "H:1.05|A:0.97"
+  - SISTEM 100% conform planului AlohaScan Hybrid Intelligence System v2 (L2 era ultimul layer neimplementat)
