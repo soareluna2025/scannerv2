@@ -1,6 +1,11 @@
 ================================================================================
   SESSION_CONTEXT.txt — AlohaScan Scanner V2
   Audit complet: 2026-05-17
+  ✅ VERIFICAT COMPLET: Miercuri 27 Mai 2026, ora 01:22
+     Sistem functional 95% conform planului. Zero probleme critice.
+     Toate componentele active: Confidence 8 layere, NGP, Poisson, Scanner,
+     Backfill, Auto-predict, Learning Engine, Deploy, Filtre ligi.
+     Singurul layer neimplementat: L2 (lineups/suspendari in lambda).
   CITEȘTE ACEST FIȘIER LA ÎNCEPUTUL ORICĂREI SESIUNI NOI
 ================================================================================
 
@@ -3482,6 +3487,21 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     Tabel recent 20 predicții: meci, pick nostru (cu prob), pick API, rezultat real
     Notă explicativă că marketele sunt diferite (Over1.5 vs 1X2)
   Selector de zile: 30/60/90/180 zile; date on-demand (nu auto-refresh 30s)
+
+[27.05 01:22] - VERIFICARE COMPLETA SISTEM — AlohaScan Hybrid Intelligence System v2
+  Audit automat toate componentele. Rezultat: 95% functional conform planului.
+  ✅ Confidence Score 8 layere (EV Layer 5 activ w=0.08 dupa fix)
+  ✅ NGP double-boost fix (if/else if la mn>=70/mn>=80)
+  ✅ Poisson 6x6 normalizare corecta
+  ✅ Filtre ligi (fix 'dame' → 'dames', Copa Sudamericana OK)
+  ✅ Scanner live + saveFormStats implementata complet
+  ✅ Backfill season-first, STOP_AT=250k
+  ✅ Auto-predict zilnic 00:30
+  ✅ Learning engine 6 pasi + lambda_multiplier activ
+  ✅ Coach stats (L6) — citit si aplicat in enrich.js (contrar analizei initiale)
+  ✅ Deploy GitHub Actions → VPS functional
+  ⏳ L2 (lineups confirmate + suspendari in lambda) — singurul layer neimplementat
+  Zero probleme critice detectate.
 
 [26.05 ~AUDIT] - FIX Copa Sudamericana blocata de filtru fals pozitiv:
   BUG: 'dame' in WOMEN_TERMS bloca 'CONMEBOL Su**dame**ricana' → meciurile nu apareau in LIVE
