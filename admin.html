@@ -1198,6 +1198,24 @@ body{
     </div>
   </section>
 
+  <section class="card" id="cardVsApi">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3L2 9l10 6 10-6-10-6z"/><path d="M2 15l10 6 10-6"/><path d="M2 12l10 6 10-6"/></svg></span>
+      <h2>Noi vs API Football</h2>
+      <select id="vsapi-days" onchange="loadVsApi()" style="background:rgba(255,255,255,.05);border:1px solid var(--bor);color:var(--tx);padding:5px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-left:auto;margin-right:6px">
+        <option value="30">30 zile</option>
+        <option value="60">60 zile</option>
+        <option value="90" selected>90 zile</option>
+        <option value="180">180 zile</option>
+      </select>
+      <button class="hc-btn" onclick="loadVsApi()">Reîncarcă</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">Comparație reală: predicțiile noastre Over/Under 1.5 vs predicțiile 1X2 de la API-Football. Plus auto-corecții model.</div>
+    <div id="vsapi-results" style="margin-top:8px">
+      <div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">Apasă „Reîncarcă"</div>
+    </div>
+  </section>
+
   <section class="card" id="cardScannerControl">
     <div class="card-h">
       <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><polygon points="10,8 16,12 10,16"/></svg></span>
@@ -2194,6 +2212,127 @@ async function loadLeaguesInsights() {
     });
     h += '</tbody></table>';
     h += '<div style="margin-top:10px;font-size:10px;color:var(--mu);padding:8px;background:rgba(99,102,241,.05);border-left:2px solid #6366f1;border-radius:4px;line-height:1.5">💡 Filtru: predicții cu prob ≥ 70% Over 1.5, min 10 samples, 180 zile. Baseline așteptat: ' + d.baseline + '%.</div>';
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare fetch: ' + e.message + '</div>';
+  }
+}
+
+// ── NOI vs API FOOTBALL ──────────────────────────────────────────────────────
+async function loadVsApi() {
+  var el = document.getElementById('vsapi-results');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">⏳ Încarcă...</div>';
+  try {
+    var days = document.getElementById('vsapi-days').value;
+    var d = await apiFetch('/api/admin/vs-api?days=' + days);
+    if (!d.ok) { el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + (d.error || 'unknown') + '</div>'; return; }
+
+    var wrClr = function(n) {
+      if (n === null || n === undefined) return 'var(--mu)';
+      if (n >= 70) return '#22c55e'; if (n >= 55) return '#f59e0b'; return '#ef4444';
+    };
+
+    var h = '';
+
+    // ── Hero duel ────────────────────────────────────────────────────
+    var ourAcc  = d.our.accuracy;
+    var apiAcc  = d.api.accuracy;
+    var winner  = ourAcc !== null && apiAcc !== null
+      ? (ourAcc > apiAcc ? 'noi' : ourAcc < apiAcc ? 'api' : 'egal')
+      : null;
+    h += '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin-bottom:16px">';
+    // Noi
+    h += '<div style="background:rgba(34,211,238,.07);border:1px solid rgba(34,211,238,.18);border-radius:14px;padding:18px 12px;text-align:center' + (winner==='noi'?';box-shadow:0 0 20px rgba(34,211,238,.2)':'') + '">';
+    h += '<div style="font-size:10px;color:var(--mu);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">🤖 Sistemul Nostru</div>';
+    h += '<div style="font-family:Rajdhani,sans-serif;font-size:38px;font-weight:800;color:' + wrClr(ourAcc) + ';line-height:1">' + (ourAcc !== null ? ourAcc.toFixed(1) + '%' : '—') + '</div>';
+    h += '<div style="font-size:10px;color:var(--mu);margin-top:4px">' + d.our.wins + ' / ' + d.our.total + ' · Over 1.5</div>';
+    h += (winner==='noi' ? '<div style="font-size:10px;color:#22c55e;font-weight:700;margin-top:6px">🏆 CÂȘTIGĂM</div>' : '') + '</div>';
+    // VS
+    h += '<div style="text-align:center;font-family:Rajdhani,sans-serif;font-size:22px;font-weight:800;color:var(--mu)">VS</div>';
+    // API
+    h += '<div style="background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.18);border-radius:14px;padding:18px 12px;text-align:center' + (winner==='api'?';box-shadow:0 0 20px rgba(99,102,241,.2)':'') + '">';
+    h += '<div style="font-size:10px;color:var(--mu);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">📡 API-Football</div>';
+    h += '<div style="font-family:Rajdhani,sans-serif;font-size:38px;font-weight:800;color:' + wrClr(apiAcc) + ';line-height:1">' + (apiAcc !== null ? apiAcc.toFixed(1) + '%' : '—') + '</div>';
+    h += '<div style="font-size:10px;color:var(--mu);margin-top:4px">' + d.api.wins + ' / ' + d.api.total + ' · 1X2</div>';
+    h += (winner==='api' ? '<div style="font-size:10px;color:#6366f1;font-weight:700;margin-top:6px">🏆 CÂȘTIGĂ</div>' : '') + '</div>';
+    h += '</div>';
+
+    if (d.our.total === 0) {
+      h += '<div style="color:#f59e0b;padding:12px;background:rgba(245,158,11,.05);border-left:3px solid #f59e0b;border-radius:6px;font-size:12px;margin-bottom:12px">⚠ Nu există predicții rezolvate în această perioadă. Sistemul auto-predict + update-results trebuie să ruleze cel puțin o dată.</div>';
+    }
+
+    // ── Head-to-head grid ───────────────────────────────────────────
+    if (d.hth.total > 0) {
+      h += '<div style="background:rgba(255,255,255,.03);border-radius:10px;padding:12px;margin-bottom:14px">';
+      h += '<div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">⚔ Head-to-Head · ' + d.hth.total + ' meciuri comune</div>';
+      h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;font-size:11px">';
+      var hthItems = [
+        { val: d.hth.we_won_api_lost, lbl: 'Noi ✓ API ✗', clr: '#22c55e' },
+        { val: d.hth.api_won_we_lost, lbl: 'API ✓ Noi ✗', clr: '#ef4444' },
+        { val: d.hth.both_right,      lbl: 'Ambii ✓',     clr: '#6366f1' },
+        { val: d.hth.both_wrong,      lbl: 'Ambii ✗',     clr: 'var(--mu)' },
+      ];
+      hthItems.forEach(function(it) {
+        h += '<div style="background:rgba(255,255,255,.03);border-radius:8px;padding:10px 6px">';
+        h += '<div style="font-size:22px;font-weight:800;color:' + it.clr + '">' + it.val + '</div>';
+        h += '<div style="font-size:9.5px;color:var(--mu);margin-top:3px">' + it.lbl + '</div>';
+        h += '</div>';
+      });
+      h += '</div></div>';
+    }
+
+    // ── Auto-corecții ───────────────────────────────────────────────
+    if (d.self_corrections && d.self_corrections.length) {
+      h += '<div style="margin-bottom:14px">';
+      h += '<div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🔧 Auto-Corecții Model (Lambda Multiplier per Ligă)</div>';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+      h += '<thead><tr style="background:rgba(255,255,255,.04)"><th style="padding:5px 8px;text-align:left">Ligă ID</th><th style="padding:5px 8px;text-align:center">Direcție</th><th style="padding:5px 8px;text-align:right">Corecție</th><th style="padding:5px 8px;text-align:right">Samples</th><th style="padding:5px 8px;text-align:right">WR%</th><th style="padding:5px 8px;text-align:right">Confidence</th></tr></thead>';
+      h += '<tbody>';
+      d.self_corrections.forEach(function(r) {
+        var dc = r.direction === 'UP' ? '#22c55e' : '#f59e0b';
+        var arrow = r.direction === 'UP' ? '▲' : '▼';
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
+        h += '<td style="padding:5px 8px;font-family:monospace">Liga ' + r.league_id + '</td>';
+        h += '<td style="padding:5px 8px;text-align:center;color:' + dc + ';font-weight:700">' + arrow + ' ' + r.direction + '</td>';
+        h += '<td style="padding:5px 8px;text-align:right;font-weight:700;color:' + dc + '">×' + r.multiplier.toFixed(3) + ' (+' + r.pct_change + '%)</td>';
+        h += '<td style="padding:5px 8px;text-align:right">' + r.samples + '</td>';
+        h += '<td style="padding:5px 8px;text-align:right;color:' + wrClr(r.win_rate) + '">' + (r.win_rate !== null ? r.win_rate.toFixed(1) + '%' : '—') + '</td>';
+        h += '<td style="padding:5px 8px;text-align:right;font-size:10px;color:var(--mu)">' + (r.confidence || '—') + '</td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table>';
+      h += '<div style="margin-top:6px;font-size:10px;color:var(--mu)">Lambda UP = predicțiile noastre subestimasem golurile (am crescut lambda). DOWN = supraestitmaserăm.</div>';
+      h += '</div>';
+    } else if (d.our.total > 0) {
+      h += '<div style="font-size:11px;color:var(--mu);padding:10px;background:rgba(255,255,255,.02);border-radius:8px;margin-bottom:14px">🔧 Nicio auto-corecție activă încă — sistemul learning-analysis trebuie să acumuleze min. 20 predicții rezolvate per ligă.</div>';
+    }
+
+    // ── Tabel recent ────────────────────────────────────────────────
+    if (d.recent && d.recent.length) {
+      h += '<div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📋 Ultimele ' + d.recent.length + ' predicții comune rezolvate</div>';
+      h += '<div style="overflow-x:auto">';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:10.5px;min-width:540px">';
+      h += '<thead><tr style="background:rgba(255,255,255,.04)"><th style="padding:5px 6px;text-align:left">Meci</th><th style="padding:5px 6px;text-align:center">Noi</th><th style="padding:5px 6px;text-align:center">API</th><th style="padding:5px 6px;text-align:center">Rezultat</th></tr></thead><tbody>';
+      d.recent.forEach(function(r) {
+        var ourClr = r.our_ok ? '#22c55e' : '#ef4444';
+        var apiClr = r.api_ok ? '#22c55e' : '#ef4444';
+        var ourIcon = r.our_ok ? '✓' : '✗';
+        var apiIcon = r.api_ok ? '✓' : '✗';
+        var ourLabel = r.over15_prob.toFixed(0) + '% → ' + (r.our_pick === 'over15' ? 'OVER' : 'UNDER');
+        var apiLabel = r.api_pick.toUpperCase() + ' ' + r.api_pct + '%';
+        var resultLabel = (r.result_over15 ? 'Over' : 'Under') + ' 1.5 · ' + r.result_winner;
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
+        h += '<td style="padding:5px 6px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + r.home + ' – ' + r.away + '</td>';
+        h += '<td style="padding:5px 6px;text-align:center;color:' + ourClr + ';font-weight:700">' + ourIcon + ' ' + ourLabel + '</td>';
+        h += '<td style="padding:5px 6px;text-align:center;color:' + apiClr + ';font-weight:700">' + apiIcon + ' ' + apiLabel + '</td>';
+        h += '<td style="padding:5px 6px;text-align:center;font-size:10px;color:var(--mu)">' + resultLabel + '</td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table></div>';
+      h += '<div style="font-size:10px;color:var(--mu);margin-top:8px;padding:8px;background:rgba(34,211,238,.04);border-left:2px solid var(--ac);border-radius:4px;line-height:1.5">ℹ️ Noi = Over/Under 1.5 goals (prag 50%). API = 1X2 winner (prob maximă). Sunt piețe diferite — comparația arată direcția generală.</div>';
+    }
+
     el.innerHTML = h;
   } catch (e) {
     el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare fetch: ' + e.message + '</div>';

@@ -3469,6 +3469,20 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Verificare: node --check api/enrich.js OK
   Commit: f092982
 
+[26.05 ~11:00] - ADMIN: Secțiune "Noi vs API Football" — comparație reală + auto-corecții:
+  api/admin.js — endpoint nou GET /api/admin/vs-api?days=N:
+    Query 1: statistici globale din predictions (our Over15 accuracy vs API 1X2 accuracy)
+    Query 2: head-to-head (noi OK API greșit / API OK noi greșit / ambii / niciunul)
+    Query 3: ultimele 20 predicții comune rezolvate (cu over15_prob, api_home/draw/away_pct)
+    Query 4: auto-corecții din model_weights WHERE weight_name='lambda_multiplier' ABS>=0.05
+  admin.html — card nou "cardVsApi" (înainte de cardScannerControl):
+    Hero duel: Sistemul Nostru X.X% vs API-Football Y.Y% (piețe diferite: Over1.5 vs 1X2)
+    Grid head-to-head: Noi✓API✗ | API✓Noi✗ | Ambii✓ | Ambii✗
+    Tabel auto-corecții: ligă, direcție UP/DOWN, multiplier, samples, win rate, confidence
+    Tabel recent 20 predicții: meci, pick nostru (cu prob), pick API, rezultat real
+    Notă explicativă că marketele sunt diferite (Over1.5 vs 1X2)
+  Selector de zile: 30/60/90/180 zile; date on-demand (nu auto-refresh 30s)
+
 [26.05 ~10:00] - SISTEM AUTO-PREDICȚIE + FEEDBACK LOOP COMPLET:
   1. scripts/migrations/add-prediction-api-columns.sql — coloane noi: api_home_pct,
      api_draw_pct, api_away_pct, result_winner (rulează manual pe VPS cu psql)

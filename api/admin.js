@@ -990,6 +990,157 @@ router.post('/db-cleanup', async (req, res) => {
   }
 });
 
+// ── GET /api/admin/vs-api ────────────────────────────────────────────────────
+// Comparatie reala: sistemul nostru vs predictiile API-Football
+router.get('/vs-api', async (req, res) => {
+  const days = Math.min(parseInt(req.query?.days || '90', 10), 365);
+  const safe = q => query(q).catch(() => ({ rows: [] }));
+  try {
+    const [vsStats, recentRows, selfCorrections] = await Promise.all([
+      // Statistici globale
+      query(`
+        SELECT
+          COUNT(*) FILTER (WHERE result_over15 IS NOT NULL AND over15_prob IS NOT NULL)::int AS our_total,
+          COUNT(*) FILTER (WHERE result_over15 IS NOT NULL AND over15_prob IS NOT NULL
+            AND ((over15_prob >= 50 AND result_over15 = TRUE) OR (over15_prob < 50 AND result_over15 = FALSE)))::int AS our_wins,
+          COUNT(*) FILTER (WHERE result_winner IS NOT NULL AND api_home_pct IS NOT NULL)::int AS api_total,
+          COUNT(*) FILTER (WHERE result_winner IS NOT NULL AND api_home_pct IS NOT NULL
+            AND (
+              (api_home_pct >= api_draw_pct AND api_home_pct >= api_away_pct AND result_winner = 'home') OR
+              (api_draw_pct > api_home_pct AND api_draw_pct >= api_away_pct AND result_winner = 'draw') OR
+              (api_away_pct > api_home_pct AND api_away_pct > api_draw_pct AND result_winner = 'away')
+            ))::int AS api_wins,
+          COUNT(*) FILTER (WHERE result_over15 IS NOT NULL AND result_winner IS NOT NULL
+            AND over15_prob IS NOT NULL AND api_home_pct IS NOT NULL)::int AS hth_total,
+          COUNT(*) FILTER (WHERE result_over15 IS NOT NULL AND result_winner IS NOT NULL
+            AND over15_prob IS NOT NULL AND api_home_pct IS NOT NULL
+            AND ((over15_prob >= 50 AND result_over15 = TRUE) OR (over15_prob < 50 AND result_over15 = FALSE))
+            AND NOT (
+              (api_home_pct >= api_draw_pct AND api_home_pct >= api_away_pct AND result_winner = 'home') OR
+              (api_draw_pct > api_home_pct AND api_draw_pct >= api_away_pct AND result_winner = 'draw') OR
+              (api_away_pct > api_home_pct AND api_away_pct > api_draw_pct AND result_winner = 'away')
+            ))::int AS we_won_api_lost,
+          COUNT(*) FILTER (WHERE result_over15 IS NOT NULL AND result_winner IS NOT NULL
+            AND over15_prob IS NOT NULL AND api_home_pct IS NOT NULL
+            AND NOT ((over15_prob >= 50 AND result_over15 = TRUE) OR (over15_prob < 50 AND result_over15 = FALSE))
+            AND (
+              (api_home_pct >= api_draw_pct AND api_home_pct >= api_away_pct AND result_winner = 'home') OR
+              (api_draw_pct > api_home_pct AND api_draw_pct >= api_away_pct AND result_winner = 'draw') OR
+              (api_away_pct > api_home_pct AND api_away_pct > api_draw_pct AND result_winner = 'away')
+            ))::int AS api_won_we_lost,
+          COUNT(*) FILTER (WHERE result_over15 IS NOT NULL AND result_winner IS NOT NULL
+            AND over15_prob IS NOT NULL AND api_home_pct IS NOT NULL
+            AND ((over15_prob >= 50 AND result_over15 = TRUE) OR (over15_prob < 50 AND result_over15 = FALSE))
+            AND (
+              (api_home_pct >= api_draw_pct AND api_home_pct >= api_away_pct AND result_winner = 'home') OR
+              (api_draw_pct > api_home_pct AND api_draw_pct >= api_away_pct AND result_winner = 'draw') OR
+              (api_away_pct > api_home_pct AND api_away_pct > api_draw_pct AND result_winner = 'away')
+            ))::int AS both_right
+        FROM predictions
+        WHERE created_at > NOW() - INTERVAL '${days} days'
+      `),
+
+      // Ultimele 20 predictii rezolvate cu date de la ambii
+      safe(`
+        SELECT home_team, away_team, league_name, match_date,
+               over15_prob, confidence,
+               api_home_pct, api_draw_pct, api_away_pct,
+               result_over15, result_winner
+        FROM predictions
+        WHERE result_over15 IS NOT NULL
+          AND api_home_pct IS NOT NULL
+          AND result_winner IS NOT NULL
+          AND created_at > NOW() - INTERVAL '${days} days'
+        ORDER BY match_date DESC
+        LIMIT 20
+      `),
+
+      // Auto-corectii: league lambda multipliers
+      safe(`
+        SELECT module, context_key, weight_value, default_value,
+               sample_size, win_rate, confidence_level, last_updated
+        FROM model_weights
+        WHERE weight_name = 'lambda_multiplier'
+          AND ABS(weight_value - 1.0) >= 0.05
+        ORDER BY ABS(weight_value - 1.0) DESC
+        LIMIT 15
+      `),
+    ]);
+
+    const s = vsStats.rows[0] || {};
+    const ourTotal       = Number(s.our_total        || 0);
+    const ourWins        = Number(s.our_wins         || 0);
+    const apiTotal       = Number(s.api_total        || 0);
+    const apiWins        = Number(s.api_wins         || 0);
+    const hthTotal       = Number(s.hth_total        || 0);
+    const weWonApiLost   = Number(s.we_won_api_lost  || 0);
+    const apiWonWeLost   = Number(s.api_won_we_lost  || 0);
+    const bothRight      = Number(s.both_right       || 0);
+    const bothWrong      = Math.max(0, hthTotal - weWonApiLost - apiWonWeLost - bothRight);
+
+    const recentPreds = recentRows.rows.map(r => {
+      const op = Number(r.over15_prob) >= 50 ? 'over15' : 'under15';
+      const ourOk = (op === 'over15' && r.result_over15 === true) || (op === 'under15' && r.result_over15 === false);
+      const hp = Number(r.api_home_pct || 0);
+      const dp = Number(r.api_draw_pct || 0);
+      const ap = Number(r.api_away_pct || 0);
+      let apiPick = 'home';
+      if (dp > hp && dp >= ap)  apiPick = 'draw';
+      else if (ap > hp && ap > dp) apiPick = 'away';
+      const apiOk = apiPick === r.result_winner;
+      return {
+        home: r.home_team, away: r.away_team, league: r.league_name,
+        date: r.match_date,
+        over15_prob: Number(r.over15_prob),
+        our_pick: op, our_ok: ourOk,
+        api_pick: apiPick,
+        api_pct: Math.round(Math.max(hp, dp, ap)),
+        api_ok: apiOk,
+        result_over15: r.result_over15,
+        result_winner: r.result_winner,
+      };
+    });
+
+    res.json({
+      ok: true, days,
+      our: {
+        total:    ourTotal,
+        wins:     ourWins,
+        accuracy: ourTotal > 0 ? +(ourWins / ourTotal * 100).toFixed(1) : null,
+        note: 'Over/Under 1.5 goals',
+      },
+      api: {
+        total:    apiTotal,
+        wins:     apiWins,
+        accuracy: apiTotal > 0 ? +(apiWins / apiTotal * 100).toFixed(1) : null,
+        note: '1X2 winner prediction',
+      },
+      hth: {
+        total: hthTotal,
+        we_won_api_lost:  weWonApiLost,
+        api_won_we_lost:  apiWonWeLost,
+        both_right:       bothRight,
+        both_wrong:       bothWrong,
+      },
+      self_corrections: selfCorrections.rows.map(r => ({
+        context:    r.context_key,
+        league_id:  r.context_key?.replace('league_', ''),
+        module:     r.module,
+        multiplier: Number(r.weight_value),
+        direction:  Number(r.weight_value) > 1.0 ? 'UP' : 'DOWN',
+        pct_change: Math.round(Math.abs(Number(r.weight_value) - 1.0) * 100),
+        samples:    Number(r.sample_size),
+        win_rate:   r.win_rate ? Number(r.win_rate) : null,
+        confidence: r.confidence_level,
+        updated:    r.last_updated,
+      })),
+      recent: recentPreds,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ── GET /api/admin/db-cleanup-preview ─────────────────────────────────────────
 // Preview: cate randuri ar fi sterse fara sa execute
 router.get('/db-cleanup-preview', async (req, res) => {
