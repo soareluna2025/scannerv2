@@ -3113,6 +3113,30 @@ NEXT STEPS (prioritizat):
      script: scripts/create-model-weights.sql
      module-uri: NGP(3), OVER15(2), OVER25(1), GG(5), CONFIDENCE(7), CARDS(2), CORNERS(2), GENERATOR(1)
   Commit: 58db4bd (Hybrid V2 enrich.js) | ba9e0ee (create-model-weights.sql)
+
+[26.05.2026] - COLECTORI NOI: top_scorers, players_season, squads (camere goale umplute)
+  CONTEXT: Audit 25.05 a confirmat 12 tabele cu 0 randuri (players_season, top_scorers,
+           top_assists, squads etc.) — date disponibile in API dar nu colectate niciodata.
+  FISIERE NOI:
+    api/cron/collect-top-scorers.js — top marcatori + top pasatori per liga activa
+      - Citeste ligi din standings WHERE season = $1 (max 200 ligi)
+      - /players/topscorers + /players/topassists per liga
+      - INSERT in top_scorers + top_assists cu ON CONFLICT DO UPDATE
+      - Rulare: duminica 01:00 — ~330 req API/run
+    api/cron/collect-players-season.js — statistici sezoniere jucatori per echipa
+      - Citeste echipe cu meciuri in urmatoarele 30 zile (max 300 echipe)
+      - /players?team={id}&season={SEASON}&page=1 per echipa
+      - INSERT in players_season cu ON CONFLICT DO UPDATE
+      - Rulare: duminica 01:30 — ~400-500 req API/run
+    api/cron/collect-squads.js — loturi echipe cu meciuri in 30 zile
+      - /players/squads?team={id} per echipa (max 300)
+      - INSERT in squads ON CONFLICT (team_id, season, player_id) DO UPDATE
+      - Rulare: duminica 02:00 — ~200 req API/run
+  MODIFICATE:
+    server.js: adaugate 'collect-top-scorers', 'collect-players-season', 'collect-squads' in cronFiles
+    deploy.yml: C12/C13/C14 noi + grep -v idempotent + echo in crontab block
+  TOTAL API saptamanal adaugat: ~930-1030 req (neglijabil vs planul 300k)
+  Commit: 85525a9 | Push: main + claude/list-project-structure-HrK8s
 ================================================================================
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
