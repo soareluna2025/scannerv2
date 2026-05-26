@@ -7,6 +7,7 @@ import { calcConsensus } from './utils/consensus-engine.js';
 const PRE_MATCH_STATUSES = new Set(['NS']);
 const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
 const FINISHED_STATUSES = new Set(['FT','AET','PEN','SUSP','ABD','AWD','WO']);
+const SEASON = new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1;
 
 // Referee impact: home bias + cards markets adjustments
 async function getRefereeImpact(refereeName) {
@@ -175,35 +176,91 @@ async function getRefereeStats(refName) {
   } catch (_) { return null; }
 }
 
+async function getTopScorerFactor(teamId, leagueId) {
+  if (!teamId || !leagueId) return 1.0;
+  try {
+    const { rows } = await query(
+      `SELECT
+         COALESCE((SELECT MAX(goals) FROM top_scorers WHERE team_id=$1 AND league_id=$2 AND season=$3), 0) AS team_top,
+         COALESCE((SELECT AVG(goals)::numeric(5,2) FROM top_scorers WHERE league_id=$2 AND season=$3), 0) AS league_avg`,
+      [teamId, Number(leagueId), SEASON]
+    );
+    const teamTop   = Number(rows[0]?.team_top)   || 0;
+    const leagueAvg = Number(rows[0]?.league_avg) || 0;
+    if (!teamTop || leagueAvg < 1) return 1.0;
+    return Math.max(0.85, Math.min(1.15, teamTop / leagueAvg));
+  } catch (_) { return 1.0; }
+}
+
+async function getSquadCount(teamId) {
+  if (!teamId) return 0;
+  try {
+    const { rows } = await query(
+      `SELECT COUNT(*) AS cnt FROM squads WHERE team_id=$1 AND season=$2`,
+      [teamId, SEASON]
+    );
+    return parseInt(rows[0]?.cnt) || 0;
+  } catch (_) { return 0; }
+}
+
 async function getTeamStrengths(hId, aId) {
   try {
     const [rH, rA] = await Promise.all([
       query('SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY fixture_id DESC LIMIT 110', [hId]),
       query('SELECT rating, goals, pass_accuracy, shots_on_target FROM player_stats WHERE team_id = $1 ORDER BY fixture_id DESC LIMIT 110', [aId]),
     ]);
-    const dH = rH.rows;
-    const dA = rA.rows;
 
     const calcStr = (rows) => {
       if (!Array.isArray(rows) || rows.length < 10) return null;
-      const rated     = rows.filter(r => r.rating);
-      const avgRating = rated.length ? rated.reduce((s, r) => s + Number(r.rating), 0) / rated.length : 5;
+      const rated        = rows.filter(r => r.rating);
+      const avgRating    = rated.length ? rated.reduce((s, r) => s + Number(r.rating), 0) / rated.length : 5;
       const goalsPerGame = rows.reduce((s, r) => s + (r.goals || 0), 0) / rows.length;
       const withPass     = rows.filter(r => r.pass_accuracy != null);
       const avgPassAcc   = withPass.length ? withPass.reduce((s, r) => s + Number(r.pass_accuracy), 0) / withPass.length : 50;
       const avgSot       = rows.reduce((s, r) => s + (r.shots_on_target || 0), 0) / rows.length;
       const topScorer    = Math.max(...rows.map(r => r.goals || 0), 0);
-      const topScorerForm = Math.min(100, topScorer * 20);
       return Math.round(
         (avgRating / 10 * 100) * 0.35 +
         Math.min(100, goalsPerGame * 35) * 0.25 +
         avgPassAcc * 0.20 +
         Math.min(100, avgSot * 12) * 0.10 +
-        topScorerForm * 0.10
+        Math.min(100, topScorer * 20) * 0.10
       );
     };
 
-    return { home: calcStr(dH), away: calcStr(dA) };
+    // Fallback players_season cand player_stats insuficient (<10 randuri)
+    const calcStrSeason = async (teamId) => {
+      try {
+        const { rows } = await query(
+          `SELECT rating, goals, appearances FROM players_season
+           WHERE team_id=$1 AND season=$2 AND appearances > 0`,
+          [teamId, SEASON]
+        );
+        if (rows.length < 5) return null;
+        const rated      = rows.filter(r => r.rating);
+        const avgRating  = rated.length ? rated.reduce((s, r) => s + Number(r.rating), 0) / rated.length : 5;
+        const totalGoals = rows.reduce((s, r) => s + (r.goals || 0), 0);
+        const totalApps  = rows.reduce((s, r) => s + (r.appearances || 0), 0);
+        const topScorer  = Math.max(...rows.map(r => r.goals || 0), 0);
+        return Math.round(
+          (avgRating / 10 * 100) * 0.45 +
+          Math.min(100, totalApps > 0 ? (totalGoals / totalApps) * 50 : 0) * 0.35 +
+          Math.min(100, topScorer * 5) * 0.20
+        );
+      } catch (_) { return null; }
+    };
+
+    const strH = calcStr(rH.rows);
+    const strA = calcStr(rA.rows);
+    const finalH = strH ?? await calcStrSeason(hId);
+    const finalA = strA ?? await calcStrSeason(aId);
+
+    return {
+      home:       finalH,
+      away:       finalA,
+      homeSource: strH != null ? 'ps' : finalH != null ? 'pss' : null,
+      awaySource: strA != null ? 'ps' : finalA != null ? 'pss' : null,
+    };
   } catch (_) {
     return { home: null, away: null };
   }
@@ -617,7 +674,7 @@ export default async function handler(req, res) {
 
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats + venue in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred] = await Promise.all([
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA] = await Promise.all([
       getFormFromDB(hId),
       getFormFromDB(aId),
       getH2HFromDB(hId, aId),
@@ -631,6 +688,10 @@ export default async function handler(req, res) {
       lgid ? getStandingsForTeam(hId, lgid) : Promise.resolve(null),
       lgid ? getStandingsForTeam(aId, lgid) : Promise.resolve(null),
       fid  ? getPrematchPredictions(Number(fid)) : Promise.resolve(null),
+      lgid ? getTopScorerFactor(hId, lgid)   : Promise.resolve(1.0),
+      lgid ? getTopScorerFactor(aId, lgid)   : Promise.resolve(1.0),
+      getSquadCount(hId),
+      getSquadCount(aId),
     ]);
 
     // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
@@ -726,6 +787,20 @@ export default async function handler(req, res) {
         draw: mxStn.draw, awayWin: mxStn.awayWin,
       });
       result._standingsBlend = `H(${stnH.avgScored}/${stnH.avgConceded})|A(${stnA.avgScored}/${stnA.avgConceded})`;
+    }
+
+    // Top scorer factor — lambda ajustat cu puterea atacantului de top vs media ligii (±15% max)
+    if (lgid && (topScorerFactorH !== 1.0 || topScorerFactorA !== 1.0)) {
+      result.lambdaHome  = +(result.lambdaHome  * topScorerFactorH).toFixed(2);
+      result.lambdaAway  = +(result.lambdaAway  * topScorerFactorA).toFixed(2);
+      result.lambdaTotal = +(result.lambdaHome + result.lambdaAway).toFixed(2);
+      const mxTsf = calcPoisson6x6(result.lambdaHome, result.lambdaAway);
+      Object.assign(result, {
+        over15Prob: mxTsf.over15Prob, over25Prob: mxTsf.over25Prob,
+        ggProb: mxTsf.ggProb, homeWin: mxTsf.homeWin,
+        draw: mxTsf.draw, awayWin: mxTsf.awayWin,
+      });
+      result._topScorerFactor = `H:${topScorerFactorH.toFixed(2)}|A:${topScorerFactorA.toFixed(2)}`;
     }
 
     // Venue + altitude impact (Faza 1 Hybrid)
@@ -842,6 +917,20 @@ export default async function handler(req, res) {
         value: -injuryPenalty,
         note:  `${injuries.length} jucători accidentați`,
       };
+    }
+
+    // Squad completeness — penalizare lot incomplet (date din squads table)
+    if (squadCntH > 0 || squadCntA > 0) {
+      let squadPenalty = 0;
+      const sqNotes = [];
+      if (squadCntH > 0 && squadCntH < 11) { squadPenalty += 10; sqNotes.push(`H<11(${squadCntH})`); }
+      else if (squadCntH > 0 && squadCntH < 14) { squadPenalty += 5; sqNotes.push(`H<14(${squadCntH})`); }
+      if (squadCntA > 0 && squadCntA < 11) { squadPenalty += 10; sqNotes.push(`A<11(${squadCntA})`); }
+      else if (squadCntA > 0 && squadCntA < 14) { squadPenalty += 5; sqNotes.push(`A<14(${squadCntA})`); }
+      if (squadPenalty > 0) {
+        confData.confidenceScore = Math.max(10, confData.confidenceScore - squadPenalty);
+        confData.breakdown.squads = { home: squadCntH, away: squadCntA, penalty: -squadPenalty };
+      }
     }
 
     const payload = { ...result, ...evData, ...confData, leagueStats: leagueStats || null, refereeStats: refereeStats || null };
