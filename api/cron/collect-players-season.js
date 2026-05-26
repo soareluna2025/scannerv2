@@ -4,6 +4,7 @@
 
 import { query } from '../db.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
+import { writeToCazarma } from '../utils/cazarma.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const SEASON = new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1;
@@ -38,6 +39,7 @@ export default async function handler(req, res) {
       try {
         const r = await fetchApiFootball(`/players?team=${team_id}&season=${SEASON}&page=1`);
         const d = await r.json();
+        await writeToCazarma('collect-players-season', `/players?team=${team_id}&season=${SEASON}&page=1`, team_id, d);
 
         for (const item of (d.response || [])) {
           const p = item.player;
