@@ -13,6 +13,7 @@
 - **Întotdeauna commit + push pe `main`** după orice modificare finalizată — push-ul pe main declanșează auto-deploy via GitHub Actions.
 - **Dacă userul cere „Faza X", „calibrare globală", „aplicăm calibrare", „verificare Faza X" sau „rollback Faza X"** → CITEȘTE `ROADMAP_CALIBRARE.md` ÎNAINTE de a începe orice modificare. Fișierul conține planul în 5 faze, trigger-urile (Brier scor, sample size, durată stabilă), modificările exacte de cod și procedura de rollback.
 - **Dacă userul cere „bump plan API" sau „abonament nou X k"** → ajustează `STOP_AT` în `api/backfill.js` la `(plan - 20k)` ca buffer pentru live scanner.
+- **`STOP_AT` curent în `api/backfill.js` = 250.000** — valoare corectă și intenționată pentru planul actual. NU modifica fără cerere explicită.
 
 ## 2. STACK
 

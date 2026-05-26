@@ -407,7 +407,7 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPr
     { score: score2, w: 0.18 },
     { score: score3, w: 0.10 },
     { score: score4, w: 0.14 },
-    { score: score5, w: 0 }, // EV — exclus din scor (informativ in breakdown)
+    { score: score5, w: 0.08 }, // EV Layer 5
     { score: score6, w: 0.05 },
     { score: score7, w: 0.18 },
     { score: score8, w: 0.08 },

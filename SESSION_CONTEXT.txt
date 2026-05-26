@@ -730,7 +730,7 @@ scanner.js (background) ──────────→ match_snapshots (NGP, 
 
 🟢 MINOR (îmbunătățiri):
 
-  6. Telegram bot neintegrat complet — telegram.js există dar alertele salvate cu telegram_ok=false
+  6. Telegram bot — PENDING cerere explicită utilizator (telegram.js definit, integrare completă amânată)
   7. pre_match_snapshots fără coloanele outcome/composite_score — tWinRate returnează 0
   8. live_odds tabel complet nefolosit
   9. squads/coaches/venues colectate în prematch_data dar niciodată citite
@@ -3482,6 +3482,15 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     Tabel recent 20 predicții: meci, pick nostru (cu prob), pick API, rezultat real
     Notă explicativă că marketele sunt diferite (Over1.5 vs 1X2)
   Selector de zile: 30/60/90/180 zile; date on-demand (nu auto-refresh 30s)
+
+[26.05 ~AUDIT] - FIX 2 bug-uri critice + note admin:
+  FIX 1 — enrich.js:410 — EV Layer 5 w:0 → w:0.08 (stratul EV contribuie acum la Confidence Score)
+  FIX 5 — live-score.js:82-83 și 102-103 — NGP dublu boost corectat: if/if → if/else if
+           La min≥80 anterior se aplica ×1.2 ȘI ×1.15 = ×1.38. Acum: doar ×1.15 la ≥80, ×1.2 la 70-79.
+  NOTE 2 — CLAUDE.md: STOP_AT=250k este corect și intenționat, nu modifica fără cerere explicită
+  NOTE 3 — SESSION_CONTEXT: telegram.js PENDING cerere explicită utilizator
+  NOTE 4 — Greutăți Confidence Score: codul normalizează automat prin totalW → nu e bug real
+  Commit: (în curs)
 
 [26.05 ~10:00] - SISTEM AUTO-PREDICȚIE + FEEDBACK LOOP COMPLET:
   1. scripts/migrations/add-prediction-api-columns.sql — coloane noi: api_home_pct,

@@ -79,8 +79,8 @@ export function calcNextGoal(f) {
   if (f.txg === 0) {
     remXg = ((f.homeFormGoals + f.awayFormGoals) / 2 * 2.5) * remFrac;
   }
-  if (mn >= 70) remXg *= 1.2;
   if (mn >= 80) remXg *= 1.15;
+  else if (mn >= 70) remXg *= 1.2;
   const prob = 1 - Math.exp(-Math.max(remXg, 0.05));
   return Math.round(Math.max(3, Math.min(97, prob * 100)));
 }
@@ -99,8 +99,8 @@ export function calcNextGoalWindow(f, windowMin = 15) {
     const remFracWindow = remTime / 90;
     remXg = ((f.homeFormGoals + f.awayFormGoals) / 2 * 2.5) * remFracWindow;
   }
-  if (mn >= 70) remXg *= 1.2;
   if (mn >= 80) remXg *= 1.15;
+  else if (mn >= 70) remXg *= 1.2;
   const prob = 1 - Math.exp(-Math.max(remXg, 0.03));
   return Math.round(Math.max(3, Math.min(60, prob * 100)));
 }
