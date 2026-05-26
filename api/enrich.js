@@ -266,6 +266,39 @@ async function getTeamStrengths(hId, aId) {
   }
 }
 
+async function getInjuredPlayerScores(injuries, homeId, awayId) {
+  if (!injuries || !injuries.length) return { home: [], away: [] };
+  const playerIds = injuries.map(i => i.player_id).filter(Boolean);
+  if (!playerIds.length) return { home: [], away: [] };
+  try {
+    const { rows } = await query(
+      `SELECT player_id, team_id, goals, assists, rating, minutes
+       FROM players_season WHERE player_id = ANY($1) AND season = $2`,
+      [playerIds, SEASON]
+    );
+    const calcScore = (r) => {
+      const rn  = r.rating ? +(Number(r.rating) / 10 * 100) : 50;
+      const gs  = Math.min(100, (r.goals   || 0) * 25);
+      const as_ = Math.min(100, (r.assists  || 0) * 20);
+      const ms  = Math.min(100, (r.minutes  || 0) / 2500 * 100);
+      return Math.round(rn * 0.40 + gs * 0.30 + as_ * 0.20 + ms * 0.10);
+    };
+    const scoreMap = {};
+    for (const r of rows) scoreMap[r.player_id] = { score: calcScore(r), teamId: Number(r.team_id) };
+    const home = [], away = [];
+    for (const inj of injuries) {
+      if (!inj.player_id) continue;
+      const data = scoreMap[inj.player_id];
+      if (!data) continue;
+      const tid = Number(inj.team_id) || data.teamId;
+      const entry = { id: inj.player_id, name: inj.player_name, score: data.score };
+      if (tid === homeId) home.push(entry);
+      else if (tid === awayId) away.push(entry);
+    }
+    return { home, away };
+  } catch (_) { return { home: [], away: [] }; }
+}
+
 function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPred = null) {
   const score1 = result.over15Prob ?? 50;
   const elapsed  = liveStats?.elapsed ?? 0;
@@ -700,11 +733,12 @@ export default async function handler(req, res) {
     const needH2H   = sbH2H.length    < 3;
     const needOdds  = fid && sbOddsRows.length === 0;
 
-    const [apiFbHForm, apiFbAForm, apiFbH2H, apiFbOdds] = await Promise.all([
+    const [apiFbHForm, apiFbAForm, apiFbH2H, apiFbOdds, injuredScores] = await Promise.all([
       needHForm ? fetchApiFootball(`/fixtures?team=${h}&last=20&status=FT`).then(r => r.json()) : null,
       needAForm ? fetchApiFootball(`/fixtures?team=${a}&last=20&status=FT`).then(r => r.json()) : null,
       needH2H   ? fetchApiFootball(`/fixtures/headtohead?h2h=${h}-${a}&last=10`).then(r => r.json()) : null,
       needOdds  ? fetchApiFootball(`/odds?fixture=${fid}`).then(r => r.json()) : null,
+      getInjuredPlayerScores(injuries, hId, aId),
     ]);
 
     // Resolve final datasets
@@ -801,6 +835,32 @@ export default async function handler(req, res) {
         draw: mxTsf.draw, awayWin: mxTsf.awayWin,
       });
       result._topScorerFactor = `H:${topScorerFactorH.toFixed(2)}|A:${topScorerFactorA.toFixed(2)}`;
+    }
+
+    // Smart injury lambda penalty — jucători importanți lipsă reduc puterea de atac
+    if (fid && Array.isArray(injuries) && injuries.length > 0) {
+      const applyInjLambda = (players) => {
+        if (!players.length) return 1.0;
+        const top = Math.max(...players.map(p => p.score));
+        if (top > 80) return 0.88;
+        if (top > 65) return 0.94;
+        if (top > 45) return 0.97;
+        return 1.0;
+      };
+      const injFactorH = applyInjLambda(injuredScores.home);
+      const injFactorA = applyInjLambda(injuredScores.away);
+      if (injFactorH !== 1.0 || injFactorA !== 1.0) {
+        result.lambdaHome  = +(result.lambdaHome  * injFactorH).toFixed(2);
+        result.lambdaAway  = +(result.lambdaAway  * injFactorA).toFixed(2);
+        result.lambdaTotal = +(result.lambdaHome + result.lambdaAway).toFixed(2);
+        const mxInj = calcPoisson6x6(result.lambdaHome, result.lambdaAway);
+        Object.assign(result, {
+          over15Prob: mxInj.over15Prob, over25Prob: mxInj.over25Prob,
+          ggProb: mxInj.ggProb, homeWin: mxInj.homeWin,
+          draw: mxInj.draw, awayWin: mxInj.awayWin,
+        });
+        result._injuryLambda = `H:${injFactorH.toFixed(2)}|A:${injFactorA.toFixed(2)}`;
+      }
     }
 
     // Venue + altitude impact (Faza 1 Hybrid)
@@ -905,18 +965,26 @@ export default async function handler(req, res) {
       confData._consensusDetails = consensusData.details;
     }
 
-    // --- Injuries adjustment ---
-    if (fid && Array.isArray(injuries) && injuries.length >= 3) {
+    // --- Injuries adjustment — smart penalty bazat pe scorul individual al jucătorului ---
+    if (fid && Array.isArray(injuries) && injuries.length > 0) {
+      const topH = injuredScores.home.length ? Math.max(...injuredScores.home.map(p => p.score)) : 0;
+      const topA = injuredScores.away.length ? Math.max(...injuredScores.away.map(p => p.score)) : 0;
+      const topScore = Math.max(topH, topA);
       let injuryPenalty = 0;
-      if (injuries.length >= 8)      injuryPenalty = 15;
-      else if (injuries.length >= 5) injuryPenalty = 10;
-      else if (injuries.length >= 3) injuryPenalty = 5;
-      confData.confidenceScore = Math.max(10, confData.confidenceScore - injuryPenalty);
-      confData.breakdown.injuries = {
-        layer: 'injuries',
-        value: -injuryPenalty,
-        note:  `${injuries.length} jucători accidentați`,
-      };
+      if (topScore > 85)       injuryPenalty = 15;
+      else if (topScore > 70)  injuryPenalty = 10;
+      else if (topScore > 50)  injuryPenalty = 5;
+      else if (injuries.length >= 3) injuryPenalty = 3;
+      if (injuryPenalty > 0) {
+        confData.confidenceScore = Math.max(10, confData.confidenceScore - injuryPenalty);
+        const starNames = [...injuredScores.home, ...injuredScores.away]
+          .filter(p => p.score > 50).map(p => p.name).filter(Boolean).join(', ');
+        confData.breakdown.injuries = {
+          layer: 'injuries',
+          value: -injuryPenalty,
+          note:  starNames ? `Stars: ${starNames}` : `${injuries.length} accidentați`,
+        };
+      }
     }
 
     // Squad completeness — penalizare lot incomplet (date din squads table)
