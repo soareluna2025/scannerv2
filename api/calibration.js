@@ -48,10 +48,16 @@ export default async function handler(req, res) {
       live[key] = { n: Number(r.n_samples), pct: Number(r.real_pct) };
     }
 
+    const { rows: cntRows } = await query(`
+      SELECT COUNT(*) AS n FROM predictions
+      WHERE result_over15 IS NOT NULL
+    `).catch(() => ({ rows: [{ n: 0 }] }));
+
     const result = {
       generated_at: rows.length ? rows[0].generated_at : null,
       modules,
       live,
+      predictions_count: Number(cntRows[0]?.n || 0),
     };
     _cache = result;
     _cacheTs = Date.now();

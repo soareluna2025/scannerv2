@@ -2253,7 +2253,7 @@ function mdRenderSumar(d){
     });
     out+='<div style="font-size:10px;color:var(--mu);margin-top:6px;line-height:1.5">';
     out+='💡 EV = (Probabilitate &times; Cota) &minus; 1. EV &gt; 0 = profit pe termen lung. ';
-    out+='Probabilitatea real&#259; e m&#259;surat&#259; pe backtest 531 meciuri.';
+    out+='Probabilitatea real&#259; e m&#259;surat&#259; pe backtest '+(PREDICTIONS_COUNT>0?PREDICTIONS_COUNT.toLocaleString():'531')+' meciuri.';
     out+='</div>';
     out+='</div>';
     // Trigger initial calc pe cotele salvate
@@ -3054,10 +3054,13 @@ var CALIBRATION_META={};
 // LIVE calibration: {"minute_bucket|score_state|market": {n, pct}}
 var LIVE_CALIBRATION={};
 // Auto-update G2_CALIBRATION din DB (recalibrate-tables cron) si LIVE table.
+var PREDICTIONS_COUNT=0;
 (function loadDynamicCalibration(){
   try{
     fetch('/api/calibration').then(function(r){return r.json();}).then(function(d){
       if(!d||!d.ok)return;
+      // Stocheaza numarul real de predictii rezolvate
+      if(d.predictions_count)PREDICTIONS_COUNT=d.predictions_count;
       // Pre-meci calibration
       if(d.modules){
         Object.keys(d.modules).forEach(function(moduleKey){
@@ -3069,7 +3072,7 @@ var LIVE_CALIBRATION={};
       }
       // LIVE calibration
       if(d.live){LIVE_CALIBRATION=d.live;}
-      console.log('[calibration] modules:'+Object.keys(d.modules||{}).length+' live:'+Object.keys(d.live||{}).length);
+      console.log('[calibration] modules:'+Object.keys(d.modules||{}).length+' live:'+Object.keys(d.live||{}).length+' predictions:'+PREDICTIONS_COUNT);
     }).catch(function(){});
   }catch(e){}
 })();
@@ -3320,7 +3323,7 @@ function g2RenderTop10(){
   // Header cu disclaimer per categorie
   var header='';
   if(isTested){
-    header='<div style="font-size:10px;color:var(--mu);padding:6px 12px;background:rgba(34,197,94,.05);border-left:3px solid #22c55e;margin-bottom:8px">✓ <b>Calibrat empiric</b> pe backtest 1000 meciuri. Procentele reflectă probabilitatea reală măsurată.</div>';
+    header='<div style="font-size:10px;color:var(--mu);padding:6px 12px;background:rgba(34,197,94,.05);border-left:3px solid #22c55e;margin-bottom:8px">✓ <b>Calibrat empiric</b> pe backtest '+(PREDICTIONS_COUNT>0?PREDICTIONS_COUNT.toLocaleString():'1.000')+' meciuri. Procentele reflectă probabilitatea reală măsurată.</div>';
   }else if(g2CalibrationHeuristic(G2.cat)){
     header='<div style="font-size:10px;color:var(--mu);padding:6px 12px;background:rgba(59,130,246,.05);border-left:3px solid #3b82f6;margin-bottom:8px">📐 <b>Calibrat Poisson teoretic</b> (sample backtest 46 meciuri prea mic — folosim distribuția Poisson pe media de ligă, robustă matematic).</div>';
   }else{
