@@ -3483,6 +3483,12 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     Notă explicativă că marketele sunt diferite (Over1.5 vs 1X2)
   Selector de zile: 30/60/90/180 zile; date on-demand (nu auto-refresh 30s)
 
+[26.05 ~AUDIT] - FIX Copa Sudamericana blocata de filtru fals pozitiv:
+  BUG: 'dame' in WOMEN_TERMS bloca 'CONMEBOL Su**dame**ricana' → meciurile nu apareau in LIVE
+  FIX: scos 'dame' din WOMEN_TERMS in league-filter.js (ramane 'dames' care prinde ligile feminine)
+  Confirmat cu debug-live: passedFilter=0 → dupa fix passedFilter>0
+  Commit: (in curs)
+
 [26.05 ~AUDIT] - FIX 2 bug-uri critice + note admin:
   FIX 1 — enrich.js:410 — EV Layer 5 w:0 → w:0.08 (stratul EV contribuie acum la Confidence Score)
   FIX 5 — live-score.js:82-83 și 102-103 — NGP dublu boost corectat: if/if → if/else if

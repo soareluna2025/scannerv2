@@ -5,7 +5,7 @@
 export const WOMEN_TERMS = [
   'women', 'female', 'ladies', 'lady', 'girl',
   'féminin', 'feminin', 'femenino', 'femenina',
-  'frauen', 'damen', 'dame', 'dames',
+  'frauen', 'damen', 'dames',
   'vrouwen', 'vrouw',
   'naiset', 'naisten',
   'kvinnor', 'kvinna',
