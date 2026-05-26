@@ -215,6 +215,7 @@ router.get('/live-matches', async (req, res) => {
 // ── GET /api/admin/cron-status ───────────────────────────────────────────────
 router.get('/cron-status', async (req, res) => {
   const jobs = [
+    'auto-predict', 'update-results', 'learning-analysis',
     'league-stats', 'referee-stats', 'collect-daily',
     'collect-finished', 'prematch-enrichment', 'scan',
   ];
@@ -308,6 +309,9 @@ router.delete('/clear-errors', async (req, res) => {
 
 // ── POST /api/admin/trigger-cron ─────────────────────────────────────────────
 const ALLOWED_JOBS = {
+  'auto-predict':       '/api/cron/auto-predict',
+  'update-results':     '/api/update-results',
+  'learning-analysis':  '/api/cron/learning-analysis',
   'league-stats':       '/api/cron/league-stats',
   'referee-stats':      '/api/cron/referee-stats',
   'collect-daily':      '/api/cron/collect-daily',
@@ -317,7 +321,6 @@ const ALLOWED_JOBS = {
   'backfill':           '/api/backfill/start',
   'recalibrate-tables': '/api/cron/recalibrate-tables',
   'calibrate-live':     '/api/cron/calibrate-live',
-  'learning-analysis':  '/api/cron/learning-analysis',
   'collect-venues':     '/api/cron/collect-venues',
   'collect-coaches':    '/api/cron/collect-coaches',
   'coach-stats':        '/api/cron/coach-stats',
