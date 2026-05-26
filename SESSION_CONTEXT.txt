@@ -3375,6 +3375,32 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
       → impact altitudine nefolosit in calcul
       → solutie: ruleaza collect-venues cu OpenElevation
 
+[26.05.2026] - CAZARMA CENTRALA — punct de primire universal API (Pasul 1)
+  ARHITECTURA:
+    API-Football → cron scrie RAW în cazarma_centrala + direct în tabel specific (Pasul 1)
+    cazarma-router (orar) citește procesat=FALSE → distribuie → marchează procesat=TRUE
+    Cleanup automat: intrări procesate mai vechi de 7 zile șterse automat
+    DATE LIVE/WS: bypass complet cazarma — scanner.js scrie direct (latență zero)
+  FISIERE NOI:
+    scripts/create-cazarma.sql — migrare VPS (RULAT CU SUCCES 26.05)
+    api/utils/cazarma.js — writeToCazarma(sursa, endpoint, entityId, rawData) fire-and-forget
+    api/cron/cazarma-router.js — router orar cu 4 handlere:
+      topscorers → top_scorers | topassists → top_assists
+      /players? → players_season | /players/squads → squads
+  MODIFICATE:
+    collect-top-scorers/players-season/squads: + writeToCazarma după fiecare fetch API
+    server.js: + 'cazarma-router' în cronFiles
+    deploy.yml: + C15 (0 * * * * cazarma-router) + grep-v idempotent
+  STARE VPS: tabel creat manual (IF NOT EXISTS — NOTICE normale, nu erori)
+  Commit: 6306228 | Push: main + claude/list-project-structure-HrK8s
+  PASUL 2 (următor): extinde writeToCazarma la cron-urile rămase (collect-daily, collect-finished etc.)
+  PASUL 3 (final): elimină scrierile directe, cazarma devine singura cale batch
+
+[26.05.2026] - Colectori schimbati din saptamanal in zilnic
+  deploy.yml C12/C13/C14: * * 0 → * * * (zilnic 01:00 / 01:30 / 02:00)
+  ~930 req/zi suplimentar — neglijabil vs 300k/zi plan
+  Commit: 62edec9
+
 ================================================================================
   ⚠️  IMPORTANT — WORKFLOW GIT (Claude Code pe web, repo remote):
   ---------------------------------------------------------------
