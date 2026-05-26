@@ -204,6 +204,61 @@ async function getSquadCount(teamId) {
   } catch (_) { return 0; }
 }
 
+const LINEUP_TEAM_AVG = 55; // scor mediu echipă din players_season
+
+async function getLineupStrengthFactor(fixtureId, homeId, awayId) {
+  try {
+    const { rows } = await query(
+      `SELECT payload FROM prematch_data
+       WHERE fixture_id=$1 AND data_type='lineups'
+       ORDER BY stage DESC LIMIT 1`,
+      [fixtureId]
+    );
+    if (!rows.length) return { home: 1.0, away: 1.0 };
+    const lineups = rows[0].payload;
+    if (!Array.isArray(lineups) || lineups.length < 2) return { home: 1.0, away: 1.0 };
+
+    const findTeam = (id) => lineups.find(t => t.team?.id === id);
+    const homeEntry = findTeam(homeId);
+    const awayEntry = findTeam(awayId);
+    if (!homeEntry || !awayEntry) return { home: 1.0, away: 1.0 };
+
+    const extractIds = (entry) =>
+      (entry.startXI || []).map(p => p.player?.id).filter(Boolean);
+    const hIds = extractIds(homeEntry);
+    const aIds = extractIds(awayEntry);
+    if (hIds.length < 7 || aIds.length < 7) return { home: 1.0, away: 1.0 };
+
+    const allIds = [...new Set([...hIds, ...aIds])];
+    const { rows: ps } = await query(
+      `SELECT player_id,
+              (rating/10.0*100)*0.45
+              + LEAST(100, COALESCE(goals,0)*25)*0.20
+              + COALESCE(pass_accuracy,50)*0.20
+              + LEAST(100, COALESCE(shots_on_target,0)*15)*0.15 AS score
+       FROM players_season
+       WHERE player_id = ANY($1) AND season=$2 AND appearances > 0`,
+      [allIds, SEASON]
+    );
+    const scoreMap = Object.fromEntries(ps.map(r => [r.player_id, Number(r.score)]));
+
+    const avgScore = (ids) => {
+      const scored = ids.map(id => scoreMap[id]).filter(s => s != null);
+      if (scored.length < 7) return null;
+      return scored.reduce((s, v) => s + v, 0) / scored.length;
+    };
+
+    const hAvg = avgScore(hIds);
+    const aAvg = avgScore(aIds);
+    if (hAvg == null && aAvg == null) return { home: 1.0, away: 1.0 };
+
+    const toFactor = (avg) =>
+      avg != null ? Math.max(0.88, Math.min(1.12, avg / LINEUP_TEAM_AVG)) : 1.0;
+
+    return { home: toFactor(hAvg), away: toFactor(aAvg) };
+  } catch (_) { return { home: 1.0, away: 1.0 }; }
+}
+
 async function getTeamStrengths(hId, aId) {
   try {
     const [rH, rA] = await Promise.all([
@@ -708,7 +763,7 @@ export default async function handler(req, res) {
 
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats + venue in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA] = await Promise.all([
+    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA, lineupFactor] = await Promise.all([
       getFormFromDB(hId),
       getFormFromDB(aId),
       getH2HFromDB(hId, aId),
@@ -726,6 +781,7 @@ export default async function handler(req, res) {
       lgid ? getTopScorerFactor(aId, lgid)   : Promise.resolve(1.0),
       getSquadCount(hId),
       getSquadCount(aId),
+      fid ? getLineupStrengthFactor(Number(fid), hId, aId) : Promise.resolve({ home: 1.0, away: 1.0 }),
     ]);
 
     // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
@@ -836,6 +892,20 @@ export default async function handler(req, res) {
         draw: mxTsf.draw, awayWin: mxTsf.awayWin,
       });
       result._topScorerFactor = `H:${topScorerFactorH.toFixed(2)}|A:${topScorerFactorA.toFixed(2)}`;
+    }
+
+    // L2 — Confirmed lineup strength factor (±12% max, requires ≥7/11 starters with data)
+    if (fid && (lineupFactor.home !== 1.0 || lineupFactor.away !== 1.0)) {
+      result.lambdaHome  = +(result.lambdaHome  * lineupFactor.home).toFixed(2);
+      result.lambdaAway  = +(result.lambdaAway  * lineupFactor.away).toFixed(2);
+      result.lambdaTotal = +(result.lambdaHome + result.lambdaAway).toFixed(2);
+      const mxLU = calcPoisson6x6(result.lambdaHome, result.lambdaAway);
+      Object.assign(result, {
+        over15Prob: mxLU.over15Prob, over25Prob: mxLU.over25Prob,
+        ggProb: mxLU.ggProb, homeWin: mxLU.homeWin,
+        draw: mxLU.draw, awayWin: mxLU.awayWin,
+      });
+      result._lineupFactor = `H:${lineupFactor.home.toFixed(2)}|A:${lineupFactor.away.toFixed(2)}`;
     }
 
     // Smart injury lambda penalty — jucători importanți lipsă reduc puterea de atac
