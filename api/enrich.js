@@ -103,38 +103,20 @@ function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
 }
 
 function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agParam, sothParam, sotaParam, lgHome = 1.2, lgAway = 1.2) {
-  // Weighted average — meciurile recente (index 0 = cel mai recent) cântăresc mai mult
-  const wAvg = (arr, fn) => {
-    if (!arr.length) return 0;
-    const n = arr.length;
-    let sum = 0, totalW = 0;
-    arr.forEach((m, i) => { const w = n - i; sum += fn(m) * w; totalW += w; });
-    return totalW ? sum / totalW : 0;
-  };
+  const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
   const pct = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
 
-  const homeAvgScored   = wAvg(hGames, m => (m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away) ?? 0);
-  const homeAvgConceded = wAvg(hGames, m => (m.teams?.home?.id === hId ? m.goals?.away : m.goals?.home) ?? 0);
-  const awayAvgScored   = wAvg(aGames, m => (m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0);
-  const awayAvgConceded = wAvg(aGames, m => (m.teams?.away?.id === aId ? m.goals?.home : m.goals?.away) ?? 0);
+  const homeAvgScored   = avg(hGames, m => (m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away) ?? 0);
+  const homeAvgConceded = avg(hGames, m => (m.teams?.home?.id === hId ? m.goals?.away : m.goals?.home) ?? 0);
+  const awayAvgScored   = avg(aGames, m => (m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0);
+  const awayAvgConceded = avg(aGames, m => (m.teams?.away?.id === aId ? m.goals?.home : m.goals?.away) ?? 0);
 
-  let lambdaHome, lambdaAway;
-  if (hGames.length && aGames.length) {
-    // Normalizare Maher: ajustează lambda relativ la media ligii
-    const lgAvg = (lgHome + lgAway) / 2 || 1.2;
-    const attackHome   = homeAvgScored   / lgAvg;
-    const defenseHome  = homeAvgConceded / lgAvg;
-    const attackAway   = awayAvgScored   / lgAvg;
-    const defenseAway  = awayAvgConceded / lgAvg;
-    lambdaHome = attackHome  * defenseAway  * lgHome;
-    lambdaAway = attackAway  * defenseHome  * lgAway;
-    // Clamp rezonabil
-    lambdaHome = Math.max(0.3, Math.min(4.5, lambdaHome));
-    lambdaAway = Math.max(0.3, Math.min(4.5, lambdaAway));
-  } else {
-    lambdaHome = lgHome;
-    lambdaAway = lgAway;
-  }
+  let lambdaHome = hGames.length && aGames.length
+    ? (homeAvgScored + awayAvgConceded) / 2
+    : lgHome;
+  let lambdaAway = hGames.length && aGames.length
+    ? (awayAvgScored + homeAvgConceded) / 2
+    : lgAway;
 
   let isDynamic = false;
   const elapsedNum = parseInt(elapsedParam) || 0;
