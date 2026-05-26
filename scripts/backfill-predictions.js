@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 // Generează retroactiv înregistrări în `predictions` din fixtures_history + form_stats.
 // Scopul: crește sample-ul pentru recalibrate-tables (Brier score).
-// Rulează manual: node scripts/backfill-predictions.js [--limit 500]
+// Rulează manual: node scripts/backfill-predictions.js [--limit=5000] [--months=6] [--dry] [--clean]
 
 import 'dotenv/config';
 import { query } from '../api/db.js';
 import { calcPoisson6x6 } from '../api/calc-utils.js';
 
-const BATCH   = 100;
-const LIMIT   = parseInt(process.argv.find(a => a.startsWith('--limit='))?.split('=')[1] || '0') || 5000;
+const BATCH  = 100;
+const LIMIT  = parseInt(process.argv.find(a => a.startsWith('--limit='))?.split('=')[1]  || '0') || 5000;
+const MONTHS = parseInt(process.argv.find(a => a.startsWith('--months='))?.split('=')[1] || '0') || 6;
 const DRY_RUN = process.argv.includes('--dry');
+const CLEAN   = process.argv.includes('--clean');
 
 function log(msg) { console.log(`[${new Date().toISOString().slice(11,19)}] ${msg}`); }
 
@@ -24,22 +26,33 @@ async function getFormStats(teamId) {
 }
 
 function poissonCalc(homeForm, awayForm) {
-  const hScored    = parseFloat(homeForm.avg_scored_home)   || 1.2;
-  const hConceded  = parseFloat(homeForm.avg_conceded_home) || 1.0;
-  const aScored    = parseFloat(awayForm.avg_scored_away)   || 1.0;
-  const aConceded  = parseFloat(awayForm.avg_conceded_away) || 1.2;
+  const hScored   = parseFloat(homeForm.avg_scored_home)   || 1.2;
+  const hConceded = parseFloat(homeForm.avg_conceded_home) || 1.0;
+  const aScored   = parseFloat(awayForm.avg_scored_away)   || 1.0;
+  const aConceded = parseFloat(awayForm.avg_conceded_away) || 1.2;
 
-  const lambdaHome  = (hScored + aConceded) / 2;
-  const lambdaAway  = (aScored + hConceded) / 2;
-  const matrix      = calcPoisson6x6(lambdaHome, lambdaAway);
+  const lambdaHome = (hScored + aConceded) / 2;
+  const lambdaAway = (aScored + hConceded) / 2;
+  const matrix     = calcPoisson6x6(lambdaHome, lambdaAway);
 
   return { lambdaHome, lambdaAway, matrix };
 }
 
 async function main() {
-  log(`Start — limit=${LIMIT}, dry=${DRY_RUN}`);
+  // --clean: șterge predicțiile retroactive vechi (fără confidence) mai vechi de MONTHS luni
+  if (CLEAN) {
+    const { rowCount } = await query(`
+      DELETE FROM predictions
+      WHERE confidence IS NULL
+        AND best_ev IS NULL
+        AND match_date < NOW() - INTERVAL '${MONTHS} months'
+    `);
+    log(`Clean: șters ${rowCount} predicții retroactive vechi (>${MONTHS} luni)`);
+    process.exit(0);
+  }
 
-  // Meciuri din fixtures_history care NU există deja în predictions
+  log(`Start — limit=${LIMIT}, months=${MONTHS}, dry=${DRY_RUN}`);
+
   const { rows: fixtures } = await query(`
     SELECT fh.fixture_id,
            fh.home_team_id, fh.home_team_name,
@@ -50,6 +63,7 @@ async function main() {
     FROM fixtures_history fh
     WHERE fh.home_goals IS NOT NULL
       AND fh.away_goals IS NOT NULL
+      AND fh.match_date >= NOW() - INTERVAL '${MONTHS} months'
       AND NOT EXISTS (
         SELECT 1 FROM predictions p WHERE p.fixture_id = fh.fixture_id
       )
@@ -57,7 +71,7 @@ async function main() {
     LIMIT $1
   `, [LIMIT]);
 
-  log(`Găsite ${fixtures.length} meciuri fără predicție`);
+  log(`Găsite ${fixtures.length} meciuri fără predicție (ultimele ${MONTHS} luni)`);
 
   let inserted = 0, skipped = 0;
 
@@ -74,7 +88,7 @@ async function main() {
 
       const { lambdaHome, lambdaAway, matrix } = poissonCalc(homeForm, awayForm);
 
-      const totalGoals = (f.home_goals || 0) + (f.away_goals || 0);
+      const totalGoals  = (f.home_goals || 0) + (f.away_goals || 0);
       const result_over15 = totalGoals > 1;
       const result_over25 = totalGoals > 2;
       const result_gg     = (f.home_goals || 0) > 0 && (f.away_goals || 0) > 0;
