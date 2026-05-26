@@ -20,10 +20,10 @@ export default async function handler(req, res) {
     const { rows: teams } = await query(
       `SELECT DISTINCT team_id FROM (
          SELECT home_team_id AS team_id FROM fixtures
-         WHERE date >= NOW() AND date <= NOW() + INTERVAL '30 days'
+         WHERE match_date >= NOW() AND match_date <= NOW() + INTERVAL '30 days'
          UNION
          SELECT away_team_id FROM fixtures
-         WHERE date >= NOW() AND date <= NOW() + INTERVAL '30 days'
+         WHERE match_date >= NOW() AND match_date <= NOW() + INTERVAL '30 days'
        ) t WHERE team_id IS NOT NULL
        LIMIT 300`
     );
