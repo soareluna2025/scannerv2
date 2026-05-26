@@ -108,7 +108,7 @@ router.get('/status', async (req, res) => {
 router.get('/db-stats', async (req, res) => {
   const safe = q => query(q).catch(() => ({ rows: [{ cnt: 0 }] }));
   try {
-    const [fh, ls, rs, ms, h2h, st, pred, ps, snaps] = await Promise.all([
+    const [fh, ls, rs, ms, h2h, st, pred, ps, snaps, psSeason, topSc, sq] = await Promise.all([
       safe('SELECT COUNT(*) AS cnt FROM fixtures_history'),
       safe('SELECT COUNT(*) AS cnt FROM league_stats'),
       safe('SELECT COUNT(*) AS cnt FROM referee_stats'),
@@ -118,6 +118,9 @@ router.get('/db-stats', async (req, res) => {
       safe('SELECT COUNT(*) AS cnt FROM predictions'),
       safe('SELECT COUNT(*) AS cnt FROM player_stats'),
       safe("SELECT COUNT(*) AS cnt FROM match_snapshots WHERE outcome='LIVE'"),
+      safe('SELECT COUNT(*) AS cnt FROM players_season'),
+      safe('SELECT COUNT(*) AS cnt FROM top_scorers'),
+      safe('SELECT COUNT(*) AS cnt FROM squads'),
     ]);
     // pre_match_snapshots accuracy
     const pmsTotal = await safe('SELECT COUNT(*) AS cnt FROM pre_match_snapshots');
@@ -137,6 +140,9 @@ router.get('/db-stats', async (req, res) => {
         player_stats:         Number(ps.rows[0].cnt),
         live_snapshots:       Number(snaps.rows[0].cnt),
         pre_match_snapshots:  Number(pmsTotal.rows[0].cnt),
+        players_season:       Number(psSeason.rows[0].cnt),
+        top_scorers:          Number(topSc.rows[0].cnt),
+        squads:               Number(sq.rows[0].cnt),
       },
       prediction_accuracy: {
         resolved: Number(pmsResolved.rows[0].cnt),
