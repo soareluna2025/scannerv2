@@ -2920,8 +2920,6 @@ NEXT STEPS (prioritizat):
                  NU schimba formula V0 in live-score.js (zero risc).
                  Brier estimat post-calibrare: 0.18 (de la 0.28).
   Commit: 72be9fc
-
-
 [25.05 ~13:00] - SESIUNE NOUA: Aloha Hybrid Intelligence System v2
                  Context recuperat din SESSION_CONTEXT + SINTEZA files + commits.
                  Stare initiala identificata:
@@ -3468,7 +3466,6 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
       confData.breakdown.injuries.note: 'Stars: Nume1, Nume2' sau 'X accidentați'
   Verificare: node --check api/enrich.js OK
   Commit: f092982
-
 [26.05 ~12:00] - ADMIN: auto-predict + update-results + learning-analysis adaugate in ALLOWED_JOBS + cron-status | Commit: 4c43617
 
 [26.05 ~11:00] - ADMIN: Secțiune "Noi vs API Football" — comparație reală + auto-corecții:
