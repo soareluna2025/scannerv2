@@ -1,6 +1,6 @@
 // Cron: GET /api/cron/collect-top-scorers
 // Colecteaza top marcatori + top pasatori per liga activa din standings
-// Rulare: saptamanal duminica 01:00 — ~330 apeluri API/run
+// Rulare: zilnic 01:00 — ~330 apeluri API/run
 
 import { query } from '../db.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';

@@ -1,6 +1,6 @@
 // Cron: GET /api/cron/collect-squads
 // Colecteaza loturile echipelor cu meciuri in urmatoarele 30 zile
-// Rulare: saptamanal duminica 02:00 — ~200 apeluri API/run
+// Rulare: zilnic 02:00 — ~200 apeluri API/run
 
 import { query } from '../db.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';

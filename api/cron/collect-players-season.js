@@ -1,6 +1,6 @@
 // Cron: GET /api/cron/collect-players-season
 // Colecteaza statistici sezoniere per jucator pentru echipele cu meciuri in urmatoarele 30 zile
-// Rulare: saptamanal duminica 01:30 — ~400-500 apeluri API/run
+// Rulare: zilnic 01:30 — ~400-500 apeluri API/run
 
 import { query } from '../db.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
