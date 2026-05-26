@@ -67,17 +67,28 @@ export default async function handler(req, res) {
   const blocked  = sorted.filter(l => l.passedFilter === 0 && l.passedStatus > 0);
   const noStatus = sorted.filter(l => l.passedStatus === 0);
 
-  return res.status(200).json({
-    ok: true,
-    api_error: apiError,
-    total_raw: raw.length,
-    total_leagues: sorted.length,
-    allowed_count: allowed.length,
-    blocked_count: blocked.length,
-    allowed,
-    blocked,
-    no_live_status: noStatus,
-    copa_sudamericana: sorted.find(l => l.id === 11) || null,
-    copa_libertadores: sorted.find(l => l.id === 13) || null,
-  });
+  // Format text simplu pentru Termius
+  const lines = [];
+  lines.push(`=== DEBUG LIVE === ${new Date().toISOString()}`);
+  lines.push(`API error: ${apiError ? JSON.stringify(apiError) : 'none'}`);
+  lines.push(`Total meciuri raw din API: ${raw.length}`);
+  lines.push(`Total ligi: ${sorted.length} | Permise: ${allowed.length} | Blocate: ${blocked.length}`);
+  lines.push('');
+
+  const copaSud = sorted.find(l => l.id === 11);
+  const copaLib = sorted.find(l => l.id === 13);
+  lines.push(`Copa Sudamericana (ID 11): ${copaSud ? `GASITA — passedFilter=${copaSud.passedFilter} blockedReason=${copaSud.blockedReason || 'nicio blocare'}` : 'NEGASITA in API (planul nu o include sau nu e live acum)'}`);
+  lines.push(`Copa Libertadores (ID 13): ${copaLib ? `GASITA — passedFilter=${copaLib.passedFilter} blockedReason=${copaLib.blockedReason || 'nicio blocare'}` : 'NEGASITA in API'}`);
+  lines.push('');
+
+  if (blocked.length > 0) {
+    lines.push('LIGI BLOCATE (in API dar filtrate de noi):');
+    for (const l of blocked) lines.push(`  ID ${l.id} | ${l.name} | Motiv: ${l.blockedReason}`);
+    lines.push('');
+  }
+
+  lines.push('LIGI PERMISE (trec filtrul si apar in app):');
+  for (const l of allowed) lines.push(`  ID ${l.id} | ${l.name} | meciuri: ${l.passedFilter}`);
+
+  return res.status(200).set('Content-Type', 'text/plain').send(lines.join('\n'));
 }
