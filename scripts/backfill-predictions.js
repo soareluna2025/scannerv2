@@ -3,6 +3,7 @@
 // Scopul: crește sample-ul pentru recalibrate-tables (Brier score).
 // Rulează manual: node scripts/backfill-predictions.js [--limit 500]
 
+import 'dotenv/config';
 import { query } from '../api/db.js';
 import { calcPoisson6x6 } from '../api/calc-utils.js';
 
