@@ -3401,6 +3401,74 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   ~930 req/zi suplimentar — neglijabil vs 300k/zi plan
   Commit: 62edec9
 
+[26.05.2026] - enrich.js — 3 consumatori noi pentru datele colectate
+  CONTEXT: Audit identificase ~34% utilizare efectiva date API — 3 cron-uri noi
+           populau tabele (top_scorers, players_season, squads) pe care niciun
+           fișier de calcul nu le citea. Fix: 3 consumatori concreți.
+  CONSUMATOR 1 — Top Scorer Factor (lambda ajustare):
+    getTopScorerFactor(teamId, leagueId): goluri topscorer echipă / media ligii
+    Factor limitrat 0.85–1.15. Adăugat în Batch 1 (paralel).
+    Aplicat după standings blend: lambdaHome/Away × factor → recalcul Poisson.
+    result._topScorerFactor = 'H:X.XX|A:X.XX' în răspuns.
+  CONSUMATOR 2 — Layer 7 Fallback (players_season → team strength):
+    getTeamStrengths() extins: dacă player_stats <10 rânduri → calcStrSeason()
+    calcStrSeason(): citește players_season WHERE team_id + season + appearances>0
+    Formula sezon: avgRating*0.45 + goalsPerApp*50*0.35 + topScorer*5*0.20
+    homeSource/awaySource: 'ps' (player_stats) sau 'pss' (players_season)
+  CONSUMATOR 3 — Squad Completeness Penalty (squads):
+    getSquadCount(teamId): COUNT din squads WHERE team_id + season
+    Adăugat în Batch 1. Penalizare după confidence:
+      <11 jucători: -10pt, <14 jucători: -5pt (per echipă)
+    confData.breakdown.squads = { home, away, penalty } în răspuns.
+  CONST SEASON adăugat la nivel modul (era redefinit local în fiecare helper).
+  Commit: 4a1b434
+
+[26.05.2026] - fix: date → match_date in collect-players-season + collect-squads
+  BUG: ambele cron-uri foloseau WHERE date >= NOW() dar coloana în fixtures e match_date
+  FIX: înlocuit date → match_date în ambele query-uri WHERE
+  EFECT: colectorii rulau dar returnau 0 echipe (niciun fixture nu trecea filtrul)
+  Verificare: sintaxă OK cu node --check ambele fișiere
+  Commit: 0f200e1
+
+[26.05.2026] - scripts/populate-players.sh — script simplu pentru iPhone (Termius)
+  CONTEXT: Userul lucrează pe iPhone cu Termius — are nevoie de comenzi simple.
+  SCRIPT: bash populate-players.sh (sau scripts/populate-players.sh de pe VPS)
+    1/3 players-season → curl localhost:3000/api/cron/collect-players-season
+    2/3 squads → curl localhost:3000/api/cron/collect-squads
+    3/3 top-scorers → curl localhost:3000/api/cron/collect-top-scorers
+    Afișează ultimele 100 caractere din răspunsul JSON per pas + GATA
+  Rulat manual pe VPS: players-season 991/64, squads 1736/64, top-scorers 2146/157
+  Commit: 46fff07
+
+[26.05.2026] - admin dashboard — adăugate players_season, top_scorers, squads în DB grid
+  CONTEXT: Utilizatorul voia să vadă în admin câte rânduri au noile tabele.
+  api/admin.js: + 3 query-uri COUNT paralele (players_season, top_scorers, squads)
+                + 3 chei în răspuns (playersSeasonCount, topScorersCount, squadsCount)
+  admin.html:
+    DB_ICONS: + 3 SVG-uri noi (raport barchart, podium, oameni-squad)
+    DB_ROW3: array nou cu 3 celule (players_season, top_scorers, squads)
+    CSS: .db-grid-row.r3{grid-template-columns:repeat(3,1fr)}
+    loadDB(): renderDBRow(DB_ROW3, 'r3') → al treilea rând în grila DB
+  Commit: 5a52c8f
+
+[26.05.2026] - enrich.js — smart injury penalty bazat pe scorul individual al jucătorului
+  CONTEXT: Penalizarea oarbă (injuries.length >= 3/5/8 → -5/-10/-15) era indiferentă
+           la cine este accidentat. Un star cu scor 90 = același impact ca un rezervist 20.
+  IMPLEMENTARE:
+    getInjuredPlayerScores(injuries, homeId, awayId): adăugată în Batch 2 (paralel)
+      Citește players_season WHERE player_id = ANY($1) AND season = $2
+      calcScore: ratingNorm*0.40 + goals*25*0.30 + assists*20*0.20 + minutes/2500*100*0.10
+      Returnează { home: [{id, name, score}], away: [...] }
+    Lambda penalty SMART (nou, înainte de venue impact):
+      applyInjLambda: top score >80 → factor 0.88 | >65 → 0.94 | >45 → 0.97
+      Recalcul Poisson 6×6 dacă factorii diferă de 1.0
+      result._injuryLambda = 'H:X.XX|A:X.XX' în răspuns
+    Confidence penalty SMART (înlocuiește penalizarea oarbă):
+      topScore >85 → -15 | >70 → -10 | >50 → -5 | ≥3 jucători oricum → -3
+      confData.breakdown.injuries.note: 'Stars: Nume1, Nume2' sau 'X accidentați'
+  Verificare: node --check api/enrich.js OK
+  Commit: f092982
+
 ================================================================================
   ⚠️  IMPORTANT — WORKFLOW GIT (Claude Code pe web, repo remote):
   ---------------------------------------------------------------
