@@ -179,10 +179,14 @@ function buildAccumulator(matches, targetMin = 1.50, targetMax = 2.00) {
   const byMarket = {};
   for (const m of matches) {
     if (!m.markets) continue;
+    // Exclude meciuri cu < 15 min rămase — bookmaker-ul nu mai acceptă pariuri
+    if (m.is_live && (m.minute || 0) >= 75) continue;
     for (const [key, mkt] of Object.entries(m.markets)) {
       if (!MARKET_ORDER.includes(key)) continue; // sare over05 + orice neinclus
       if (mkt.prob < MIN_PROB) continue;
       if (isMarketSettled(key, m)) continue; // piața deja rezolvată în live — skip
+      const fairOdds = Math.round((100 / mkt.prob) * 100) / 100;
+      if (fairOdds < 1.10) continue; // odds prea mici — fără valoare de pariu
       if (!byMarket[key]) byMarket[key] = [];
       byMarket[key].push({
         fixture_id:     m.fixture_id,
