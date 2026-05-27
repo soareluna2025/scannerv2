@@ -429,6 +429,22 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPr
     }
   }
 
+  // Suprimă EV când calitatea datelor nu susține estimarea probabilității.
+  // Modelul calculează lambda din date istorice — când datele lipsesc, lambda
+  // alunecă spre media ligii și nivelează artificial diferența dintre echipe.
+  // Bookmaker-ul e mai precis decât noi pentru cote lungi cu date insuficiente.
+  if (bestEV !== null && bestCota != null) {
+    const dataQuality = result.confidence || 'LOW';
+    const h2hWeak    = (result.h2hSample || 0) < 3;
+    const suppress   =
+      bestCota > 10.0 ||                                          // niciodată la cote extreme
+      (bestCota > 5.0  && dataQuality === 'LOW') ||               // LOW data + cote lungi
+      (bestCota > 3.0  && dataQuality === 'LOW' && h2hWeak);      // LOW data + fără H2H
+    if (suppress) {
+      bestEV = null; bestMarket = null; bestCota = null; score5 = null;
+    }
+  }
+
   const scores = [score1, score2, score3, score4, score5];
   const alignedCount = scores.filter(s => s > 60).length;
   const score6 = (alignedCount / 5) * 100;
