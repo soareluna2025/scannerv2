@@ -358,17 +358,17 @@ Format: [STATUS] #NR | Fișier:linie | Descriere scurtă
 
 ── CRITIC (5) ──────────────────────────────────────────────────────────────────
 
-[ ] #1 | api/enrich.js:402+425 | bestEV returnat ca STRING "+43%" în loc de NUMBER 0.43
+[x] #1 | api/enrich.js:402+425 | bestEV returnat ca STRING "+43%" în loc de NUMBER 0.43
         Cauza: `bestEV = '+' + Math.round(best.ev * 100) + '%'`
         Impact: NaN în 4 locuri UI; Safe Bet badge broken ("+43%" > 0 = false)
         Fix: `bestEV = best.ev;` (NUMBER), frontend formatează
 
-[ ] #2 | api/football.js:14-16,96 | fetch() direct la API-Football fără retry 429
+[x] #2 | api/football.js:14-16,96 | fetch() direct la API-Football fără retry 429
         Cauza: codul scris înainte să existe fetchApiFootball()
         Impact: eșuare silențioasă la rate-limit
         Fix: import { fetchApiFootball } + înlocuiește toate fetch() cu ea
 
-[ ] #3 | api/today.js:146-147 | fetch() direct la API-Football fără retry 429
+[x] #3 | api/today.js:146-147 | fetch() direct la API-Football fără retry 429
         Același ca #2 dar în calea de fallback din today.js
         Fix: același ca #2
 
@@ -387,16 +387,16 @@ Format: [STATUS] #NR | Fișier:linie | Descriere scurtă
 
 ── IMPORTANT (13) ──────────────────────────────────────────────────────────────
 
-[ ] #6  | api/enrich.js:441-442 | `teamStrengths.home || 50` — echipă cu scor 0 → 50
+[x] #6  | api/enrich.js:441-442 | `teamStrengths.home || 50` — echipă cu scor 0 → 50
          Fix: `teamStrengths.home ?? 50`
 
-[ ] #7  | api/enrich.js:363-365 | `homeAvgScored || 1.2` — 0 goluri marcate → lambda 1.2
+[x] #7  | api/enrich.js:363-365 | `homeAvgScored || 1.2` — 0 goluri marcate → lambda 1.2
          Fix: `result.homeAvgScored ?? 1.2`
 
 [ ] #8  | api/enrich.js:432-434 | Consistency score împarte la 5 fix chiar dacă score5=null
          Fix: `scores.filter(s => s !== null).length` ca divizor
 
-[ ] #9  | api/enrich.js:496 | `Math.round(null) = 0` → breakdown.ev = 0 fals
+[x] #9  | api/enrich.js:496 | `Math.round(null) = 0` → breakdown.ev = 0 fals
          Fix: `ev: score5 != null ? Math.round(score5) : null`
 
 [ ] #10 | api/match.js:113-116 | homeForm opponent mereu teams.away.name
@@ -411,7 +411,7 @@ Format: [STATUS] #NR | Fișier:linie | Descriere scurtă
          Payload real are: `enr.leagueStats?.avg_corners`, `enr.leagueStats?.avg_yellow_cards`
          Impact: afișează mereu fallback hardcodat (9.5 și 4)
 
-[ ] #13 | index.html:2350 | `parseFloat(null).toFixed(2)` = "NaN / meci"
+[x] #13 | index.html:2350 | `parseFloat(null).toFixed(2)` = "NaN / meci"
          Fix: `parseFloat(ls?.avg_goals_per_match || 0).toFixed(2)`
 
 [ ] #14 | index.html:2643 | Season fallback: `getFullYear()-1` greșit din iulie 2026+
@@ -438,10 +438,10 @@ Format: [STATUS] #NR | Fișier:linie | Descriere scurtă
 
 ── COSMETIC (5) ────────────────────────────────────────────────────────────────
 
-[ ] #19 | index.html:1738 | "neanalzate" → "neanalizate"
-[ ] #20 | index.html:1807 | "Neanalzat" → "Neanalizat"
+[x] #19 | index.html:1738 | "neanalzate" → "neanalizate"
+[x] #20 | index.html:1807 | "Neanalzat" → "Neanalizat"
 [ ] #21 | index.html:2984-2996 | `var rem5` declarat de 3 ori; `var xgH5/xgA5` ×2
-[ ] #22 | api/match.js:336 | ON CONFLICT DO NOTHING → predicții niciodată actualizate
+[x] #22 | api/match.js:336 | ON CONFLICT DO NOTHING → predicții niciodată actualizate
          Fix: schimbă în ON CONFLICT DO UPDATE (ca în enrich.js)
 [ ] #23 | api/today.js:104 | Filtru ligă redundant (deja filtrat în DB query la linia 31)
 

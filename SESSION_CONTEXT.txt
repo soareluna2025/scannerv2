@@ -3643,3 +3643,18 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   - SCOP: fiecare sesiune viitoare citește ARHITECT.md → cunoaște tot contextul
     → nu mai reintroduce bug-uri → deciziile se păstrează între sesiuni
   Commit: ea8693a (branch) / 7f38776 (merge main)
+
+[27.05 ~17:00] - FIX 10 BUG-URI (din bugtracker ARHITECT.md)
+  Commit: 8268df7 (bug #1) + 9f40953 (bug-uri #2,3,6,7,9,13,19,20,22)
+  #1 enrich.js: bestEV STRING → NUMBER — Safe Bets funcționeaza acum
+  #2 football.js: fetch() direct → fetchApiFootball() cu retry 429
+  #3 today.js: fetch() direct → fetchApiFootball() cu retry 429 (fallback API)
+  #6 enrich.js: teamStrengths || 50 → ?? 50 (echipa cu scor 0 corectata)
+  #7 enrich.js: homeAvgScored || 1.2 → ?? 1.2 (echipa fara goluri corectata)
+  #9 enrich.js: Math.round(null)=0 → absent cand score5=null (breakdown corect)
+  #13 index.html: parseFloat(null) → '—' in profil liga
+  #19 index.html: 'neanalzate' → 'neanalizate'
+  #20 index.html: 'Neanalzat' → 'Neanalizat'
+  #22 match.js: ON CONFLICT DO NOTHING → DO UPDATE (predictii actualizate)
+  ARHITECT.md bugtracker actualizat: 10 bug-uri marcate [x]
+  Raman deschise: #4,#5,#8,#10,#11,#12,#14,#15,#16,#17,#18,#21,#23 (13 bug-uri)
