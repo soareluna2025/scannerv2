@@ -3694,3 +3694,14 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
       cards_over35, dc1x, dcx2, over25, corners_over95, cards_over45, h1, h2, draw
     * MIN_PROB: 62% (scazut de la 68% pt mai multa acoperire de piete)
     * Un bilet exemplu: Over 1.5 (meciul A) + GG (meciul B) + 1X (meciul C) etc.
+
+[27.05 ~22:30] - FIX: Bilet Compus live — exclude piete deja rezolvate | Commit: pending
+  - generator.js: adaugat isMarketSettled(key, m) — verifica scorul live
+    * home_scores: skip daca home_goals > 0
+    * away_scores: skip daca away_goals > 0
+    * over15: skip daca total goluri >= 2
+    * over25: skip daca total goluri >= 3
+    * gg: skip daca ambele au marcat
+    * cards_over35/45: skip daca carti >= 4/5
+    * corners_over85/95: skip daca cornere >= 9/10
+    * 1X2 / DC: mereu deschise pana la final

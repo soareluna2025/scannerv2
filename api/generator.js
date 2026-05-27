@@ -66,6 +66,28 @@ function calcMatchMarkets(form, h2h, lg, ref) {
   };
 }
 
+// Piața e deja "câștigată" în live — bookmaker-ul nu o mai oferă
+function isMarketSettled(key, m) {
+  if (!m.is_live) return false;
+  const hg = m.home_goals || 0;
+  const ag = m.away_goals || 0;
+  const totalGoals   = hg + ag;
+  const totalCorners = (m.live?.home_corners || 0) + (m.live?.away_corners || 0);
+  const totalCards   = (m.live?.home_cards   || 0) + (m.live?.away_cards   || 0);
+  switch (key) {
+    case 'home_scores':    return hg > 0;
+    case 'away_scores':    return ag > 0;
+    case 'over15':         return totalGoals >= 2;
+    case 'over25':         return totalGoals >= 3;
+    case 'gg':             return hg > 0 && ag > 0;
+    case 'cards_over35':   return totalCards >= 4;
+    case 'cards_over45':   return totalCards >= 5;
+    case 'corners_over85': return totalCorners >= 9;
+    case 'corners_over95': return totalCorners >= 10;
+    default:               return false; // 1X2, DC — deschise până la final
+  }
+}
+
 // Construiește biletul compus optim pentru ținta de cotă [targetMin, targetMax]
 // Logica: câte UN singur pick per piață (cel mai bun meci din toate pentru acea piață)
 // Over 0.5 exclus — nu există la bookmakers mainstream
@@ -88,6 +110,7 @@ function buildAccumulator(matches, targetMin = 1.50, targetMax = 2.00) {
     for (const [key, mkt] of Object.entries(m.markets)) {
       if (!MARKET_ORDER.includes(key)) continue; // sare over05 + orice neinclus
       if (mkt.prob < MIN_PROB) continue;
+      if (isMarketSettled(key, m)) continue; // piața deja rezolvată în live — skip
       if (!byMarket[key]) byMarket[key] = [];
       byMarket[key].push({
         fixture_id:  m.fixture_id,
