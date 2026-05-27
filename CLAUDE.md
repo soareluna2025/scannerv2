@@ -13,7 +13,7 @@
 - **Întotdeauna commit + push pe `main`** după orice modificare finalizată — push-ul pe main declanșează auto-deploy via GitHub Actions.
 - **Dacă userul cere „Faza X", „calibrare globală", „aplicăm calibrare", „verificare Faza X" sau „rollback Faza X"** → CITEȘTE `ROADMAP_CALIBRARE.md` ÎNAINTE de a începe orice modificare. Fișierul conține planul în 5 faze, trigger-urile (Brier scor, sample size, durată stabilă), modificările exacte de cod și procedura de rollback.
 - **Dacă userul cere „bump plan API" sau „abonament nou X k"** → ajustează `STOP_AT` în `api/backfill.js` la `(plan - 20k)` ca buffer pentru live scanner.
-- **`STOP_AT` curent în `api/backfill.js` = 250.000** — valoare corectă și intenționată pentru planul actual. NU modifica fără cerere explicită.
+- **`STOP_AT` curent în `api/backfill.js` = 280.000** — valoare corectă pentru planul 300k (300k - 20k buffer). NU modifica fără cerere explicită.
 
 ## 2. STACK
 
@@ -32,10 +32,11 @@
 
 - **Filtre de ligi**: DOAR prin `isAllowedLeague()` / `isAllowedMatch()` din `api/utils/league-filter.js`. NU duplica logica WOMEN_TERMS / YOUTH_TERMS / LOWER_DIV_TERMS în alte fișiere.
 - **Apeluri API-Football**: DOAR prin `fetchApiFootball()` din `api/utils/fetch-api.js` — gestionează retry 429 cu backoff (30s/60s/120s) și autentificare. NU folosi `fetch()` direct pentru `v3.football.api-sports.io`.
-- **Limitele API zilnice** (plan 150.000/zi):
+- **Limitele API zilnice** (plan 300.000/zi — upgrade 27.05.2026):
   - **Scanner live**: rezervă **50.000/zi** (buget țintă)
-  - **Backfill**: maxim **50.000/zi** (constanta `STOP_AT` în `api/backfill.js` — atenție: în prezent setată la `100_000`, vezi audit C2 din SESSION_CONTEXT sec. 13)
-  - Restul (~50.000/zi): cron-uri (prematch-enrichment, collect-daily, collect-finished, referee-stats) + ad-hoc UI
+  - **Backfill**: maxim **100.000/zi** (STOP_AT = 280k total cumulativ)
+  - **Cron-uri**: ~50.000/zi (prematch-enrichment, collect-daily, collect-finished, referee-stats)
+  - **Disponibil ad-hoc / UI**: ~100.000/zi
 
 ---
 

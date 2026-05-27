@@ -3592,7 +3592,16 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
      → L2 (getLineupStrengthFactor) functional complet cu rating + goluri + pase + suturi
   5. enrich.js: fix multiplicator shots_on_target *15 -> *2 (totaluri sezon, nu per meci)
 
-[27.05 ~12:30] - FIX WHITELIST: ID 785 (Liga III Romania) inlocuit cu 784 (Liga II Romania) | Commit: (in curs)
+[27.05 ~12:30] - FIX WHITELIST: ID 785 (Liga III Romania) inlocuit cu 784 (Liga II Romania) | Commit: 3b51962
   - 785 returna "Liga III - Serie 2" din API (confirmat din backfill logs)
   - Inlocuit cu 784 (ID secvential corect: 783=L1, 784=L2, 785=L3)
   - Modificat: api/leagues.js + league-list.html (badge ⚠️ eliminat, logo actualizat)
+
+[27.05 ~12:45] - UPGRADE PLAN API 150k → 300k + PAGINARE DINAMICA players_season | Commit: (in curs)
+  - STOP_AT in api/backfill.js: 250_000 → 280_000 (300k plan - 20k buffer live scanner)
+  - CLAUDE.md actualizat: plan 300k/zi, limite redistribuite
+  - backfill-pass-shots.js: paginare dinamica (page 1,2,3... pana paging.total)
+    → de la max 25 jucatori/echipa la 100% coverage squad
+  - collect-players-season.js: aceeasi imbunatatire paginare dinamica
+  - MOTIV: Player Intelligence scores mici (32/30 Crystal Palace) din cauza datelor incomplete
+  - TODO: ruleaza backfill-pass-shots de 2 ori pe VPS pana remaining=0
