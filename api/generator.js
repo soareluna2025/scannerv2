@@ -8,7 +8,7 @@ const KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || proce
 const LIVE_S = new Set(['1H','HT','2H','ET','BT','P','SUSP','INT','LIVE']);
 
 // Calculează toate piețele pentru un meci folosind datele disponibile
-function calcMatchMarkets(form, h2h, lg, ref) {
+function calcMatchMarkets(form, h2h, lg, ref, liveState = null) {
   const lgGoals   = +(lg.avg_goals)   || 2.5;
   const lgYellow  = +(lg.avg_yellow)  || 3.5;
   const lgCorners = +(lg.avg_corners) || 9.0;
@@ -47,7 +47,7 @@ function calcMatchMarkets(form, h2h, lg, ref) {
   const lambdaCards   = hasRef ? +(ref.avg_yellow)  || lgYellow  : lgYellow;
   const lambdaCorners = hasRef ? +(ref.avg_corners)  || lgCorners : lgCorners;
 
-  return {
+  const mkts = {
     over05:          { prob: over05,                              label: 'Over 0.5' },
     over15:          { prob: over15,                              label: 'Over 1.5' },
     over25:          { prob: over25,                              label: 'Over 2.5' },
@@ -64,6 +64,78 @@ function calcMatchMarkets(form, h2h, lg, ref) {
     corners_over85:  { prob: poissonProbOver(lambdaCorners, 8),   label: 'Cornere Over 8.5' },
     corners_over95:  { prob: poissonProbOver(lambdaCorners, 9),   label: 'Cornere Over 9.5' },
   };
+
+  // Ajustare LIVE: recalculează probabilitățile bazat pe timp rămas + scor curent
+  // Probabilitățile istorice (din formă) sunt pentru 90 min — trebuie reduse proporțional
+  if (liveState && liveState.elapsed > 0) {
+    const minutesLeft = Math.max(1, 90 - liveState.elapsed);
+    const tf  = minutesLeft / 90;                             // fracție de timp rămasă
+    const hg  = liveState.home_goals   || 0;
+    const ag  = liveState.away_goals   || 0;
+    const tg  = hg + ag;
+    const tc  = (liveState.home_corners || 0) + (liveState.away_corners || 0);
+    const tk  = (liveState.home_cards   || 0) + (liveState.away_cards   || 0);
+
+    const lH  = lambdaH * tf;                                // goluri așteptate gazdă în restul meciului
+    const lA  = lambdaA * tf;                                // goluri așteptate oaspete
+    const lT  = lH + lA;
+    const lCo = lambdaCorners * tf;
+    const lCk = lambdaCards   * tf;
+
+    // P(X >= n | X ~ Poisson(lambda)) — folosind poissonProbOver existent
+    const pAtLeast = (lambda, n) =>
+      n <= 0 ? 100 : Math.min(99, Math.max(1, Math.round(poissonProbOver(lambda, n - 1) * 100)));
+
+    // Goluri
+    mkts.over15.prob      = pAtLeast(lT, Math.max(0, 2 - tg));
+    mkts.over25.prob      = pAtLeast(lT, Math.max(0, 3 - tg));
+    mkts.home_scores.prob = hg > 0 ? 100 : pAtLeast(lH, 1);
+    mkts.away_scores.prob = ag > 0 ? 100 : pAtLeast(lA, 1);
+
+    if (hg > 0 && ag > 0) {
+      mkts.gg.prob = 100;                                    // ambele au marcat deja
+    } else if (hg > 0) {
+      mkts.gg.prob = pAtLeast(lA, 1);                       // trebuie să marcheze oaspeții
+    } else if (ag > 0) {
+      mkts.gg.prob = pAtLeast(lH, 1);                       // trebuie să marcheze gazdele
+    } else {
+      mkts.gg.prob = Math.min(99, Math.max(1,
+        Math.round((1 - Math.exp(-lH)) * (1 - Math.exp(-lA)) * 100)));
+    }
+
+    // Cornere / cartonașe
+    mkts.corners_over85.prob = pAtLeast(lCo, Math.max(0, 9  - tc));
+    mkts.corners_over95.prob = pAtLeast(lCo, Math.max(0, 10 - tc));
+    mkts.cards_over35.prob   = pAtLeast(lCk, Math.max(0, 4  - tk));
+    mkts.cards_over45.prob   = pAtLeast(lCk, Math.max(0, 5  - tk));
+
+    // 1X2 / DC: recalcul Poisson din scorul curent (lambda = goluri rămase)
+    // log-PMF pentru stabilitate numerică
+    const pmf = (lambda, k) => {
+      if (k < 0) return 0;
+      let lp = -lambda + k * Math.log(Math.max(lambda, 1e-10));
+      for (let i = 1; i <= k; i++) lp -= Math.log(i);
+      return Math.exp(lp);
+    };
+    const scoreDiff = hg - ag;
+    let pHW = 0, pD = 0, pAW = 0;
+    for (let i = 0; i <= 6; i++) {
+      for (let j = 0; j <= 6; j++) {
+        const p  = pmf(lH, i) * pmf(lA, j);
+        const fd = scoreDiff + i - j;
+        if (fd > 0) pHW += p;
+        else if (fd === 0) pD += p;
+        else pAW += p;
+      }
+    }
+    mkts.h1.prob   = Math.min(99, Math.max(1, Math.round(pHW * 100)));
+    mkts.draw.prob = Math.min(99, Math.max(1, Math.round(pD  * 100)));
+    mkts.h2.prob   = Math.min(99, Math.max(1, Math.round(pAW * 100)));
+    mkts.dc1x.prob = Math.min(99, Math.max(1, Math.round((pHW + pD) * 100)));
+    mkts.dcx2.prob = Math.min(99, Math.max(1, Math.round((pAW + pD) * 100)));
+  }
+
+  return mkts;
 }
 
 // Piața e deja "câștigată" în live — bookmaker-ul nu o mai oferă
@@ -454,7 +526,16 @@ export default async function handler(req, res) {
           },
           h2h,
           { avg_goals: +(lg.avg_goals) || 2.5, avg_yellow: +(lg.avg_yellow) || 3.5, avg_corners: +(lg.avg_corners) || 9.0 },
-          ref && Number(ref.total_matches) >= 5 ? ref : null
+          ref && Number(ref.total_matches) >= 5 ? ref : null,
+          isLive ? {
+            elapsed:      m.fixture?.status?.elapsed || 0,
+            home_goals:   m.goals?.home || 0,
+            away_goals:   m.goals?.away || 0,
+            home_corners: getStat(m.statistics, hid, 'Corner Kicks'),
+            away_corners: getStat(m.statistics, aid, 'Corner Kicks'),
+            home_cards:   liveCards(hid),
+            away_cards:   liveCards(aid),
+          } : null
         ),
       };
     });

@@ -3695,6 +3695,16 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     * MIN_PROB: 62% (scazut de la 68% pt mai multa acoperire de piete)
     * Un bilet exemplu: Over 1.5 (meciul A) + GG (meciul B) + 1X (meciul C) etc.
 
+[27.05 ~23:00] - FIX CRITIC: Probabilitati live ajustate dupa timp ramas + scor curent | Commit: pending
+  - generator.js: calcMatchMarkets() primeste acum liveState = { elapsed, home_goals, away_goals, corners, cards }
+  - Recalculeaza toate pietele cu lambda proportional cu minutele ramase (tf = minutesLeft/90):
+    * Over 1.5 la min 80, scor 0-1: lambdaRem = 2.5*(10/90)=0.28 → P(1 gol)≈24% (×4.17 fair odds)
+    * over15/25: goluri necesare = max(0, prag - totalGoals), pAtLeast(lT, goluri_necesare)
+    * home_scores/away_scores: exclude daca deja marcat, altfel P(cel putin 1 in restul meciului)
+    * GG: depinde de starea curenta (ambele/una/niciuna au marcat)
+    * corners/cards: lambda scalat cu tf, goluri necesare = prag - currentCount
+    * 1X2/DC: Poisson din scorul curent (Σ over i,j: pmf(lH,i)*pmf(lA,j) per rezultat final)
+
 [27.05 ~22:30] - FIX: Bilet Compus live — exclude piete deja rezolvate | Commit: pending
   - generator.js: adaugat isMarketSettled(key, m) — verifica scorul live
     * home_scores: skip daca home_goals > 0
