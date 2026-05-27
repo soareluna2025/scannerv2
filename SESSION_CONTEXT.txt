@@ -3667,3 +3667,12 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     * bestCota > 5.0 + LOW confidence → suprima
     * bestCota > 3.0 + LOW confidence + h2hSample < 3 → suprima
   - Modelul acum stie CAND NU STIE si nu afiseaza valori false
+
+[27.05 ~20:00] - FEAT: Piete complete + Bilet Compus automat | Commit: 0c4c435
+  - calc-utils.js: over05Prob in calcPoisson6x6 + poissonProbOver() exportata
+  - enrich.js: expus over05Prob, dc1x, dcx2, cardsOver35/45, cornersOver85/95
+  - generator.js: calcMatchMarkets() server-side pt toate pietele, buildAccumulator()
+    endpoint: /api/generator?action=accumulator&mode=prematch&target_min=1.5&target_max=2.0
+  - index.html: buton "Bilet Compus" in Generator S1 → ecran S7 cu UI complet
+  - Piete disponibile: Over 0.5/1.5/2.5, GG, Gazde/Oaspeti marcheaza,
+    1/X/2, 1X, X2, Cartonase Over 3.5/4.5, Cornere Over 8.5/9.5
