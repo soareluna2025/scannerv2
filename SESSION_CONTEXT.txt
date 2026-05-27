@@ -3619,3 +3619,16 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     (ligi mici, sezoane fara squad, echipe inactive) — loop infinit imposibil
   - STATUS FINAL: echipele cu meciuri in 30 zile sunt acoperite de collect-players-season
     Celelalte 780 = fara date in API, nu pot fi populate
+
+[27.05 ~14:30] - FIX pct() MINIM 5 MECIURI — statistici false eliminate | Commit: 8b33793
+  - Problema: "100% Oaspeti marcheaza" dintr-un singur meci
+  - Fix in api/enrich.js, api/match.js, api/football.js:
+    arr.length → arr.length >= 5 (pct() returneaza null daca < 5 meciuri)
+  - Fallback in enrich.js: pct() null → estimare Poisson (lambda) automat
+  - Fisiere JS pushate direct pe main via MCP (nu local — divergenta istorii)
+
+[27.05 ~15:00] - FIX index.html: null display + GG float in EV table | Commit: fd0ebd3
+  - homeScoreRate/awayScoreRate afiseaza '—' cand pct() returneaza null
+    (3 locatii: linia 1763-1764 prematch card, 2292-2305 modal live+prematch)
+  - EV Analysis table: row.prob → Math.round(row.prob) (elimina float-uri 46.78%)
+  - Pushare: temp branch din origin/main + checkout index.html de pe feature branch
