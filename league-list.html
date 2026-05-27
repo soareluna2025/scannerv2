@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlohaScan — Lista Ligi Whitelist</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 24px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 800;
+    color: #38bdf8;
+    margin-bottom: 4px;
+    letter-spacing: 1px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 28px;
+  }
+  .region {
+    font-size: 11px;
+    font-weight: 700;
+    color: #38bdf8;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin: 24px 0 10px 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #1e3a5f;
+  }
+  .country-block {
+    margin-bottom: 16px;
+  }
+  .country-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #94a3b8;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .league-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    background: #1e293b;
+    border-radius: 8px;
+    border-left: 3px solid #334155;
+  }
+  .league-row.warning {
+    border-left-color: #f59e0b;
+    background: #1c1a0f;
+  }
+  .logo {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: #0f172a;
+    flex-shrink: 0;
+  }
+  .league-id {
+    font-size: 10px;
+    font-weight: 700;
+    color: #38bdf8;
+    background: #0c2340;
+    padding: 2px 6px;
+    border-radius: 4px;
+    min-width: 36px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .league-name {
+    font-size: 13px;
+    color: #e2e8f0;
+    flex: 1;
+  }
+  .league-type {
+    font-size: 10px;
+    color: #64748b;
+    flex-shrink: 0;
+  }
+  .warn-badge {
+    font-size: 10px;
+    background: #78350f;
+    color: #fbbf24;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  @media print {
+    body { background: white; color: black; padding: 12px; }
+    h1 { color: #0369a1; }
+    .region { color: #0369a1; border-bottom-color: #cbd5e1; }
+    .country-title { color: #475569; }
+    .league-row { background: #f8fafc; border-left-color: #cbd5e1; break-inside: avoid; }
+    .league-row.warning { background: #fffbeb; border-left-color: #f59e0b; }
+    .league-id { background: #e0f2fe; color: #0369a1; }
+    .league-name { color: #1e293b; }
+    .league-type { color: #94a3b8; }
+    .subtitle { color: #94a3b8; }
+  }
+</style>
+</head>
+<body>
+
+<h1>⚽ AlohaScan — Lista Ligi Whitelist</h1>
+<div class="subtitle">Total: 216 ligi | Generat: 27.05.2026 | Format: ID · Țară · Ligă</div>
+
+<!-- ═══════════════════════════════════════════ EUROPA -->
+<div class="region">🌍 Europa</div>
+
+<div class="country-block">
+  <div class="country-title">🏴󠁧󠁢󠁥󠁮󠁧󠁿 Anglia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/39.png"><span class="league-id">39</span><span class="league-name">Premier League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/40.png"><span class="league-id">40</span><span class="league-name">Championship</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/45.png"><span class="league-id">45</span><span class="league-name">FA Cup</span><span class="league-type">Cupă</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/48.png"><span class="league-id">48</span><span class="league-name">EFL Cup (Carabao Cup)</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇪🇸 Spania</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/140.png"><span class="league-id">140</span><span class="league-name">La Liga</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/141.png"><span class="league-id">141</span><span class="league-name">Segunda División</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/143.png"><span class="league-id">143</span><span class="league-name">Copa del Rey</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇩🇪 Germania</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/78.png"><span class="league-id">78</span><span class="league-name">Bundesliga</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/79.png"><span class="league-id">79</span><span class="league-name">2. Bundesliga</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/81.png"><span class="league-id">81</span><span class="league-name">DFB Pokal</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇮🇹 Italia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/135.png"><span class="league-id">135</span><span class="league-name">Serie A</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/136.png"><span class="league-id">136</span><span class="league-name">Serie B</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/137.png"><span class="league-id">137</span><span class="league-name">Coppa Italia</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇫🇷 Franța</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/61.png"><span class="league-id">61</span><span class="league-name">Ligue 1</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/62.png"><span class="league-id">62</span><span class="league-name">Ligue 2</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/66.png"><span class="league-id">66</span><span class="league-name">Coupe de France</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇳🇱 Olanda</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/88.png"><span class="league-id">88</span><span class="league-name">Eredivisie</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/89.png"><span class="league-id">89</span><span class="league-name">Eerste Divisie</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/90.png"><span class="league-id">90</span><span class="league-name">KNVB Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇵🇹 Portugalia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/94.png"><span class="league-id">94</span><span class="league-name">Primeira Liga</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/95.png"><span class="league-id">95</span><span class="league-name">Liga Portugal 2</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/96.png"><span class="league-id">96</span><span class="league-name">Taça de Portugal</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇧🇪 Belgia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/144.png"><span class="league-id">144</span><span class="league-name">Pro League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/145.png"><span class="league-id">145</span><span class="league-name">Challenger Pro League</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/146.png"><span class="league-id">146</span><span class="league-name">Belgian Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇹🇷 Turcia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/203.png"><span class="league-id">203</span><span class="league-name">Süper Lig</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/204.png"><span class="league-id">204</span><span class="league-name">TFF First League</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/205.png"><span class="league-id">205</span><span class="league-name">Turkish Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scoția</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/179.png"><span class="league-id">179</span><span class="league-name">Premiership</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/180.png"><span class="league-id">180</span><span class="league-name">Championship</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/184.png"><span class="league-id">184</span><span class="league-name">Scottish Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇨🇿 Cehia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/345.png"><span class="league-id">345</span><span class="league-name">Fortuna Liga</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/346.png"><span class="league-id">346</span><span class="league-name">FNL</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/347.png"><span class="league-id">347</span><span class="league-name">MOL Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇦🇹 Austria</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/218.png"><span class="league-id">218</span><span class="league-name">Bundesliga</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/219.png"><span class="league-id">219</span><span class="league-name">2. Liga</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/221.png"><span class="league-id">221</span><span class="league-name">ÖFB Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇨🇭 Elveția</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/207.png"><span class="league-id">207</span><span class="league-name">Super League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/208.png"><span class="league-id">208</span><span class="league-name">Challenge League</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/209.png"><span class="league-id">209</span><span class="league-name">Swiss Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇩🇰 Danemarca</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/119.png"><span class="league-id">119</span><span class="league-name">Superliga</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/120.png"><span class="league-id">120</span><span class="league-name">1st Division</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/123.png"><span class="league-id">123</span><span class="league-name">DBU Pokalen</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇳🇴 Norvegia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/103.png"><span class="league-id">103</span><span class="league-name">Eliteserien</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/104.png"><span class="league-id">104</span><span class="league-name">First Division</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/105.png"><span class="league-id">105</span><span class="league-name">Norwegian Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇸🇪 Suedia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/113.png"><span class="league-id">113</span><span class="league-name">Allsvenskan</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/114.png"><span class="league-id">114</span><span class="league-name">Superettan</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/115.png"><span class="league-id">115</span><span class="league-name">Svenska Cupen</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇵🇱 Polonia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/106.png"><span class="league-id">106</span><span class="league-name">Ekstraklasa</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/107.png"><span class="league-id">107</span><span class="league-name">I Liga</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/108.png"><span class="league-id">108</span><span class="league-name">Polish Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇭🇷 Croația</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/210.png"><span class="league-id">210</span><span class="league-name">Prva HNL</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/211.png"><span class="league-id">211</span><span class="league-name">Druga HNL</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/212.png"><span class="league-id">212</span><span class="league-name">Croatian Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇷🇸 Serbia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/392.png"><span class="league-id">392</span><span class="league-name">SuperLiga</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/394.png"><span class="league-id">394</span><span class="league-name">Kup Srbije</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇷🇴 România</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/783.png"><span class="league-id">783</span><span class="league-name">Superliga (Liga 1)</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row warning"><img class="logo" src="https://media.api-sports.io/football/leagues/785.png"><span class="league-id">785</span><span class="league-name">Liga II <span class="warn-badge">⚠️ API returnează Liga III</span></span><span class="league-type">?</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/787.png"><span class="league-id">787</span><span class="league-name">Cupa României</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇬🇷 Grecia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/551.png"><span class="league-id">551</span><span class="league-name">Super League 1</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/552.png"><span class="league-id">552</span><span class="league-name">Super League 2</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/556.png"><span class="league-id">556</span><span class="league-name">Greek Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇭🇺 Ungaria</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/271.png"><span class="league-id">271</span><span class="league-name">Nemzeti Bajnokság I</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/275.png"><span class="league-id">275</span><span class="league-name">Magyar Kupa</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇧🇬 Bulgaria</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/172.png"><span class="league-id">172</span><span class="league-name">First Professional League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/174.png"><span class="league-id">174</span><span class="league-name">Bulgarian Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇸🇰 Slovacia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/332.png"><span class="league-id">332</span><span class="league-name">Super Liga</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/680.png"><span class="league-id">680</span><span class="league-name">Slovak Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇫🇮 Finlanda</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/244.png"><span class="league-id">244</span><span class="league-name">Veikkausliiga</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/246.png"><span class="league-id">246</span><span class="league-name">Finnish Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇺🇦 Ucraina</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/333.png"><span class="league-id">333</span><span class="league-name">Premier League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/336.png"><span class="league-id">336</span><span class="league-name">Ukrainian Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇷🇺 Rusia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/235.png"><span class="league-id">235</span><span class="league-name">Premier League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/237.png"><span class="league-id">237</span><span class="league-name">Russian Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇧🇾 Belarus</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/116.png"><span class="league-id">116</span><span class="league-name">Vysheyshaya Liga</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/486.png"><span class="league-id">486</span><span class="league-name">Belarusian Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇰🇿 Kazahstan</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/389.png"><span class="league-id">389</span><span class="league-name">Premier League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/498.png"><span class="league-id">498</span><span class="league-name">Kazakhstan Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════ AMERICAS -->
+<div class="region">🌎 Americas</div>
+
+<div class="country-block">
+  <div class="country-title">🇧🇷 Brazilia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/71.png"><span class="league-id">71</span><span class="league-name">Série A</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/72.png"><span class="league-id">72</span><span class="league-name">Série B</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/73.png"><span class="league-id">73</span><span class="league-name">Copa do Brasil</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇦🇷 Argentina</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/128.png"><span class="league-id">128</span><span class="league-name">Primera División</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/131.png"><span class="league-id">131</span><span class="league-name">Primera Nacional</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/132.png"><span class="league-id">132</span><span class="league-name">Copa Argentina</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇲🇽 Mexic</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/262.png"><span class="league-id">262</span><span class="league-name">Liga MX</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/263.png"><span class="league-id">263</span><span class="league-name">Liga de Expansión</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/264.png"><span class="league-id">264</span><span class="league-name">Copa MX</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇨🇴 Columbia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/239.png"><span class="league-id">239</span><span class="league-name">Primera A</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/240.png"><span class="league-id">240</span><span class="league-name">Primera B</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/241.png"><span class="league-id">241</span><span class="league-name">Copa Colombia</span><span class="league-type">Cupă</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/713.png"><span class="league-id">713</span><span class="league-name">Superliga</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇨🇱 Chile</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/265.png"><span class="league-id">265</span><span class="league-name">Primera División</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/266.png"><span class="league-id">266</span><span class="league-name">Primera B</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/267.png"><span class="league-id">267</span><span class="league-name">Copa Chile</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇺🇾 Uruguay</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/268.png"><span class="league-id">268</span><span class="league-name">Primera División</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/269.png"><span class="league-id">269</span><span class="league-name">Segunda División</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/270.png"><span class="league-id">270</span><span class="league-name">Copa Uruguay</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇵🇪 Peru</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/281.png"><span class="league-id">281</span><span class="league-name">Liga 1</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/282.png"><span class="league-id">282</span><span class="league-name">Liga 2</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/283.png"><span class="league-id">283</span><span class="league-name">Copa Perú</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇪🇨 Ecuador</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/286.png"><span class="league-id">286</span><span class="league-name">LigaPro Serie A</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/287.png"><span class="league-id">287</span><span class="league-name">LigaPro Serie B</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/735.png"><span class="league-id">735</span><span class="league-name">Copa Ecuador</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇵🇾 Paraguay</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/278.png"><span class="league-id">278</span><span class="league-name">Primera División</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/279.png"><span class="league-id">279</span><span class="league-name">División Intermedia</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/280.png"><span class="league-id">280</span><span class="league-name">Copa Paraguay</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇧🇴 Bolivia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/273.png"><span class="league-id">273</span><span class="league-name">Primera División</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/274.png"><span class="league-id">274</span><span class="league-name">Liga de Ascenso</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/276.png"><span class="league-id">276</span><span class="league-name">Copa Bolivia</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇻🇪 Venezuela</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/153.png"><span class="league-id">153</span><span class="league-name">Liga FUTVE</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/154.png"><span class="league-id">154</span><span class="league-name">Segunda División</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/155.png"><span class="league-id">155</span><span class="league-name">Copa Venezuela</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇺🇸 SUA</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/253.png"><span class="league-id">253</span><span class="league-name">MLS</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/255.png"><span class="league-id">255</span><span class="league-name">USL Championship</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/257.png"><span class="league-id">257</span><span class="league-name">US Open Cup</span><span class="league-type">Cupă</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/909.png"><span class="league-id">909</span><span class="league-name">MLS Next Pro</span><span class="league-type">Liga 3</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇨🇦 Canada</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/321.png"><span class="league-id">321</span><span class="league-name">Canadian Premier League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/322.png"><span class="league-id">322</span><span class="league-name">Canadian Championship</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇨🇷 Costa Rica</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/258.png"><span class="league-id">258</span><span class="league-name">Primera División</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/259.png"><span class="league-id">259</span><span class="league-name">Segunda División</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/260.png"><span class="league-id">260</span><span class="league-name">Copa Costa Rica</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇭🇳 Honduras</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/261.png"><span class="league-id">261</span><span class="league-name">Liga Nacional</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/319.png"><span class="league-id">319</span><span class="league-name">Liga de Ascenso</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/320.png"><span class="league-id">320</span><span class="league-name">Copa Honduras</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇬🇹 Guatemala</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/339.png"><span class="league-id">339</span><span class="league-name">Liga Nacional</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/338.png"><span class="league-id">338</span><span class="league-name">Primera División</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/248.png"><span class="league-id">248</span><span class="league-name">Copa Guatemala</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇸🇻 El Salvador</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/344.png"><span class="league-id">344</span><span class="league-name">Primera División</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/349.png"><span class="league-id">349</span><span class="league-name">Segunda División</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/350.png"><span class="league-id">350</span><span class="league-name">Copa El Salvador</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇳🇮 Nicaragua</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/256.png"><span class="league-id">256</span><span class="league-name">Primera División</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/380.png"><span class="league-id">380</span><span class="league-name">Segunda División</span><span class="league-type">Liga 2</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇵🇦 Panama</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/306.png"><span class="league-id">306</span><span class="league-name">Primera División</span><span class="league-type">Liga 1</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════ ASIA -->
+<div class="region">🌏 Asia</div>
+
+<div class="country-block">
+  <div class="country-title">🇸🇦 Arabia Saudită</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/307.png"><span class="league-id">307</span><span class="league-name">Saudi Pro League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/308.png"><span class="league-id">308</span><span class="league-name">First Division</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/313.png"><span class="league-id">313</span><span class="league-name">King Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇯🇵 Japonia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/98.png"><span class="league-id">98</span><span class="league-name">J1 League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/99.png"><span class="league-id">99</span><span class="league-name">J2 League</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/100.png"><span class="league-id">100</span><span class="league-name">Emperor's Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇰🇷 Coreea de Sud</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/292.png"><span class="league-id">292</span><span class="league-name">K League 1</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/293.png"><span class="league-id">293</span><span class="league-name">K League 2</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/294.png"><span class="league-id">294</span><span class="league-name">Korean FA Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇮🇷 Iran</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/290.png"><span class="league-id">290</span><span class="league-name">Persian Gulf Pro League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/291.png"><span class="league-id">291</span><span class="league-name">Azadegan League</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/295.png"><span class="league-id">295</span><span class="league-name">Hazfi Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇶🇦 Qatar</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/19.png"><span class="league-id">19</span><span class="league-name">Qatar Stars League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/21.png"><span class="league-id">21</span><span class="league-name">QSL Liga 2</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/22.png"><span class="league-id">22</span><span class="league-name">Emir Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇦🇪 Emiratele Arabe</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/433.png"><span class="league-id">433</span><span class="league-name">Pro League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/434.png"><span class="league-id">434</span><span class="league-name">First Division</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/435.png"><span class="league-id">435</span><span class="league-name">UAE Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇨🇳 China</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/169.png"><span class="league-id">169</span><span class="league-name">Super League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/170.png"><span class="league-id">170</span><span class="league-name">League One</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/171.png"><span class="league-id">171</span><span class="league-name">FA Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇹🇭 Thailanda</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/296.png"><span class="league-id">296</span><span class="league-name">Thai League 1</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/297.png"><span class="league-id">297</span><span class="league-name">Thai League 2</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/298.png"><span class="league-id">298</span><span class="league-name">Thai FA Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇺🇿 Uzbekistan</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/335.png"><span class="league-id">335</span><span class="league-name">Super League</span><span class="league-type">Liga 1</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇦🇺 Australia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/188.png"><span class="league-id">188</span><span class="league-name">A-League Men</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/189.png"><span class="league-id">189</span><span class="league-name">Australia Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇮🇳 India</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/323.png"><span class="league-id">323</span><span class="league-name">ISL (Indian Super League)</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/324.png"><span class="league-id">324</span><span class="league-name">I-League</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/325.png"><span class="league-id">325</span><span class="league-name">Durand Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇲🇾 Malaysia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/518.png"><span class="league-id">518</span><span class="league-name">Super League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/519.png"><span class="league-id">519</span><span class="league-name">Premier League</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/520.png"><span class="league-id">520</span><span class="league-name">Malaysia Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇮🇩 Indonezia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/391.png"><span class="league-id">391</span><span class="league-name">Liga 1</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/460.png"><span class="league-id">460</span><span class="league-name">Liga 2</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/461.png"><span class="league-id">461</span><span class="league-name">Indonesian Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇻🇳 Vietnam</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/340.png"><span class="league-id">340</span><span class="league-name">V.League 1</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/341.png"><span class="league-id">341</span><span class="league-name">V.League 2</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/342.png"><span class="league-id">342</span><span class="league-name">Vietnamese Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇮🇶 Irak</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/302.png"><span class="league-id">302</span><span class="league-name">Premier League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/303.png"><span class="league-id">303</span><span class="league-name">Division 1</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/304.png"><span class="league-id">304</span><span class="league-name">Iraqi Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇯🇴 Iordania</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/474.png"><span class="league-id">474</span><span class="league-name">Pro League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/475.png"><span class="league-id">475</span><span class="league-name">Division 1</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/494.png"><span class="league-id">494</span><span class="league-name">Jordan Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇰🇼 Kuwait</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/299.png"><span class="league-id">299</span><span class="league-name">Premier League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/300.png"><span class="league-id">300</span><span class="league-name">Division 1</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/493.png"><span class="league-id">493</span><span class="league-name">Emir Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇴🇲 Oman</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/309.png"><span class="league-id">309</span><span class="league-name">Professional League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/491.png"><span class="league-id">491</span><span class="league-name">Division 1</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/492.png"><span class="league-id">492</span><span class="league-name">Sultan Qaboos Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇧🇭 Bahrain</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/415.png"><span class="league-id">415</span><span class="league-name">Premier League</span><span class="league-type">Liga 1</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇭🇰 Hong Kong</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/499.png"><span class="league-id">499</span><span class="league-name">Premier League</span><span class="league-type">Liga 1</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇸🇬 Singapore</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/502.png"><span class="league-id">502</span><span class="league-name">Premier League</span><span class="league-type">Liga 1</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇵🇭 Filipine</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/483.png"><span class="league-id">483</span><span class="league-name">PFL</span><span class="league-type">Liga 1</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════ AFRICA -->
+<div class="region">🌍 Africa</div>
+
+<div class="country-block">
+  <div class="country-title">🇪🇬 Egipt</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/233.png"><span class="league-id">233</span><span class="league-name">Premier League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/234.png"><span class="league-id">234</span><span class="league-name">Second Division</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/238.png"><span class="league-id">238</span><span class="league-name">Egyptian Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇲🇦 Maroc</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/200.png"><span class="league-id">200</span><span class="league-name">Botola Pro</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/201.png"><span class="league-id">201</span><span class="league-name">Botola 2</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/822.png"><span class="league-id">822</span><span class="league-name">Coupe du Trône</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇹🇳 Tunisia</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/202.png"><span class="league-id">202</span><span class="league-name">Ligue 1</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/377.png"><span class="league-id">377</span><span class="league-name">Ligue 2</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/378.png"><span class="league-id">378</span><span class="league-name">Coupe de Tunisie</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇩🇿 Algeria</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/197.png"><span class="league-id">197</span><span class="league-name">Ligue Professionnelle 1</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/198.png"><span class="league-id">198</span><span class="league-name">Ligue Professionnelle 2</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/199.png"><span class="league-id">199</span><span class="league-name">Coupe d'Algérie</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇿🇦 Africa de Sud</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/288.png"><span class="league-id">288</span><span class="league-name">Premier Division (PSL)</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/670.png"><span class="league-id">670</span><span class="league-name">National First Division</span><span class="league-type">Liga 2</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/671.png"><span class="league-id">671</span><span class="league-name">Nedbank Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇳🇬 Nigeria</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/399.png"><span class="league-id">399</span><span class="league-name">NPFL</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/667.png"><span class="league-id">667</span><span class="league-name">Nigerian FA Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇬🇭 Ghana</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/289.png"><span class="league-id">289</span><span class="league-name">Premier League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/418.png"><span class="league-id">418</span><span class="league-name">Ghana FA Cup</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇨🇮 Coasta de Fildeș</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/383.png"><span class="league-id">383</span><span class="league-name">Ligue 1</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/385.png"><span class="league-id">385</span><span class="league-name">Coupe de Côte d'Ivoire</span><span class="league-type">Cupă</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🇰🇪 Kenya</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/357.png"><span class="league-id">357</span><span class="league-name">Premier League</span><span class="league-type">Liga 1</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/358.png"><span class="league-id">358</span><span class="league-name">National Super League</span><span class="league-type">Liga 2</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════ INTERNAȚIONALE -->
+<div class="region">🏆 Competiții Internaționale</div>
+
+<div class="country-block">
+  <div class="country-title">🇪🇺 UEFA</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/2.png"><span class="league-id">2</span><span class="league-name">UEFA Champions League</span><span class="league-type">Internațional</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/3.png"><span class="league-id">3</span><span class="league-name">UEFA Europa League</span><span class="league-type">Internațional</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/848.png"><span class="league-id">848</span><span class="league-name">UEFA Conference League</span><span class="league-type">Internațional</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/4.png"><span class="league-id">4</span><span class="league-name">Euro Championship</span><span class="league-type">Internațional</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/5.png"><span class="league-id">5</span><span class="league-name">UEFA Nations League</span><span class="league-type">Internațional</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🌎 CONMEBOL</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/13.png"><span class="league-id">13</span><span class="league-name">Copa Libertadores</span><span class="league-type">Internațional</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/11.png"><span class="league-id">11</span><span class="league-name">Copa Sudamericana</span><span class="league-type">Internațional</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/9.png"><span class="league-id">9</span><span class="league-name">Copa America</span><span class="league-type">Internațional</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🌍 CAF</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/12.png"><span class="league-id">12</span><span class="league-name">CAF Champions League</span><span class="league-type">Internațional</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/20.png"><span class="league-id">20</span><span class="league-name">CAF Confederation Cup</span><span class="league-type">Internațional</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🌏 AFC</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/17.png"><span class="league-id">17</span><span class="league-name">AFC Champions League</span><span class="league-type">Internațional</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/18.png"><span class="league-id">18</span><span class="league-name">AFC Cup</span><span class="league-type">Internațional</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🌎 CONCACAF</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/10.png"><span class="league-id">10</span><span class="league-name">CONCACAF Champions Cup</span><span class="league-type">Internațional</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/26.png"><span class="league-id">26</span><span class="league-name">CONCACAF Nations League</span><span class="league-type">Internațional</span></div>
+</div>
+
+<div class="country-block">
+  <div class="country-title">🌐 FIFA</div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/1.png"><span class="league-id">1</span><span class="league-name">World Cup</span><span class="league-type">Internațional</span></div>
+  <div class="league-row"><img class="logo" src="https://media.api-sports.io/football/leagues/6.png"><span class="league-id">6</span><span class="league-name">FIFA Club World Cup</span><span class="league-type">Internațional</span></div>
+</div>
+
+</body>
+</html>
