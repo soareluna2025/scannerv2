@@ -52,12 +52,14 @@ export default async function handler(req, res) {
         const pr = await query(
           `UPDATE predictions SET
              result_over15  = $1,
-             result_gg      = $2,
-             result_winner  = $3,
+             result_over25  = $2,
+             result_gg      = $3,
+             result_winner  = $4,
              updated_at     = NOW()
-           WHERE fixture_id = $4`,
+           WHERE fixture_id = $5`,
           [
             (hg + ag) >= 2,
+            (hg + ag) >= 3,
             hg > 0 && ag > 0,
             hg > ag ? 'home' : ag > hg ? 'away' : 'draw',
             pred.fixture_id,

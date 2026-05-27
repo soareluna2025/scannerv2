@@ -31,7 +31,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Overall stats — pentru banner-ul scanner "Alerte NGP > 70" unificat
+    // 1. Overall stats — pentru banner-ul scanner "Over 1.5 win rate"
+    // Filtru over15_prob >= 60: masuram precizia modelului cand a prezis activ Over 1.5,
+    // nu rata naturala a fotbalului (care e ~77% indiferent de model)
     const { rows: ovRows } = await query(`
       SELECT
         COUNT(*)::int AS total,
@@ -40,6 +42,7 @@ export default async function handler(req, res) {
         COUNT(*) FILTER (WHERE result_over15 IS NULL)::int AS pending
       FROM predictions
       WHERE created_at > NOW() - (INTERVAL '1 day' * $1)
+        AND over15_prob >= 60
     `, [days]);
     const ov = ovRows[0] || { total: 0, wins: 0, losses: 0, pending: 0 };
     const resolved = Number(ov.wins) + Number(ov.losses);
@@ -53,6 +56,8 @@ export default async function handler(req, res) {
     };
 
     // 2. Per-league stats — pentru badge-uri good/bad
+    // Acelasi filtru over15_prob >= 60: badge-ul verde/rosu reflecta
+    // precizia modelului pe acea liga, nu rata naturala de goluri
     const { rows } = await query(`
       SELECT
         league_id,
@@ -63,6 +68,7 @@ export default async function handler(req, res) {
       FROM predictions
       WHERE created_at > NOW() - (INTERVAL '1 day' * $1)
         AND result_over15 IS NOT NULL
+        AND over15_prob >= 60
         AND league_id IS NOT NULL
       GROUP BY league_id, league_name
       HAVING COUNT(*) >= $2

@@ -223,6 +223,8 @@ export default async function handler(req, res) {
 
     // ── PASUL 6: Lambda multiplier per ligă ─────────────────────
     // Compară predicțiile over15_prob vs rata reală — calculează factor de corecție
+    // Filtru over15_prob >= 55: excludem meciurile unde modelul a prezis activ Under 1.5
+    // (includererea lor dilua media si producea un multiplicator sistematic supraevaluat)
     const { rows: byLeagueLambda } = await query(`
       SELECT league_id,
         COUNT(*) AS n,
@@ -231,6 +233,7 @@ export default async function handler(req, res) {
       FROM predictions
       WHERE result_over15 IS NOT NULL
         AND league_id IS NOT NULL
+        AND over15_prob >= 55
         AND updated_at > NOW() - INTERVAL '90 days'
       GROUP BY league_id
       HAVING COUNT(*) >= ${MIN_SAMPLES}
