@@ -3676,3 +3676,11 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   - index.html: buton "Bilet Compus" in Generator S1 → ecran S7 cu UI complet
   - Piete disponibile: Over 0.5/1.5/2.5, GG, Gazde/Oaspeti marcheaza,
     1/X/2, 1X, X2, Cartonase Over 3.5/4.5, Cornere Over 8.5/9.5
+
+[27.05 ~21:00] - WHITELIST BRAZILIA: Catarinense 2 + Carioca A2 adăugate | Commit: b82aa87
+  - api/leagues.js: +8077 (Catarinense 2 — Santa Catarina div.2)
+                    +682  (Carioca A2 — Rio de Janeiro div.2)
+  - IDs neconfirmate (necesita verificare pe VPS cu API key):
+    Copa Sul-Sudeste → GET /api/health-check?action=leagues&country=Brazil&name=Sul-Sudeste
+    Copa FGF         → GET /api/health-check?action=leagues&country=Brazil&name=FGF
+    Copa Centro-Oeste→ GET /api/health-check?action=leagues&country=Brazil&name=Centro-Oeste
