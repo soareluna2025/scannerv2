@@ -3684,3 +3684,13 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     Copa Sul-Sudeste → GET /api/health-check?action=leagues&country=Brazil&name=Sul-Sudeste
     Copa FGF         → GET /api/health-check?action=leagues&country=Brazil&name=FGF
     Copa Centro-Oeste→ GET /api/health-check?action=leagues&country=Brazil&name=Centro-Oeste
+
+[27.05 ~22:00] - FIX: Bilet Compus — piete diverse, Over 0.5 exclus | Commit: pending
+  - generator.js: buildAccumulator() rescris complet
+    * VECHI: greedy pur dupa probabilitate → toate selectiile ieșeau Over 0.5 (~94%)
+    * NOU: câte un singur pick per piata, cel mai bun meci per piata
+    * Over 0.5 exclus explicit (nu exista la bookmakers mainstream)
+    * MARKET_ORDER: over15, gg, home_scores, away_scores, corners_over85,
+      cards_over35, dc1x, dcx2, over25, corners_over95, cards_over45, h1, h2, draw
+    * MIN_PROB: 62% (scazut de la 68% pt mai multa acoperire de piete)
+    * Un bilet exemplu: Over 1.5 (meciul A) + GG (meciul B) + 1X (meciul C) etc.

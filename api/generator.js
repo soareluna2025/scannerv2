@@ -67,16 +67,29 @@ function calcMatchMarkets(form, h2h, lg, ref) {
 }
 
 // Construiește biletul compus optim pentru ținta de cotă [targetMin, targetMax]
+// Logica: câte UN singur pick per piață (cel mai bun meci din toate pentru acea piață)
+// Over 0.5 exclus — nu există la bookmakers mainstream
 function buildAccumulator(matches, targetMin = 1.50, targetMax = 2.00) {
-  const MIN_PROB = 68; // ignoră piețele sub 68% probabilitate
+  const MIN_PROB = 62;
 
-  // Aplatizează toate selecțiile posibile
-  const allPicks = [];
+  // Ordinea piețelor — de la cele mai comune la cele mai de nișă
+  // Over 0.5 lipsește intenționat (nu există la bookmakers)
+  const MARKET_ORDER = [
+    'over15', 'gg', 'home_scores', 'away_scores',
+    'corners_over85', 'cards_over35', 'dc1x', 'dcx2',
+    'over25', 'corners_over95', 'cards_over45',
+    'h1', 'h2', 'draw',
+  ];
+
+  // Grupează toate pick-urile valide per piață, sortate DESC prob
+  const byMarket = {};
   for (const m of matches) {
     if (!m.markets) continue;
     for (const [key, mkt] of Object.entries(m.markets)) {
+      if (!MARKET_ORDER.includes(key)) continue; // sare over05 + orice neinclus
       if (mkt.prob < MIN_PROB) continue;
-      allPicks.push({
+      if (!byMarket[key]) byMarket[key] = [];
+      byMarket[key].push({
         fixture_id:  m.fixture_id,
         match:       `${m.home_team} vs ${m.away_team}`,
         league:      m.league_name,
@@ -90,27 +103,29 @@ function buildAccumulator(matches, targetMin = 1.50, targetMax = 2.00) {
       });
     }
   }
+  for (const key of Object.keys(byMarket)) {
+    byMarket[key].sort((a, b) => b.prob - a.prob);
+  }
 
-  // Sortează: probabilitate descrescătoare (cele mai sigure primele)
-  allPicks.sort((a, b) => b.prob - a.prob);
-
-  // Greedy: adaugă cel mai sigur pariu per meci până atingem targetMin
+  // Greedy: pentru fiecare piață în ordine, ia cel mai bun meci neutilizat
   const selected = [];
   const usedFixtures = new Set();
   let combinedOdds = 1.0;
 
-  for (const pick of allPicks) {
-    if (usedFixtures.has(pick.fixture_id)) continue;
+  for (const key of MARKET_ORDER) {
+    if (combinedOdds >= targetMin) break;
+    if (!byMarket[key]) continue;
+
+    // Cel mai bun meci pentru această piață care nu a mai fost folosit
+    const pick = byMarket[key].find(p => !usedFixtures.has(p.fixture_id));
+    if (!pick) continue;
 
     const newOdds = combinedOdds * pick.fair_odds;
-    // Nu adăuga dacă depășim targetMax cu >20% (lăsăm puțin marjă)
-    if (newOdds > targetMax * 1.2) continue;
+    if (newOdds > targetMax * 1.2) continue; // ar depăși limita — sari
 
     selected.push(pick);
     combinedOdds = Math.round(newOdds * 100) / 100;
     usedFixtures.add(pick.fixture_id);
-
-    if (combinedOdds >= targetMin) break;
   }
 
   const combinedProb = Math.round(
