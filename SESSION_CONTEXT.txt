@@ -3578,3 +3578,16 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   - Zero apeluri API extra — refolosește date colectate de prematch-enrichment cron
   - Rezultat adăugat în response: _lineupFactor = "H:1.05|A:0.97"
   - SISTEM 100% conform planului AlohaScan Hybrid Intelligence System v2 (L2 era ultimul layer neimplementat)
+
+[27.05 ~11:00] - CALIBRARE + DATE JUCĂTORI — 3 fix-uri fundamentale + populare DB | Commit: 5324553 + 77bb4a4 + 9bdde0e
+  1. update-results.js: result_over25 scris acum in predictions (era calculat dar ignorat)
+     → calibrarea Over 2.5 din recalibrate-tables devine functionala
+  2. learning-analysis.js Pasul 6: lambda_multiplier filtrat la over15_prob >= 55
+     → elimina bias fals (rata naturala fotbal 77% / avg toate predictiile = multiplicator gresit)
+  3. learning-leagues.js: win rate banner + badge-uri filtrate la over15_prob >= 60
+     → afiseaza precizia reala a modelului, nu rata naturala a fotbalului
+  4. players_season: adaugate coloane pass_accuracy + shots_on_target
+     → migration rulata pe VPS + collector actualizat + backfill-pass-shots endpoint one-shot
+     → 1499 jucatori din 77 echipe populati cu toate 4 campurile
+     → L2 (getLineupStrengthFactor) functional complet cu rating + goluri + pase + suturi
+  5. enrich.js: fix multiplicator shots_on_target *15 -> *2 (totaluri sezon, nu per meci)
