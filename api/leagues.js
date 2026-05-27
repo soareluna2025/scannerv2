@@ -144,6 +144,12 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   71,    // Serie A
   72,    // Serie B (Liga 2)
   73,    // Copa do Brasil
+  8077,  // Catarinense 2 (Santa Catarina — divizia a 2-a de stat)
+  682,   // Carioca A2 (Rio de Janeiro — divizia a 2-a de stat)
+  // IDs de VERIFICAT pe VPS (GET /api/health-check?action=leagues&country=Brazil&name=...):
+  // Copa Sul-Sudeste    → ?action=leagues&country=Brazil&name=Sul-Sudeste
+  // Copa FGF            → ?action=leagues&country=Brazil&name=FGF
+  // Copa Centro-Oeste   → ?action=leagues&country=Brazil&name=Centro-Oeste
 
   // Argentina
   128,   // Primera Division

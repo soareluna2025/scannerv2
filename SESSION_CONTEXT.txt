@@ -3642,4 +3642,28 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   - CLAUDE.md actualizat: ARHITECT.md adăugat la citire obligatorie (secțiunea 3, pct 2)
   - SCOP: fiecare sesiune viitoare citește ARHITECT.md → cunoaște tot contextul
     → nu mai reintroduce bug-uri → deciziile se păstrează între sesiuni
+  Commit: ea8693a + 7f38776 (CLAUDE.md update)
+
+[27.05 ~17:00] - BUGFIX sesiune completă (#1,#2,#3,#6,#7,#9,#13,#19,#20,#22) + EV suppression + piețe noi
+  - Fix #1: bestEV NUMBER (nu string) în enrich.js + index.html display
+  - Fix #2,#3: fetchApiFootball() în football.js, today.js (retry 429 corect)
+  - Fix #6,#7: nullsafe teamStrengths + lambdaHome/Away fallback
+  - Fix #9: ev.ev trimis ca număr întreg (Math.round)
+  - Fix #13: null guards league_stats în index.html
+  - Fix #19,#20: typo "neanalizate"/"Neanalizat" corectat
+  - Fix #22: ON CONFLICT DO UPDATE SET în match.js predictions
+  - EV suppression: bloc anti-halucinație (cota>10 sau cota>5+LOW sau cota>3+LOW+h2h<3)
+  - Piețe noi: over05Prob în calcPoisson6x6 + poissonProbOver() în calc-utils.js
+  - enrich.js: dc1x, dcx2, cardsOver35/45, cornersOver85/95 în răspuns
+  - generator.js: calcMatchMarkets() (14 piețe) + buildAccumulator() greedy
+  - Endpoint nou: GET /api/generator?action=accumulator&target_min=1.5&target_max=2.0
+  - index.html: S7 Bilet Compus cu inputs target + result display
+  Commits: 8268df7, 9f40953, 0134903, dac8db5, c4ffa29, 0c4c435, c5b4842
+
+[27.05 ~18:00] - WHITELIST BRAZILIA: Catarinense 2 + Carioca A2 adăugate
+  - api/leagues.js: +8077 (Catarinense 2) + 682 (Carioca A2)
+  - IDs de verificat pe VPS (API key necesar):
+    Copa Sul-Sudeste → GET /api/health-check?action=leagues&country=Brazil&name=Sul-Sudeste
+    Copa FGF         → GET /api/health-check?action=leagues&country=Brazil&name=FGF
+    Copa Centro-Oeste→ GET /api/health-check?action=leagues&country=Brazil&name=Centro-Oeste
   Commit: (urmează)
