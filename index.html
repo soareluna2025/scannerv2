@@ -1760,8 +1760,8 @@ function renderPM(){
       html+='<div class="pm-meter-row"><div class="pm-meter-label">GG</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(enr.ggProb||0,100)+'%;background:'+ec(enr.ggProb)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(enr.ggProb)+'">'+Math.round(enr.ggProb||0)+'%</div></div>';
       html+='<div class="pm-stats">';
       html+='<span class="pm-stat">λ <span>'+Number(enr.lambdaTotal||0).toFixed(2)+'</span></span>';
-      html+='<span class="pm-stat">Gazde <span style="color:'+ec(enr.homeScoreRate)+'">'+enr.homeScoreRate+'%</span></span>';
-      html+='<span class="pm-stat">Oaspeti <span style="color:'+ec(enr.awayScoreRate)+'">'+enr.awayScoreRate+'%</span></span>';
+      html+='<span class="pm-stat">Gazde <span style="color:'+ec(enr.homeScoreRate)+'">'+( enr.homeScoreRate!=null?enr.homeScoreRate+'%':'—')+'</span></span>';
+      html+='<span class="pm-stat">Oaspeti <span style="color:'+ec(enr.awayScoreRate)+'">'+( enr.awayScoreRate!=null?enr.awayScoreRate+'%':'—')+'</span></span>';
       if(enr.confidence)html+='<span class="badge-conf '+enr.confidence+'">'+enr.confidence+'</span>';
       html+='</div>';
       if(enr.homeWin!=null)html+='<div class="enrich-row hda-row"><span style="color:'+ec(enr.homeWin)+'">H:'+enr.homeWin+'%</span><span style="color:'+ec(enr.draw)+'">D:'+enr.draw+'%</span><span style="color:'+ec(enr.awayWin)+'">A:'+enr.awayWin+'%</span></div>';
@@ -2289,9 +2289,9 @@ function mdRenderSumar(d){
       out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.ggProb)+'">'+Math.round(en.ggProb)+'%</div><div class="md-prob-lbl">GG</div></div>';
       out+='</div>';
       out+='<div class="md-prob-row" style="opacity:0.6">';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeScoreRate)+'">'+en.homeScoreRate+'%</div><div class="md-prob-lbl">Gazde marcheaza</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeScoreRate)+'">'+(en.homeScoreRate!=null?en.homeScoreRate+'%':'—')+'</div><div class="md-prob-lbl">Gazde marcheaza</div></div>';
       out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2)">'+Number(en.lambdaTotal||0).toFixed(2)+'</div><div class="md-prob-lbl">λ Total</div></div>';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.awayScoreRate)+'">'+en.awayScoreRate+'%</div><div class="md-prob-lbl">Oaspeti marcheaza</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.awayScoreRate)+'">'+(en.awayScoreRate!=null?en.awayScoreRate+'%':'—')+'</div><div class="md-prob-lbl">Oaspeti marcheaza</div></div>';
       out+='</div></details>';
     } else {
       out+='<div class="md-prob-row">';
@@ -2300,9 +2300,9 @@ function mdRenderSumar(d){
       out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.ggProb)+'">'+Math.round(en.ggProb)+'%</div><div class="md-prob-lbl">GG</div></div>';
       out+='</div>';
       out+='<div class="md-prob-row">';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeScoreRate)+'">'+en.homeScoreRate+'%</div><div class="md-prob-lbl">Gazde marcheaza</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeScoreRate)+'">'+(en.homeScoreRate!=null?en.homeScoreRate+'%':'—')+'</div><div class="md-prob-lbl">Gazde marcheaza</div></div>';
       out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2)">'+Number(en.lambdaTotal||0).toFixed(2)+'</div><div class="md-prob-lbl">λ Total</div></div>';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.awayScoreRate)+'">'+en.awayScoreRate+'%</div><div class="md-prob-lbl">Oaspeti marcheaza</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.awayScoreRate)+'">'+(en.awayScoreRate!=null?en.awayScoreRate+'%':'—')+'</div><div class="md-prob-lbl">Oaspeti marcheaza</div></div>';
       out+='</div>';
       if(en.confidence)out+='<div style="text-align:center;margin-top:6px"><span class="badge-conf '+en.confidence+'">Incredere: '+en.confidence+'</span></div>';
     }

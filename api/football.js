@@ -20,7 +20,7 @@ async function fetchH2H(homeId, awayId, key) {
     const h2hGames = (d3.response || []).slice(0, 10);
 
     const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : null;
-    const pct    = (arr, fn) => arr.length ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
+    const pct    = (arr, fn) => arr.length >= 5 ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
     const goals  = m => (m.goals?.home ?? 0) + (m.goals?.away ?? 0);
 
     return {
