@@ -98,7 +98,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Romania
   783,   // Superliga (Liga 1)
-  785,   // Liga II
+  784,   // Liga II
   787,   // Cupa Romaniei
 
   // Greece

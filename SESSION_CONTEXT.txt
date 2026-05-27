@@ -3591,3 +3591,8 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
      → 1499 jucatori din 77 echipe populati cu toate 4 campurile
      → L2 (getLineupStrengthFactor) functional complet cu rating + goluri + pase + suturi
   5. enrich.js: fix multiplicator shots_on_target *15 -> *2 (totaluri sezon, nu per meci)
+
+[27.05 ~12:30] - FIX WHITELIST: ID 785 (Liga III Romania) inlocuit cu 784 (Liga II Romania) | Commit: (in curs)
+  - 785 returna "Liga III - Serie 2" din API (confirmat din backfill logs)
+  - Inlocuit cu 784 (ID secvential corect: 783=L1, 784=L2, 785=L3)
+  - Modificat: api/leagues.js + league-list.html (badge ⚠️ eliminat, logo actualizat)
