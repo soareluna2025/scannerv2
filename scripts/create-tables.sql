@@ -274,6 +274,8 @@ CREATE TABLE IF NOT EXISTS players_season (
     yellow_cards    INTEGER DEFAULT 0,
     red_cards       INTEGER DEFAULT 0,
     rating          NUMERIC(4,2),
+    pass_accuracy   NUMERIC(5,2),
+    shots_on_target INTEGER,
     updated_at      TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (player_id, league_id, season)
 );

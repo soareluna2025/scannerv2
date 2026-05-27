@@ -235,7 +235,7 @@ async function getLineupStrengthFactor(fixtureId, homeId, awayId) {
               (rating/10.0*100)*0.45
               + LEAST(100, COALESCE(goals,0)*25)*0.20
               + COALESCE(pass_accuracy,50)*0.20
-              + LEAST(100, COALESCE(shots_on_target,0)*15)*0.15 AS score
+              + LEAST(100, COALESCE(shots_on_target,0)*2)*0.15 AS score
        FROM players_season
        WHERE player_id = ANY($1) AND season=$2 AND appearances > 0`,
       [allIds, SEASON]

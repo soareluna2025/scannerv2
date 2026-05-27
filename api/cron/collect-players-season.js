@@ -49,12 +49,16 @@ export default async function handler(req, res) {
           await query(
             `INSERT INTO players_season
                (player_id, team_id, league_id, season, player_name, nationality, position, age,
-                appearances, lineups, minutes, goals, assists, yellow_cards, red_cards, rating)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+                appearances, lineups, minutes, goals, assists, yellow_cards, red_cards, rating,
+                pass_accuracy, shots_on_target)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
              ON CONFLICT (player_id, league_id, season) DO UPDATE SET
                goals=EXCLUDED.goals, assists=EXCLUDED.assists,
                appearances=EXCLUDED.appearances, rating=EXCLUDED.rating,
-               minutes=EXCLUDED.minutes, updated_at=NOW()`,
+               minutes=EXCLUDED.minutes,
+               pass_accuracy=EXCLUDED.pass_accuracy,
+               shots_on_target=EXCLUDED.shots_on_target,
+               updated_at=NOW()`,
             [
               p.id, s.team?.id || team_id, s.league.id, SEASON,
               p.name || null, p.nationality || null,
@@ -67,6 +71,8 @@ export default async function handler(req, res) {
               s.cards?.yellow || 0,
               s.cards?.red || 0,
               s.games?.rating ? parseFloat(s.games.rating) : null,
+              s.passes?.accuracy != null ? parseFloat(s.passes.accuracy) : null,
+              s.shots?.on || 0,
             ]
           );
           inserted++;
