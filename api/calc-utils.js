@@ -17,7 +17,7 @@ function poissonProb(lambda, k) {
 
 export function calcPoisson6x6(lambdaHome, lambdaAway) {
   let probHomeWin = 0, probDraw = 0, probAwayWin = 0;
-  let probOver15 = 0, probOver25 = 0, probGG = 0;
+  let probOver05 = 0, probOver15 = 0, probOver25 = 0, probGG = 0;
 
   for (let i = 0; i <= 5; i++) {
     for (let j = 0; j <= 5; j++) {
@@ -25,6 +25,7 @@ export function calcPoisson6x6(lambdaHome, lambdaAway) {
       if (i > j) probHomeWin += p;
       else if (i === j) probDraw += p;
       else probAwayWin += p;
+      if (i + j >= 1) probOver05 += p;
       if (i + j >= 2) probOver15 += p;
       if (i + j >= 3) probOver25 += p;
       if (i > 0 && j > 0) probGG += p;
@@ -36,10 +37,21 @@ export function calcPoisson6x6(lambdaHome, lambdaAway) {
     homeWin:    Math.round(probHomeWin / total * 100),
     draw:       Math.round(probDraw    / total * 100),
     awayWin:    Math.round(probAwayWin / total * 100),
+    over05Prob: Math.round(probOver05 * 100),
     over15Prob: Math.round(probOver15 * 100),
     over25Prob: Math.round(probOver25 * 100),
     ggProb:     Math.round(probGG     * 100)
   };
+}
+
+// P(X > maxBelow) = P(X >= maxBelow+1) — folosit pentru cartonașe/cornere
+// Exemple: poissonProbOver(lambda, 3) = Over 3.5, poissonProbOver(lambda, 8) = Over 8.5
+export function poissonProbOver(lambda, maxBelow) {
+  if (lambda <= 0) return 0;
+  let cdf = 0, term = Math.exp(-lambda);
+  cdf += term;
+  for (let k = 1; k <= maxBelow; k++) { term *= lambda / k; cdf += term; }
+  return Math.max(0, Math.min(100, Math.round((1 - cdf) * 100)));
 }
 
 export function parseOddsItem(item) {

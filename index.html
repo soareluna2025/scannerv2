@@ -738,6 +738,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
         </div>
       </div>
       <button onclick="genOpenSim()" style="width:100%;margin-top:12px;padding:13px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#818cf8;font-weight:800;font-size:13px;border-radius:12px;cursor:pointer;letter-spacing:.5px">🔮 SIMULATOR Monte Carlo</button>
+      <button onclick="genOpenAccum()" style="width:100%;margin-top:8px;padding:13px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:#22c55e;font-weight:800;font-size:13px;border-radius:12px;cursor:pointer;letter-spacing:.5px">🎯 BILET COMPUS (1.5–2.0)</button>
     </div>
 
     <!-- S2: categorie -->
@@ -850,6 +851,36 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
           <div id="sim-count-lbl" style="font-size:11px;color:var(--mu);margin-top:6px">0 / 10,000 scenarii</div>
         </div>
         <div id="sim-results" style="display:none;padding-bottom:80px"></div>
+      </div>
+    </div>
+
+    <!-- S7: BILET COMPUS -->
+    <div class="gen2-scr out-r" id="g2s7">
+      <div class="g2h">
+        <button class="g2back" onclick="gen2Back()">←</button>
+        <div class="g2title">🎯 BILET COMPUS</div>
+        <button class="g2close" onclick="gen2Close()">✕</button>
+      </div>
+      <div style="padding:12px;overflow-y:auto;flex:1">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <div style="flex:1">
+            <div style="font-size:10px;color:var(--mu);margin-bottom:3px">COTĂ MIN</div>
+            <input id="accum-min" type="number" step="0.05" min="1.10" max="3.00" value="1.50" style="width:100%;background:rgba(255,255,255,.06);border:1px solid var(--bor);color:var(--tx);padding:8px;border-radius:8px;font-size:14px;font-weight:700;text-align:center">
+          </div>
+          <div style="flex:1">
+            <div style="font-size:10px;color:var(--mu);margin-bottom:3px">COTĂ MAX</div>
+            <input id="accum-max" type="number" step="0.05" min="1.10" max="5.00" value="2.00" style="width:100%;background:rgba(255,255,255,.06);border:1px solid var(--bor);color:var(--tx);padding:8px;border-radius:8px;font-size:14px;font-weight:700;text-align:center">
+          </div>
+          <div style="flex:1">
+            <div style="font-size:10px;color:var(--mu);margin-bottom:3px">MOD</div>
+            <select id="accum-mode" style="width:100%;background:rgba(255,255,255,.06);border:1px solid var(--bor);color:var(--tx);padding:8px;border-radius:8px;font-size:13px;font-weight:700">
+              <option value="prematch">Pre-meci</option>
+              <option value="live">Live</option>
+            </select>
+          </div>
+        </div>
+        <button onclick="loadAccumulator()" style="width:100%;padding:12px;background:#22c55e;color:#000;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;margin-bottom:12px">Generează biletul optim</button>
+        <div id="accum-result"></div>
       </div>
     </div>
 
@@ -3487,6 +3518,62 @@ function genOpenSim(){
   G2.hist=[1,6];G2.scrn=6;
   g2Show(6);
   simPopulateDropdown();
+}
+
+function genOpenAccum(){
+  document.getElementById('gen2-ov').classList.add('open');
+  document.getElementById('nav-gen').classList.add('active');
+  G2.hist=[1,7];G2.scrn=7;
+  g2Show(7);
+}
+
+async function loadAccumulator(){
+  var resEl=document.getElementById('accum-result');
+  var tMin=parseFloat(document.getElementById('accum-min').value)||1.50;
+  var tMax=parseFloat(document.getElementById('accum-max').value)||2.00;
+  var mode=document.getElementById('accum-mode').value||'prematch';
+  resEl.innerHTML='<div class="g2spin-wrap"><div class="g2spin"></div><div class="g2spin-lbl">Se calculează biletul optim...</div></div>';
+  try{
+    var r=await fetch('/api/generator?action=accumulator&mode='+mode+'&target_min='+tMin+'&target_max='+tMax);
+    var d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Eroare server');
+    var ac=d.accumulator;
+    if(!ac||!ac.selections||!ac.selections.length){
+      resEl.innerHTML='<div style="text-align:center;color:var(--mu);padding:24px">Nu există meciuri suficiente azi pentru bilet.</div>';
+      return;
+    }
+    var html='';
+    // Header
+    var oddsColor=ac.target_met?'#22c55e':'#f59e0b';
+    html+='<div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:12px;padding:14px;margin-bottom:12px;text-align:center">';
+    html+='<div style="font-size:11px;color:var(--mu);margin-bottom:4px">COTĂ COMBINATĂ (fair odds fără marjă)</div>';
+    html+='<div style="font-size:32px;font-weight:900;color:'+oddsColor+'">×'+ac.combined_odds+'</div>';
+    html+='<div style="font-size:12px;color:var(--mu);margin-top:4px">Probabilitate combinată: <strong style="color:#22c55e">'+ac.combined_prob+'%</strong></div>';
+    if(ac.note)html+='<div style="font-size:11px;color:#f59e0b;margin-top:6px">'+ac.note+'</div>';
+    html+='</div>';
+    // Selecții
+    html+='<div style="font-size:11px;color:var(--mu);margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">'+ac.selections.length+' SELECȚII</div>';
+    ac.selections.forEach(function(s,i){
+      var probColor=s.prob>=85?'#22c55e':s.prob>=75?'#f59e0b':'#818cf8';
+      html+='<div style="background:rgba(255,255,255,.04);border:1px solid var(--bor);border-radius:10px;padding:12px;margin-bottom:8px">';
+      html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">';
+      if(s.home_logo)html+='<img src="'+s.home_logo+'" width="16" height="16" style="border-radius:2px" onerror="this.style.display=\'none\'">';
+      html+='<span style="font-size:12px;font-weight:700;flex:1">'+htmlEsc(s.match)+'</span>';
+      if(s.away_logo)html+='<img src="'+s.away_logo+'" width="16" height="16" style="border-radius:2px" onerror="this.style.display=\'none\'">';
+      html+='</div>';
+      html+='<div style="font-size:10px;color:var(--mu);margin-bottom:6px">'+htmlEsc(s.league||'')+'</div>';
+      html+='<div style="display:flex;align-items:center;justify-content:space-between">';
+      html+='<span style="background:rgba(34,197,94,.12);color:#22c55e;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:800">'+htmlEsc(s.label)+'</span>';
+      html+='<span style="font-size:13px;font-weight:800;color:'+probColor+'">'+s.prob+'%</span>';
+      html+='<span style="font-size:12px;color:var(--mu)">×'+s.fair_odds+'</span>';
+      html+='</div>';
+      html+='</div>';
+    });
+    html+='<div style="font-size:10px;color:var(--mu);margin-top:8px;text-align:center">Fair odds = 1/probabilitate (fără marja bookmaker). Cotele reale pot fi mai mici.</div>';
+    resEl.innerHTML=html;
+  }catch(e){
+    resEl.innerHTML='<div style="color:var(--red);text-align:center;padding:20px">'+e.message+'</div>';
+  }
 }
 
 function genUpdateBadge(){} // stub — badge înlocuit cu design nou

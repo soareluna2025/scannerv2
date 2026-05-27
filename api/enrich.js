@@ -147,12 +147,15 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
     lambdaHome:      r2(lambdaHome),
     lambdaAway:      r2(lambdaAway),
     lambdaTotal:     r2(lambdaTotal),
+    over05Prob:      matrix.over05Prob,
     over15Prob:      matrix.over15Prob,
     over25Prob:      matrix.over25Prob,
     ggProb:          matrix.ggProb,
     homeWin:         matrix.homeWin,
     draw:            matrix.draw,
     awayWin:         matrix.awayWin,
+    dc1x:            Math.min(100, matrix.homeWin + matrix.draw),
+    dcx2:            Math.min(100, matrix.draw + matrix.awayWin),
     h2hOver15:       pct(h2h, m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1) ?? matrix.over15Prob,
     h2hGG:           pct(h2h, m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0) ?? matrix.ggProb,
     h2hSample:       h2h.length,
@@ -1106,7 +1109,22 @@ export default async function handler(req, res) {
       }
     }
 
-    const payload = { ...result, ...evData, ...confData, leagueStats: leagueStats || null, refereeStats: refereeStats || null };
+    // Calculez probabilități cartonașe/cornere pentru piețele biletului compus
+    const _lgAvgYellow  = leagueStats ? +(leagueStats.avg_yellow_cards) || 3.5 : 3.5;
+    const _lgAvgCorners = leagueStats ? +(leagueStats.avg_corners)       || 9.0 : 9.0;
+    const _refAvgYellow  = (refereeStats && Number(refereeStats.total_matches) >= 5)
+      ? +(refereeStats.avg_yellow_cards) || _lgAvgYellow : _lgAvgYellow;
+    const _refAvgCorners = (refereeStats && Number(refereeStats.total_matches) >= 5)
+      ? +(refereeStats.avg_corners)      || _lgAvgCorners : _lgAvgCorners;
+    const { poissonProbOver: _ppo } = await import('./calc-utils.js');
+    const cardsOver35  = _ppo(_refAvgYellow,  3);
+    const cardsOver45  = _ppo(_refAvgYellow,  4);
+    const cornersOver85 = _ppo(_refAvgCorners, 8);
+    const cornersOver95 = _ppo(_refAvgCorners, 9);
+
+    const payload = { ...result, ...evData, ...confData,
+      cardsOver35, cardsOver45, cornersOver85, cornersOver95,
+      leagueStats: leagueStats || null, refereeStats: refereeStats || null };
 
     // Fire-and-forget: colectare injuries + prediction save + pre_match snapshot
     if (fid) {

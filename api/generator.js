@@ -2,9 +2,131 @@ import { query } from './db.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
 import { isAllowedMatch } from './utils/league-filter.js';
+import { calcPoisson6x6, poissonProbOver } from './calc-utils.js';
 
 const KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 const LIVE_S = new Set(['1H','HT','2H','ET','BT','P','SUSP','INT','LIVE']);
+
+// Calculează toate piețele pentru un meci folosind datele disponibile
+function calcMatchMarkets(form, h2h, lg, ref) {
+  const lgGoals   = +(lg.avg_goals)   || 2.5;
+  const lgYellow  = +(lg.avg_yellow)  || 3.5;
+  const lgCorners = +(lg.avg_corners) || 9.0;
+
+  const hAvgS = form.home_avg_scored   ?? lgGoals * 0.55;
+  const hAvgC = form.home_avg_conceded ?? lgGoals * 0.45;
+  const aAvgS = form.away_avg_scored   ?? lgGoals * 0.45;
+  const aAvgC = form.away_avg_conceded ?? lgGoals * 0.55;
+
+  const lambdaH = Math.max(0.3, (hAvgS + aAvgC) / 2);
+  const lambdaA = Math.max(0.3, (aAvgS + hAvgC) / 2);
+
+  const matrix = calcPoisson6x6(lambdaH, lambdaA);
+
+  // Blend cu H2H dacă există minim 5 meciuri (40% greutate H2H)
+  const h2nSample = h2h?.total || 0;
+  const blend = (poisson, h2hPct) =>
+    h2nSample >= 5 ? Math.round(poisson * 0.60 + h2hPct * 0.40) : poisson;
+
+  const over05 = matrix.over05Prob;
+  const over15 = blend(matrix.over15Prob, +(h2h?.pct_over_15) || matrix.over15Prob);
+  const over25 = blend(matrix.over25Prob, +(h2h?.pct_over_25) || matrix.over25Prob);
+  const gg     = blend(matrix.ggProb,     +(h2h?.pct_gg)      || matrix.ggProb);
+
+  const homeScores = blend(
+    Math.min(99, Math.round((1 - Math.exp(-lambdaH)) * 100)),
+    +(h2h?.pct_home_scores) || Math.min(99, Math.round((1 - Math.exp(-lambdaH)) * 100))
+  );
+  const awayScores = blend(
+    Math.min(99, Math.round((1 - Math.exp(-lambdaA)) * 100)),
+    +(h2h?.pct_away_scores) || Math.min(99, Math.round((1 - Math.exp(-lambdaA)) * 100))
+  );
+
+  // Cartonașe — preferă media arbitrului dacă >=5 meciuri, altfel media ligii
+  const hasRef = ref && Number(ref.total_matches) >= 5;
+  const lambdaCards   = hasRef ? +(ref.avg_yellow)  || lgYellow  : lgYellow;
+  const lambdaCorners = hasRef ? +(ref.avg_corners)  || lgCorners : lgCorners;
+
+  return {
+    over05:          { prob: over05,                              label: 'Over 0.5' },
+    over15:          { prob: over15,                              label: 'Over 1.5' },
+    over25:          { prob: over25,                              label: 'Over 2.5' },
+    gg:              { prob: gg,                                  label: 'GG (Ambele marchează)' },
+    home_scores:     { prob: homeScores,                          label: 'Gazde marchează' },
+    away_scores:     { prob: awayScores,                          label: 'Oaspeți marchează' },
+    h1:              { prob: matrix.homeWin,                      label: '1 (Victorie Gazde)' },
+    draw:            { prob: matrix.draw,                         label: 'X (Egal)' },
+    h2:              { prob: matrix.awayWin,                      label: '2 (Victorie Oaspeți)' },
+    dc1x:            { prob: Math.min(100, matrix.homeWin + matrix.draw),  label: '1X' },
+    dcx2:            { prob: Math.min(100, matrix.draw + matrix.awayWin),  label: 'X2' },
+    cards_over35:    { prob: poissonProbOver(lambdaCards,   3),   label: 'Cartonașe Over 3.5' },
+    cards_over45:    { prob: poissonProbOver(lambdaCards,   4),   label: 'Cartonașe Over 4.5' },
+    corners_over85:  { prob: poissonProbOver(lambdaCorners, 8),   label: 'Cornere Over 8.5' },
+    corners_over95:  { prob: poissonProbOver(lambdaCorners, 9),   label: 'Cornere Over 9.5' },
+  };
+}
+
+// Construiește biletul compus optim pentru ținta de cotă [targetMin, targetMax]
+function buildAccumulator(matches, targetMin = 1.50, targetMax = 2.00) {
+  const MIN_PROB = 68; // ignoră piețele sub 68% probabilitate
+
+  // Aplatizează toate selecțiile posibile
+  const allPicks = [];
+  for (const m of matches) {
+    if (!m.markets) continue;
+    for (const [key, mkt] of Object.entries(m.markets)) {
+      if (mkt.prob < MIN_PROB) continue;
+      allPicks.push({
+        fixture_id:  m.fixture_id,
+        match:       `${m.home_team} vs ${m.away_team}`,
+        league:      m.league_name,
+        match_date:  m.match_date,
+        home_logo:   m.home_logo,
+        away_logo:   m.away_logo,
+        market_key:  key,
+        label:       mkt.label,
+        prob:        mkt.prob,
+        fair_odds:   Math.round((100 / mkt.prob) * 100) / 100,
+      });
+    }
+  }
+
+  // Sortează: probabilitate descrescătoare (cele mai sigure primele)
+  allPicks.sort((a, b) => b.prob - a.prob);
+
+  // Greedy: adaugă cel mai sigur pariu per meci până atingem targetMin
+  const selected = [];
+  const usedFixtures = new Set();
+  let combinedOdds = 1.0;
+
+  for (const pick of allPicks) {
+    if (usedFixtures.has(pick.fixture_id)) continue;
+
+    const newOdds = combinedOdds * pick.fair_odds;
+    // Nu adăuga dacă depășim targetMax cu >20% (lăsăm puțin marjă)
+    if (newOdds > targetMax * 1.2) continue;
+
+    selected.push(pick);
+    combinedOdds = Math.round(newOdds * 100) / 100;
+    usedFixtures.add(pick.fixture_id);
+
+    if (combinedOdds >= targetMin) break;
+  }
+
+  const combinedProb = Math.round(
+    selected.reduce((p, s) => p * (s.prob / 100), 1) * 100
+  );
+
+  return {
+    selections:    selected,
+    combined_odds: Math.round(combinedOdds * 100) / 100,
+    combined_prob: combinedProb,
+    target_met:    combinedOdds >= targetMin,
+    note: combinedOdds < targetMin
+      ? 'Meciuri insuficiente azi pentru target. Măriți MIN_PROB sau adăugați mai multe meciuri.'
+      : null,
+  };
+}
 
 function cleanRef(s) {
   if (!s || s === 'null') return null;
@@ -283,8 +405,27 @@ export default async function handler(req, res) {
           home_cards:   liveCards(hid),
           away_cards:   liveCards(aid),
         } : null,
+        markets: calcMatchMarkets(
+          {
+            home_avg_scored:   hForm ? +(hForm.avg_scored_home)   : (hTS ? +(hTS.avg_goals_for)     : null),
+            home_avg_conceded: hForm ? +(hForm.avg_conceded_home) : (hTS ? +(hTS.avg_goals_against) : null),
+            away_avg_scored:   aForm ? +(aForm.avg_scored_away)   : (aTS ? +(aTS.avg_goals_for)     : null),
+            away_avg_conceded: aForm ? +(aForm.avg_conceded_away) : (aTS ? +(aTS.avg_goals_against) : null),
+          },
+          h2h,
+          { avg_goals: +(lg.avg_goals) || 2.5, avg_yellow: +(lg.avg_yellow) || 3.5, avg_corners: +(lg.avg_corners) || 9.0 },
+          ref && Number(ref.total_matches) >= 5 ? ref : null
+        ),
       };
     });
+
+    // ?action=accumulator — returnează biletul compus optim
+    if (req.query?.action === 'accumulator') {
+      const targetMin = parseFloat(req.query.target_min) || 1.50;
+      const targetMax = parseFloat(req.query.target_max) || 2.00;
+      const accum = buildAccumulator(result, targetMin, targetMax);
+      return res.json({ ok: true, mode, accumulator: accum });
+    }
 
     return res.json({ ok: true, mode, count: result.length, matches: result });
   } catch (e) {
