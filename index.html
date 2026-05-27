@@ -3565,7 +3565,9 @@ async function loadAccumulator(){
       html+='<span style="font-size:12px;font-weight:700;flex:1">'+htmlEsc(s.match)+'</span>';
       if(s.away_logo)html+='<img src="'+s.away_logo+'" width="16" height="16" style="border-radius:2px" onerror="this.style.display=\'none\'">';
       html+='</div>';
-      html+='<div style="font-size:10px;color:var(--mu);margin-bottom:6px">'+htmlEsc(s.league||'')+'</div>';
+      var leagueLine=htmlEsc(s.league||'');
+      if(s.league_country)leagueLine='<span style="opacity:.6">'+htmlEsc(s.league_country)+'</span> · '+leagueLine;
+      html+='<div style="font-size:10px;color:var(--mu);margin-bottom:6px">'+leagueLine+'</div>';
       html+='<div style="display:flex;align-items:center;justify-content:space-between">';
       html+='<span style="background:rgba(34,197,94,.12);color:#22c55e;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:800">'+htmlEsc(s.label)+'</span>';
       html+='<span style="font-size:13px;font-weight:800;color:'+probColor+'">'+s.prob+'%</span>';

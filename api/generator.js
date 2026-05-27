@@ -113,16 +113,17 @@ function buildAccumulator(matches, targetMin = 1.50, targetMax = 2.00) {
       if (isMarketSettled(key, m)) continue; // piața deja rezolvată în live — skip
       if (!byMarket[key]) byMarket[key] = [];
       byMarket[key].push({
-        fixture_id:  m.fixture_id,
-        match:       `${m.home_team} vs ${m.away_team}`,
-        league:      m.league_name,
-        match_date:  m.match_date,
-        home_logo:   m.home_logo,
-        away_logo:   m.away_logo,
-        market_key:  key,
-        label:       mkt.label,
-        prob:        mkt.prob,
-        fair_odds:   Math.round((100 / mkt.prob) * 100) / 100,
+        fixture_id:     m.fixture_id,
+        match:          `${m.home_team} vs ${m.away_team}`,
+        league:         m.league_name,
+        league_country: m.league_country || '',
+        match_date:     m.match_date,
+        home_logo:      m.home_logo,
+        away_logo:      m.away_logo,
+        market_key:     key,
+        label:          mkt.label,
+        prob:           mkt.prob,
+        fair_odds:      Math.round((100 / mkt.prob) * 100) / 100,
       });
     }
   }
@@ -217,7 +218,7 @@ export default async function handler(req, res) {
                 COALESCE(th.name, f.home_team_name) AS home_name,
                 COALESCE(ta.name, f.away_team_name) AS away_name,
                 th.logo AS home_logo, ta.logo AS away_logo,
-                f.match_date, l.name AS league_name,
+                f.match_date, l.name AS league_name, l.country AS league_country,
                 pd.payload AS pd_fixture
          FROM fixtures f
          LEFT JOIN teams th ON th.team_id = f.home_team_id
@@ -242,7 +243,7 @@ export default async function handler(req, res) {
           _db: true,
           _venue_id: venueId,
           fixture: { id: row.fixture_id, date: row.match_date, referee: refStr, status: { short: 'NS', elapsed: 0 } },
-          league: { id: row.league_id, name: row.league_name },
+          league: { id: row.league_id, name: row.league_name, country: row.league_country || null },
           teams: {
             home: { id: row.home_team_id, name: row.home_name, logo: row.home_logo || `https://media.api-sports.io/football/teams/${row.home_team_id}.png` },
             away: { id: row.away_team_id, name: row.away_name, logo: row.away_logo || `https://media.api-sports.io/football/teams/${row.away_team_id}.png` },
@@ -381,7 +382,8 @@ export default async function handler(req, res) {
         away_team:  m.teams?.away?.name || '?',
         home_logo:  m.teams?.home?.logo || (hid ? `${logoBase}${hid}.png` : null),
         away_logo:  m.teams?.away?.logo || (aid ? `${logoBase}${aid}.png` : null),
-        league_name: m.league?.name || '',
+        league_name:    m.league?.name    || '',
+        league_country: m.league?.country || '',
         league_id:  lid,
         is_live:    isLive,
         minute:     m.fixture?.status?.elapsed || 0,
