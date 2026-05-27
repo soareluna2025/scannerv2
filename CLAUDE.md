@@ -25,8 +25,9 @@
 ## 3. WORKFLOW STANDARD
 
 1. **Citește `SESSION_CONTEXT.txt`** la începutul oricărei sesiuni noi — conține istoric, stare DB, probleme cunoscute, task-uri în curs.
-2. **Lucrează pe branch `claude/...`** (ex. `claude/session-context-review-MNZ8Y`), apoi merge în `main` și push.
-3. **Verifică sintaxa** cu `node --check <fișier.js>` după orice editare de fișier JavaScript, înainte de commit.
+2. **Citește `ARHITECT.md`** la începutul oricărei sesiuni noi — conține arhitectura completă, formulele, contractele de tip, regulile absolute și bugtracker-ul live. OBLIGATORIU înainte de orice modificare de cod.
+3. **Lucrează pe branch `claude/...`** (ex. `claude/session-context-review-MNZ8Y`), apoi merge în `main` și push.
+4. **Verifică sintaxa** cu `node --check <fișier.js>` după orice editare de fișier JavaScript, înainte de commit.
 
 ## 4. ARHITECTURĂ
 
