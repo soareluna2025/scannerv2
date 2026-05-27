@@ -1,6 +1,7 @@
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
 import { query } from './db.js';
 import { isAllowedMatch } from './utils/league-filter.js';
+import { fetchApiFootball } from './utils/fetch-api.js';
 
 function log(msg) {
   console.log(`[today] ${new Date().toISOString()} ${msg}`);
@@ -139,12 +140,9 @@ export default async function handler(req, res) {
     const [d0, d1] = [dateStr(0), dateStr(1)];
     log(`fetching 2 days: ${d0} / ${d1}`);
 
-    const hdr  = { 'x-apisports-key': key };
-    const base = 'https://v3.football.api-sports.io/fixtures';
-
     const [r0, r1] = await Promise.all([
-      fetch(`${base}?date=${d0}&status=NS&timezone=Europe%2FBerlin`, { headers: hdr }),
-      fetch(`${base}?date=${d1}&status=NS&timezone=Europe%2FBerlin`, { headers: hdr }),
+      fetchApiFootball(`/fixtures?date=${d0}&status=NS&timezone=Europe%2FBerlin`),
+      fetchApiFootball(`/fixtures?date=${d1}&status=NS&timezone=Europe%2FBerlin`),
     ]);
 
     const [j0, j1] = await Promise.all([r0.json(), r1.json()]);

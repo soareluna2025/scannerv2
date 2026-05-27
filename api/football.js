@@ -3,17 +3,18 @@ import { isAllowedMatch } from './utils/league-filter.js';
 import { calcNextGoal } from './utils/live-score.js';
 import { calibrateNgp } from './utils/ngp-calibration.js';
 import { query } from './db.js';
+import { fetchApiFootball } from './utils/fetch-api.js';
 
 function log(msg) {
   console.log(`[football] ${new Date().toISOString()} ${msg}`);
 }
 
-async function fetchH2H(homeId, awayId, key) {
+async function fetchH2H(homeId, awayId) {
   try {
     const [d1, d2, d3] = await Promise.all([
-      fetch(`https://v3.football.api-sports.io/fixtures?team=${homeId}&last=10&status=FT`, { headers: { 'x-apisports-key': key } }).then(r => r.json()),
-      fetch(`https://v3.football.api-sports.io/fixtures?team=${awayId}&last=10&status=FT`, { headers: { 'x-apisports-key': key } }).then(r => r.json()),
-      fetch(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${homeId}-${awayId}&last=10`, { headers: { 'x-apisports-key': key } }).then(r => r.json()),
+      fetchApiFootball(`/fixtures?team=${homeId}&last=10&status=FT`).then(r => r.json()),
+      fetchApiFootball(`/fixtures?team=${awayId}&last=10&status=FT`).then(r => r.json()),
+      fetchApiFootball(`/fixtures/headtohead?h2h=${homeId}-${awayId}&last=10`).then(r => r.json()),
     ]);
     const hGames = (d1.response || []).filter(m => m.teams?.home?.id === homeId).slice(0, 10);
     const aGames = (d2.response || []).filter(m => m.teams?.away?.id === awayId).slice(0, 10);
@@ -71,7 +72,7 @@ async function enrichOne(m, key) {
     [...enrichCache.keys()].slice(0, 100).forEach(k => enrichCache.delete(k));
   }
 
-  const h2h = await fetchH2H(hId, aId, key);
+  const h2h = await fetchH2H(hId, aId);
   const enriched = { ...h2h, liveStats };
   enrichCache.set(cacheKey, { data: enriched, ts: Date.now() });
   return { ...m, ...enriched };
@@ -93,9 +94,7 @@ export default async function handler(req, res) {
   // football-data.org a fost eliminat — ocola ALLOWED_LEAGUE_IDS complet
   let raw = [];
   try {
-    const r = await fetch('https://v3.football.api-sports.io/fixtures?live=all', {
-      headers: { 'x-apisports-key': key },
-    });
+    const r = await fetchApiFootball('/fixtures?live=all');
     const d = await r.json();
     raw = d.response || [];
     log(`af raw live: ${raw.length}`);

@@ -361,8 +361,8 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPr
   const sotTotal = liveStats?.sot     ?? null;
   const ycTotal  = liveStats?.yc      ?? 0;
 
-  const homeAvg = result.homeAvgScored || 1.2;
-  const awayAvg = result.awayAvgScored || 1.0;
+  const homeAvg = result.homeAvgScored ?? 1.2;
+  const awayAvg = result.awayAvgScored ?? 1.0;
   const score2 = Math.min(100, (homeAvg + awayAvg) / 3.5 * 100);
 
   const score3 = result.h2hOver15 != null ? result.h2hOver15 : score1;
@@ -438,8 +438,8 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPr
   if (teamStrengths && (teamStrengths.home != null || teamStrengths.away != null)) {
     teamStrengthHome = teamStrengths.home;
     teamStrengthAway = teamStrengths.away;
-    const h = teamStrengths.home || 50;
-    const a = teamStrengths.away || 50;
+    const h = teamStrengths.home ?? 50;
+    const a = teamStrengths.away ?? 50;
     score7 = Math.round((h + a) / 2);
   }
 
@@ -493,7 +493,7 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPr
       forma:        Math.round(score2),
       h2h:          Math.round(score3),
       live:         Math.round(score4),
-      ev:           Math.round(score5),
+      ...(score5 != null ? { ev: Math.round(score5) } : {}),
       consistenta:  Math.round(score6),
       ...(hasStr ? { putereEchipe: score7 } : {}),
       ...(score8 != null ? { apiConsensus: Math.round(score8) } : {}),

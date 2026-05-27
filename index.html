@@ -1735,7 +1735,7 @@ function renderPM(){
     return new Date(a.fixture.date)-new Date(b.fixture.date);
   });
   var analyzedCount=Object.keys(_pmEnrich).length;
-  var pendingTxt=analyzedCount<total?' · <span style="opacity:.6">⏳ '+(total-analyzedCount)+' neanalzate</span>':'';
+  var pendingTxt=analyzedCount<total?' · <span style="opacity:.6">⏳ '+(total-analyzedCount)+' neanalizate</span>':'';
   var html='<div class="pm-summary"><span class="pm-summary-t">'+total+' meciuri · '+analyzedCount+' analizate'+pendingTxt+'</span></div>';
   sorted.forEach(function(m){
     var fid=m.fixture&&m.fixture.id;
@@ -1803,7 +1803,7 @@ function renderPM(){
       html+='</div>';
     }else{
       html+='<div class="pm-body" style="display:flex;align-items:center;justify-content:space-between">';
-      html+='<span style="font-size:11px;color:var(--mu)">Neanalzat</span>';
+      html+='<span style="font-size:11px;color:var(--mu)">Neanalizat</span>';
       if(hid&&aid)html+='<button class="analyze-btn" id="abtn-'+fid+'" onclick="analyzeMatch('+fid+','+hid+','+aid+')">ANALIZEAZA</button>';
       html+='</div>';
     }
@@ -2347,9 +2347,9 @@ function mdRenderSumar(d){
     out+='<div class="md-section"><div class="md-section-title">Profil Ligă</div>';
     out+='<div class="league-profile">';
     out+='<div class="lp-row"><span class="lp-label">Tip ligă</span><span class="lp-val">'+lt.icon+' '+lt.label+'</span></div>';
-    out+='<div class="lp-row"><span class="lp-label">Medie goluri</span><span class="lp-val">'+parseFloat(ls.avg_goals_per_match).toFixed(2)+' / meci</span></div>';
-    out+='<div class="lp-row"><span class="lp-label">Over 1.5 / Over 2.5</span><span class="lp-val">'+Math.round(ls.pct_over_15)+'% / '+Math.round(ls.pct_over_25)+'%</span></div>';
-    out+='<div class="lp-row"><span class="lp-label">GG</span><span class="lp-val">'+Math.round(ls.pct_gg)+'%</span></div>';
+    out+='<div class="lp-row"><span class="lp-label">Medie goluri</span><span class="lp-val">'+(ls.avg_goals_per_match!=null?parseFloat(ls.avg_goals_per_match).toFixed(2):'—')+' / meci</span></div>';
+    out+='<div class="lp-row"><span class="lp-label">Over 1.5 / Over 2.5</span><span class="lp-val">'+(ls.pct_over_15!=null?Math.round(ls.pct_over_15):'—')+'% / '+(ls.pct_over_25!=null?Math.round(ls.pct_over_25):'—')+'%</span></div>';
+    out+='<div class="lp-row"><span class="lp-label">GG</span><span class="lp-val">'+(ls.pct_gg!=null?Math.round(ls.pct_gg):'—')+'%</span></div>';
     out+='</div></div>';
   }
 

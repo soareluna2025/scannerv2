@@ -333,7 +333,12 @@ export default async function handler(req, res) {
           lambda_home, lambda_away, lambda_total, over15_prob, over25_prob, gg_prob,
           home_score_rate, away_score_rate, h2h_over15)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-        ON CONFLICT (fixture_id) DO NOTHING`,
+        ON CONFLICT (fixture_id) DO UPDATE SET
+          lambda_home = EXCLUDED.lambda_home, lambda_away = EXCLUDED.lambda_away,
+          lambda_total = EXCLUDED.lambda_total, over15_prob = EXCLUDED.over15_prob,
+          over25_prob = EXCLUDED.over25_prob, gg_prob = EXCLUDED.gg_prob,
+          home_score_rate = EXCLUDED.home_score_rate, away_score_rate = EXCLUDED.away_score_rate,
+          h2h_over15 = EXCLUDED.h2h_over15`,
         [
           fixture.fixture?.id,
           fixture.teams?.home?.name || '',
