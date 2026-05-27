@@ -3591,3 +3591,55 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
      → 1499 jucatori din 77 echipe populati cu toate 4 campurile
      → L2 (getLineupStrengthFactor) functional complet cu rating + goluri + pase + suturi
   5. enrich.js: fix multiplicator shots_on_target *15 -> *2 (totaluri sezon, nu per meci)
+
+[27.05 ~12:30] - FIX WHITELIST: ID 785 (Liga III Romania) inlocuit cu 784 (Liga II Romania) | Commit: 3b51962
+  - 785 returna "Liga III - Serie 2" din API (confirmat din backfill logs)
+  - Inlocuit cu 784 (ID secvential corect: 783=L1, 784=L2, 785=L3)
+  - Modificat: api/leagues.js + league-list.html (badge ⚠️ eliminat, logo actualizat)
+
+[27.05 ~12:45] - UPGRADE PLAN API 150k → 300k + PAGINARE DINAMICA players_season | Commit: acdc9e5
+  - STOP_AT in api/backfill.js: 250_000 → 280_000 (300k plan - 20k buffer live scanner)
+  - CLAUDE.md actualizat: plan 300k/zi, limite redistribuite
+  - backfill-pass-shots.js: paginare dinamica (page 1,2,3... pana paging.total)
+    → de la max 25 jucatori/echipa la 100% coverage squad
+  - collect-players-season.js: aceeasi imbunatatire paginare dinamica
+  - MOTIV: Player Intelligence scores mici (32/30 Crystal Palace) din cauza datelor incomplete
+
+[27.05 ~13:10] - CRASH SERVER: backfill.js trunchiat la 16 linii via MCP push | Commit: f5aeac1
+  - CAUZA: mcp__github__push_files a inclus doar primele 16 linii din backfill.js (519 linii)
+  - EROARE VPS: "getBackfillStatus not exported" → restart loop (counter 66+)
+  - FIX: push complet backfill.js (519 linii) via MCP → server repornit corect
+
+[27.05 ~13:30] - BACKFILL players_season — populare partiala (oprire voluntara)
+  - Rulat backfill-pass-shots in loop automat (bash) pe VPS
+  - Run 1: 500 echipe, 372 inserate, remaining 783
+  - Run 2: 500 echipe, 242 inserate, remaining 781
+  - Run 3-4 (loop): remaining 780→ OPRIT voluntar
+  - CONCLUZIE: ~780 echipe din standings NU au date jucatori in API-Football
+    (ligi mici, sezoane fara squad, echipe inactive) — loop infinit imposibil
+  - STATUS FINAL: echipele cu meciuri in 30 zile sunt acoperite de collect-players-season
+    Celelalte 780 = fara date in API, nu pot fi populate
+
+[27.05 ~14:30] - FIX pct() MINIM 5 MECIURI — statistici false eliminate | Commit: 8b33793
+  - Problema: "100% Oaspeti marcheaza" dintr-un singur meci
+  - Fix in api/enrich.js, api/match.js, api/football.js:
+    arr.length → arr.length >= 5 (pct() returneaza null daca < 5 meciuri)
+  - Fallback in enrich.js: pct() null → estimare Poisson (lambda) automat
+  - Fisiere JS pushate direct pe main via MCP (nu local — divergenta istorii)
+
+[27.05 ~15:00] - FIX index.html: null display + GG float in EV table | Commit: fd0ebd3
+  - homeScoreRate/awayScoreRate afiseaza '—' cand pct() returneaza null
+    (3 locatii: linia 1763-1764 prematch card, 2292-2305 modal live+prematch)
+  - EV Analysis table: row.prob → Math.round(row.prob) (elimina float-uri 46.78%)
+  - Pushare: temp branch din origin/main + checkout index.html de pe feature branch
+
+[27.05 ~16:00] - CREAT ARHITECT.md — creierul arhitectural complet al aplicației
+  - MOTIV: 23 de bug-uri documentate cauzate de lipsa continuității între sesiuni
+  - ARHITECT.md conține: hartă fișiere, toate formulele cu raționamentul lor,
+    contracte de tip (bestEV = NUMBER, nu string), 5 reguli absolute,
+    bugtracker live (23 bug-uri deschise), 12 decizii arhitecturale documentate,
+    flux de date complet, stare DB, direcție îmbunătățire, limite API
+  - CLAUDE.md actualizat: ARHITECT.md adăugat la citire obligatorie (secțiunea 3, pct 2)
+  - SCOP: fiecare sesiune viitoare citește ARHITECT.md → cunoaște tot contextul
+    → nu mai reintroduce bug-uri → deciziile se păstrează între sesiuni
+  Commit: (urmează)

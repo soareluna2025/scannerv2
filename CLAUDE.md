@@ -11,8 +11,8 @@
 - **NU modifica niciodată** valoarea `10.000` simulări Monte Carlo din `api/monte-carlo.js` (parametrul `nSims` / `iterations`).
 - **NU committa niciodată** chei, token-uri, parole sau fișiere `.env`. Verifică `git diff` înainte de commit dacă ai dubii.
 - **Întotdeauna commit + push pe `main`** după orice modificare finalizată — push-ul pe main declanșează auto-deploy via GitHub Actions.
-- **Dacă userul cere „Faza X‟, „calibrare globală‟, „aplicăm calibrare‟, „verificare Faza X‟ sau „rollback Faza X‟** → CITEȘTE `ROADMAP_CALIBRARE.md` ÎINAINTE de a începe orice modificare. Fișierul conține planul în 5 faze, trigger-urile (Brier scor, sample size, durată stabilă), modificările exacte de cod și procedura de rollback.
-- **Dacă userul cere „bump plan API‟ sau „abonament nou X k‟** → ajustează `STOP_AT` în `api/backfill.js` la `(plan - 20k)` ca buffer pentru live scanner.
+- **Dacă userul cere „Faza X", „calibrare globală", „aplicăm calibrare", „verificare Faza X" sau „rollback Faza X"** → CITEȘTE `ROADMAP_CALIBRARE.md` ÎNAINTE de a începe orice modificare. Fișierul conține planul în 5 faze, trigger-urile (Brier scor, sample size, durată stabilă), modificările exacte de cod și procedura de rollback.
+- **Dacă userul cere „bump plan API" sau „abonament nou X k"** → ajustează `STOP_AT` în `api/backfill.js` la `(plan - 20k)` ca buffer pentru live scanner.
 - **`STOP_AT` curent în `api/backfill.js` = 280.000** — valoare corectă pentru planul 300k (300k - 20k buffer). NU modifica fără cerere explicită.
 
 ## 2. STACK
@@ -25,8 +25,9 @@
 ## 3. WORKFLOW STANDARD
 
 1. **Citește `SESSION_CONTEXT.txt`** la începutul oricărei sesiuni noi — conține istoric, stare DB, probleme cunoscute, task-uri în curs.
-2. **Lucrează pe branch `claude/...`** (ex. `claude/session-context-review-MNZ8Y`), apoi merge în `main` și push.
-3. **Verifică sintaxa** cu `node --check <fișier.js>` după orice editare de fișier JavaScript, înainte de commit.
+2. **Citește `ARHITECT.md`** la începutul oricărei sesiuni noi — conține arhitectura completă, formulele, contractele de tip, regulile absolute și bugtracker-ul live. OBLIGATORIU înainte de orice modificare de cod.
+3. **Lucrează pe branch `claude/...`** (ex. `claude/session-context-review-MNZ8Y`), apoi merge în `main` și push.
+4. **Verifică sintaxa** cu `node --check <fișier.js>` după orice editare de fișier JavaScript, înainte de commit.
 
 ## 4. ARHITECTURĂ
 
