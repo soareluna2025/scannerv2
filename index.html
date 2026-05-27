@@ -2011,7 +2011,7 @@ function mdRenderSumar(d){
     out+='<div class="conf-circle-wrap">';
     out+='<div class="conf-circle '+ccls+'">'+cs+'%</div>';
     if(en.bestMarket){
-      out+='<div style="text-align:center;font-size:12px;color:var(--mu2)">Best bet: <strong style="color:'+confColor+'">'+en.bestMarket+' @ '+en.bestCota+'</strong>'+(en.bestEV?' | EV: <span style="color:#22c55e">'+en.bestEV+'</span>':'')+'</div>';
+      out+='<div style="text-align:center;font-size:12px;color:var(--mu2)">Best bet: <strong style="color:'+confColor+'">'+en.bestMarket+' @ '+en.bestCota+'</strong>'+(en.bestEV>0?' | EV: <span style="color:#22c55e">+'+Math.round(en.bestEV*100)+'%</span>':'')+'</div>';
     }
     if(en.breakdown){
       var bd=en.breakdown;

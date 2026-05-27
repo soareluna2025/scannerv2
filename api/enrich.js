@@ -399,7 +399,7 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPr
       bestCota   = best.cota;
       if (best.ev > 0) {
         score5 = Math.min(100, best.ev * 300);
-        bestEV = '+' + Math.round(best.ev * 100) + '%';
+        bestEV = best.ev;
       } else {
         score5 = Math.max(10, 50 + Math.round(best.ev * 100));
       }
@@ -422,7 +422,7 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPr
       bestCota   = best.cota;
       if (best.ev > 0) {
         score5 = Math.min(100, best.ev * 300);
-        bestEV = '+' + Math.round(best.ev * 100) + '%';
+        bestEV = best.ev;
       } else {
         score5 = Math.max(10, 50 + Math.round(best.ev * 100));
       }
