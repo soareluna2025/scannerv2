@@ -3597,11 +3597,25 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   - Inlocuit cu 784 (ID secvential corect: 783=L1, 784=L2, 785=L3)
   - Modificat: api/leagues.js + league-list.html (badge ⚠️ eliminat, logo actualizat)
 
-[27.05 ~12:45] - UPGRADE PLAN API 150k → 300k + PAGINARE DINAMICA players_season | Commit: (in curs)
+[27.05 ~12:45] - UPGRADE PLAN API 150k → 300k + PAGINARE DINAMICA players_season | Commit: acdc9e5
   - STOP_AT in api/backfill.js: 250_000 → 280_000 (300k plan - 20k buffer live scanner)
   - CLAUDE.md actualizat: plan 300k/zi, limite redistribuite
   - backfill-pass-shots.js: paginare dinamica (page 1,2,3... pana paging.total)
     → de la max 25 jucatori/echipa la 100% coverage squad
   - collect-players-season.js: aceeasi imbunatatire paginare dinamica
   - MOTIV: Player Intelligence scores mici (32/30 Crystal Palace) din cauza datelor incomplete
-  - TODO: ruleaza backfill-pass-shots de 2 ori pe VPS pana remaining=0
+
+[27.05 ~13:10] - CRASH SERVER: backfill.js trunchiat la 16 linii via MCP push | Commit: f5aeac1
+  - CAUZA: mcp__github__push_files a inclus doar primele 16 linii din backfill.js (519 linii)
+  - EROARE VPS: "getBackfillStatus not exported" → restart loop (counter 66+)
+  - FIX: push complet backfill.js (519 linii) via MCP → server repornit corect
+
+[27.05 ~13:30] - BACKFILL players_season — populare partiala (oprire voluntara)
+  - Rulat backfill-pass-shots in loop automat (bash) pe VPS
+  - Run 1: 500 echipe, 372 inserate, remaining 783
+  - Run 2: 500 echipe, 242 inserate, remaining 781
+  - Run 3-4 (loop): remaining 780→ OPRIT voluntar
+  - CONCLUZIE: ~780 echipe din standings NU au date jucatori in API-Football
+    (ligi mici, sezoane fara squad, echipe inactive) — loop infinit imposibil
+  - STATUS FINAL: echipele cu meciuri in 30 zile sunt acoperite de collect-players-season
+    Celelalte 780 = fara date in API, nu pot fi populate
