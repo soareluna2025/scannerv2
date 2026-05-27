@@ -3658,3 +3658,12 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   #22 match.js: ON CONFLICT DO NOTHING → DO UPDATE (predictii actualizate)
   ARHITECT.md bugtracker actualizat: 10 bug-uri marcate [x]
   Raman deschise: #4,#5,#8,#10,#11,#12,#14,#15,#16,#17,#18,#21,#23 (13 bug-uri)
+
+[27.05 ~18:00] - FIX EV hallucination: suprima EV cand date insuficiente | Commit: 0134903
+  - PROBLEMA: model dadea EV +38% la cota 11.50 cu LOW confidence + 1 meci H2H
+    (Atletico-MG vs Puerto Cabello) — lambda aluneca spre media ligii
+  - FIX in api/enrich.js: 3 reguli de suprimare EV:
+    * bestCota > 10.0 → mereu suprima
+    * bestCota > 5.0 + LOW confidence → suprima
+    * bestCota > 3.0 + LOW confidence + h2hSample < 3 → suprima
+  - Modelul acum stie CAND NU STIE si nu afiseaza valori false
