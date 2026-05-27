@@ -3642,4 +3642,4 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   - CLAUDE.md actualizat: ARHITECT.md adăugat la citire obligatorie (secțiunea 3, pct 2)
   - SCOP: fiecare sesiune viitoare citește ARHITECT.md → cunoaște tot contextul
     → nu mai reintroduce bug-uri → deciziile se păstrează între sesiuni
-  Commit: (urmează)
+  Commit: ea8693a (branch) / 7f38776 (merge main)
