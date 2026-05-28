@@ -389,9 +389,14 @@ export default async function handler(req, res) {
       'SELECT * FROM form_stats WHERE team_id = ANY($1)', [allTeamIds]
     ).catch(() => ({ rows: [] }));
     const formMap = {};
+    const formByTeam = {}; // fallback cross-ligă: cea mai recentă formă per echipă
     for (const r of fsRows) {
       const k = `${r.team_id}-${r.league_id}`;
       if (!formMap[k] || formMap[k].season < r.season) formMap[k] = r;
+      // Reține forma cea mai recentă per echipă indiferent de ligă
+      if (!formByTeam[r.team_id] || formByTeam[r.team_id].season < r.season) {
+        formByTeam[r.team_id] = r;
+      }
     }
 
     // Load teams_stats as fallback when form_stats missing (season-level averages)
@@ -440,8 +445,10 @@ export default async function handler(req, res) {
       const lg = leagueMap[lid] || {};
       const ref = refName ? refMap[refName] : null;
       const h2h = h2hMap[`${Math.min(hid, aid)}-${Math.max(hid, aid)}`] || null;
-      const hForm = formMap[`${hid}-${lid}`] || null;
-      const aForm = formMap[`${aid}-${lid}`] || null;
+      // Fallback cross-ligă: dacă echipa nu are form în liga curentă (ex. cupă internațională),
+      // folosește forma din liga domestică (cea mai recentă din orice ligă)
+      const hForm = formMap[`${hid}-${lid}`] || formByTeam[hid] || null;
+      const aForm = formMap[`${aid}-${lid}`] || formByTeam[aid] || null;
       const hTS   = tsMap[hid] || null;
       const aTS   = tsMap[aid] || null;
       const venue = m._venue_id ? venueMap[m._venue_id] || null : null;
