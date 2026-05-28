@@ -1305,7 +1305,6 @@ function mevCalibrate(fk){
   var c1=parseFloat(v1),cx=parseFloat(vx),c2=parseFloat(v2);
   if(!c1||c1<1.01||!cx||cx<1.01||!c2||c2<1.01){
     res.innerHTML='<div style="color:var(--mu);font-size:11px;padding:8px 0">Introdu cotele pentru 1, X și 2 →</div>';return;}
-  try{localStorage.setItem('mev_c1_'+fk,c1);localStorage.setItem('mev_cx_'+fk,cx);localStorage.setItem('mev_c2_'+fk,c2);}catch(e){}
   var i1=1/c1,ix=1/cx,i2=1/c2,tot=i1+ix+i2;
   var p1=i1/tot,pX=ix/tot,p2=i2/tot;
   var margin=Math.round((tot-1)*100);
@@ -2351,19 +2350,17 @@ function mdRenderSumar(d){
   // ── CALIBRARE CU COTE REALE ───────────────────────────────────────
   if(en.homeWin!=null||en.over15Prob!=null){
     var fk=String((fix&&fix.fixture&&fix.fixture.id)||0);
-    var sc1='';var scx='';var sc2='';
-    try{sc1=localStorage.getItem('mev_c1_'+fk)||'';scx=localStorage.getItem('mev_cx_'+fk)||'';sc2=localStorage.getItem('mev_c2_'+fk)||'';}catch(e){}
     var _lH=+(en.lambdaHome)||1.3, _lA=+(en.lambdaAway)||1.1;
     out+='<div class="md-section">';
     out+='<div class="md-section-title">🔄 Calibrare cu cote reale</div>';
     out+='<div style="font-size:10px;color:var(--mu);margin-bottom:14px">Introdu cotele 1/X/2 de la bookmaker. Sistemul recalculează λ și actualizează <b>toate piețele</b>.</div>';
     out+='<div style="display:flex;gap:10px;margin-bottom:14px">';
     out+='<div style="flex:1"><div style="font-size:10px;font-weight:600;color:var(--mu);margin-bottom:5px;text-align:center">1 GAZDE</div>';
-    out+='<input type="text" inputmode="decimal" id="mev_c1_'+fk+'" value="'+htmlEsc(sc1)+'" placeholder="1.80" oninput="mevCalibrate(\''+fk+'\')" style="width:100%;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.15);color:var(--tx);padding:10px 6px;border-radius:8px;font-size:18px;font-weight:800;text-align:center;outline:none;box-sizing:border-box"></div>';
+    out+='<input type="text" inputmode="decimal" id="mev_c1_'+fk+'" value="" placeholder="1.80" oninput="mevCalibrate(\''+fk+'\')" style="width:100%;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.15);color:var(--tx);padding:10px 6px;border-radius:8px;font-size:18px;font-weight:800;text-align:center;outline:none;box-sizing:border-box"></div>';
     out+='<div style="flex:1"><div style="font-size:10px;font-weight:600;color:var(--mu);margin-bottom:5px;text-align:center">X EGAL</div>';
-    out+='<input type="text" inputmode="decimal" id="mev_cx_'+fk+'" value="'+htmlEsc(scx)+'" placeholder="3.40" oninput="mevCalibrate(\''+fk+'\')" style="width:100%;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.15);color:var(--tx);padding:10px 6px;border-radius:8px;font-size:18px;font-weight:800;text-align:center;outline:none;box-sizing:border-box"></div>';
+    out+='<input type="text" inputmode="decimal" id="mev_cx_'+fk+'" value="" placeholder="3.40" oninput="mevCalibrate(\''+fk+'\')" style="width:100%;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.15);color:var(--tx);padding:10px 6px;border-radius:8px;font-size:18px;font-weight:800;text-align:center;outline:none;box-sizing:border-box"></div>';
     out+='<div style="flex:1"><div style="font-size:10px;font-weight:600;color:var(--mu);margin-bottom:5px;text-align:center">2 OASPEȚI</div>';
-    out+='<input type="text" inputmode="decimal" id="mev_c2_'+fk+'" value="'+htmlEsc(sc2)+'" placeholder="4.50" oninput="mevCalibrate(\''+fk+'\')" style="width:100%;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.15);color:var(--tx);padding:10px 6px;border-radius:8px;font-size:18px;font-weight:800;text-align:center;outline:none;box-sizing:border-box"></div>';
+    out+='<input type="text" inputmode="decimal" id="mev_c2_'+fk+'" value="" placeholder="4.50" oninput="mevCalibrate(\''+fk+'\')" style="width:100%;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.15);color:var(--tx);padding:10px 6px;border-radius:8px;font-size:18px;font-weight:800;text-align:center;outline:none;box-sizing:border-box"></div>';
     out+='</div>';
     out+='<div id="mev_res_'+fk+'"'
       +' data-lh="'+_lH+'" data-la="'+_lA+'"'
@@ -2374,9 +2371,6 @@ function mdRenderSumar(d){
       +' data-hsc="'+(en.homeScoreRate||'')+'" data-asc="'+(en.awayScoreRate||'')+'">'
       +'<div style="color:var(--mu);font-size:11px;padding:6px 0">Introdu cotele pentru 1, X și 2 →</div></div>';
     out+='</div>';
-    if(sc1&&scx&&sc2){
-      setTimeout(function(){mevCalibrate(fk);},100);
-    }
   }
 
   // League Profile
