@@ -118,6 +118,16 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
     ? (awayAvgScored + homeAvgConceded) / 2
     : lgAway;
 
+  // Soluția 1 — H2H influențează λ direct (pre-meci, min. 3 meciuri directe)
+  // Blend 70% formă + 30% H2H (scalat cu sample size, max 30%)
+  if (h2h.length >= 3 && !parseInt(elapsedParam)) {
+    const h2hAvgH = avg(h2h, m => m.teams?.home?.id === hId ? (m.goals?.home ?? 0) : (m.goals?.away ?? 0));
+    const h2hAvgA = avg(h2h, m => m.teams?.away?.id === aId ? (m.goals?.away ?? 0) : (m.goals?.home ?? 0));
+    const w = Math.min(0.30, h2h.length / 10 * 0.30);
+    lambdaHome = +(lambdaHome * (1 - w) + h2hAvgH * w).toFixed(2);
+    lambdaAway = +(lambdaAway * (1 - w) + h2hAvgA * w).toFixed(2);
+  }
+
   let isDynamic = false;
   const elapsedNum = parseInt(elapsedParam) || 0;
   if (elapsedNum > 0) {
@@ -708,6 +718,8 @@ export default async function handler(req, res) {
     const lgHome = parseFloat(leagueStats?.avg_home_goals) || 1.2;
     const lgAway = parseFloat(leagueStats?.avg_away_goals) || 1.2;
     const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota, lgHome, lgAway);
+    const lambdaHomeRaw = result.lambdaHome;
+    const lambdaAwayRaw = result.lambdaAway;
 
     // teams_stats lambda override — priority 2 (between form_stats and league_stats)
     if (formInsufficient && (tsH || tsA)) {
@@ -823,10 +835,31 @@ export default async function handler(req, res) {
       }
     }
 
+    // Soluția 2 — plafon ajustări: nicio combinație de straturi nu reduce λ cu mai mult de 20%
+    if (!parseInt(elapsed)) {
+      const floorH = +(lambdaHomeRaw * 0.80).toFixed(2);
+      const floorA = +(lambdaAwayRaw * 0.80).toFixed(2);
+      if (result.lambdaHome < floorH || result.lambdaAway < floorA) {
+        result.lambdaHome  = +Math.max(result.lambdaHome, floorH).toFixed(2);
+        result.lambdaAway  = +Math.max(result.lambdaAway, floorA).toFixed(2);
+        result.lambdaTotal = +(result.lambdaHome + result.lambdaAway).toFixed(2);
+        const mxFloor = calcPoisson6x6(result.lambdaHome, result.lambdaAway);
+        Object.assign(result, {
+          over15Prob: mxFloor.over15Prob, over25Prob: mxFloor.over25Prob,
+          ggProb: mxFloor.ggProb, homeWin: mxFloor.homeWin,
+          draw: mxFloor.draw, awayWin: mxFloor.awayWin,
+        });
+      }
+    }
+
     // Sync homeScoreRate/awayScoreRate cu lambda-urile finale calibrate
-    // (homeScoreRate era calculat din date istorice la init, lambda s-a modificat de N ori)
     result.homeScoreRate = Math.round((1 - Math.exp(-result.lambdaHome)) * 100);
     result.awayScoreRate = Math.round((1 - Math.exp(-result.lambdaAway)) * 100);
+
+    // Soluția 3 — GG corectat din H2H (blend 60% Poisson + 40% H2H, min. 3 meciuri directe)
+    if (result.h2hGG != null && result.h2hSample >= 3 && !parseInt(elapsed)) {
+      result.ggProb = Math.round(result.ggProb * 0.60 + result.h2hGG * 0.40);
+    }
 
     // Venue + altitude impact (Faza 1 Hybrid)
     if (venueInfo) {
