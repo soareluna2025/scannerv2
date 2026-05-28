@@ -135,6 +135,10 @@ function calcMatchMarkets(form, h2h, lg, ref, liveState = null) {
     mkts.dcx2.prob = Math.min(99, Math.max(1, Math.round((pAW + pD) * 100)));
   }
 
+  // Expune lambdas pentru detectarea datelor nesigure în buildAccumulator
+  mkts._lambdaH = lambdaH;
+  mkts._lambdaA = lambdaA;
+
   return mkts;
 }
 
@@ -183,8 +187,15 @@ function buildAccumulator(matches, targetMin = 1.50, targetMax = 5.00) {
     if (m.is_live && (m.minute || 0) >= 75) continue;
     // Exclude meciuri fără date de formă — probabilitățile ar fi inventate
     if (!m.has_form_data) continue;
+    // lambdaH < lambdaA = date de formă nesigure (gazda prezisă să marcheze mai puțin decât musafirul)
+    const lambdaH = m.markets._lambdaH || 1;
+    const lambdaA = m.markets._lambdaA || 1;
+    const formReliable = lambdaH >= lambdaA * 0.75; // echipa de acasă să aibă cel puțin 75% din lambda oaspete
+    const DC_1X2_KEYS = new Set(['h1', 'draw', 'h2', 'dc1x', 'dcx2']);
+
     for (const [key, mkt] of Object.entries(m.markets)) {
       if (!MARKET_ORDER.includes(key)) continue; // sare over05 + orice neinclus
+      if (DC_1X2_KEYS.has(key) && !formReliable) continue; // 1X2/DC cu forme inversate = nesigure
       if (mkt.prob < MIN_PROB) continue;
       if (isMarketSettled(key, m)) continue; // piața deja rezolvată în live — skip
       const fairOdds = Math.round((100 / mkt.prob) * 100) / 100;
