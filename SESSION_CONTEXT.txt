@@ -3722,3 +3722,13 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   - Override markets.h1/draw/h2/dc1x/dcx2 cu probabilitati implicite normalizate (overround removal)
   - Seteaza has_odds_1x2=true pe meci cand cote bookmaker disponibile
   - buildAccumulator: exclude 1X2/DC pentru meciuri fara cote reale (DC_1X2_KEYS.has(key) && !m.has_odds_1x2)
+
+[28.05 ~10:00] - REMOVE: Toate cotele bookmaker eliminate din interfata | Commit: c138549
+  - index.html: eliminat EV rows din carduri meci (live, pre-meci, favorite) care aratau "EV: +X% @ 2.45"
+  - Eliminat sectiunea "Calculator EV (Bet365)" din modal meciuri live
+  - Eliminat sectiunea "EV Analysis (Bet365)" cu tabel Piata/Model/Cota/EV din modal detalii meci
+  - Eliminat "Best bet: @ cota | EV" din cercul de incredere al match detail
+  - Eliminat Calculator EV din Generator S7 (Bilet Compus) detail view
+  - Eliminat SAFE BET badge cu cota bookmaker din carduri pre-meci
+  - Actualizat Monte Carlo BEST BET: afiseaza piata + probabilitate model, fara cota/EV bookmaker
+  - Probabilitatile Poisson (H/D/A%, Over 1.5%, GG%, confidence score) NESCHIMBATE
