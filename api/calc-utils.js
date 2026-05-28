@@ -15,13 +15,29 @@ function poissonProb(lambda, k) {
   return result;
 }
 
+// Dixon-Coles 1997 — corecție pentru low-scoring (0-0, 1-0, 0-1, 1-1)
+// rho < 0 => meciuri low-score MAI FRECVENTE decât Poisson independent prezice
+// Afectează DOAR i+j <= 2; scorurile mai mari rămân Poisson pur (tauDC = 1)
+function tauDC(i, j, lH, lA, rho) {
+  if (i === 0 && j === 0) return 1 - lH * lA * rho;
+  if (i === 1 && j === 0) return 1 + lA * rho;
+  if (i === 0 && j === 1) return 1 + lH * rho;
+  if (i === 1 && j === 1) return 1 - rho;
+  return 1;
+}
+
 export function calcPoisson6x6(lambdaHome, lambdaAway) {
   let probHomeWin = 0, probDraw = 0, probAwayWin = 0;
   let probOver05 = 0, probOver15 = 0, probOver25 = 0, probGG = 0;
 
+  // rho citit din .env (fallback -0.13 din literatura empirică pentru fotbal)
+  const rho = parseFloat(process.env.POISSON_RHO) || -0.13;
+
   for (let i = 0; i <= 5; i++) {
     for (let j = 0; j <= 5; j++) {
-      const p = poissonProb(lambdaHome, i) * poissonProb(lambdaAway, j);
+      const p = poissonProb(lambdaHome, i)
+              * poissonProb(lambdaAway, j)
+              * tauDC(i, j, lambdaHome, lambdaAway, rho);
       if (i > j) probHomeWin += p;
       else if (i === j) probDraw += p;
       else probAwayWin += p;

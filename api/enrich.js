@@ -101,21 +101,49 @@ function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
   return { lambda: currentGoals + lambdaRemaining, dynamic: true };
 }
 
-function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agParam, sothParam, sotaParam, lgHome = 1.2, lgAway = 1.2) {
+function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agParam, sothParam, sotaParam, lgHome = 1.2, lgAway = 1.2, leagueStats = null) {
   const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
   const pct = (arr, fn) => arr.length >= 5 ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
 
-  const homeAvgScored   = avg(hGames, m => (m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away) ?? 0);
-  const homeAvgConceded = avg(hGames, m => (m.teams?.home?.id === hId ? m.goals?.away : m.goals?.home) ?? 0);
-  const awayAvgScored   = avg(aGames, m => (m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0);
-  const awayAvgConceded = avg(aGames, m => (m.teams?.away?.id === aId ? m.goals?.home : m.goals?.away) ?? 0);
+  // Lambda Nivel 4 — temporal decay Dixon-Coles 1997 (phi = 0.0065, half-life ~107 zile)
+  const phi = 0.0065;
+  const now = Date.now();
+  const weighted = (arr, valueFn) => {
+    let sumW = 0, sumWV = 0;
+    for (const m of arr) {
+      const ageDays = m.match_date
+        ? (now - new Date(m.match_date).getTime()) / 86_400_000
+        : 30;
+      const w = Math.exp(-phi * ageDays);
+      sumW  += w;
+      sumWV += w * valueFn(m);
+    }
+    return sumW > 0 ? sumWV / sumW : 0;
+  };
+
+  const homeAvgScored   = weighted(hGames, m => (m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away) ?? 0);
+  const homeAvgConceded = weighted(hGames, m => (m.teams?.home?.id === hId ? m.goals?.away : m.goals?.home) ?? 0);
+  const awayAvgScored   = weighted(aGames, m => (m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0);
+  const awayAvgConceded = weighted(aGames, m => (m.teams?.away?.id === aId ? m.goals?.home : m.goals?.away) ?? 0);
+
+  // Lambda Nivel 4 — Maher 1982: lambda = lgAvg × AttackStrength × DefenseStrength × HomeAdvantage
+  // Normalizare față de media ligii elimină bias-ul cross-league (Premier League ≠ Liga 3 Finlanda)
+  const lgHomeAvg = parseFloat(leagueStats?.avg_home_goals) || lgHome || 1.35;
+  const lgAwayAvg = parseFloat(leagueStats?.avg_away_goals) || lgAway || 1.10;
+  const homeAdvantage = 1.25;
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+  const hAttStr = lgHomeAvg > 0 ? homeAvgScored   / lgHomeAvg : 1.0;
+  const aDefStr = lgHomeAvg > 0 ? awayAvgConceded / lgHomeAvg : 1.0;
+  const aAttStr = lgAwayAvg > 0 ? awayAvgScored   / lgAwayAvg : 1.0;
+  const hDefStr = lgAwayAvg > 0 ? homeAvgConceded / lgAwayAvg : 1.0;
 
   let lambdaHome = hGames.length && aGames.length
-    ? (homeAvgScored + awayAvgConceded) / 2
-    : lgHome;
+    ? clamp(lgHomeAvg * clamp(hAttStr, 0.4, 2.5) * clamp(aDefStr, 0.4, 2.5) * homeAdvantage, 0.3, 4.5)
+    : (lgHome ?? 1.35);
   let lambdaAway = hGames.length && aGames.length
-    ? (awayAvgScored + homeAvgConceded) / 2
-    : lgAway;
+    ? clamp(lgAwayAvg * clamp(aAttStr, 0.4, 2.5) * clamp(hDefStr, 0.4, 2.5), 0.3, 4.0)
+    : (lgAway ?? 1.10);
 
   // Soluția 1 — H2H influențează λ direct (pre-meci, min. 3 meciuri directe)
   // Blend 70% formă + 30% H2H (scalat cu sample size, max 30%)
@@ -450,12 +478,12 @@ function calcConfidence(result, liveStats, teamStrengths) {
 
 // --- PostgreSQL data helpers ---
 
-async function getFormFromDB(teamId) {
+async function getHomeForm(teamId) {
   try {
     const r = await query(
-      `SELECT home_team_id, away_team_id, home_goals, away_goals
+      `SELECT home_team_id, away_team_id, home_goals, away_goals, match_date
        FROM fixtures_history
-       WHERE (home_team_id = $1 OR away_team_id = $1)
+       WHERE home_team_id = $1
          AND status_short = 'FT'
          AND home_goals IS NOT NULL
          AND match_date >= NOW() - INTERVAL '2 years'
@@ -466,6 +494,28 @@ async function getFormFromDB(teamId) {
     return r.rows.map(row => ({
       teams: { home: { id: row.home_team_id }, away: { id: row.away_team_id } },
       goals: { home: row.home_goals ?? 0, away: row.away_goals ?? 0 },
+      match_date: row.match_date,
+    }));
+  } catch (_) { return []; }
+}
+
+async function getAwayForm(teamId) {
+  try {
+    const r = await query(
+      `SELECT home_team_id, away_team_id, home_goals, away_goals, match_date
+       FROM fixtures_history
+       WHERE away_team_id = $1
+         AND status_short = 'FT'
+         AND home_goals IS NOT NULL
+         AND match_date >= NOW() - INTERVAL '2 years'
+       ORDER BY match_date DESC
+       LIMIT 10`,
+      [teamId]
+    );
+    return r.rows.map(row => ({
+      teams: { home: { id: row.home_team_id }, away: { id: row.away_team_id } },
+      goals: { home: row.home_goals ?? 0, away: row.away_goals ?? 0 },
+      match_date: row.match_date,
     }));
   } catch (_) { return []; }
 }
@@ -651,8 +701,8 @@ export default async function handler(req, res) {
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats + venue in parallel ---
     const [sbHForm, sbAForm, sbH2H, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA, lineupFactor] = await Promise.all([
-      getFormFromDB(hId),
-      getFormFromDB(aId),
+      getHomeForm(hId),
+      getAwayForm(aId),
       getH2HFromDB(hId, aId),
       getTeamStrengths(hId, aId),
       fid ? getInjuriesFromDB(Number(fid)) : Promise.resolve([]),
@@ -706,7 +756,7 @@ export default async function handler(req, res) {
     // --- Calculations ---
     const lgHome = parseFloat(leagueStats?.avg_home_goals) || 1.2;
     const lgAway = parseFloat(leagueStats?.avg_away_goals) || 1.2;
-    const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota, lgHome, lgAway);
+    const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota, lgHome, lgAway, leagueStats);
     const lambdaHomeRaw = result.lambdaHome;
     const lambdaAwayRaw = result.lambdaAway;
 

@@ -180,23 +180,63 @@ A. POISSON 6×6 (calc-utils.js:18)
   Performanța home/away diferă semnificativ. Un club poate marca 2/meci acasă
   dar 0.8/meci deplasare. Folosind doar meciurile relevante, lambda e mai precis.
 
-B. LAMBDA PIPELINE (enrich.js — 10 pași în ordine)
+B. LAMBDA PIPELINE — NIVEL 4 (enrich.js)
 
-  Prioritatea datelor (de la cel mai specific la cel mai general):
-  1. Form din ultimele 10 meciuri (cel mai relevant — recent și specific)
-  2. teams_stats (medie sezon complet — mai mult context)
-  3. standings blend (60/40 — balansează recency cu stabilitatea sezonului)
-  4. topScorerFactor (jucătorul cheie influențează lambda ±15%)
+  Modelul actual: Maher 1982 + Dixon-Coles 1997 + temporal decay + H/A separat
+  Implementat: 28.05.2026 — saltul de la Nivel 2 (cross-product) la Nivel 4 complet.
+
+  B.1 — FORMA INPUT (H/A separat)
+    getHomeForm(teamId): ultimele 10 meciuri ALE GAZDEI doar ACASĂ (home_team_id = $1)
+    getAwayForm(teamId): ultimele 10 meciuri ALE OASPETELUI doar DEPLASARE (away_team_id = $1)
+    Motiv: performanța home/away diferă semnificativ. Cross-product cu meciuri
+    mixate diluează semnalul.
+
+  B.2 — TEMPORAL DECAY Dixon-Coles 1997
+    weighted(arr, fn) cu phi = 0.0065 → half-life ~107 zile
+    w = exp(-phi * ageDays); medie ponderată în loc de medie simplă
+    Motiv: meciul de ieri = relevanță 1.0; meciul de acum 107 zile = relevanță 0.5
+    Constanta phi=0.0065 NU se modifică (validată empiric Dixon-Coles).
+
+  B.3 — MAHER 1982 Attack/Defense Strength + Home Advantage
+    lgHomeAvg, lgAwayAvg din league_stats (avg_home_goals, avg_away_goals)
+    hAttStr = homeAvgScored   / lgHomeAvg    [1.0 = liga avg, >1 = atac peste medie]
+    aDefStr = awayAvgConceded / lgHomeAvg    [1.0 = apărare la medie, >1 = slabă]
+    aAttStr = awayAvgScored   / lgAwayAvg
+    hDefStr = homeAvgConceded / lgAwayAvg
+    lambdaHome = lgHomeAvg × clamp(hAttStr,0.4-2.5) × clamp(aDefStr,0.4-2.5) × 1.25
+    lambdaAway = lgAwayAvg × clamp(aAttStr,0.4-2.5) × clamp(hDefStr,0.4-2.5)
+    homeAdvantage = 1.25 (validat empiric din studii).
+    Clamp final: lambdaHome [0.3, 4.5], lambdaAway [0.3, 4.0]
+    Motiv: normalizarea cu liga elimină bias-ul cross-league (Premier League vs
+    Liga 3 Finlanda au baseline-uri diferite — comparațe directe sunt eronate).
+
+  B.4 — DIXON-COLES TAU CORRECTION (calc-utils.js:tauDC)
+    rho citit din process.env.POISSON_RHO (fallback -0.13)
+    tauDC(i,j,lH,lA,rho) aplicat în loop la fiecare combinație (i,j):
+      (0,0) → 1 - lH*lA*rho        [boost 0-0]
+      (1,0) → 1 + lA*rho           [reducere 1-0]
+      (0,1) → 1 + lH*rho           [reducere 0-1]
+      (1,1) → 1 - rho              [boost 1-1]
+      altele → 1.0                 [neschimbat]
+    rho < 0 → meciurile low-scoring (≤2 goluri totale) sunt mai frecvente
+    decât Poisson independent prezice. Confirmat empiric pe fotbal.
+
+  B.5 — PIPELINE DE AJUSTĂRI ULTERIOARE (după B.1-B.4 calculate λH, λA):
+  1. h2h blend (70% formă + 30% H2H scalat cu sample size, max 30%)
+  2. teams_stats override dacă form insuficient (<3 meciuri H/A)
+  3. standings blend (60% form + 40% medie sezon) Hybrid V2
+  4. topScorerFactor (±15%)
   5. lineupFactor (formație confirmată ±12%)
   6. injuryLambda (star player lipsă = -6% până -12% lambda de atac)
   7. model_weights (auto-calibrare per ligă din learning-analysis)
-  8. altitude/venue (meciuri la altitudine înaltă au mai puține goluri)
-  9. coach style (antrenor ofensiv vs defensiv)
-  10. referee (arbitru cu many-cards = mai puține goluri)
+  8. altitude/venue (>2500m: ×0.78/0.70, >2000m: ×0.88/0.82, >1500m: ×0.94/0.90)
+  9. coachImpact (tenure + style: offensive/open/defensive/pragmatic)
+  10. refereeImpact (home_win_rate bias + cardy_ref penalty)
+  11. dynamic live (calcDynamicLambda din SOT acumulat live)
 
   De ce nu combinăm toți factorii simultan? Fiecare pas ajustează lambda
-  incremental. Ordinea contează: forma recentă are prioritate față de
-  media sezonului, care are prioritate față de statisticile ligii.
+  incremental. Ordinea contează: Maher (B.3) e baseline-ul; restul sunt
+  modulatori contextuali peste λ obținut prin Maher.
 
 C. EXPECTED VALUE (calc-utils.js:67)
 

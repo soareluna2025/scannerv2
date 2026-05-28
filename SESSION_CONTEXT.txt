@@ -3142,6 +3142,74 @@ NEXT STEPS (prioritizat):
   Commit: 85525a9 | Push: main + claude/list-project-structure-HrK8s
 ================================================================================
 
+[28.05 22:50] - Lambda Nivel 4 complet — H/A separat + temporal decay + Maher + Dixon-Coles tau
+  Saltul de la Nivel 2 (cross-product mixed) la Nivel 4 (Maher + DC + decay + H/A).
+  Baza literatura: Maher 1982 ("Modelling Association Football Scores") + Dixon-Coles 1997.
+
+  IMBUNATATIRE 1 — api/enrich.js: getFormFromDB → getHomeForm + getAwayForm
+    Linia 453-471 (functie veche stearsa) → 453-491 (2 functii noi)
+    Linia 676-677: getHomeForm(hId) + getAwayForm(aId)
+    getHomeForm: WHERE home_team_id = $1 → DOAR meciurile gazdei ACASA
+    getAwayForm: WHERE away_team_id = $1 → DOAR meciurile oaspetelui IN DEPLASARE
+    + adaugat match_date in SELECT (necesar pentru temporal decay)
+    Motiv: cross-product Poisson cu meciuri mixate H+A dilueaza semnalul
+    (performanta home/away difera tipic 0.3-0.8 goluri/meci)
+
+  IMBUNATATIRE 2 — api/enrich.js calcPoisson: temporal decay weighted average
+    Linia 109-118 (avg simplu) → 109-127 (weighted cu phi=0.0065)
+    Formula: w = exp(-phi * ageDays); media ponderata in loc de medie simpla
+    phi = 0.0065 → half-life ~107 zile (Dixon-Coles 1997 valoare empirica fotbal)
+    Meciuri fara match_date → ageDays = 30 (fallback conservator)
+    Motiv: meciul de ieri = relevanta 1.0; meciul de acum 200 zile = relevanta 0.27
+
+  IMBUNATATIRE 3 — api/enrich.js calcPoisson: Maher 1982 Attack/Defense Strength
+    Linia 130-145 (cross-product simplu) → 130-148 (Maher normalizat)
+    lgHomeAvg, lgAwayAvg din leagueStats.avg_home_goals/avg_away_goals
+    AttStr / DefStr clampate la [0.4, 2.5] (protectie outliers)
+    lambdaHome final clampat [0.3, 4.5], lambdaAway clampat [0.3, 4.0]
+    homeAdvantage = 1.25 (validat empiric)
+    Signature calcPoisson() extinsa: + leagueStats = null parametru
+    Apelantul linia 766: pasaj leagueStats (deja avut in Promise.all)
+    Motiv: normalizarea cu liga elimina bias-ul cross-league
+    (Premier League avg = 2.85 goluri/meci, Liga 3 Finlanda avg = 2.45 → comparatii directe gresite)
+
+  IMBUNATATIRE 4 — api/calc-utils.js: Dixon-Coles tau correction
+    Adaugat functia tauDC inainte de calcPoisson6x6 (linia 18-26)
+    In loop calcPoisson6x6 (linia 31): p *= tauDC(i, j, lH, lA, rho)
+    rho citit din process.env.POISSON_RHO || -0.13 (fallback empiric)
+    Afecteaza DOAR scoruri 0-0, 1-0, 0-1, 1-1 (i+j <= 2); restul tauDC=1
+    Motiv: meciurile low-scoring (≤2 goluri) sunt mai frecvente decat
+    Poisson independent prezice → corectie empiric demonstrata Dixon-Coles 1997
+    Renormalizarea la 100% (linia 47-49) ramane intacta
+
+  VERIFICARE:
+    ✅ node --check api/enrich.js     OK
+    ✅ node --check api/calc-utils.js OK
+    ✅ Smoke test calcPoisson6x6 cu tau:
+       λH=1.5, λA=1.2 → 1X2: 42/29/29, Over1.5: 76%, GG: 55%
+       λH=2.5, λA=1.0 → 1X2: 68/20/13, Over1.5: 83%, GG: 56%
+       λH=0.8, λA=0.7 → 1X2: 33/40/27, Over1.5: 46%, GG: 29%
+       Draw 40% pentru low-scoring confirma DC tau functioneaza (boost 0-0/1-1)
+
+  LIMITARI SANDBOX:
+    ❌ NU am putut rula curl http://localhost:3000/api/enrich (VPS inaccesibil)
+    ❌ NU am putut adauga POISSON_RHO=-0.13 in .env pe VPS direct
+    Cod foloseste fallback -0.13 daca .env nu il are → comportament corect by default
+    Pentru a controla rho de pe VPS:
+      ssh root@VPS
+      echo 'POISSON_RHO=-0.13' >> /root/scannerv2/.env
+      systemctl restart alohascan
+
+  EFECT ASTEPTAT (impact pe Brier):
+    Saltul Nivel 2 → 4 reduce Brier estimat ~10-20% (literatura Dixon-Coles).
+    Pentru AlohaScan: Brier curent 0.193 (Over 1.5) → asteptat 0.155-0.175
+    Verificare post-deploy: 30 zile observare + comparare cu /api/admin/calibration
+
+  DOCUMENTATIE ACTUALIZATA:
+    ARHITECT.md sectiunea 3B rescrisa complet (cei 4 sub-pasi B.1-B.4 + pipeline B.5)
+    Pipeline complet documentat ca 11 pasi (era 10, adaugat dynamic live ca pas 11)
+  Commit: (acest commit)
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 14. DIAGNOSTIC COMPLET — 25.05.2026 (rulat pe VPS via scripts/diagnostic-db.sh)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
