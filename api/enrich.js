@@ -475,6 +475,7 @@ async function getFormFromDB(teamId) {
        WHERE (home_team_id = $1 OR away_team_id = $1)
          AND status_short = 'FT'
          AND home_goals IS NOT NULL
+         AND match_date >= NOW() - INTERVAL '2 years'
        ORDER BY match_date DESC
        LIMIT 10`,
       [teamId]
@@ -489,7 +490,7 @@ async function getFormFromDB(teamId) {
 async function getH2HFromDB(homeId, awayId) {
   try {
     const r = await query(
-      'SELECT * FROM h2h WHERE (home_team_id = $1 AND away_team_id = $2) OR (home_team_id = $2 AND away_team_id = $1) ORDER BY match_date DESC LIMIT 10',
+      `SELECT * FROM h2h WHERE ((home_team_id = $1 AND away_team_id = $2) OR (home_team_id = $2 AND away_team_id = $1)) AND match_date >= NOW() - INTERVAL '2 years' ORDER BY match_date DESC LIMIT 10`,
       [homeId, awayId]
     );
     return r.rows;
@@ -698,11 +699,16 @@ export default async function handler(req, res) {
       getInjuredPlayerScores(injuries, hId, aId),
     ]);
 
-    // Resolve final datasets
-    const hGames = needHForm ? (apiFbHForm?.response || []).slice(0, 10) : sbHForm;
-    const aGames = needAForm ? (apiFbAForm?.response || []).slice(0, 10) : sbAForm;
+    // Resolve final datasets — meciuri mai vechi de 2 ani excluse din toate calculele
+    const _cutoff = new Date(Date.now() - 2 * 365.25 * 24 * 3600 * 1000);
+    const _fresh = arr => (arr || []).filter(m => {
+      const d = m?.fixture?.date || m?.date;
+      return d ? new Date(d) >= _cutoff : true;
+    });
+    const hGames = needHForm ? _fresh(apiFbHForm?.response).slice(0, 10) : sbHForm;
+    const aGames = needAForm ? _fresh(apiFbAForm?.response).slice(0, 10) : sbAForm;
     const h2h = needH2H
-      ? (apiFbH2H?.response || []).slice(0, 10)
+      ? _fresh(apiFbH2H?.response).slice(0, 10)
       : h2hToFixtures(sbH2H);
 
     // teams_stats fallback when form still insufficient after API
