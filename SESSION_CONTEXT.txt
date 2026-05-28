@@ -3271,6 +3271,75 @@ NEXT STEPS (prioritizat):
     Marcate [x]: #4 #8 #10 #11 #12 #14 #15 #21
     Nu raman bug-uri IMPORTANT/CRITIC/COSMETIC ne-rezolvate care sa fie aplicabile
     (#5, #16, #17, #18, #23 ramaneau de analizat — nu erau in scope Sprint 2)
+  Commit: 62abc74
+
+[28.05 23:45] - Sprint 3 Pas 1 — CSS separat in 4 fisiere
+  Obiectiv: extragerea celor 545 linii CSS din blocul <style> al index.html
+  in 4 fisiere modulare in public/css/ pentru maintainability si caching browser.
+
+  STRUCTURA NOUA:
+    public/css/variables.css   —  11 linii — reset universal + :root cu variabile CSS
+    public/css/layout.css      —  73 linii — html/body, header, nav, stats, page, connect
+    public/css/cards.css       — 259 linii — match cards, pre-meci, match detail overlay, generator
+    public/css/components.css  — 224 linii — badges, NGP bars, agent, simulator, splash, animations
+    TOTAL CSS extras: 567 linii (545 originale + 22 comentarii header/sectiuni)
+
+  INDEX.HTML:
+    Inainte: 4839 linii (cu blocul <style>...</style> integrat 16-561)
+    Acum:    4297 linii (542 linii mutate; ramane HTML/JS doar)
+    Inlocuit cu 4 <link rel="stylesheet"> in <head> (variables PRIMUL — regula cascading)
+
+  MAPARE PE LINII (din index.html original):
+    variables.css: linii 17-23 (reset + :root)
+    layout.css: linii 24, 27-46 (header), 49-57 (stats), 60-64 (content), 67-76 (connect),
+                262-277 (bottom nav + sim-fab)
+    cards.css: linii 86-115 (.card+), 116-135 (.markets/.ev), 169-193 (.pm-*),
+               295-299 (.md-overlay), 351-374 (.md-hdr/standings/body), 377-403 (md SUMAR),
+               406-415 (FORM), 418-429 (FORMATII), 432-446 (JUCATORI/EVENTS),
+               464-545 (.gen2-* + ecrane S1-S5)
+    components.css: linia 40 (pulse), 79-83 (.chips), 108-115 (NGP+forte),
+                    136-144 (badge-conf/top/analyze), 147-149 (HT), 152-155 (empty),
+                    158-166 (wr), 195-226 (conf-bar/circle/pi-*),
+                    229-259 (agent + typing), 280-289 (score-chips/spinner/spin),
+                    292 (scrollbar), 301-350 (sim-*), 449-451 (nav-badge),
+                    455-462 (helpers), 548-560 (splash + spl-* keyframes)
+    DUPLICAT @keyframes spin (linia 289 + linia 454) — pastrat un singur exemplar
+
+  SERVER.JS:
+    Linia 27 existenta:  app.use(express.static(__dirname, { index: 'index.html' }))
+    Linia 29 ADAUGATA:   app.use(express.static(join(__dirname, 'public')))
+    Servea deja static din root (__dirname). Adaugat al doilea pentru a servi
+    public/ sub URL /. Astfel /css/variables.css → __dirname/public/css/variables.css.
+    Importul 'join' din 'path' era deja prezent (linia 12).
+
+  VERIFICARE:
+    ✅ node --check server.js OK
+    ✅ <style> count in index.html = 0 (eliminat complet)
+    ✅ CSS brace balance (toate balansate):
+       variables.css: { x 2,   } x 2   OK
+       layout.css:    { x 37,  } x 37  OK
+       cards.css:     { x 209, } x 209 OK
+       components.css:{ x 183, } x 183 OK
+    ✅ Smoke test HTTP server local: toate 4 CSS HTTP 200, sizes 466/3807/18605/15478 bytes
+    ✅ Cele 4 <link> in head index.html in ordine corecta (variables primul)
+
+  LIMITARI SANDBOX:
+    ❌ NU am putut deschide browser cu pagina reala pentru a vedea vizual rendering
+    ❌ NU am putut verifica daca exista clase CSS folosite in HTML/JS dar absente
+       din cele 4 fisiere noi (extras manual, sample-uri vizuale necesare post-deploy)
+    NOTA: BUG vechi pre-existent — clase .sim-select / .sim-inp / .sim-score-name folosesc
+          var(--txt) in loc de var(--tx). NU l-am corectat (preservare 1:1 cu original).
+
+  AVANTAJE NOU FORMAT:
+    1. Browser cache separat per fisier — modificari la components.css nu invalideaza layout
+    2. Posibilitate sa servim CSS critic-path (variables + layout) cu <link>, restul async
+    3. Edit-uri mai usoare: gasesti regula in fisierul logic vs scroll 545 linii
+    4. Sprint 3 viitor: extragere JS, modulare progresiva
+
+  PASI URMATORI (sprint 3+):
+    - Pas 2 (sprint viitor): extragere JS din index.html in public/js/
+    - Pas 3 (sprint viitor): module ES6 cu imports
+    - Posibil: bundle production cu esbuild/vite
   Commit: (acest commit)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

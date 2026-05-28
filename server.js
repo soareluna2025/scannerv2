@@ -25,6 +25,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Static files (index.html, icons, manifest, service-worker)
 app.use(express.static(__dirname, { index: 'index.html' }));
+// Public static (CSS extras, future JS modules)
+app.use(express.static(join(__dirname, 'public')));
 
 // API routes — mapate direct la handler-ele Vercel
 import { logError } from './api/db.js';
