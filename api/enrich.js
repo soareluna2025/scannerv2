@@ -971,6 +971,11 @@ export default async function handler(req, res) {
       }
     }
 
+    // Sync homeScoreRate/awayScoreRate cu lambda-urile finale calibrate
+    // (homeScoreRate era calculat din date istorice la init, lambda s-a modificat de N ori)
+    result.homeScoreRate = Math.round((1 - Math.exp(-result.lambdaHome)) * 100);
+    result.awayScoreRate = Math.round((1 - Math.exp(-result.lambdaAway)) * 100);
+
     // Venue + altitude impact (Faza 1 Hybrid)
     if (venueInfo) {
       const altM    = Number(venueInfo.altitude_m) || 0;
