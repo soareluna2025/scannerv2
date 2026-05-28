@@ -1,4 +1,4 @@
-import { calcPoisson6x6, parseOddsItem, calcEV } from './calc-utils.js';
+import { calcPoisson6x6 } from './calc-utils.js';
 import { query } from './db.js';
 import { logPrediction } from './log-prediction.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
@@ -358,7 +358,7 @@ async function getInjuredPlayerScores(injuries, homeId, awayId) {
   } catch (_) { return { home: [], away: [] }; }
 }
 
-function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPred = null) {
+function calcConfidence(result, liveStats, teamStrengths, apiPred = null) {
   const score1 = result.over15Prob ?? 50;
   const elapsed  = liveStats?.elapsed ?? 0;
   const sotTotal = liveStats?.sot     ?? null;
@@ -383,74 +383,9 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPr
     }
   }
 
-  // Layer 5 — EV: folosim evData calculat deja (elimină hardcodarea la 50%)
-  let score5 = null;
-  let bestMarket = null, bestCota = null, bestEV = null;
-  if (evData?.hasOdds) {
-    const candidates = [
-      { name: 'Over 1.5', ev: evData.evOver15, cota: evData.cotaOver15 },
-      { name: 'GG',       ev: evData.evGG,     cota: evData.cotaGG },
-      { name: '1 Gazde',  ev: evData.evHome,   cota: evData.cotaHome },
-      { name: 'X Egal',   ev: evData.evDraw,   cota: evData.cotaDraw },
-      { name: '2 Oasp.',  ev: evData.evAway,   cota: evData.cotaAway },
-    ].filter(c => c.ev != null && c.cota != null && c.cota >= 1.20)
-     .sort((a, b) => b.ev - a.ev);
-
-    if (candidates.length) {
-      const best = candidates[0];
-      bestMarket = best.name;
-      bestCota   = best.cota;
-      if (best.ev > 0) {
-        score5 = Math.min(100, best.ev * 300);
-        bestEV = best.ev;
-      } else {
-        score5 = Math.max(10, 50 + Math.round(best.ev * 100));
-      }
-    }
-  } else if (oddsRaw) {
-    // fallback: calcul direct când evData nu e disponibil
-    const markets = [
-      { name: 'Over 1.5', cota: oddsRaw.cotaOver15, prob: result.over15Prob / 100 },
-      { name: 'GG',       cota: oddsRaw.cotaGG,     prob: result.ggProb     / 100 },
-      { name: '1 Gazde',  cota: oddsRaw.cotaHome,   prob: result.homeWin    / 100 },
-      { name: 'X Egal',   cota: oddsRaw.cotaDraw,   prob: result.draw       / 100 },
-      { name: '2 Oasp.',  cota: oddsRaw.cotaAway,   prob: result.awayWin    / 100 },
-    ].filter(m => m.cota >= 1.20 && m.prob != null);
-
-    if (markets.length) {
-      const evMarkets = markets.map(m => ({ ...m, ev: m.prob * m.cota - 1 }))
-        .sort((a, b) => b.ev - a.ev);
-      const best = evMarkets[0];
-      bestMarket = best.name;
-      bestCota   = best.cota;
-      if (best.ev > 0) {
-        score5 = Math.min(100, best.ev * 300);
-        bestEV = best.ev;
-      } else {
-        score5 = Math.max(10, 50 + Math.round(best.ev * 100));
-      }
-    }
-  }
-
-  // Suprimă EV când calitatea datelor nu susține estimarea probabilității.
-  // Modelul calculează lambda din date istorice — când datele lipsesc, lambda
-  // alunecă spre media ligii și nivelează artificial diferența dintre echipe.
-  // Bookmaker-ul e mai precis decât noi pentru cote lungi cu date insuficiente.
-  if (bestEV !== null && bestCota != null) {
-    const dataQuality = result.confidence || 'LOW';
-    const h2hWeak    = (result.h2hSample || 0) < 3;
-    const suppress   =
-      bestCota > 10.0 ||                                          // niciodată la cote extreme
-      (bestCota > 5.0  && dataQuality === 'LOW') ||               // LOW data + cote lungi
-      (bestCota > 3.0  && dataQuality === 'LOW' && h2hWeak);      // LOW data + fără H2H
-    if (suppress) {
-      bestEV = null; bestMarket = null; bestCota = null; score5 = null;
-    }
-  }
-
-  const scores = [score1, score2, score3, score4, score5];
+  const scores = [score1, score2, score3, score4];
   const alignedCount = scores.filter(s => s > 60).length;
-  const score6 = (alignedCount / 5) * 100;
+  const score6 = (alignedCount / 4) * 100;
 
   let score7 = null;
   let teamStrengthHome = null, teamStrengthAway = null;
@@ -477,14 +412,13 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPr
   }
 
   const layers = [
-    { score: score1, w: 0.20 },
-    { score: score2, w: 0.18 },
-    { score: score3, w: 0.10 },
-    { score: score4, w: 0.14 },
-    { score: score5, w: 0.08 }, // EV Layer 5
-    { score: score6, w: 0.05 },
+    { score: score1, w: 0.22 },
+    { score: score2, w: 0.20 },
+    { score: score3, w: 0.12 },
+    { score: score4, w: 0.16 },
+    { score: score6, w: 0.06 },
     { score: score7, w: 0.18 },
-    { score: score8, w: 0.08 },
+    { score: score8, w: 0.06 },
   ].filter(l => l.score !== null).filter(l => l.w > 0);
   const totalW = layers.reduce((s, l) => s + l.w, 0);
   const confidenceScore = Math.round(layers.reduce((s, l) => s + l.score * (l.w / totalW), 0));
@@ -512,16 +446,12 @@ function calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPr
       forma:        Math.round(score2),
       h2h:          Math.round(score3),
       live:         Math.round(score4),
-      ...(score5 != null ? { ev: Math.round(score5) } : {}),
       consistenta:  Math.round(score6),
       ...(hasStr ? { putereEchipe: score7 } : {}),
       ...(score8 != null ? { apiConsensus: Math.round(score8) } : {}),
     },
     teamStrengthHome,
     teamStrengthAway,
-    bestMarket,
-    bestCota,
-    bestEV,
   };
 }
 
@@ -553,45 +483,6 @@ async function getH2HFromDB(homeId, awayId) {
       [homeId, awayId]
     );
     return r.rows;
-  } catch (_) { return []; }
-}
-
-async function getOddsFromDB(fixtureId) {
-  try {
-    const r = await query(
-      'SELECT *, bet_name AS market, value_name AS label, value_odd AS odd_value FROM odds WHERE fixture_id = $1 AND bookmaker_id = 8',
-      [fixtureId]
-    );
-    if (r.rows.length > 0) return r.rows;
-
-    // Fallback: prematch_data stochează odds ca array [{bookmakers:[{id,name,bets:[{name,values}]}]}]
-    const pd = await query(
-      `SELECT payload FROM prematch_data WHERE fixture_id = $1 AND data_type = 'odds'
-       ORDER BY collected_at DESC LIMIT 1`,
-      [fixtureId]
-    );
-    if (!pd.rows.length) return [];
-    const arr = pd.rows[0].payload;
-    if (!Array.isArray(arr) || !arr.length) return [];
-    const rows = [];
-    for (const item of arr) {
-      for (const bm of item.bookmakers || []) {
-        for (const bet of bm.bets || []) {
-          for (const v of bet.values || []) {
-            const oddVal = parseFloat(v.odd);
-            if (!oddVal) continue;
-            rows.push({
-              bookmaker_id:   bm.id,
-              bookmaker_name: bm.name,
-              market:         bet.name,
-              label:          v.value,
-              odd_value:      oddVal,
-            });
-          }
-        }
-      }
-    }
-    return rows;
   } catch (_) { return []; }
 }
 
@@ -750,23 +641,6 @@ function h2hToFixtures(rows) {
   }));
 }
 
-// Transform flat odds rows → parseOddsItem-compatible structure
-function oddsRowsToItem(rows) {
-  if (!rows.length) return null;
-  const betsMap = {};
-  for (const row of rows) {
-    if (!betsMap[row.market]) betsMap[row.market] = [];
-    betsMap[row.market].push({ value: row.label, odd: String(row.odd_value) });
-  }
-  return {
-    bookmakers: [{
-      id:   rows[0].bookmaker_id,
-      name: rows[0].bookmaker_name,
-      bets: Object.entries(betsMap).map(([name, values]) => ({ name, values })),
-    }],
-  };
-}
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -782,11 +656,10 @@ export default async function handler(req, res) {
 
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats + venue in parallel ---
-    const [sbHForm, sbAForm, sbH2H, sbOddsRows, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA, lineupFactor] = await Promise.all([
+    const [sbHForm, sbAForm, sbH2H, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA, lineupFactor] = await Promise.all([
       getFormFromDB(hId),
       getFormFromDB(aId),
       getH2HFromDB(hId, aId),
-      fid ? getOddsFromDB(Number(fid)) : Promise.resolve([]),
       getTeamStrengths(hId, aId),
       fid ? getInjuriesFromDB(Number(fid)) : Promise.resolve([]),
       fid ? getMatchStatsFromDB(Number(fid)) : Promise.resolve([]),
@@ -807,13 +680,11 @@ export default async function handler(req, res) {
     const needHForm = sbHForm.length  < 3;
     const needAForm = sbAForm.length  < 3;
     const needH2H   = sbH2H.length    < 3;
-    const needOdds  = fid && sbOddsRows.length === 0;
 
-    const [apiFbHForm, apiFbAForm, apiFbH2H, apiFbOdds, injuredScores] = await Promise.all([
+    const [apiFbHForm, apiFbAForm, apiFbH2H, injuredScores] = await Promise.all([
       needHForm ? fetchApiFootball(`/fixtures?team=${h}&last=20&status=FT`).then(r => r.json()) : null,
       needAForm ? fetchApiFootball(`/fixtures?team=${a}&last=20&status=FT`).then(r => r.json()) : null,
       needH2H   ? fetchApiFootball(`/fixtures/headtohead?h2h=${h}-${a}&last=10`).then(r => r.json()) : null,
-      needOdds  ? fetchApiFootball(`/odds?fixture=${fid}`).then(r => r.json()) : null,
       getInjuredPlayerScores(injuries, hId, aId),
     ]);
 
@@ -832,25 +703,6 @@ export default async function handler(req, res) {
           getTeamStatsFromDB(aId, lgid),
         ])
       : [null, null];
-
-    // Resolve odds
-    let oddsRaw = null;
-    if (!needOdds && sbOddsRows.length > 0) {
-      oddsRaw = parseOddsItem(oddsRowsToItem(sbOddsRows));
-    } else if (needOdds && apiFbOdds) {
-      const item = (apiFbOdds.response || [])[0];
-      if (item) oddsRaw = parseOddsItem(item);
-
-      // League-level fallback
-      if (!oddsRaw && lgid) {
-        try {
-          const r5 = await fetchApiFootball(`/odds?league=${lgid}&season=${new Date().getFullYear()}`);
-          const d5 = await r5.json();
-          const item2 = (d5.response || []).find(x => x.fixture?.id === Number(fid));
-          if (item2) oddsRaw = parseOddsItem(item2);
-        } catch (_) {}
-      }
-    }
 
     // --- Calculations ---
     const lgHome = parseFloat(leagueStats?.avg_home_goals) || 1.2;
@@ -1040,8 +892,6 @@ export default async function handler(req, res) {
         result.over25Prob = Math.max(0, result.over25Prob - 5);
     }
 
-    const evData = calcEV(result, oddsRaw);
-
     // --- Resolve xG ---
     let xgSource = 'estimated';
     let xgValue  = (parseFloat(soth) || 0) * 0.4 + (parseFloat(sota) || 0) * 0.4;
@@ -1064,7 +914,7 @@ export default async function handler(req, res) {
       da, yc, elapsed: elapsedNum,
     } : null;
 
-    const confData = calcConfidence(result, oddsRaw, liveStats, teamStrengths, evData, apiPred);
+    const confData = calcConfidence(result, liveStats, teamStrengths, apiPred);
 
     if (elapsed && parseInt(elapsed) > 0) {
       confData.breakdown.xg_source = xgSource;
@@ -1127,7 +977,7 @@ export default async function handler(req, res) {
     const cornersOver85 = _ppo(_refAvgCorners, 8);
     const cornersOver95 = _ppo(_refAvgCorners, 9);
 
-    const payload = { ...result, ...evData, ...confData,
+    const payload = { ...result, ...confData,
       cardsOver35, cardsOver45, cornersOver85, cornersOver95,
       leagueStats: leagueStats || null, refereeStats: refereeStats || null };
 
@@ -1155,7 +1005,7 @@ export default async function handler(req, res) {
             payload.lambdaHome, payload.lambdaAway,
             payload.over15Prob, payload.over25Prob, payload.ggProb,
             payload.confidenceScore || null,
-            oddsRaw ? JSON.stringify(oddsRaw) : null,
+            null,
             compositeScore,
           ]
         ).catch(() => {});
@@ -1178,7 +1028,7 @@ export default async function handler(req, res) {
             layer2: payload.breakdown?.forma        ?? null,
             layer3: payload.breakdown?.h2h          ?? null,
             layer4: payload.breakdown?.live         ?? null,
-            layer5: payload.breakdown?.ev           ?? null,
+            layer5: null,
             layer6: payload.breakdown?.consistenta  ?? null,
             layer7: payload.breakdown?.putereEchipe ?? null,
           }).catch(() => {});
@@ -1207,7 +1057,7 @@ export default async function handler(req, res) {
               layer2: payload.breakdown?.forma        ?? null,
               layer3: payload.breakdown?.h2h          ?? null,
               layer4: payload.breakdown?.live         ?? null,
-              layer5: payload.breakdown?.ev           ?? null,
+              layer5: null,
               layer6: payload.breakdown?.consistenta  ?? null,
               layer7: payload.breakdown?.putereEchipe ?? null,
             }).catch(() => {});
