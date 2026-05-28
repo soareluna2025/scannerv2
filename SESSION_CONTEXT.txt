@@ -3715,3 +3715,10 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     * cards_over35/45: skip daca carti >= 4/5
     * corners_over85/95: skip daca cornere >= 9/10
     * 1X2 / DC: mereu deschise pana la final
+
+[28.05 ~00:00] - FIX: 1X2/DC din cote bookmaker reale, nu Poisson estimat | Commit: 65f758a
+  - generator.js: incarca odds reale din DB (bet_id IN (1,2)) pentru toate fixture_ids
+  - Construieste oddsMap { [fixture_id]: { homeOdd, drawOdd, awayOdd } } cu MIN(value_odd) per value_name
+  - Override markets.h1/draw/h2/dc1x/dcx2 cu probabilitati implicite normalizate (overround removal)
+  - Seteaza has_odds_1x2=true pe meci cand cote bookmaker disponibile
+  - buildAccumulator: exclude 1X2/DC pentru meciuri fara cote reale (DC_1X2_KEYS.has(key) && !m.has_odds_1x2)
