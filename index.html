@@ -1254,6 +1254,24 @@ function evRecalc(inputId, realProb, displayId){
   disp.innerHTML = '<span style="color:'+color+'">EV: '+sign+evPct+'% '+icon+' '+label+'</span>';
 }
 
+function mevCheck(inputId, prob, resultId){
+  var el=document.getElementById(inputId);
+  var disp=document.getElementById(resultId);
+  if(!el||!disp) return;
+  var raw=(el.value||'').toString().replace(',','.');
+  var cota=parseFloat(raw);
+  if(!cota||cota<1.01){disp.innerHTML='&mdash;';disp.style.color='var(--mu)';return;}
+  try{localStorage.setItem(inputId,cota.toString());}catch(e){}
+  var ev=prob*cota-1;
+  var evPct=Math.round(ev*100);
+  var sign=ev>=0?'+':'';
+  var color,icon;
+  if(ev>=0.08){color='#22c55e';icon='✅';}
+  else if(ev>=0){color='#f59e0b';icon='⚠️';}
+  else{color='#ef4444';icon='❌';}
+  disp.innerHTML='<span style="color:'+color+'">'+icon+' '+sign+evPct+'%</span>';
+}
+
 function buildCardHtml(m,lgName){
   var s=m._s||{};var mk=s.mk||{};
   var hg=s.hg||0;var ag=s.ag||0;var mn=s.mn||0;var ng=s.ng||0;
@@ -2268,6 +2286,48 @@ function mdRenderSumar(d){
     }
     out+='</div>';
   }
+
+  // ── VERIFICĂ COTA TA — calculator manual EV ─────────────────────
+  (function(){
+    var mevMkts=[];
+    if(en.over15Prob!=null)    mevMkts.push({id:'o15',label:'Over 1.5',          prob:en.over15Prob/100});
+    if(en.over25Prob!=null)    mevMkts.push({id:'o25',label:'Over 2.5',          prob:en.over25Prob/100});
+    if(en.ggProb!=null)        mevMkts.push({id:'gg', label:'GG',                prob:en.ggProb/100});
+    if(en.homeWin!=null)       mevMkts.push({id:'h1', label:'1 Gazde',           prob:en.homeWin/100});
+    if(en.draw!=null)          mevMkts.push({id:'x',  label:'X Egal',            prob:en.draw/100});
+    if(en.awayWin!=null)       mevMkts.push({id:'h2', label:'2 Oaspeţi',    prob:en.awayWin/100});
+    if(en.homeScoreRate!=null) mevMkts.push({id:'hsc',label:'Gazde marchează', prob:en.homeScoreRate/100});
+    if(en.awayScoreRate!=null) mevMkts.push({id:'asc',label:'Oaspeţi marchează',prob:en.awayScoreRate/100});
+    if(!mevMkts.length) return;
+    var fid0=(fix&&fix.fixture&&fix.fixture.id)||0;
+    out+='<div class="md-section">';
+    out+='<div class="md-section-title">🎯 Verifică cota ta</div>';
+    out+='<div style="font-size:10px;color:var(--mu);margin-bottom:12px">Introdu cota de la bookmaker. Sistemul calculează dacă are valoare conform modelului nostru.</div>';
+    out+='<div style="display:flex;flex-direction:column;gap:5px">';
+    mevMkts.forEach(function(mk){
+      var pct=Math.round(mk.prob*100);
+      var minCota=mk.prob>0?(1/mk.prob).toFixed(2):'&mdash;';
+      var key='mev_'+fid0+'_'+mk.id;
+      var saved='';try{saved=localStorage.getItem(key)||'';}catch(e){}
+      out+='<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid var(--bor)">';
+      out+='<div style="flex:1;font-size:12px;font-weight:600;color:var(--tx)">'+mk.label+'</div>';
+      out+='<div style="font-size:13px;font-weight:800;color:'+ec(pct)+';width:36px;text-align:center">'+pct+'%</div>';
+      out+='<div style="font-size:10px;color:var(--mu);width:44px;text-align:center;line-height:1.3">min<br><b style="color:var(--tx)">'+minCota+'</b></div>';
+      out+='<input type="text" inputmode="decimal" pattern="[0-9.,]*" id="'+key+'" value="'+htmlEsc(saved)+'" placeholder="cota" oninput="mevCheck(\''+key+'\','+mk.prob+',\''+key+'_r\')" style="width:68px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:var(--tx);padding:6px 8px;border-radius:6px;font-size:14px;font-weight:700;text-align:center;outline:none">';
+      out+='<div id="'+key+'_r" style="width:80px;font-size:12px;font-weight:700;text-align:right">&mdash;</div>';
+      out+='</div>';
+    });
+    out+='</div>';
+    out+='<div style="font-size:10px;color:var(--mu);margin-top:10px;line-height:1.5">✅ = profit (&gt;8% EV) &nbsp; ⚠️ = marginal (0-8%) &nbsp; ❌ = nu paria</div>';
+    out+='</div>';
+    setTimeout(function(){
+      mevMkts.forEach(function(mk){
+        var key='mev_'+fid0+'_'+mk.id;
+        var el=document.getElementById(key);
+        if(el&&el.value) mevCheck(key,mk.prob,key+'_r');
+      });
+    },80);
+  })();
 
   // League Profile
   if(en.leagueStats){
