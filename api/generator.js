@@ -185,14 +185,14 @@ function buildAccumulator(matches, targetMin = 1.50, targetMax = 5.00) {
     if (!m.markets) continue;
     // Exclude meciuri cu < 15 min rămase — bookmaker-ul nu mai acceptă pariuri
     if (m.is_live && (m.minute || 0) >= 75) continue;
-    // Exclude meciuri fără date de formă — probabilitățile ar fi inventate
+    // Exclude meciuri fără date de formă — probabilitățile pentru piețele de goluri ar fi inventate
     if (!m.has_form_data) continue;
-    // 1X2/DC corecte doar dacă ambele echipe au formă din aceeași ligă — altfel ignoră
+    // 1X2/DC acceptate doar dacă avem cote bookmaker reale — altfel ignoră
     const DC_1X2_KEYS = new Set(['h1', 'draw', 'h2', 'dc1x', 'dcx2']);
 
     for (const [key, mkt] of Object.entries(m.markets)) {
       if (!MARKET_ORDER.includes(key)) continue;
-      if (DC_1X2_KEYS.has(key) && !m.has_same_league_form) continue; // forme din ligi diferite = 1X2 nesigure
+      if (DC_1X2_KEYS.has(key) && !m.has_odds_1x2) continue; // fără cote bookmaker = 1X2/DC nesigure
       if (mkt.prob < MIN_PROB) continue;
       if (isMarketSettled(key, m)) continue; // piața deja rezolvată în live — skip
       const fairOdds = Math.round((100 / mkt.prob) * 100) / 100;
@@ -429,8 +429,30 @@ export default async function handler(req, res) {
       venueMap = Object.fromEntries(vRows.map(r => [r.venue_id, r]));
     }
 
-    // Load injuries per fixture (batch grouped by fixture_id + team_id)
+    // Load 1X2 + DC bookmaker odds for all fixtures
     const fixtureIds = rawMatches.map(m => m.fixture?.id).filter(Boolean);
+    let oddsMap = {};
+    if (fixtureIds.length) {
+      const { rows: oddsRows } = await query(
+        `SELECT fixture_id, bet_id, value_name, MIN(value_odd) AS min_odd
+         FROM odds
+         WHERE fixture_id = ANY($1) AND bet_id IN (1, 2)
+         GROUP BY fixture_id, bet_id, value_name`,
+        [fixtureIds]
+      ).catch(() => ({ rows: [] }));
+      for (const r of oddsRows) {
+        const fid = r.fixture_id;
+        if (!oddsMap[fid]) oddsMap[fid] = {};
+        const odd = parseFloat(r.min_odd);
+        if (!odd || odd < 1.01) continue;
+        if (r.bet_id === 1) {
+          const vn = r.value_name?.toLowerCase();
+          if (vn === 'home')      oddsMap[fid].homeOdd = odd;
+          else if (vn === 'draw') oddsMap[fid].drawOdd = odd;
+          else if (vn === 'away') oddsMap[fid].awayOdd = odd;
+        }
+      }
+    }
     let injMap = {};
     if (fixtureIds.length) {
       const { rows: injRows } = await query(
@@ -469,6 +491,47 @@ export default async function handler(req, res) {
       ).length;
 
       const logoBase = 'https://media.api-sports.io/football/teams/';
+
+      const markets = calcMatchMarkets(
+        {
+          home_avg_scored:   hForm ? +(hForm.avg_scored_home)   : (hTS ? +(hTS.avg_goals_for)     : null),
+          home_avg_conceded: hForm ? +(hForm.avg_conceded_home) : (hTS ? +(hTS.avg_goals_against) : null),
+          away_avg_scored:   aForm ? +(aForm.avg_scored_away)   : (aTS ? +(aTS.avg_goals_for)     : null),
+          away_avg_conceded: aForm ? +(aForm.avg_conceded_away) : (aTS ? +(aTS.avg_goals_against) : null),
+        },
+        h2h,
+        { avg_goals: +(lg.avg_goals) || 2.5, avg_yellow: +(lg.avg_yellow) || 3.5, avg_corners: +(lg.avg_corners) || 9.0 },
+        ref && Number(ref.total_matches) >= 5 ? ref : null,
+        isLive ? {
+          elapsed:      m.fixture?.status?.elapsed || 0,
+          home_goals:   m.goals?.home || 0,
+          away_goals:   m.goals?.away || 0,
+          home_corners: getStat(m.statistics, hid, 'Corner Kicks'),
+          away_corners: getStat(m.statistics, aid, 'Corner Kicks'),
+          home_cards:   liveCards(hid),
+          away_cards:   liveCards(aid),
+        } : null
+      );
+
+      // Override 1X2/DC cu probabilități implicite din cote bookmaker reale (când există)
+      let has_odds_1x2 = false;
+      const fixtureOdds = oddsMap[fid];
+      if (fixtureOdds && fixtureOdds.homeOdd && fixtureOdds.drawOdd && fixtureOdds.awayOdd) {
+        const rawH = 1 / fixtureOdds.homeOdd;
+        const rawD = 1 / fixtureOdds.drawOdd;
+        const rawA = 1 / fixtureOdds.awayOdd;
+        const overround = rawH + rawD + rawA;
+        const pH = Math.round(rawH / overround * 100);
+        const pD = Math.round(rawD / overround * 100);
+        const pA = Math.round(rawA / overround * 100);
+        markets.h1.prob   = Math.min(99, Math.max(1, pH));
+        markets.draw.prob = Math.min(99, Math.max(1, pD));
+        markets.h2.prob   = Math.min(99, Math.max(1, pA));
+        markets.dc1x.prob = Math.min(99, Math.max(1, pH + pD));
+        markets.dcx2.prob = Math.min(99, Math.max(1, pD + pA));
+        has_odds_1x2 = true;
+      }
+
       return {
         fixture_id: fid,
         home_team:  m.teams?.home?.name || '?',
@@ -538,29 +601,10 @@ export default async function handler(req, res) {
           home_cards:   liveCards(hid),
           away_cards:   liveCards(aid),
         } : null,
-        has_form_data:      !!(hForm || hTS) && !!(aForm || aTS),
-        // 1X2/DC fiabile doar dacă ambele echipe au formă din ACEEAȘI ligă ca meciul curent
+        has_form_data:        !!(hForm || hTS) && !!(aForm || aTS),
         has_same_league_form: !!(formMap[`${hid}-${lid}`]) && !!(formMap[`${aid}-${lid}`]),
-        markets: calcMatchMarkets(
-          {
-            home_avg_scored:   hForm ? +(hForm.avg_scored_home)   : (hTS ? +(hTS.avg_goals_for)     : null),
-            home_avg_conceded: hForm ? +(hForm.avg_conceded_home) : (hTS ? +(hTS.avg_goals_against) : null),
-            away_avg_scored:   aForm ? +(aForm.avg_scored_away)   : (aTS ? +(aTS.avg_goals_for)     : null),
-            away_avg_conceded: aForm ? +(aForm.avg_conceded_away) : (aTS ? +(aTS.avg_goals_against) : null),
-          },
-          h2h,
-          { avg_goals: +(lg.avg_goals) || 2.5, avg_yellow: +(lg.avg_yellow) || 3.5, avg_corners: +(lg.avg_corners) || 9.0 },
-          ref && Number(ref.total_matches) >= 5 ? ref : null,
-          isLive ? {
-            elapsed:      m.fixture?.status?.elapsed || 0,
-            home_goals:   m.goals?.home || 0,
-            away_goals:   m.goals?.away || 0,
-            home_corners: getStat(m.statistics, hid, 'Corner Kicks'),
-            away_corners: getStat(m.statistics, aid, 'Corner Kicks'),
-            home_cards:   liveCards(hid),
-            away_cards:   liveCards(aid),
-          } : null
-        ),
+        has_odds_1x2,
+        markets,
       };
     });
 
