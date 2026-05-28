@@ -163,7 +163,7 @@ function isMarketSettled(key, m) {
 // Construiește biletul compus optim pentru ținta de cotă [targetMin, targetMax]
 // Logica: câte UN singur pick per piață (cel mai bun meci din toate pentru acea piață)
 // Over 0.5 exclus — nu există la bookmakers mainstream
-function buildAccumulator(matches, targetMin = 1.50, targetMax = 2.00) {
+function buildAccumulator(matches, targetMin = 1.50, targetMax = 5.00) {
   const MIN_PROB = 62;
 
   // Ordinea piețelor — de la cele mai comune la cele mai de nișă
@@ -288,7 +288,7 @@ export default async function handler(req, res) {
       }));
     } else {
       const now = new Date();
-      const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const in1h = new Date(now.getTime() + 60 * 60 * 1000);
       const { rows } = await query(
         `SELECT f.fixture_id, f.league_id, f.home_team_id, f.away_team_id,
                 COALESCE(th.name, f.home_team_name) AS home_name,
@@ -308,7 +308,7 @@ export default async function handler(req, res) {
          WHERE f.status_short = 'NS'
            AND f.match_date >= $1 AND f.match_date <= $2
          ORDER BY f.match_date ASC`,
-        [now.toISOString(), in24h.toISOString()]
+        [now.toISOString(), in1h.toISOString()]
       );
       rawMatches = rows.map(row => {
         let refStr = null, venueId = null;
@@ -547,7 +547,7 @@ export default async function handler(req, res) {
     // ?action=accumulator — returnează biletul compus optim
     if (req.query?.action === 'accumulator') {
       const targetMin = parseFloat(req.query.target_min) || 1.50;
-      const targetMax = parseFloat(req.query.target_max) || 2.00;
+      const targetMax = parseFloat(req.query.target_max) || 5.00;
       const accum = buildAccumulator(result, targetMin, targetMax);
       return res.json({ ok: true, mode, accumulator: accum });
     }
