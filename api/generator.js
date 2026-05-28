@@ -187,15 +187,12 @@ function buildAccumulator(matches, targetMin = 1.50, targetMax = 5.00) {
     if (m.is_live && (m.minute || 0) >= 75) continue;
     // Exclude meciuri fără date de formă — probabilitățile ar fi inventate
     if (!m.has_form_data) continue;
-    // lambdaH < lambdaA = date de formă nesigure (gazda prezisă să marcheze mai puțin decât musafirul)
-    const lambdaH = m.markets._lambdaH || 1;
-    const lambdaA = m.markets._lambdaA || 1;
-    const formReliable = lambdaH >= lambdaA * 0.75; // echipa de acasă să aibă cel puțin 75% din lambda oaspete
+    // 1X2/DC corecte doar dacă ambele echipe au formă din aceeași ligă — altfel ignoră
     const DC_1X2_KEYS = new Set(['h1', 'draw', 'h2', 'dc1x', 'dcx2']);
 
     for (const [key, mkt] of Object.entries(m.markets)) {
-      if (!MARKET_ORDER.includes(key)) continue; // sare over05 + orice neinclus
-      if (DC_1X2_KEYS.has(key) && !formReliable) continue; // 1X2/DC cu forme inversate = nesigure
+      if (!MARKET_ORDER.includes(key)) continue;
+      if (DC_1X2_KEYS.has(key) && !m.has_same_league_form) continue; // forme din ligi diferite = 1X2 nesigure
       if (mkt.prob < MIN_PROB) continue;
       if (isMarketSettled(key, m)) continue; // piața deja rezolvată în live — skip
       const fairOdds = Math.round((100 / mkt.prob) * 100) / 100;
@@ -541,7 +538,9 @@ export default async function handler(req, res) {
           home_cards:   liveCards(hid),
           away_cards:   liveCards(aid),
         } : null,
-        has_form_data: !!(hForm || hTS) && !!(aForm || aTS),
+        has_form_data:      !!(hForm || hTS) && !!(aForm || aTS),
+        // 1X2/DC fiabile doar dacă ambele echipe au formă din ACEEAȘI ligă ca meciul curent
+        has_same_league_form: !!(formMap[`${hid}-${lid}`]) && !!(formMap[`${aid}-${lid}`]),
         markets: calcMatchMarkets(
           {
             home_avg_scored:   hForm ? +(hForm.avg_scored_home)   : (hTS ? +(hTS.avg_goals_for)     : null),
