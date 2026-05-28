@@ -412,10 +412,8 @@ Format: [STATUS] #NR | Fișier:linie | Descriere scurtă
         Același ca #2 dar în calea de fallback din today.js
         Fix: același ca #2
 
-[ ] #4 | api/match.js:135 | awayScoreRate calculat greșit
-        Cauza: `pct(aGames, m => (m.goals?.away ?? 0) > 0)` — ignoră meciurile
-               în care echipa oaspete a jucat acasă în datele istorice
-        Fix: `pct(aGames, m => ((m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0) > 0)`
+[x] #4 | api/match.js:133,135 | awayScoreRate + homeScoreRate calculate greșit (FIX 28.05 Sprint 2)
+        Fix aplicat: ambele perspective H/A corecte prin teams.{home,away}.id === {h,a}Id
 
 [ ] #5 | index.html:1993 | Object.assign({}, enrichBase, cached) — ordinea e inversată
         Cauza: enrichBase vine de la /api/enrich (cu bestEV STRING posibil),
@@ -433,32 +431,31 @@ Format: [STATUS] #NR | Fișier:linie | Descriere scurtă
 [x] #7  | api/enrich.js:363-365 | `homeAvgScored || 1.2` — 0 goluri marcate → lambda 1.2
          Fix: `result.homeAvgScored ?? 1.2`
 
-[ ] #8  | api/enrich.js:432-434 | Consistency score împarte la 5 fix chiar dacă score5=null
-         Fix: `scores.filter(s => s !== null).length` ca divizor
+[x] #8  | api/enrich.js:423-427 | Consistency score împarte la 5 fix chiar dacă score5=null
+         Fix aplicat 28.05.2026 Sprint 2: activeScores.filter().length ca divizor + null fallback
 
 [x] #9  | api/enrich.js:496 | `Math.round(null) = 0` → breakdown.ev = 0 fals
          Fix: `ev: score5 != null ? Math.round(score5) : null`
 
-[ ] #10 | api/match.js:113-116 | homeForm opponent mereu teams.away.name
+[x] #10 | api/match.js:113-116 | homeForm opponent mereu teams.away.name (FIX 28.05 Sprint 2)
          Cauza: când hId a jucat în deplasare, adversarul e teams.home.name
          Fix: verificare `m.teams?.home?.id === hId`
 
-[ ] #11 | api/match.js:139-140 | h2hOver15 și h2hGG fără ?? fallback
-         Fix: adaugă `?? matrix.over15Prob` și `?? matrix.ggProb`
+[x] #11 | api/match.js:139-140 | h2hOver15 și h2hGG fără ?? fallback
+         Fix aplicat 28.05.2026 Sprint 2: ?? matrix.over15Prob și ?? matrix.ggProb
 
-[ ] #12 | index.html:1643-1648 | Câmpuri greșite pentru league stats
-         Cod folosește: `enr.league_avg_corners`, `enr.league_avg_yellow`
-         Payload real are: `enr.leagueStats?.avg_corners`, `enr.leagueStats?.avg_yellow_cards`
-         Impact: afișează mereu fallback hardcodat (9.5 și 4)
+[x] #12 | index.html:1809,1814 | Câmpuri greșite pentru league stats (FIX 28.05 Sprint 2)
+         enr.league_avg_corners → enr.leagueStats?.avg_corners??9.5
+         enr.league_avg_yellow  → enr.leagueStats?.avg_yellow_cards??4
 
 [x] #13 | index.html:2350 | `parseFloat(null).toFixed(2)` = "NaN / meci"
          Fix: `parseFloat(ls?.avg_goals_per_match || 0).toFixed(2)`
 
-[ ] #14 | index.html:2643 | Season fallback: `getFullYear()-1` greșit din iulie 2026+
-         Fix: logică corectă: `month < 7 ? year-1 : year` (sau citit din payload)
+[x] #14 | index.html:2719-2722 | Season fallback: getFullYear()-1 greșit din iulie 2026+
+         Fix aplicat 28.05.2026 Sprint 2: month<6?year-1:year (sezonul european)
 
-[ ] #15 | index.html:2693 | Standings coloring fals fără puncte
-         Fix: adaugă guard `if (homePoints == null || awayPoints == null) return;`
+[x] #15 | index.html:2766-2779 | Standings coloring fals fără puncte
+         Fix aplicat 28.05.2026 Sprint 2: guard explicit înainte de logica de comparare
 
 [ ] #16 | api/enrich.js:460-468 | Layer weights diferite față de CLAUDE.md
          Cod real: 0.20, 0.18, 0.10, 0.14, 0.08, 0.05, 0.18, 0.08
@@ -480,7 +477,8 @@ Format: [STATUS] #NR | Fișier:linie | Descriere scurtă
 
 [x] #19 | index.html:1738 | "neanalzate" → "neanalizate"
 [x] #20 | index.html:1807 | "Neanalzat" → "Neanalizat"
-[ ] #21 | index.html:2984-2996 | `var rem5` declarat de 3 ori; `var xgH5/xgA5` ×2
+[x] #21 | index.html:3067-3086 | var rem5×3 + var xgH5×2 + var xgA5×2 (FIX 28.05 Sprint 2)
+         Renumite: rem5a/rem5b/rem5c, xgH5a/xgH5b, xgA5a/xgA5b + xgHR5c/xgAR5c
 [x] #22 | api/match.js:336 | ON CONFLICT DO NOTHING → predicții niciodată actualizate
          Fix: schimbă în ON CONFLICT DO UPDATE (ca în enrich.js)
 [ ] #23 | api/today.js:104 | Filtru ligă redundant (deja filtrat în DB query la linia 31)

@@ -1806,12 +1806,12 @@ async function loadTopOpps(){
       // 6. Cornere — scalez lg avg cu intensitatea meciului (lambdaTotal)
       // matches cu mai multe goluri asteptate au probabil mai multe cornere
       var lambdaTot=enr.lambdaTotal||2.5;
-      var lgCornBase=enr.league_avg_corners||9.5;
+      var lgCornBase=enr.leagueStats?.avg_corners??9.5;
       var lambdaCorn=lgCornBase*Math.max(0.7,Math.min(1.4,lambdaTot/2.5));  // scaling factor
       var bestCorn=bestThreshold(lambdaCorn,[4,5,6,7,8,9,10,11,12,13],70);
       if(bestCorn)addPick('corn','Cornere Over '+bestCorn.thr,bestCorn.prob,bestCorn.prob);
       // 6. Cartonase — scalez similar
-      var lgCardsBase=enr.league_avg_yellow||4;
+      var lgCardsBase=enr.leagueStats?.avg_yellow_cards??4;
       var lambdaCards=lgCardsBase*Math.max(0.7,Math.min(1.4,lambdaTot/2.5));
       var bestCards=bestThreshold(lambdaCards,[1,2,3,4,5,6],70);
       if(bestCards)addPick('cards','Cartonase Over '+bestCards.thr,bestCards.prob,bestCards.prob);
@@ -2716,7 +2716,10 @@ async function mdRenderClasament(d) {
   var lid=fix&&fix.league&&fix.league.id?fix.league.id:0;
   var hid=fix&&fix.teams&&fix.teams.home&&fix.teams.home.id?fix.teams.home.id:_md.homeId;
   var aid=fix&&fix.teams&&fix.teams.away&&fix.teams.away.id?fix.teams.away.id:_md.awayId;
-  var season=fix&&fix.league&&fix.league.season?fix.league.season:new Date().getFullYear()-1;
+  // BUG #14 FIX: înainte de iulie = sezonul trecut; din iulie încolo = sezonul curent
+  var _seasonNow=new Date();
+  var _seasonFallback=_seasonNow.getMonth()<6?_seasonNow.getFullYear()-1:_seasonNow.getFullYear();
+  var season=fix&&fix.league&&fix.league.season?fix.league.season:_seasonFallback;
 
   if(!lid){
     body.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-t">Indisponibil</div><div class="empty-s">Liga nu a putut fi identificată</div></div>';
@@ -2760,13 +2763,17 @@ async function mdRenderClasament(d) {
     var isHome=tid===homeId2,isAway=tid===awayId2;
     var rowCls='';
     if(isHome||isAway){
-      if(homePoints!=null&&awayPoints!=null){
-        if(homePoints===awayPoints)rowCls='srow-even';
-        else if(isHome&&homePoints>awayPoints)rowCls='srow-home';
-        else if(isAway&&awayPoints>homePoints)rowCls='srow-home';
-        else rowCls='srow-away';
-      } else {
+      // BUG #15 FIX: guard explicit înainte de logica de comparare puncte
+      if(homePoints==null||awayPoints==null){
         rowCls=isHome?'srow-home':'srow-away';
+      } else if(homePoints===awayPoints){
+        rowCls='srow-even';
+      } else if(isHome&&homePoints>awayPoints){
+        rowCls='srow-home';
+      } else if(isAway&&awayPoints>homePoints){
+        rowCls='srow-home';
+      } else {
+        rowCls='srow-away';
       }
     }
     var logoHtml=row.team_logo?'<img src="'+row.team_logo+'" width="16" height="16" style="vertical-align:middle;margin-right:4px;border-radius:2px" onerror="this.style.display=\'none\'">':'';
@@ -3056,27 +3063,30 @@ function g2Score(m){
       if(hg>=1&&ag>=1){
         confirmed=true;livGG=100;
       }else if(hg>=1){
+        // BUG #21 FIX: rem5→rem5a, xgA5→xgA5a (decuplare scope-uri)
         // Home already scored — only need away to score
-        var rem5=Math.max(0,90-m.minute);
-        var xgA5=lv.away_xg||0;
-        var xgAR5=m.minute>0?(xgA5/m.minute)*rem5:lamA*rem5/90;
-        livGG=g2Over(Math.max(xgAR5,lamA*rem5/90),0.5);
+        var rem5a=Math.max(0,90-m.minute);
+        var xgA5a=lv.away_xg||0;
+        var xgAR5=m.minute>0?(xgA5a/m.minute)*rem5a:lamA*rem5a/90;
+        livGG=g2Over(Math.max(xgAR5,lamA*rem5a/90),0.5);
       }else if(ag>=1){
+        // BUG #21 FIX: rem5→rem5b, xgH5→xgH5a
         // Away already scored — only need home to score
-        var rem5=Math.max(0,90-m.minute);
-        var xgH5=lv.home_xg||0;
-        var xgHR5=m.minute>0?(xgH5/m.minute)*rem5:lamH*rem5/90;
-        livGG=g2Over(Math.max(xgHR5,lamH*rem5/90),0.5);
+        var rem5b=Math.max(0,90-m.minute);
+        var xgH5a=lv.home_xg||0;
+        var xgHR5=m.minute>0?(xgH5a/m.minute)*rem5b:lamH*rem5b/90;
+        livGG=g2Over(Math.max(xgHR5,lamH*rem5b/90),0.5);
       }else{
+        // BUG #21 FIX: rem5→rem5c, xgH5→xgH5b, xgA5→xgA5b
         // 0-0: both still need to score
-        var rem5=Math.max(0,90-m.minute);
-        var xgH5=lv.home_xg||0,xgA5=lv.away_xg||0;
-        var xgHR5=m.minute>0?(xgH5/m.minute)*rem5:lamH*rem5/90;
-        var xgAR5=m.minute>0?(xgA5/m.minute)*rem5:lamA*rem5/90;
+        var rem5c=Math.max(0,90-m.minute);
+        var xgH5b=lv.home_xg||0,xgA5b=lv.away_xg||0;
+        var xgHR5c=m.minute>0?(xgH5b/m.minute)*rem5c:lamH*rem5c/90;
+        var xgAR5c=m.minute>0?(xgA5b/m.minute)*rem5c:lamA*rem5c/90;
         // 0-0 at 60+ min: boost — desperation increases scoring rates
         var pressureMult=m.minute>=60?1+(m.minute-60)/60:1;
-        livGG=(g2Over(Math.max(xgHR5,lamH*rem5/90)*pressureMult,0.5)/100)*
-              (g2Over(Math.max(xgAR5,lamA*rem5/90)*pressureMult,0.5)/100)*100;
+        livGG=(g2Over(Math.max(xgHR5c,lamH*rem5c/90)*pressureMult,0.5)/100)*
+              (g2Over(Math.max(xgAR5c,lamA*rem5c/90)*pressureMult,0.5)/100)*100;
       }
     }
     s=isLive?(compH*.25+compA*.25+h2hGG*.20+livGG*.30):(compH*.35+compA*.35+h2hGG*.30);

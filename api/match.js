@@ -112,13 +112,15 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, lgHome = 1.2, lgAway = 1.2) 
   const homeForm = hGames.slice(0, 5).map(m => ({
     result: formResult(m, m.teams?.home?.id === hId),
     score: `${m.goals?.home ?? 0}-${m.goals?.away ?? 0}`,
-    opponent: m.teams?.away?.name || '?',
+    // BUG #10 FIX: opponent corect — când hId a jucat în deplasare, adversarul e home
+    opponent: (m.teams?.home?.id === hId ? m.teams?.away?.name : m.teams?.home?.name) || '?',
     date: m.fixture?.date?.slice(0, 10) || ''
   }));
   const awayForm = aGames.slice(0, 5).map(m => ({
     result: formResult(m, m.teams?.home?.id === aId),
     score: `${m.goals?.home ?? 0}-${m.goals?.away ?? 0}`,
-    opponent: m.teams?.home?.name || '?',
+    // BUG #10 FIX: opponent corect — când aId a jucat acasă, adversarul e away
+    opponent: (m.teams?.away?.id === aId ? m.teams?.home?.name : m.teams?.away?.name) || '?',
     date: m.fixture?.date?.slice(0, 10) || ''
   }));
   const h2hForm = h2h.slice(0, 5).map(m => ({
@@ -130,14 +132,15 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, lgHome = 1.2, lgAway = 1.2) 
 
   return {
     homeAvgScored: r2(homeAvgScored), homeAvgConceded: r2(homeAvgConceded),
-    homeScoreRate: pct(hGames, m => (m.goals?.home ?? 0) > 0),
+    homeScoreRate: pct(hGames, m => ((m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away) ?? 0) > 0),
     awayAvgScored: r2(awayAvgScored), awayAvgConceded: r2(awayAvgConceded),
-    awayScoreRate: pct(aGames, m => (m.goals?.away ?? 0) > 0),
+    awayScoreRate: pct(aGames, m => ((m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0) > 0),
     lambdaHome: r2(lambdaHome), lambdaAway: r2(lambdaAway), lambdaTotal: r2(lambdaTotal),
     over15Prob: matrix.over15Prob, over25Prob: matrix.over25Prob, ggProb: matrix.ggProb,
     homeWin: matrix.homeWin, draw: matrix.draw, awayWin: matrix.awayWin,
-    h2hOver15: pct(h2h, m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1),
-    h2hGG:     pct(h2h, m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0),
+    // BUG #11 FIX: fallback la matrix.over15Prob/ggProb când pct() returnează null (sample <5)
+    h2hOver15: pct(h2h, m => ((m.goals?.home ?? 0) + (m.goals?.away ?? 0)) > 1) ?? matrix.over15Prob,
+    h2hGG:     pct(h2h, m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0) ?? matrix.ggProb,
     h2hSample: h2h.length, confidence,
     homeForm, awayForm, h2hForm
   };

@@ -420,9 +420,11 @@ function calcConfidence(result, liveStats, teamStrengths) {
     }
   }
 
-  const scores = [score1, score2, score3, score4];
-  const alignedCount = scores.filter(s => s > 60).length;
-  const score6 = (alignedCount / 4) * 100;
+  // BUG #8 FIX: împarte la numărul de straturi ACTIVE (nu null), nu la 4 fix
+  const activeScores = [score1, score2, score3, score4].filter(s => s !== null);
+  const score6 = activeScores.length > 0
+    ? (activeScores.filter(s => s > 60).length / activeScores.length) * 100
+    : null;
 
   let score7 = null;
   let teamStrengthHome = null, teamStrengthAway = null;

@@ -3208,6 +3208,69 @@ NEXT STEPS (prioritizat):
   DOCUMENTATIE ACTUALIZATA:
     ARHITECT.md sectiunea 3B rescrisa complet (cei 4 sub-pasi B.1-B.4 + pipeline B.5)
     Pipeline complet documentat ca 11 pasi (era 10, adaugat dynamic live ca pas 11)
+  Commit: 96bbc92
+
+[28.05 23:20] - Sprint 2 complet — 8 bug-uri importante fixate
+  BUG #4 — api/match.js:133,135: homeScoreRate + awayScoreRate cu perspectiva H/A
+    Inainte: pct(hGames, m => (m.goals?.home ?? 0) > 0) — ignora meciuri unde gazda juca in deplasare
+    Acum:    pct(hGames, m => ((m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away) ?? 0) > 0)
+    Identic fix pentru awayScoreRate (aId perspective)
+
+  BUG #8 — api/enrich.js:423-427: Consistency score impartire dinamica
+    Inainte: const score6 = (alignedCount / 4) * 100;  // fix 4 chiar daca score null
+    Acum:    activeScores = filter(s => s !== null); divizor = activeScores.length; fallback null
+    Layer filtrat automat in array layers[].filter(l => l.score !== null) — corect normalizat
+
+  BUG #10 — api/match.js:113-122: homeForm/awayForm opponent corect detectat
+    Inainte: homeForm.opponent = m.teams?.away?.name  // gresit cand hId juca in deplasare
+    Acum:    homeForm.opponent = (m.teams?.home?.id === hId ? m.teams?.away?.name : m.teams?.home?.name)
+    Identic pentru awayForm (aId perspective)
+
+  BUG #11 — api/match.js:139-140: h2hOver15 + h2hGG fallback la matrix
+    Inainte: pct(h2h, ...)  // return null cand sample < 5 → undefined in payload
+    Acum:    pct(h2h, ...) ?? matrix.over15Prob   (si ?? matrix.ggProb)
+    Frontend primeste mereu un numar valid
+
+  BUG #12 — index.html:1809,1814: campuri reale league stats
+    Inainte: enr.league_avg_corners || 9.5  // camp inexistent in payload
+             enr.league_avg_yellow  || 4
+    Acum:    enr.leagueStats?.avg_corners ?? 9.5
+             enr.leagueStats?.avg_yellow_cards ?? 4
+    Acum cornere/cartonase folosesc valori REALE per liga (nu hardcodate)
+
+  BUG #14 — index.html:2719-2722: season fallback dinamic
+    Inainte: new Date().getFullYear() - 1  // mereu anul trecut → eronat din iulie
+    Acum:    var _seasonNow = new Date();
+             var _seasonFallback = _seasonNow.getMonth() < 6
+               ? _seasonNow.getFullYear() - 1
+               : _seasonNow.getFullYear();
+    Logica europeana: ian-iun = sezonul precedent; iul-dec = sezonul curent
+
+  BUG #15 — index.html:2766-2779: standings coloring guard explicit
+    Inainte: logic comparare puncte inainte de verificare null → comparare cu undefined
+    Acum:    guard explicit:
+             if (homePoints == null || awayPoints == null) {
+               rowCls = isHome ? 'srow-home' : 'srow-away';
+             } else if (...) // logica comparare doar cand ambele exista
+
+  BUG #21 — index.html:3067-3086: variabile duplicate renumite
+    Probleme: var rem5 declarat in 3 ramuri (hg>=1, ag>=1, 0-0)
+              var xgH5 declarat in 2 ramuri (ag>=1, 0-0)
+              var xgA5 declarat in 2 ramuri (hg>=1, 0-0)
+    Fix: renumite cu sufix a/b/c — rem5a/rem5b/rem5c, xgH5a/xgH5b, xgA5a/xgA5b
+         Plus xgHR5/xgAR5 in bloc 0-0 → xgHR5c/xgAR5c (decuplare clara scope)
+    Toate referintele in interiorul blocurilor au fost actualizate
+
+  VERIFICARE:
+    ✅ node --check api/enrich.js  OK
+    ✅ node --check api/match.js   OK
+    ✅ 3 blocuri <script> din index.html validate Node parser OK
+    ✅ Zero duplicate var rem5/xgH5/xgA5 ramase (grep 0 rezultate)
+
+  ARHITECT.md SECTIUNEA 6:
+    Marcate [x]: #4 #8 #10 #11 #12 #14 #15 #21
+    Nu raman bug-uri IMPORTANT/CRITIC/COSMETIC ne-rezolvate care sa fie aplicabile
+    (#5, #16, #17, #18, #23 ramaneau de analizat — nu erau in scope Sprint 2)
   Commit: (acest commit)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
