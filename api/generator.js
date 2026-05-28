@@ -181,6 +181,8 @@ function buildAccumulator(matches, targetMin = 1.50, targetMax = 5.00) {
     if (!m.markets) continue;
     // Exclude meciuri cu < 15 min rămase — bookmaker-ul nu mai acceptă pariuri
     if (m.is_live && (m.minute || 0) >= 75) continue;
+    // Exclude meciuri fără date de formă — probabilitățile ar fi inventate
+    if (!m.has_form_data) continue;
     for (const [key, mkt] of Object.entries(m.markets)) {
       if (!MARKET_ORDER.includes(key)) continue; // sare over05 + orice neinclus
       if (mkt.prob < MIN_PROB) continue;
@@ -528,6 +530,7 @@ export default async function handler(req, res) {
           home_cards:   liveCards(hid),
           away_cards:   liveCards(aid),
         } : null,
+        has_form_data: !!(hForm || hTS) && !!(aForm || aTS),
         markets: calcMatchMarkets(
           {
             home_avg_scored:   hForm ? +(hForm.avg_scored_home)   : (hTS ? +(hTS.avg_goals_for)     : null),
