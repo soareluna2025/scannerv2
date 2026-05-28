@@ -1303,18 +1303,80 @@ function mevCalibrate(fk){
   var vx=((document.getElementById('mev_cx_'+fk)||{}).value||'').replace(',','.');
   var v2=((document.getElementById('mev_c2_'+fk)||{}).value||'').replace(',','.');
   var c1=parseFloat(v1),cx=parseFloat(vx),c2=parseFloat(v2);
+  var ec2=function(v){return v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
+  // Helper: update a Poisson tile value element
+  var setTile=function(id,val,pct){
+    var el=document.getElementById('mdpv_'+fk+'_'+id);
+    if(!el)return;
+    el.style.color=ec2(val);
+    el.textContent=val+(pct?'%':'');
+  };
+  // Helper: update confidence circle and Poisson breakdown bar
+  var setConf=function(newPo){
+    var origCs=parseInt(res.dataset.cs)||null;
+    var origPo=res.dataset.po!==''?parseInt(res.dataset.po):null;
+    var pow=parseFloat(res.dataset.pow)||0.20;
+    if(origCs!=null&&origPo!=null){
+      var csAdj=Math.max(0,Math.min(100,Math.round(origCs+(newPo-origPo)*pow)));
+      var ccEl=document.getElementById('mdcc_'+fk);
+      if(ccEl){ccEl.textContent=csAdj+'%';ccEl.className='conf-circle '+(csAdj>=80?'high':csAdj>=60?'mid':'low');}
+      var poBd=document.getElementById('mdbd_'+fk+'_po');
+      var poBdV=document.getElementById('mdbdv_'+fk+'_po');
+      var bc=newPo>=80?'#22c55e':newPo>=60?'#f59e0b':'#ef4444';
+      if(poBd){poBd.style.width=newPo+'%';poBd.style.background=bc;}
+      if(poBdV)poBdV.textContent=newPo+'%';
+    }
+  };
+  // Restore tiles and confidence to original model values
+  var restoreTiles=function(){
+    var o15=res.dataset.o15!==''?parseInt(res.dataset.o15):null;
+    var o25=res.dataset.o25!==''?parseInt(res.dataset.o25):null;
+    var gg=res.dataset.gg!==''?parseInt(res.dataset.gg):null;
+    var hsc=res.dataset.hsc!==''?parseInt(res.dataset.hsc):null;
+    var asc=res.dataset.asc!==''?parseInt(res.dataset.asc):null;
+    var lt=res.dataset.lt||'';
+    if(o15!=null)setTile('o15',o15,true);
+    if(o25!=null)setTile('o25',o25,true);
+    if(gg!=null)setTile('gg',gg,true);
+    if(hsc!=null)setTile('hsc',hsc,true);
+    if(asc!=null)setTile('asc',asc,true);
+    var ltEl=document.getElementById('mdpv_'+fk+'_lt');
+    if(ltEl&&lt){ltEl.style.color='var(--mu2)';ltEl.textContent=lt;}
+    // Restore confidence circle
+    var origCs=parseInt(res.dataset.cs)||null;
+    var origPo=res.dataset.po!==''?parseInt(res.dataset.po):null;
+    var ccEl=document.getElementById('mdcc_'+fk);
+    if(ccEl&&origCs!=null){ccEl.textContent=origCs+'%';ccEl.className='conf-circle '+(origCs>=80?'high':origCs>=60?'mid':'low');}
+    var poBd=document.getElementById('mdbd_'+fk+'_po');
+    var poBdV=document.getElementById('mdbdv_'+fk+'_po');
+    if(origPo!=null){
+      var bc=origPo>=80?'#22c55e':origPo>=60?'#f59e0b':'#ef4444';
+      if(poBd){poBd.style.width=origPo+'%';poBd.style.background=bc;}
+      if(poBdV)poBdV.textContent=origPo+'%';
+    }
+  };
   if(!c1||c1<1.01||!cx||cx<1.01||!c2||c2<1.01){
-    res.innerHTML='<div style="color:var(--mu);font-size:11px;padding:8px 0">Introdu cotele pentru 1, X și 2 →</div>';return;}
+    res.innerHTML='<div style="color:var(--mu);font-size:11px;padding:8px 0">Introdu cotele pentru 1, X și 2 →</div>';
+    restoreTiles();return;}
   var i1=1/c1,ix=1/cx,i2=1/c2,tot=i1+ix+i2;
   var p1=i1/tot,pX=ix/tot,p2=i2/tot;
   var margin=Math.round((tot-1)*100);
   var lH0=parseFloat(res.dataset.lh)||1.3,lA0=parseFloat(res.dataset.la)||1.1;
   var lam=_findLam(p1,pX,p2,lH0,lA0);
   var cal=_mkts(lam[0],lam[1]);
+  // Update the 6 Poisson tiles live
+  setTile('o15',cal.over15,true);
+  setTile('o25',cal.over25,true);
+  setTile('gg',cal.gg,true);
+  setTile('hsc',cal.hsc,true);
+  setTile('asc',cal.asc,true);
+  var ltEl=document.getElementById('mdpv_'+fk+'_lt');
+  if(ltEl){ltEl.style.color='var(--mu2)';ltEl.textContent=(lam[0]+lam[1]).toFixed(2);}
+  // Update confidence circle
+  setConf(cal.over15);
   var mod={homeWin:+res.dataset.hw||null,draw:+res.dataset.dr||null,awayWin:+res.dataset.aw||null,
     over15:+res.dataset.o15||null,over25:+res.dataset.o25||null,gg:+res.dataset.gg||null,
     hsc:+res.dataset.hsc||null,asc:+res.dataset.asc||null};
-  var ec2=function(v){return v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
   var dif=function(k){var d=cal[k]-(mod[k]||0);if(!mod[k]||Math.abs(d)<1)return '';
     return d>0?'<span style="font-size:10px;color:#22c55e"> +'+d+'pp</span>':'<span style="font-size:10px;color:#ef4444"> '+d+'pp</span>';};
   var row=function(lbl,k){var v=cal[k];if(v==null)return '';
@@ -2097,6 +2159,7 @@ function mdRenderSumar(d){
   var an=fix&&fix.teams&&fix.teams.away?fix.teams.away.name:'?';
   var isLive=(['1H','2H','HT','ET','BT','P','LIVE','INT']).indexOf(sh)>=0;
   var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
+  var fk=String((fix&&fix.fixture&&fix.fixture.id)||0);
 
   var out='';
   // Confidence circle (from pre-match enrich cache)
@@ -2104,8 +2167,10 @@ function mdRenderSumar(d){
     var cs=en.confidenceScore;
     var ccls=cs>=80?'high':cs>=60?'mid':'low';
     var confColor=cs>=80?'#22c55e':cs>=60?'#f59e0b':'#ef4444';
-    out+='<div class="conf-circle-wrap">';
-    out+='<div class="conf-circle '+ccls+'">'+cs+'%</div>';
+    var _poOrig=(en.breakdown&&en.breakdown.poisson!=null?en.breakdown.poisson:null);
+    var _powVal=(en.breakdown&&en.breakdown.putereEchipe!=null)?0.20:0.25;
+    out+='<div class="conf-circle-wrap" id="mdccw_'+fk+'" data-cs="'+cs+'" data-po="'+(_poOrig!=null?_poOrig:'')+'" data-pow="'+_powVal+'">';
+    out+='<div class="conf-circle '+ccls+'" id="mdcc_'+fk+'">'+cs+'%</div>';
     if(en.breakdown){
       var bd=en.breakdown;
       var bItems=[['Poisson',bd.poisson],['Formă',bd.forma],['H2H',bd.h2h],['Live',bd.live],['EV',bd.ev],['Consistență',bd.consistenta],['Putere Echipe',bd.putereEchipe],['API L8',bd.apiConsensus],['Consensus',bd.consensus]];
@@ -2113,9 +2178,10 @@ function mdRenderSumar(d){
       bItems.forEach(function(b){
         if(b[1]==null)return;
         var bc=b[1]>=80?'#22c55e':b[1]>=60?'#f59e0b':'#ef4444';
+        var isPo=b[0]==='Poisson';
         out+='<div class="conf-bd-row"><div class="conf-bd-lbl">'+b[0]+'</div>'+
-          '<div class="conf-bd-bar"><div class="conf-bd-fill" style="width:'+b[1]+'%;background:'+bc+'"></div></div>'+
-          '<div class="conf-bd-val">'+b[1]+'%</div></div>';
+          '<div class="conf-bd-bar"><div class="conf-bd-fill"'+(isPo?' id="mdbd_'+fk+'_po"':'')+' style="width:'+b[1]+'%;background:'+bc+'"></div></div>'+
+          '<div class="conf-bd-val"'+(isPo?' id="mdbdv_'+fk+'_po"':'')+'>'+b[1]+'%</div></div>';
       });
       out+='</div>';
     }
@@ -2333,14 +2399,14 @@ function mdRenderSumar(d){
       out+='</div></details>';
     } else {
       out+='<div class="md-prob-row">';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over15Prob)+'">'+Math.round(en.over15Prob)+'%</div><div class="md-prob-lbl">Over 1.5</div></div>';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over25Prob)+'">'+Math.round(en.over25Prob)+'%</div><div class="md-prob-lbl">Over 2.5</div></div>';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.ggProb)+'">'+Math.round(en.ggProb)+'%</div><div class="md-prob-lbl">GG</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_o15" style="color:'+ec(en.over15Prob)+'">'+Math.round(en.over15Prob)+'%</div><div class="md-prob-lbl">Over 1.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_o25" style="color:'+ec(en.over25Prob)+'">'+Math.round(en.over25Prob)+'%</div><div class="md-prob-lbl">Over 2.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_gg" style="color:'+ec(en.ggProb)+'">'+Math.round(en.ggProb)+'%</div><div class="md-prob-lbl">GG</div></div>';
       out+='</div>';
       out+='<div class="md-prob-row">';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeScoreRate)+'">'+(en.homeScoreRate!=null?en.homeScoreRate+'%':'—')+'</div><div class="md-prob-lbl">Gazde marcheaza</div></div>';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2)">'+Number(en.lambdaTotal||0).toFixed(2)+'</div><div class="md-prob-lbl">λ Total</div></div>';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.awayScoreRate)+'">'+(en.awayScoreRate!=null?en.awayScoreRate+'%':'—')+'</div><div class="md-prob-lbl">Oaspeti marcheaza</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_hsc" style="color:'+ec(en.homeScoreRate)+'">'+(en.homeScoreRate!=null?en.homeScoreRate+'%':'—')+'</div><div class="md-prob-lbl">Gazde marcheaza</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_lt" style="color:var(--mu2)">'+Number(en.lambdaTotal||0).toFixed(2)+'</div><div class="md-prob-lbl">λ Total</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_asc" style="color:'+ec(en.awayScoreRate)+'">'+(en.awayScoreRate!=null?en.awayScoreRate+'%':'—')+'</div><div class="md-prob-lbl">Oaspeti marcheaza</div></div>';
       out+='</div>';
       if(en.confidence)out+='<div style="text-align:center;margin-top:6px"><span class="badge-conf '+en.confidence+'">Incredere: '+en.confidence+'</span></div>';
     }
@@ -2349,7 +2415,6 @@ function mdRenderSumar(d){
 
   // ── CALIBRARE CU COTE REALE ───────────────────────────────────────
   if(en.homeWin!=null||en.over15Prob!=null){
-    var fk=String((fix&&fix.fixture&&fix.fixture.id)||0);
     var _lH=+(en.lambdaHome)||1.3, _lA=+(en.lambdaAway)||1.1;
     out+='<div class="md-section">';
     out+='<div class="md-section-title">🔄 Calibrare cu cote reale</div>';
@@ -2368,7 +2433,11 @@ function mdRenderSumar(d){
       +' data-o15="'+(en.over15Prob!=null?Math.round(en.over15Prob):'')+'"'
       +' data-o25="'+(en.over25Prob!=null?Math.round(en.over25Prob):'')+'"'
       +' data-gg="'+(en.ggProb!=null?Math.round(en.ggProb):'')+'"'
-      +' data-hsc="'+(en.homeScoreRate||'')+'" data-asc="'+(en.awayScoreRate||'')+'">'
+      +' data-hsc="'+(en.homeScoreRate||'')+'" data-asc="'+(en.awayScoreRate||'')+'"'
+      +' data-lt="'+Number(en.lambdaTotal||0).toFixed(2)+'"'
+      +' data-cs="'+(en.confidenceScore!=null?en.confidenceScore:'')+'"'
+      +' data-po="'+(_poOrig!=null?_poOrig:'')+'"'
+      +' data-pow="'+_powVal+'">'
       +'<div style="color:var(--mu);font-size:11px;padding:6px 0">Introdu cotele pentru 1, X și 2 →</div></div>';
     out+='</div>';
   }
