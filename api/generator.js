@@ -187,12 +187,12 @@ function buildAccumulator(matches, targetMin = 1.50, targetMax = 5.00) {
     if (m.is_live && (m.minute || 0) >= 75) continue;
     // Exclude meciuri fără date de formă — probabilitățile pentru piețele de goluri ar fi inventate
     if (!m.has_form_data) continue;
-    // 1X2/DC acceptate doar dacă avem cote bookmaker reale — altfel ignoră
+    // 1X2/DC acceptate doar dacă ambele echipe au formă din aceeași ligă
     const DC_1X2_KEYS = new Set(['h1', 'draw', 'h2', 'dc1x', 'dcx2']);
 
     for (const [key, mkt] of Object.entries(m.markets)) {
       if (!MARKET_ORDER.includes(key)) continue;
-      if (DC_1X2_KEYS.has(key) && !m.has_odds_1x2) continue; // fără cote bookmaker = 1X2/DC nesigure
+      if (DC_1X2_KEYS.has(key) && !m.has_same_league_form) continue; // 1X2/DC fiabile doar cu forma din aceeași ligă
       if (mkt.prob < MIN_PROB) continue;
       if (isMarketSettled(key, m)) continue; // piața deja rezolvată în live — skip
       const fairOdds = Math.round((100 / mkt.prob) * 100) / 100;
@@ -345,7 +345,7 @@ export default async function handler(req, res) {
 
     if (!rawMatches.length) return res.json({ ok: true, mode, count: 0, matches: [] });
 
-    // Load league_stats
+    // Load league_stats pentru meciurile curente
     const leagueIds = [...new Set(rawMatches.map(m => m.league?.id).filter(Boolean))];
     const { rows: lsRows } = await query(
       'SELECT * FROM league_stats WHERE league_id = ANY($1)', [leagueIds]
@@ -403,10 +403,19 @@ export default async function handler(req, res) {
     for (const r of fsRows) {
       const k = `${r.team_id}-${r.league_id}`;
       if (!formMap[k] || formMap[k].season < r.season) formMap[k] = r;
-      // Reține forma cea mai recentă per echipă indiferent de ligă
       if (!formByTeam[r.team_id] || formByTeam[r.team_id].season < r.season) {
         formByTeam[r.team_id] = r;
       }
+    }
+
+    // Extinde leagueMap cu ligile din care provine forma echipelor (pentru normalizare)
+    const formLeagueIds = [...new Set(fsRows.map(r => r.league_id).filter(Boolean))];
+    const missingFormLeagues = formLeagueIds.filter(id => !leagueMap[id]);
+    if (missingFormLeagues.length) {
+      const { rows: flRows } = await query(
+        'SELECT * FROM league_stats WHERE league_id = ANY($1)', [missingFormLeagues]
+      ).catch(() => ({ rows: [] }));
+      for (const r of flRows) leagueMap[Number(r.league_id)] = r;
     }
 
     // Load teams_stats as fallback when form_stats missing (season-level averages)
@@ -429,30 +438,24 @@ export default async function handler(req, res) {
       venueMap = Object.fromEntries(vRows.map(r => [r.venue_id, r]));
     }
 
-    // Load 1X2 + DC bookmaker odds for all fixtures
+    // Normalizează forma unei echipe din liga X la scala ligii Y
+    // Ex: La Guaira face 1.2 goluri/meci în liga venezueleană (avg 3.0) →
+    //     în Copa Libertadores (avg 2.2) = 1.2/3.0 * 2.2 = 0.88
+    const normalizeForm = (form, fromLgId, toLgAvgGoals) => {
+      if (!form) return form;
+      const fromLgAvg = +(leagueMap[fromLgId]?.avg_goals) || toLgAvgGoals;
+      if (Math.abs(fromLgAvg - toLgAvgGoals) < 0.3) return form; // ligi similare — fără corecție
+      const r = toLgAvgGoals / fromLgAvg;
+      return {
+        ...form,
+        home_avg_scored:   form.home_avg_scored   != null ? +(form.home_avg_scored)   * r : null,
+        home_avg_conceded: form.home_avg_conceded != null ? +(form.home_avg_conceded) * r : null,
+        away_avg_scored:   form.away_avg_scored   != null ? +(form.away_avg_scored)   * r : null,
+        away_avg_conceded: form.away_avg_conceded != null ? +(form.away_avg_conceded) * r : null,
+      };
+    };
+
     const fixtureIds = rawMatches.map(m => m.fixture?.id).filter(Boolean);
-    let oddsMap = {};
-    if (fixtureIds.length) {
-      const { rows: oddsRows } = await query(
-        `SELECT fixture_id, bet_id, value_name, MIN(value_odd) AS min_odd
-         FROM odds
-         WHERE fixture_id = ANY($1) AND bet_id IN (1, 2)
-         GROUP BY fixture_id, bet_id, value_name`,
-        [fixtureIds]
-      ).catch(() => ({ rows: [] }));
-      for (const r of oddsRows) {
-        const fid = r.fixture_id;
-        if (!oddsMap[fid]) oddsMap[fid] = {};
-        const odd = parseFloat(r.min_odd);
-        if (!odd || odd < 1.01) continue;
-        if (r.bet_id === 1) {
-          const vn = r.value_name?.toLowerCase();
-          if (vn === 'home')      oddsMap[fid].homeOdd = odd;
-          else if (vn === 'draw') oddsMap[fid].drawOdd = odd;
-          else if (vn === 'away') oddsMap[fid].awayOdd = odd;
-        }
-      }
-    }
     let injMap = {};
     if (fixtureIds.length) {
       const { rows: injRows } = await query(
@@ -475,12 +478,18 @@ export default async function handler(req, res) {
       const refName = cleanRef(m.fixture?.referee);
 
       const lg = leagueMap[lid] || {};
+      const lgAvgGoals = +(lg.avg_goals) || 2.5;
       const ref = refName ? refMap[refName] : null;
       const h2h = h2hMap[`${Math.min(hid, aid)}-${Math.max(hid, aid)}`] || null;
-      // Fallback cross-ligă: dacă echipa nu are form în liga curentă (ex. cupă internațională),
-      // folosește forma din liga domestică (cea mai recentă din orice ligă)
-      const hForm = formMap[`${hid}-${lid}`] || formByTeam[hid] || null;
-      const aForm = formMap[`${aid}-${lid}`] || formByTeam[aid] || null;
+
+      // Forma echipei: preferă datele din liga curentă; fallback la cea mai recentă ligă
+      const hFormRaw = formMap[`${hid}-${lid}`] || formByTeam[hid] || null;
+      const aFormRaw = formMap[`${aid}-${lid}`] || formByTeam[aid] || null;
+      // Normalizează forma la scala medie a ligii curente când vine din altă ligă
+      const hForm = (hFormRaw && hFormRaw.league_id !== lid)
+        ? normalizeForm(hFormRaw, hFormRaw.league_id, lgAvgGoals) : hFormRaw;
+      const aForm = (aFormRaw && aFormRaw.league_id !== lid)
+        ? normalizeForm(aFormRaw, aFormRaw.league_id, lgAvgGoals) : aFormRaw;
       const hTS   = tsMap[hid] || null;
       const aTS   = tsMap[aid] || null;
       const venue = m._venue_id ? venueMap[m._venue_id] || null : null;
@@ -512,25 +521,6 @@ export default async function handler(req, res) {
           away_cards:   liveCards(aid),
         } : null
       );
-
-      // Override 1X2/DC cu probabilități implicite din cote bookmaker reale (când există)
-      let has_odds_1x2 = false;
-      const fixtureOdds = oddsMap[fid];
-      if (fixtureOdds && fixtureOdds.homeOdd && fixtureOdds.drawOdd && fixtureOdds.awayOdd) {
-        const rawH = 1 / fixtureOdds.homeOdd;
-        const rawD = 1 / fixtureOdds.drawOdd;
-        const rawA = 1 / fixtureOdds.awayOdd;
-        const overround = rawH + rawD + rawA;
-        const pH = Math.round(rawH / overround * 100);
-        const pD = Math.round(rawD / overround * 100);
-        const pA = Math.round(rawA / overround * 100);
-        markets.h1.prob   = Math.min(99, Math.max(1, pH));
-        markets.draw.prob = Math.min(99, Math.max(1, pD));
-        markets.h2.prob   = Math.min(99, Math.max(1, pA));
-        markets.dc1x.prob = Math.min(99, Math.max(1, pH + pD));
-        markets.dcx2.prob = Math.min(99, Math.max(1, pD + pA));
-        has_odds_1x2 = true;
-      }
 
       return {
         fixture_id: fid,
@@ -601,9 +591,8 @@ export default async function handler(req, res) {
           home_cards:   liveCards(hid),
           away_cards:   liveCards(aid),
         } : null,
-        has_form_data:        !!(hForm || hTS) && !!(aForm || aTS),
+        has_form_data:        !!(hFormRaw || hTS) && !!(aFormRaw || aTS),
         has_same_league_form: !!(formMap[`${hid}-${lid}`]) && !!(formMap[`${aid}-${lid}`]),
-        has_odds_1x2,
         markets,
       };
     });
