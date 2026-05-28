@@ -3340,6 +3340,100 @@ NEXT STEPS (prioritizat):
     - Pas 2 (sprint viitor): extragere JS din index.html in public/js/
     - Pas 3 (sprint viitor): module ES6 cu imports
     - Posibil: bundle production cu esbuild/vite
+  Commit: d63311f
+
+[29.05 00:30] - Sprint 3 Pas 2 — JS separat in 3 fisiere
+  Obiectiv: extragerea celor 3919 linii JS din 3 blocuri <script> ale index.html
+  in 3 fisiere modulare in public/js/ pentru maintainability si parsare browser.
+
+  STRUCTURA NOUA:
+    public/js/app-state.js  —  527 linii  Config, helpers Poisson/NGP, calibrare, WR, EV, MATCH TIME BADGE
+                                          Loaded FIRST — alte module depind de vars/funcții aici
+    public/js/app-ui.js     — 1453 linii  WebSocket, render LIVE cards, PRE-MECI, MATCH DETAIL modal
+    public/js/app-live.js   — 1970 linii  Agent, Generator v2 S1-S6, Favorites, Simulator, Splash, BILETE, INIT
+    TOTAL JS extras: 3950 linii (3919 originale + 31 headers/comentarii)
+
+  INDEX.HTML:
+    Inainte: 4297 linii (cu 3 blocuri <script> inline: L375-3637, L3638-4286, L4287-4295)
+    Acum:     379 linii (3918 linii mutate; HTML pur + 3 <script src>)
+    Inlocuit cu 3 <script src> inainte de </body>:
+       /js/app-state.js   (PRIMUL — alte 2 depind de vars din el)
+       /js/app-ui.js
+       /js/app-live.js
+
+  MAPARE PE SECTIUNI (din JS-ul concatenat din 3 blocuri originale):
+    app-state.js — 5 sectiuni continue:
+      L1-140    CONFIG + LEAGUES + CLOCK + TABS + POISSON/NGP + filterScore
+      L2209-2330 CALIBRARE (mutata INAINTE de EV pentru hoisting NGP_CAL_REST var)
+                MIRROR CALIBRATION + NGP CAL REST + g2Calibrate/g2PoissonCalib/g2CalibTested/g2CalibHeur
+      L302-479  EV CALCULATOR HELPERS + CALIBRARE INVERSA + buildCardHtml capat
+      L618-675  WIN RATE (loadWR/saveWR/resetWR/wrShowInfo/trackWR/renderWR/fetchSupabaseWinRate)
+      L2704-2722 MATCH TIME BADGE (matchTimeBadge)
+
+    app-ui.js — 4 sectiuni continue:
+      L141-301   WEBSOCKET/CONNECT + STATS + RENDER MATCHES section comment
+      L480-617   buildCardHtml + renderMatches
+      L676-1058  PRE-MECI complet (loadPM + loadTopOpps + renderPM + etc.)
+      L1123-1885 MATCH DETAIL complet (mdOpen + mdClose + mdFetch + mdRender* + mdBuildVenueWeatherHTML + mdRenderClasament)
+
+    app-live.js — 8 sectiuni continue:
+      L1059-1122 AGENT
+      L1886-2208 GENERATOR v2 (gen2Open, g2Show, g2Score, etc.)
+      L2331-2417 g2LiveAdjust (cu comentariile sale introductive)
+      L2418-2703 g2EvRecalc + g2RenderTop10 + g2Detail + g2Conclusion + gen* + genUpdateBadge
+      L2723-2879 FAVORITES
+      L2880-2901 INIT (setInterval-uri global)
+      L2902-3263 SIMULATOR (cu banner)
+      L3264-3290 SPLASH CONTROLLER (IIFE)
+      L3291-3919 BILETE/ROI + MODAL ISTORIC
+
+  REORDERING APLICATE pentru hoisting/dependențe:
+    - Blocul CALIBRARE (L2209-2330) MUTAT in app-state.js INAINTE de EV (L302-479)
+      Motiv: calibratedAnytimeProb/calibrated15minProb folosesc calibrateNgpRest (function decl
+      hoisted, dar și NGP_CAL_REST care e var — trebuie declarat înainte de utilizare)
+    - Cut points ajustate la function boundaries:
+      L477 → L479 (include `}` închidere mevCalibrate)
+      L478 → L480 (începe buildCardHtml după linia goală)
+      L2331 → L2331 (comentariile introductive g2LiveAdjust merg cu funcția în app-live)
+      L2903 → L2902 (include banner separator SIMULATOR)
+
+  SERVER.JS: nicio modificare. Linia 29 din Sprint 3 Pas 1 (express.static(public/))
+    deja servește /js/*.js → __dirname/public/js/*.js.
+
+  VERIFICARE:
+    ✅ node --check server.js OK
+    ✅ node --check app-state.js OK
+    ✅ node --check app-ui.js OK
+    ✅ node --check app-live.js OK
+    ✅ <script> inline count in index.html = 0 (eliminat complet)
+    ✅ function definitions count in index.html = 0 (toate mutate)
+    ✅ 121/121 funcții cerute prezente in fișierele corecte:
+       - app-state: 25/25 (+ 3 IIFE-uri: loadDynamicCalibration, etc.)
+       - app-ui:    27/27 (+ 11 IIFE-uri)
+       - app-live:  69/69 (+ 7 IIFE-uri inclusiv splash controller + setInterval-uri)
+    ✅ gen2Back (lipsea ca top-level — e definit ca window.gen2Back inline) FOUND in app-live.js
+    ✅ Smoke test HTTP local: toate 3 JS HTTP 200, sizes 24KB/80KB/113KB
+    ✅ Ordine corectă <script src> în index.html: app-state → app-ui → app-live
+
+  LIMITARI SANDBOX:
+    ❌ NU am putut deschide browser pentru testare runtime (open/click/ws events)
+    ❌ NU am putut verifica race conditions între script loading și DOMContentLoaded
+    NOTĂ: cele 3 scripturi sunt LOADED SYNCHRONOUS (fără defer/async) — execută în
+    ordinea de definire, INAINTE de orice DOM event. Comportament identic cu blocurile
+    inline <script>...</script> originale.
+
+  AVANTAJE NOU FORMAT:
+    1. Browser cache separat per fisier — modificare app-live nu invalideaza app-state
+    2. Posibilitate viitoare: defer/async pe app-live (UI primar funcționează fără el)
+    3. Edit-uri mai usoare per modul logic
+    4. Foundation pentru Sprint 3 Pas 3 (module ES6 cu imports/exports)
+    5. Code splitting clar: state vs UI vs interactiv
+
+  PASI URMATORI (Sprint 3 Pas 3+):
+    - Conversie la module ES6 (export/import)
+    - Bundle production cu esbuild/vite (opțional)
+    - Tree-shaking pentru cod neutilizat
+    - Source maps pentru debug
   Commit: (acest commit)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
