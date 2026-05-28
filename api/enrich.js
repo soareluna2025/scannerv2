@@ -2,7 +2,6 @@ import { calcPoisson6x6 } from './calc-utils.js';
 import { query } from './db.js';
 import { logPrediction } from './log-prediction.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
-import { calcConsensus } from './utils/consensus-engine.js';
 import { getWeight } from './weights.js';
 
 const PRE_MATCH_STATUSES = new Set(['NS']);
@@ -368,7 +367,7 @@ async function getInjuredPlayerScores(injuries, homeId, awayId) {
   } catch (_) { return { home: [], away: [] }; }
 }
 
-function calcConfidence(result, liveStats, teamStrengths, apiPred = null) {
+function calcConfidence(result, liveStats, teamStrengths) {
   const score1 = result.over15Prob ?? 50;
   const elapsed  = liveStats?.elapsed ?? 0;
   const sotTotal = liveStats?.sot     ?? null;
@@ -407,28 +406,13 @@ function calcConfidence(result, liveStats, teamStrengths, apiPred = null) {
     score7 = Math.round((h + a) / 2);
   }
 
-  // Layer 8 — API Consensus: alinierea Poisson nostru cu cel al API-Football
-  let score8 = null;
-  if (apiPred) {
-    try {
-      const poissonDist = apiPred.comparison?.poisson_distribution;
-      if (poissonDist?.home) {
-        const theirHome = parseFloat(poissonDist.home);
-        const ourHome   = result.homeWin ?? 33;
-        const diff = Math.abs(theirHome - ourHome);
-        score8 = Math.max(0, Math.min(100, 100 - diff * 2));
-      }
-    } catch (_) { /* silent */ }
-  }
-
   const layers = [
-    { score: score1, w: 0.22 },
-    { score: score2, w: 0.20 },
+    { score: score1, w: 0.25 },
+    { score: score2, w: 0.21 },
     { score: score3, w: 0.12 },
-    { score: score4, w: 0.16 },
+    { score: score4, w: 0.17 },
     { score: score6, w: 0.06 },
-    { score: score7, w: 0.18 },
-    { score: score8, w: 0.06 },
+    { score: score7, w: 0.19 },
   ].filter(l => l.score !== null).filter(l => l.w > 0);
   const totalW = layers.reduce((s, l) => s + l.w, 0);
   const confidenceScore = Math.round(layers.reduce((s, l) => s + l.score * (l.w / totalW), 0));
@@ -458,7 +442,6 @@ function calcConfidence(result, liveStats, teamStrengths, apiPred = null) {
       live:         Math.round(score4),
       consistenta:  Math.round(score6),
       ...(hasStr ? { putereEchipe: score7 } : {}),
-      ...(score8 != null ? { apiConsensus: Math.round(score8) } : {}),
     },
     teamStrengthHome,
     teamStrengthAway,
@@ -953,18 +936,10 @@ export default async function handler(req, res) {
       da, yc, elapsed: elapsedNum,
     } : null;
 
-    const confData = calcConfidence(result, liveStats, teamStrengths, apiPred);
+    const confData = calcConfidence(result, liveStats, teamStrengths);
 
     if (elapsed && parseInt(elapsed) > 0) {
       confData.breakdown.xg_source = xgSource;
-    }
-
-    // --- Consensus Engine: multi-signal alignment API vs model ---
-    const consensusData = calcConsensus(result, apiPred);
-    if (consensusData) {
-      confData.confidenceScore = Math.max(5, Math.min(100, confData.confidenceScore + consensusData.boost));
-      confData.breakdown.consensus = consensusData.consensusScore;
-      confData._consensusDetails = consensusData.details;
     }
 
     // --- Injuries adjustment — smart penalty bazat pe scorul individual al jucătorului ---
