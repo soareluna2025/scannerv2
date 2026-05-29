@@ -3609,7 +3609,74 @@ NEXT STEPS (prioritizat):
          → conf-circle culoare PORTOCALIE (MED) — era ROȘIE inainte (LOW)
       3. Verifica Player Intelligence cu strength <40
          → trebuie sa vezi "(date limitate)" langa numar in gri
-  Commit: (acest commit)
+  Commit: 8fd1a99
+
+[29.05 03:30] - PROBLEMA 1 fix: cazarma-router log fals "nimic de procesat"
+  PROBLEMA: api/cron/cazarma-router.js:158 apela logCron('success', 'nimic de procesat')
+            Funcția logCron (linia 10-13) scrie mesajul în coloana error_msg din cron_logs.
+            Admin endpoint /api/admin/errors (admin.js:254) selectează cu condiția
+            "WHERE (error_msg IS NOT NULL OR status = 'error')" → cron-ul apărea în
+            lista Erori Recente deși status era 'success' și nu existase nicio eroare.
+
+  FIX aplicat în api/cron/cazarma-router.js:158-163:
+    Inainte:
+      if (!entries.length) {
+        await logCron('success', 'nimic de procesat');
+        return res.status(200).json({ processed: 0, skipped: 0 });
+      }
+    Acum:
+      if (!entries.length) {
+        // FIX log fals: 'nimic de procesat' era scris în error_msg, făcând admin/errors
+        // să raporteze cron-ul ca eroare deși status era 'success'.
+        // Acum logăm doar pe consolă (info), iar cron_logs primește error_msg=NULL.
+        console.log('[cazarma-router] nimic de procesat');
+        await logCron('success');
+        return res.status(200).json({ processed: 0, skipped: 0 });
+      }
+
+  EFECT:
+    - Visibility: mesajul apare în journalctl -u alohascan (consolă)
+    - cron_logs: row nou cu status='success', error_msg=NULL → NU mai apare în admin Erori
+    - Logica de procesare: NESCHIMBATĂ — doar nivelul de log
+
+  ALTE log-uri cazarma-router (NEATINSE — corecte):
+    Linia 186: logCron('success', 'procesat:N sarit:M total:K') — metric util
+    Linia 189: logCron('error', e.message) — eroare reală
+
+  VERIFICARE: node --check api/cron/cazarma-router.js OK
+
+[29.05 03:30] - PROBLEMA 2 (NU APLICATĂ): Egypt Relegation Group whitelist
+  Cerere: verificare league_ids Egypt în DB și adăugare Premier League Relegation Group.
+
+  LIMITĂRI SANDBOX:
+    ❌ NU acces psql la VPS (port 5432 blocat)
+    ❌ NU pot identifica league_id exact fără query DB sau API-Football real
+    ❌ NU pot rula systemctl restart (port 22 SSH blocat)
+
+  EROARE în query-ul user:
+    Cerere user: SELECT ... FROM fixtures WHERE country ILIKE '%egypt%'
+    Coloana 'country' NU EXISTĂ în fixtures.
+    Query corect:
+      SELECT league_id, name, country FROM leagues
+      WHERE country ILIKE '%egypt%' ORDER BY league_id;
+
+  WHITELIST ACTUAL EGYPT (api/leagues.js):
+    233 Premier League
+    234 Second Division (Liga 2)
+    238 Egyptian Cup
+
+  ID-uri CANDIDATE Relegation Group (DIN MEMORIE, NEVERIFICATE):
+    717, 1023, 1078 — NICIUNUL CONFIRMAT, NU am adăugat orbește
+
+  ACȚIUNE NECESARĂ USER pe VPS:
+    PGPASSWORD=Firenze225854 psql -U alohascan -d elefant -h 127.0.0.1 -c "
+    SELECT league_id, name, country FROM leagues
+    WHERE country ILIKE '%egypt%' ORDER BY league_id;"
+    Trimite output → adăug ID exact în api/leagues.js într-un commit ulterior.
+
+  systemctl restart alohascan: NU executat — VPS inaccesibil din sandbox.
+  Deploy.yml va face restart automat după push pe main.
+  Commit: (acest commit — DOAR fix cazarma-router)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 14. DIAGNOSTIC COMPLET — 25.05.2026 (rulat pe VPS via scripts/diagnostic-db.sh)

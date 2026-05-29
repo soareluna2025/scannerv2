@@ -155,7 +155,11 @@ export default async function handler(req, res) {
     );
 
     if (!entries.length) {
-      await logCron('success', 'nimic de procesat');
+      // FIX log fals: 'nimic de procesat' era scris în error_msg, făcând admin/errors
+      // să raporteze cron-ul ca eroare deși status era 'success'.
+      // Acum logăm doar pe consolă (info), iar cron_logs primește error_msg=NULL.
+      console.log('[cazarma-router] nimic de procesat');
+      await logCron('success');
       return res.status(200).json({ processed: 0, skipped: 0 });
     }
 
