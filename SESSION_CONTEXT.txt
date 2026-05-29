@@ -4360,3 +4360,14 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   - Eliminat SAFE BET badge cu cota bookmaker din carduri pre-meci
   - Actualizat Monte Carlo BEST BET: afiseaza piata + probabilitate model, fara cota/EV bookmaker
   - Probabilitatile Poisson (H/D/A%, Over 1.5%, GG%, confidence score) NESCHIMBATE
+
+[29.05 ~12:00] - REFACTOR: /api/generator citeste din predictions JOIN fixtures | Commit: 58bd775
+  - api/generator.js: ELIMINAT calcMatchMarkets/buildAccumulator/calcConfidence local
+  - Inlocuit cu un singur SELECT: predictions p JOIN fixtures f ON f.fixture_id=p.fixture_id
+  - WHERE f.status_short='NS' AND f.match_date BETWEEN NOW() AND NOW()+36h
+  -       AND p.confidence>=70 AND p.over15_prob>=70
+  - ORDER BY p.confidence DESC LIMIT 10
+  - Markets compuse din coloanele predictions (over15/25, gg, home/away_scores, 1X2)
+  - Expune: lambda_home/away/total, confidence, best_ev/cota/bet, h2h_over15
+  - 594 linii sterse, 80 linii noi — sursa unica de adevar = tabela predictions
+  - NU am modificat calcConfidencePreMatch/Live sau score2/3/6/7 in enrich.js
