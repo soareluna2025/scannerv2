@@ -613,13 +613,45 @@ async function getAwayForm(teamId) {
 }
 
 async function getH2HFromDB(homeId, awayId) {
+  // Sursa primară: tabelul h2h (populat de scanner.js din meciuri FT live)
+  let h2hRows = [];
   try {
     const r = await query(
       `SELECT * FROM h2h WHERE ((home_team_id = $1 AND away_team_id = $2) OR (home_team_id = $2 AND away_team_id = $1)) AND match_date >= NOW() - INTERVAL '2 years' ORDER BY match_date DESC LIMIT 10`,
       [homeId, awayId]
     );
-    return r.rows;
-  } catch (_) { return []; }
+    h2hRows = r.rows;
+  } catch (_) { h2hRows = []; }
+
+  // Fallback: dacă h2h <3 meciuri, completează din fixtures_history.
+  // Motivul: scanner.js populează h2h DOAR din meciurile observate live.
+  // Echipele care nu au jucat live recent au h2h gol, deși fixtures_history are datele.
+  if (h2hRows.length < 3) {
+    try {
+      const fh = await query(
+        `SELECT home_team_id, away_team_id, home_goals, away_goals, match_date, fixture_id
+         FROM fixtures_history
+         WHERE ((home_team_id = $1 AND away_team_id = $2)
+             OR (home_team_id = $2 AND away_team_id = $1))
+           AND status_short = 'FT'
+           AND home_goals IS NOT NULL
+         ORDER BY match_date DESC
+         LIMIT 10`,
+        [homeId, awayId]
+      );
+      // Dedupe după fixture_id (cheie unică), păstrând prioritate h2h table (sursa primară)
+      const seenFids = new Set(h2hRows.map(r => r.fixture_id).filter(v => v != null));
+      for (const row of fh.rows) {
+        if (row.fixture_id != null && seenFids.has(row.fixture_id)) continue;
+        h2hRows.push(row);
+      }
+      // Re-sortare DESC după match_date + cap la 10
+      h2hRows.sort((a, b) => new Date(b.match_date) - new Date(a.match_date));
+      h2hRows = h2hRows.slice(0, 10);
+    } catch (_) { /* păstrează h2hRows existent */ }
+  }
+
+  return h2hRows;
 }
 
 async function getInjuriesFromDB(fixtureId) {
