@@ -3676,7 +3676,99 @@ NEXT STEPS (prioritizat):
 
   systemctl restart alohascan: NU executat — VPS inaccesibil din sandbox.
   Deploy.yml va face restart automat după push pe main.
-  Commit: (acest commit — DOAR fix cazarma-router)
+  Commit: 50e1a95
+
+[29.05 04:00] - INVESTIGATIE: Egypt Relegation Group lambda=1.12 + confidence 38-64%
+  Cerere user: de ce echipele Ghazl El Mehalla et al. au scoruri așa mici.
+  Tip: AUDIT READ-ONLY (zero modificari cod).
+
+  PASUL 1: query DB NU executat (sandbox fără psql). User trebuie să ruleze pe VPS.
+           Query corectat oferit pentru fixtures_history (FT) în plus față de fixtures (NS+live).
+
+  PASUL 2-3: LAMBDA PIPELINE pentru pre-meci (api/enrich.js:104-202)
+    - hGames = getHomeForm(hId) → ultimele 10 ACASA din fixtures_history
+    - aGames = getAwayForm(aId) → ultimele 10 DEPLASARE din fixtures_history
+    - leagueStats = getLeagueStats(lgid) → row din league_stats table
+    - lgHome/lgAway din handler (linii ~881-882):
+        const lgHome = parseFloat(leagueStats?.avg_home_goals) || 1.2
+        const lgAway = parseFloat(leagueStats?.avg_away_goals) || 1.2
+
+    CALCUL (linii 124-146):
+      weighted() applies temporal decay phi=0.0065 pe hGames/aGames (sample <10)
+      Maher 1982: lambda = lgAvg × AttStr × DefStr × HomeAdv(1.25)
+      AttStr/DefStr clampate [0.4, 2.5]; lambda final clampat [0.3, 4.5]
+      FALLBACK CRITIC (linia 141-146):
+        if (hGames.length && aGames.length) → Maher
+        else → lgHome/lgAway (default 1.2 dacă league_stats lipsește!)
+
+    DUPĂ Maher — h2h blend (linia 150-156):
+      if (h2h.length >= 3) blend 70% formă + 30% H2H scalat (max 30%)
+
+  PASUL 4: calcConfidencePreMatch() (api/enrich.js:501-524)
+    Ponderi:
+      score1 Poisson         w=0.30
+      score2 Formă+Apărare    w=0.25
+      score3 H2H combo        w=0.15  (NULL dacă h2hSample <3)
+      score7 Putere Echipe    w=0.25  (NULL dacă player_stats <10/echipă)
+      score6 Convergență      w=0.05
+
+  CAUZA RĂDĂCINĂ pentru lambda=1.12 (Ghazl El Mehalla):
+    Scenariul A (probabil 80%):
+      hGames.length === 0 SAU aGames.length === 0 → fallback lgHome (1.2 default)
+      h2h blend: 1.2 × 0.91 + h2hAvgH × 0.09 ≈ 1.10-1.12 ✓ se potrivește exact
+
+    Scenariul B (alternativ):
+      hGames+aGames există dar Maher clampat la minim:
+      1.4 × 0.4 × 0.4 × 1.25 = 0.28 → clamp 0.3 (nu se potrivește 1.12)
+
+  CAUZA RĂDĂCINĂ pentru confidence 38-64%:
+    score1 ≈ 60 (P(Over 1.5) cu lambdaTotal ~2.2)
+    score2 ≈ 50 (atac+apărare mediu pentru ligă low-scoring)
+    score3 = NULL (h2h rar pentru Relegation Group recent format)
+    score7 = NULL (player_stats limitat pentru ligi inferioare Egypt)
+    score6 ≈ 70-80 (convergență pe 2 straturi)
+    Pondere efectivă DUPĂ redistribuire dinamică (3 din 5 active):
+      score1 = 0.30/0.60 = 50%
+      score2 = 0.25/0.60 = 42%
+      score6 = 0.05/0.60 = 8%
+    confidenceScore ≈ 60×0.50 + 50×0.42 + 75×0.08 = 30+21+6 = 57
+    Cu penalties (injuries, squads <14) → 38-50
+
+  PROBLEME FUNDAMENTALE IDENTIFICATE:
+
+  ❌ PROBLEMA 1 — Lipsă league_stats pentru Egypt Relegation Group
+    Cron league-stats calculează din fixtures_history. Ligi noi cu istoric mic
+    → row inexistent → lgHome cade pe default 1.2 (sub realitate ~1.4 pentru Egypt PL).
+    SUBESTIMARE λ cu ~15%.
+
+  ❌ PROBLEMA 2 — Lipsă SHRINKAGE/SMOOTHING bayesian
+    Cod nu aplică James-Stein shrinkage sau regularizare. Echipele cu 2-3 meciuri
+    produc estimări extrem de zgomotoase. weighted() nu are MIN_SAMPLE guard.
+
+  ❌ PROBLEMA 3 — score3 + score7 frecvent NULL pentru ligi inferioare
+    H2H rar (sample <3 pentru Relegation Group).
+    Layer 7 (player_stats) necesită ≥10 rânduri/echipă — backfill incomplet pentru
+    ligi mici.
+    Pondere efectivă 60% pe DOAR 2 straturi (Poisson + Formă) → confidence instabil.
+
+  ❌ PROBLEMA 4 — _calcConvergence cu n=2 = scor instabil
+    stdDev pe sample mic = zgomot. Greutate 5% (impact mic), dar contribuie.
+
+  RECOMANDĂRI (NEAPLICATE — audit only):
+
+  Pentru lambda corect pentru ligi mici:
+    1. Asigură league_stats populat pentru toate ligile (verifică cron rulare)
+    2. Adaugă MIN_SAMPLE shrinkage în weighted():
+       când hGames.length < 5 → blend 70% calc + 30% liga avg
+    3. Pentru ligi noi, folosește league baseline din altă ligă comparabilă
+
+  Pentru confidence stabil cu straturi lipsă:
+    4. Adăugare fallback score3 când H2H lipsește: folosește h2h liga avg
+    5. Adăugare fallback score7 când player_stats lipsește: folosește standings rank
+    6. Pondere de "confidence intrinsic" — scădere directă cu N straturi null
+
+  ZERO modificări cod aplicate. Decizia de fix rămâne userului.
+  Commit: (doar SESSION_CONTEXT.txt — fără modificări de cod)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 14. DIAGNOSTIC COMPLET — 25.05.2026 (rulat pe VPS via scripts/diagnostic-db.sh)
