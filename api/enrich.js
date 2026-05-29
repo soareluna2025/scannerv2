@@ -567,16 +567,43 @@ function calcConfidenceLive(result, liveStats, teamStrengths) {
   const { score1, score2, score3, score7, teamStrengthHome, teamStrengthAway } =
     _calcConfidenceCommonScores(result, teamStrengths);
 
-  // ── score4 — Live xG/SOT/DA ──────────────────────────────────────
-  const sot = liveStats.sot || 0;
-  const xg  = liveStats.xg  || 0;
-  const da  = liveStats.da  || 0;
-  const elapsed = liveStats.elapsed || 0;
+  // ── score4 — Live xG/SOT/DA + NGP din live_stats DB + minute decay (Sprint Live) ──
+  // Sume preferă per-team din live_stats; fallback la flat (din query params) pentru
+  // backward compat dacă DB nu are date pentru fixture.
+  const sumPair = (h, a, flat) => {
+    const hh = h != null ? Number(h) : null;
+    const aa = a != null ? Number(a) : null;
+    if (hh != null || aa != null) return (hh || 0) + (aa || 0);
+    return Number(flat || 0);
+  };
+  const totalXg  = sumPair(liveStats.home_xg,  liveStats.away_xg,  liveStats.xg);
+  const totalSot = sumPair(liveStats.home_sot, liveStats.away_sot, liveStats.sot);
+  const totalDa  = sumPair(liveStats.home_da,  liveStats.away_da,  liveStats.da);
+  const elapsed  = liveStats.elapsed || 0;
+
+  // NGP din DB — Next Goal Probability total (home + away), cap 100.
+  const ngpH = liveStats.ngp_home != null ? Number(liveStats.ngp_home) : null;
+  const ngpA = liveStats.ngp_away != null ? Number(liveStats.ngp_away) : null;
+  let ngpVal = null;
+  if (Number.isFinite(ngpH) || Number.isFinite(ngpA)) {
+    ngpVal = Math.min(100,
+      (Number.isFinite(ngpH) ? ngpH : 0) +
+      (Number.isFinite(ngpA) ? ngpA : 0)
+    );
+  }
+
   let score4live;
-  if (sot === 0 && elapsed > 10) {
+  if (totalSot === 0 && elapsed > 10) {
+    // Niciun șut la poartă în primele 10 min → meci închis.
     score4live = 20;
   } else {
-    score4live = Math.min(100, xg * 25 + sot * 3 + da * 0.5);
+    // Componenta intensity: xG dominant, SOT secundar, DA terțiar.
+    const intensity = Math.min(100, totalXg * 25 + totalSot * 3 + totalDa * 0.5);
+    // Blend cu NGP din DB (model dedicat next-goal): 60% intensity + 40% NGP.
+    const blended = ngpVal != null ? (intensity * 0.6 + ngpVal * 0.4) : intensity;
+    // Minute decay: după min 75, oportunitățile rămase scad liniar până la 0.7 la min 90.
+    const decay = elapsed > 75 ? Math.max(0.7, 1 - (elapsed - 75) / 50) : 1.0;
+    score4live = Math.max(0, Math.min(100, blended * decay));
   }
 
   // Convergența include score4 live (înlocuiește score3 dacă null — redundanță evitată)
@@ -839,6 +866,31 @@ async function getMatchStatsFromDB(fixtureId) {
     );
     return r.rows;
   } catch (_) { return []; }
+}
+
+// Sprint Live — Citește ULTIMA înregistrare live_stats pentru un fixture.
+// Toate coloanele provin EXCLUSIV din DB (zero query params, zero hardcoded).
+// Folosit în score4 din calcConfidenceLive pentru intensity + NGP + decay.
+async function getLiveStatsFromDB(fixtureId) {
+  if (!fixtureId) return null;
+  try {
+    const r = await query(
+      `SELECT elapsed, home_goals, away_goals,
+              home_sot, away_sot,
+              home_shots, away_shots,
+              home_possession, away_possession,
+              home_da, away_da,
+              home_xg, away_xg,
+              ngp_home, ngp_away,
+              recorded_at
+         FROM live_stats
+        WHERE fixture_id = $1
+        ORDER BY recorded_at DESC
+        LIMIT 1`,
+      [Number(fixtureId)]
+    );
+    return r.rows[0] || null;
+  } catch (_) { return null; }
 }
 
 // Transform h2h rows → API-Football-like format expected by calcPoisson
@@ -1150,10 +1202,31 @@ export default async function handler(req, res) {
     const da  = parseInt(req.query.da)  || 0;
     const yc  = parseInt(req.query.yc)  || 0;
     const elapsedNum = parseInt(elapsed) || 0;
+
+    // Sprint Live — Citește live_stats real din DB (preferă față de query params).
+    // Doar dacă caller-ul a semnalat live mode (elapsedNum > 0) — altfel pre-meci.
+    const liveDB = (fid && elapsedNum > 0)
+      ? await getLiveStatsFromDB(Number(fid))
+      : null;
+
     const liveStats = elapsedNum > 0 ? {
-      xg:  xgValue,
-      sot: (parseInt(soth) || 0) + (parseInt(sota) || 0),
-      da, yc, elapsed: elapsedNum,
+      // Sume folosite în score4 (DB > query params fallback)
+      xg:  liveDB ? (Number(liveDB.home_xg || 0) + Number(liveDB.away_xg || 0)) : xgValue,
+      sot: liveDB ? (Number(liveDB.home_sot || 0) + Number(liveDB.away_sot || 0))
+                   : ((parseInt(soth) || 0) + (parseInt(sota) || 0)),
+      da:  liveDB ? (Number(liveDB.home_da || 0) + Number(liveDB.away_da || 0)) : da,
+      yc,
+      elapsed: liveDB?.elapsed ?? elapsedNum,
+      // Detalii per echipă + NGP (din DB) — folosite în score4 (fallback null)
+      home_xg:  liveDB?.home_xg  ?? null,
+      away_xg:  liveDB?.away_xg  ?? null,
+      home_sot: liveDB?.home_sot ?? null,
+      away_sot: liveDB?.away_sot ?? null,
+      home_da:  liveDB?.home_da  ?? null,
+      away_da:  liveDB?.away_da  ?? null,
+      ngp_home: liveDB?.ngp_home ?? null,
+      ngp_away: liveDB?.ngp_away ?? null,
+      _source:  liveDB ? 'live_stats' : 'query',
     } : null;
 
     const confData = calcConfidence(result, liveStats, teamStrengths);
