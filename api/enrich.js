@@ -121,10 +121,27 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agPar
     return sumW > 0 ? sumWV / sumW : 0;
   };
 
-  const homeAvgScored   = weighted(hGames, m => (m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away) ?? 0);
-  const homeAvgConceded = weighted(hGames, m => (m.teams?.home?.id === hId ? m.goals?.away : m.goals?.home) ?? 0);
-  const awayAvgScored   = weighted(aGames, m => (m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0);
-  const awayAvgConceded = weighted(aGames, m => (m.teams?.away?.id === aId ? m.goals?.home : m.goals?.away) ?? 0);
+  let homeAvgScored   = weighted(hGames, m => (m.teams?.home?.id === hId ? m.goals?.home : m.goals?.away) ?? 0);
+  let homeAvgConceded = weighted(hGames, m => (m.teams?.home?.id === hId ? m.goals?.away : m.goals?.home) ?? 0);
+  let awayAvgScored   = weighted(aGames, m => (m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0);
+  let awayAvgConceded = weighted(aGames, m => (m.teams?.away?.id === aId ? m.goals?.home : m.goals?.away) ?? 0);
+
+  // Shrinkage Bayesian — pull-uire spre media REALĂ a ligii (din league_stats).
+  // Cu cât sample-ul de meciuri (hGames / aGames) e mai mic, cu atât ponderea
+  // mediei ligii e mai mare. N_SHRINK=5 → la 5 meciuri form-ul contează 50%,
+  // la 10 ~67%, la 20 ~80%. Aplicat DOAR când leagueStats furnizează valori
+  // reale > 0 — niciodată cu constante hardcodate.
+  const lgHomeReal = parseFloat(leagueStats?.avg_home_goals);
+  const lgAwayReal = parseFloat(leagueStats?.avg_away_goals);
+  if (Number.isFinite(lgHomeReal) && Number.isFinite(lgAwayReal) && lgHomeReal > 0 && lgAwayReal > 0) {
+    const N_SHRINK = 5;
+    const hK = hGames.length / (hGames.length + N_SHRINK);
+    const aK = aGames.length / (aGames.length + N_SHRINK);
+    homeAvgScored    = hK * homeAvgScored    + (1 - hK) * lgHomeReal;
+    homeAvgConceded  = hK * homeAvgConceded  + (1 - hK) * lgAwayReal;
+    awayAvgScored    = aK * awayAvgScored    + (1 - aK) * lgAwayReal;
+    awayAvgConceded  = aK * awayAvgConceded  + (1 - aK) * lgHomeReal;
+  }
 
   // Lambda Nivel 4 — Maher 1982: lambda = lgAvg × AttackStrength × DefenseStrength × HomeAdvantage
   // Normalizare față de media ligii elimină bias-ul cross-league (Premier League ≠ Liga 3 Finlanda)
