@@ -4410,3 +4410,31 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   g2Calibrate restaurat la starea originală — fără Math.min, fără cap.
   Calibrarea globală (calibration_tables) se aplică direct: real_pct e
   returnat ca atare, indiferent de Δ față de raw.
+
+[29.05 ~13:30] - SPRINT 4A: Shrinkage Bayesian în calcPoisson | Commit: 96f70e7
+  Problemă: când hGames/aGames < 5, weighted() producea medii volatile.
+    Cu doar 1-3 meciuri, varianța mică din eșantion → lambda extrem
+    (echipe cu 1 meci 3-0 → lambdaHome inflated).
+  Fix (api/enrich.js calcPoisson):
+    - homeAvg* / awayAvg* sunt acum `let` (anterior `const`).
+    - După weighted(): aplic shrinkage Bayesian dacă leagueStats furnizează
+      avg_home_goals + avg_away_goals reale (> 0):
+        N_SHRINK = 5
+        hK = hGames.length / (hGames.length + 5)
+        aK = aGames.length / (aGames.length + 5)
+        homeAvgScored    = hK·form + (1-hK)·lgHomeReal
+        homeAvgConceded  = hK·form + (1-hK)·lgAwayReal
+        awayAvgScored    = aK·form + (1-aK)·lgAwayReal
+        awayAvgConceded  = aK·form + (1-aK)·lgHomeReal
+  Efect numeric (exemplu echipă cu 3 meciuri, avg scored=2.5, lgHome=1.4):
+    hK = 3/8 = 0.375
+    homeAvgScored_shrunk = 0.375·2.5 + 0.625·1.4 = 1.81  (în loc de 2.5)
+    Lambda Maher se calculează cu 1.81 → mai conservator pentru sample mic.
+  Constrânți respectate:
+    - Aplicat DOAR când leagueStats are valori reale > 0 (Number.isFinite + > 0).
+    - Dacă leagueStats lipsește/null → skip total, fără shrinkage.
+    - Niciodată cu constante hardcodate (lgHome/lgAway parametri ignorate aici).
+  NU am modificat:
+    - calcConfidencePreMatch(), calcConfidenceLive()
+    - score2, score3, score6, score7
+    - calcDynamicLambda, calcPoisson6x6, blendul H2H, gate-ul lambdaHome
