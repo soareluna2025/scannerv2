@@ -4503,3 +4503,36 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     • calcConfidencePreMatch(), calcConfidenceLive()
     • score2, score3, score6, score7
     • Pipeline-ul live (xG-based) — păstrat 1:1
+
+[29.05 ~14:50] - SPRINT 4D: clamp scoruri extreme în calcPoisson | Commit: 4e0dc81
+  Problema: meciuri 6-0, 5-3, 4-4 etc (total > 5 goluri) inflau lambdaHome
+    și lambdaAway peste valori realiste. În Maher: AttackStrength = goals/lgAvg
+    → un singur 6-0 într-un sample de 5 meciuri ridica hAttStr la 2+.
+  Fix (api/enrich.js calcPoisson, primul block după signature):
+    Aplicat clamp pe hGames și aGames înainte de orice weighted/avg:
+      const clampGoals = (m) => {
+        const gh = m.goals?.home || 0;
+        const ga = m.goals?.away || 0;
+        const total = gh + ga;
+        if (total <= 5) return m;
+        const factor = 5 / total;
+        return { ...m, goals: { ...m.goals,
+          home: round(gh * factor * 10) / 10,
+          away: round(ga * factor * 10) / 10 } };
+      };
+      hGames = hGames.map(clampGoals);
+      aGames = aGames.map(clampGoals);
+  Exemple numerice:
+    0-6  →  factor 5/6=0.833  →  0.0 - 5.0
+    1-5  →  factor 5/6=0.833  →  0.8 - 4.2  (total 5.0)
+    3-4  →  factor 5/7=0.714  →  2.1 - 2.9  (total 5.0)
+    4-4  →  factor 5/8=0.625  →  2.5 - 2.5  (total 5.0)
+    2-2  →  total=4, neclampat  →  2 - 2
+  Notă structură date: m.goals.home / m.goals.away (nested), nu m.goals_home flat.
+    Adapted la structura reală din API-Football.
+  h2h NU este clampat — utilizatorul a specificat doar hGames + aGames.
+  pct() filtrele >0 funcționează în continuare (0.7 > 0 = true).
+  NU am modificat:
+    • calcConfidencePreMatch(), calcConfidenceLive()
+    • score2, score3, score6, score7
+    • shrinkage Bayesian (Sprint 4A) — se aplică pe averages-urile deja clampate
