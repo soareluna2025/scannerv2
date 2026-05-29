@@ -20,18 +20,23 @@ export default async function handler(req, res) {
 
   try {
     const { rows } = await query(`
-      SELECT module, buckets, sample_size, brier_score, generated_at
+      SELECT module, league_group, buckets, sample_size, brier_score, generated_at
       FROM calibration_tables
-      ORDER BY module
+      ORDER BY module, league_group
     `).catch(() => ({ rows: [] }));
 
+    // Cheie plată pentru frontend: 'goals_total_2.5' (global) sau 'goals_total_2.5_low'
+    // Frontend caută întâi module_group, apoi fallback la module global.
     const modules = {};
     for (const r of rows) {
-      modules[r.module] = {
-        buckets:  r.buckets,
-        n:        Number(r.sample_size || 0),
-        brier:    r.brier_score ? Number(r.brier_score) : null,
-        updated:  r.generated_at,
+      const grp = r.league_group || 'global';
+      const key = grp === 'global' ? r.module : `${r.module}_${grp}`;
+      modules[key] = {
+        buckets:      r.buckets,
+        n:            Number(r.sample_size || 0),
+        brier:        r.brier_score ? Number(r.brier_score) : null,
+        updated:      r.generated_at,
+        league_group: grp,
       };
     }
 

@@ -225,6 +225,16 @@ function calibrateNgpRest(raw){
   }
   return r;
 }
+// Detect league_group din media reală de goluri/meci (zero hardcodat per ligă).
+// Coincide cu thresholds din api/cron/recalibrate-tables.js (single source of truth).
+function g2LeagueGroup(m){
+  if(!m||!m.league)return null;
+  var ag=Number(m.league.avg_goals);
+  if(!isFinite(ag)||ag<=0)return null;
+  if(ag<2.3)return 'low';
+  if(ag<3.0)return 'mid';
+  return 'high';
+}
 function g2Calibrate(cat,sub,thr,raw,m){
   if(typeof raw!=='number'||isNaN(raw))return 0;
   var key;
@@ -236,7 +246,9 @@ function g2Calibrate(cat,sub,thr,raw,m){
     return g2PoissonCalib(cat, sub, thr, m);
   }
   else return raw;
-  var tbl=G2_CALIBRATION[key];
+  // Sprint 4B: încearcă tabela per-profil (low/mid/high), apoi fallback la global.
+  var grp=g2LeagueGroup(m);
+  var tbl=(grp&&G2_CALIBRATION[key+'_'+grp])||G2_CALIBRATION[key];
   if(!tbl)return raw;
   for(var i=0;i<tbl.length;i++){
     if(raw>=tbl[i][0]&&raw<tbl[i][1])return tbl[i][2];

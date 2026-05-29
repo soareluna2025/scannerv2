@@ -498,29 +498,31 @@ async function loadTopOpps(){
           lgGood:GOOD_LEAGUES[lgId], lgBad:BAD_LEAGUES[lgId],
         });
       }
+      // Sprint 4B: pasăm `m` pentru detectarea league_group (low/mid/high).
+      // Calibrarea folosește tabela per-profil dacă există, altfel global.
       // 1. Over 1.5
       if(typeof enr.over15Prob==='number'){
-        var cal=g2Calibrate('goals','total',1.5,Math.round(enr.over15Prob));
+        var cal=g2Calibrate('goals','total',1.5,Math.round(enr.over15Prob),m);
         addPick('over15','Over 1.5 total',enr.over15Prob,cal);
       }
       // 2. Over 2.5
       if(typeof enr.over25Prob==='number'){
-        var cal25=g2Calibrate('goals','total',2.5,Math.round(enr.over25Prob));
+        var cal25=g2Calibrate('goals','total',2.5,Math.round(enr.over25Prob),m);
         addPick('over25','Over 2.5 total',enr.over25Prob,cal25);
       }
       // 3. GG
       if(typeof enr.ggProb==='number'){
-        var cal2=g2Calibrate('gg','total',0,Math.round(enr.ggProb));
+        var cal2=g2Calibrate('gg','total',0,Math.round(enr.ggProb),m);
         addPick('gg','GG ambele marcheaza',enr.ggProb,cal2);
       }
       // 4. Gazde marcheaza (homeScoreRate)
       if(typeof enr.homeScoreRate==='number'){
-        var cal3=g2Calibrate('home','total',0,Math.round(enr.homeScoreRate));
+        var cal3=g2Calibrate('home','total',0,Math.round(enr.homeScoreRate),m);
         addPick('home','Gazde marcheaza',enr.homeScoreRate,cal3);
       }
       // 5. Oaspeti marcheaza
       if(typeof enr.awayScoreRate==='number'){
-        var cal4=g2Calibrate('away','total',0,Math.round(enr.awayScoreRate));
+        var cal4=g2Calibrate('away','total',0,Math.round(enr.awayScoreRate),m);
         addPick('away','Oaspeti marcheaza',enr.awayScoreRate,cal4);
       }
       // 6. Cornere — scalez lg avg cu intensitatea meciului (lambdaTotal)
