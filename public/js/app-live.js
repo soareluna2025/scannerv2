@@ -263,7 +263,16 @@ function g2Score(m){
         livG=need2<=0?100:g2Over(Math.max(xgR2,lamG*rem2/90),need2-1);
       }
     }
-    s=isLive?(poisG*.25+lgPct*.15+h2hPct*.15+refG*.10+livG*.35):(poisG*.35+lgPct*.20+h2hPct*.25+refG*.20);
+    // Sprint 4C: pentru pre-meci goals_total 1.5 / 2.5, dacă serverul a returnat
+    // probabilitatea din predictions table (calculată cu Poisson + shrinkage
+    // Bayesian în calcPoisson), o folosim direct ca rawScore.
+    // Calibrarea g2Calibrate() se aplică în aval pe această valoare.
+    var serverProbG=null;
+    if(!isLive&&isT&&m.confidence!=null){
+      if(thr===1.5&&typeof m.over15_prob==='number'&&m.over15_prob>0) serverProbG=m.over15_prob;
+      else if(thr===2.5&&typeof m.over25_prob==='number'&&m.over25_prob>0) serverProbG=m.over25_prob;
+    }
+    s=serverProbG!=null?serverProbG:(isLive?(poisG*.25+lgPct*.15+h2hPct*.15+refG*.10+livG*.35):(poisG*.35+lgPct*.20+h2hPct*.25+refG*.20));
 
   }else if(cat==='cards'){
     var isTC=(!sub||sub==='total'),isHC=(sub==='home');
@@ -358,7 +367,11 @@ function g2Score(m){
               (g2Over(Math.max(xgAR5c,lamA*rem5c/90)*pressureMult,0.5)/100)*100;
       }
     }
-    s=isLive?(compH*.25+compA*.25+h2hGG*.20+livGG*.30):(compH*.35+compA*.35+h2hGG*.30);
+    // Sprint 4C: server-side gg_prob (din predictions) pentru pre-meci.
+    // Folosim direct ca rawScore; calibrarea g2Calibrate() se aplică în aval.
+    var serverProbGG=null;
+    if(!isLive&&m.confidence!=null&&typeof m.gg_prob==='number'&&m.gg_prob>0) serverProbGG=m.gg_prob;
+    s=serverProbGG!=null?serverProbGG:(isLive?(compH*.25+compA*.25+h2hGG*.20+livGG*.30):(compH*.35+compA*.35+h2hGG*.30));
   }
 
   // Injury penalty: -8% per injured team (≥3 players), extra -12% for GG if both teams hit

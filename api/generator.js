@@ -228,6 +228,12 @@ function buildMatchResult(m, aux, pred = null) {
     best_cota:    pred && pred.best_cota != null ? +(pred.best_cota) : null,
     best_bet:     pred ? (pred.best_bet || null) : null,
     h2h_over15:   pred && pred.h2h_over15 != null ? +(pred.h2h_over15) : null,
+    // Sprint 4C: expune flat fields ca să folosim direct ca rawScore în g2Score().
+    // Aceleași valori sunt și în markets, dar consumatorii care vor doar
+    // probabilitatea (fără label) le pot citi direct.
+    over15_prob:  pred && pred.over15_prob != null ? +(pred.over15_prob) : null,
+    over25_prob:  pred && pred.over25_prob != null ? +(pred.over25_prob) : null,
+    gg_prob:      pred && pred.gg_prob     != null ? +(pred.gg_prob)     : null,
     has_form_data:        !!(hForm || hTS) && !!(aForm || aTS),
     has_same_league_form: !!(aux.formMap[`${hid}-${lid}`]) && !!(aux.formMap[`${aid}-${lid}`]),
     markets,
