@@ -4391,3 +4391,17 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
       lambda_*/confidence/best_* din predictions când există
   NU am modificat calcConfidencePreMatch/Live sau score2/3/6/7 in enrich.js
   NU am modificat frontend-ul (app-live.js neschimbat)
+
+[29.05 ~13:00] - FIX: g2Calibrate cap +15pp pe inflația calibrării | Commit: 8446788
+  Problemă: calibrarea globală (calibration_tables) producea salturi nerealiste:
+    Over 2.5: raw 70 → calibrat 92 (Δ +22pp)
+    Selection bias din predictions + lipsa per-league calibration => umflare
+    artificială pentru ligi atipice (Danish 1. Division, etc.)
+  Fix (public/js/app-state.js g2Calibrate):
+    return Math.min(tbl[i][2], raw + 15);
+    Astfel raw=70 over25 nu mai poate trece de 85 (în loc de 92).
+  NU am modificat downward-correction — dacă raw=80 dar real=50, lăsăm
+    50% afișat (modelul over-estimează clar acolo, vrem să onorăm).
+  FIX 2 (recalibrate cron) nu am putut rula — cloud sandbox fără SSH la VPS.
+    De rulat manual pe VPS:
+      curl -sf http://localhost:3000/api/cron/recalibrate-tables
