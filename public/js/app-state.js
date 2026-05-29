@@ -78,6 +78,9 @@ function setTab(t){
   if(t==='fav'){
     renderFavs();
   }
+  if (t === 'pre' && _pmMatches.length === 0) {
+    loadPM();
+  }
 }
 
 // ── POISSON / NGP ─────────────────────────────────────────────
