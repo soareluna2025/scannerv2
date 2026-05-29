@@ -4536,3 +4536,45 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     • calcConfidencePreMatch(), calcConfidenceLive()
     • score2, score3, score6, score7
     • shrinkage Bayesian (Sprint 4A) — se aplică pe averages-urile deja clampate
+
+[29.05 ~15:30] - SPRINT LIVE: getLiveStatsFromDB real în enrich + score4 nou | Commit: 4d81457
+  Problema:
+    - getLiveStatsFromDB existed în api/match.js DOAR (audit anterior).
+    - api/enrich.js primea live state EXCLUSIV din query params
+      (?elapsed=&hg=&ag=&soth=&sota=&da=&yc=). Dacă caller nu trimitea
+      → score4 = NaN/0 → confidence scor live degradat.
+    - Tabela live_stats (692 rânduri reale) era complet ignorată în calc.
+  Fix (api/enrich.js):
+  ── 1. Adăugat getLiveStatsFromDB(fixtureId) — query nou: ──
+       SELECT elapsed, home_goals, away_goals,
+              home_sot, away_sot, home_shots, away_shots,
+              home_possession, away_possession,
+              home_da, away_da, home_xg, away_xg,
+              ngp_home, ngp_away, recorded_at
+         FROM live_stats
+        WHERE fixture_id = $1
+        ORDER BY recorded_at DESC LIMIT 1
+       → returnează obiect cu toate câmpurile sau null.
+  ── 2. Handler: dacă elapsedNum > 0 și fid există → fetch DB row. ──
+       liveStats devine obiect compus:
+         • xg / sot / da → sume DB > fallback query params
+         • home_xg / away_xg / home_sot / away_sot / home_da / away_da →
+           valori per-echipă din DB (null dacă lipsește)
+         • ngp_home / ngp_away → NGP per-echipă din DB
+         • _source: 'live_stats' | 'query' (debug)
+  ── 3. score4 rescris în calcConfidenceLive: ──
+       (a) sumPair(): preferă per-team din DB, fallback la flat din query.
+       (b) totalXg / totalSot / totalDa derivate din pair-uri.
+       (c) NGP din DB = min(100, ngp_home + ngp_away).
+       (d) Componenta intensity = min(100, xg·25 + sot·3 + da·0.5).
+       (e) Blend = intensity·0.6 + NGP·0.4 (dacă NGP disponibil), altfel intensity.
+       (f) Minute decay liniar: 75' → factor 1.0, 90' → factor 0.7.
+       (g) Early-no-sot rule păstrată (sot=0 && elapsed>10 → score4=20).
+  Greutățile NU sunt modificate (suma rămâne 1.00):
+       score4 0.35, score1 0.20, score2 0.20, score7 0.15, score6 0.10.
+  Backward compat: dacă live_stats e gol pentru fixture, sumPair() cade pe
+       flat (din query params) → comportament identic cu înainte.
+       Dacă elapsedNum=0 → liveStats=null → calcConfidencePreMatch (neschimbat).
+  NU am modificat:
+       calcConfidencePreMatch(), greutățile calcConfidenceLive(),
+       score2, score3, score6, score7.
