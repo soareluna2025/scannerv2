@@ -4476,3 +4476,30 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
        folosește G2_CALIBRATION static (global) ca fallback.
   De rulat manual pe VPS pentru a popula tabelele per-grup:
      curl -sf http://localhost:3000/api/cron/recalibrate-tables
+
+[29.05 ~14:30] - SPRINT 4C: g2Score folosește predictions ca sursă rawScore | Commit: 14cef08
+  Problema: g2Score() în public/js/app-live.js calcula local over15/over25/gg
+    folosind o formulă simplificată (poisG·.35 + lgPct·.20 + h2hPct·.25 +
+    refG·.20). Ignora over15_prob, over25_prob, gg_prob din predictions
+    care sunt calculate cu Poisson + shrinkage Bayesian (Sprint 4A) +
+    calibrare per-profil (Sprint 4B).
+  Fix:
+  ── 1. api/generator.js buildMatchResult: ──
+     Expus flat: over15_prob, over25_prob, gg_prob alături de markets nested
+     (cu fallback null când pred lipsește).
+  ── 2. public/js/app-live.js g2Score(): ──
+     • Pentru cat='goals', sub='total', thr=1.5 / 2.5 (!isLive, m.confidence != null):
+         rawScore ← m.over15_prob / m.over25_prob (din predictions)
+     • Pentru cat='gg' (!isLive, m.confidence != null):
+         rawScore ← m.gg_prob
+     • Calibrarea g2Calibrate() se aplică în continuare pe acest raw — diferența
+       e că raw vine din server (Poisson 6×6 + shrinkage), nu din formula
+       simplificată a frontend-ului.
+     • LIVE rămâne neschimbat: predictions reflectă starea PRE-MECI, iar pe
+       live folosim blendul xG + lambda dinamic existent (livG).
+     • Backward compat: dacă m.confidence sau probabilitățile lipsesc → fallback
+       complet la calculul original (zero regression).
+  NU am modificat:
+    • calcConfidencePreMatch(), calcConfidenceLive()
+    • score2, score3, score6, score7
+    • Pipeline-ul live (xG-based) — păstrat 1:1
