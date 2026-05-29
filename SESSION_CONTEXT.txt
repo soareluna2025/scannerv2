@@ -3546,6 +3546,69 @@ NEXT STEPS (prioritizat):
   DOCUMENTATIE:
     ARHITECT.md sectiunea 3D: rescrisa complet cu D.1-D.5 (cele 2 functii + helpers)
     ARHITECT.md sectiunea 6: adaugate U1-U5 ca imbunatatiri implementate
+  Commit: 238f15c
+
+[29.05 01:30] - UI upgrade — threshold-uri LOW/MED/HIGH recalibrate + H2H/Live mesaje explicite + Putere Echipe fallback
+  Obiectiv: alinierea UI cu noile praguri de confidence (după upgrade calcConfidence)
+  + transparență când stratururi lipsesc + warning vizual pe Putere Echipe limitată.
+
+  UPGRADE 1 — Threshold-uri LOW/MED/HIGH pentru confidenceScore
+    Inainte: HIGH >=80, MED 60-80, LOW <60
+    Acum:    HIGH >=70, MED 55-70, LOW <55
+    Culori (neschimbate): verde #22c55e, portocaliu #f59e0b, rosu #ef4444
+    Modificate 5 locuri (DOAR pe confidenceScore final, NU pe Poisson/layer bars):
+      app-state.js:378  — csAdj conf-circle class (evRecalc)
+      app-state.js:405  — origCs conf-circle class (restoreTiles)
+      app-ui.js:651     — cs confColor in renderPM card
+      app-ui.js:820     — cs ccls in mdRenderSumar
+      app-ui.js:821     — cs confColor in mdRenderSumar
+    NEATINSE (intentional — sunt thresholds pe straturi individuale, NU pe confidence):
+      app-ui.js:165 ngpColor — pentru NGP, nu confidence
+      app-state.js:381,409 bc — pentru poisson bar background
+      app-ui.js:832 bc — pentru breakdown layer bars (Poisson/Forma/H2H etc.)
+
+  UPGRADE 2 + 3 — H2H/Live null → mesaje explicite
+    Locatie: app-ui.js linia 830-844 (mdRenderSumar — bItems.forEach breakdown)
+    Inainte: if(b[1]==null)return;  // stratul lipsea complet din UI
+    Acum:    if(b[1]==null){
+               if(b[0]==='H2H')       missingMsg='Date insuficiente';
+               else if(b[0]==='Live') missingMsg='Doar meciuri active';
+               if(missingMsg){
+                 afiseaza row cu bara goala (background var(--sur3))
+                 + text mesaj color var(--mu) font-size 9px
+               }
+               return;
+             }
+    Motiv: utilizatorul vede de ce lipseste stratul, nu doar absent inexplicabil
+    Comportament pentru alte straturi null (Consistenta, Putere): SKIP ca inainte
+
+  UPGRADE 4 — Putere Echipe sub 40 badge "(date limitate)"
+    Locatie: app-ui.js linia 849-858 (Player Intelligence section)
+    Inainte: '<div class="pi-str-val">'+sh2+'</div>'  // doar numarul
+    Acum:    if (sh2 < 40) adaugat dupa numar:
+               ' <span style="color:var(--mu);font-size:10px;font-weight:500">(date limitate)</span>'
+             Aplicat identic pentru sa2 (echipa oaspete).
+    Motiv: scor team strength <40 indica player_stats insuficient
+           (ex. fallback players_season sau echipa noua) — utilizatorul trebuie sa stie
+
+  VERIFICARE:
+    ✅ node --check public/js/app-state.js OK
+    ✅ node --check public/js/app-ui.js OK
+    ✅ grep cs>=70/55: 5 ocurente confirmate in app-state.js + app-ui.js
+    ✅ grep cs>=80 (vechi): zero ocurente ramase pe confidenceScore
+    ✅ Layer bars (Poisson/Forma/H2H/Live) cu thresholds proprii — neatinse
+
+  LIMITARI SANDBOX:
+    ❌ NU am putut testa vizual in browser (sandbox cloud fara access)
+    ❌ NU am putut confirma stilizare CSS (var(--mu), --sur3) cu rendering real
+    Verificare manuala post-deploy:
+      1. Deschide modal detaliu meci pre-meci (NU live) cu H2H sample mic
+         → trebuie sa vezi: H2H | bara goala | "Date insuficiente"
+         → trebuie sa vezi: Live | bara goala | "Doar meciuri active"
+      2. Deschide modal cu confidenceScore = 65
+         → conf-circle culoare PORTOCALIE (MED) — era ROȘIE inainte (LOW)
+      3. Verifica Player Intelligence cu strength <40
+         → trebuie sa vezi "(date limitate)" langa numar in gri
   Commit: (acest commit)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -648,7 +648,7 @@ function renderPM(){
       if(enr.homeWin!=null)html+='<div class="enrich-row hda-row"><span style="color:'+ec(enr.homeWin)+'">H:'+enr.homeWin+'%</span><span style="color:'+ec(enr.draw)+'">D:'+enr.draw+'%</span><span style="color:'+ec(enr.awayWin)+'">A:'+enr.awayWin+'%</span></div>';
       if(enr.confidenceScore!=null){
         var cs=enr.confidenceScore;
-        var confColor=cs>=80?'#22c55e':cs>=60?'#f59e0b':'#ef4444';
+        var confColor=cs>=70?'#22c55e':cs>=55?'#f59e0b':'#ef4444';
         var safeBadge='';
         html+='<div class="conf-bar-wrap">'+
           '<div class="conf-bar-bg"><div class="conf-bar-fill" style="width:'+cs+'%;background:'+confColor+'"></div></div>'+
@@ -817,8 +817,8 @@ function mdRenderSumar(d){
   // Confidence circle (from pre-match enrich cache)
   if(en.confidenceScore!=null){
     var cs=en.confidenceScore;
-    var ccls=cs>=80?'high':cs>=60?'mid':'low';
-    var confColor=cs>=80?'#22c55e':cs>=60?'#f59e0b':'#ef4444';
+    var ccls=cs>=70?'high':cs>=55?'mid':'low';
+    var confColor=cs>=70?'#22c55e':cs>=55?'#f59e0b':'#ef4444';
     var _poOrig=(en.breakdown&&en.breakdown.poisson!=null?en.breakdown.poisson:null);
     var _powVal=(en.breakdown&&en.breakdown.putereEchipe!=null)?0.20:0.25;
     out+='<div class="conf-circle-wrap" id="mdccw_'+fk+'" data-cs="'+cs+'" data-po="'+(_poOrig!=null?_poOrig:'')+'" data-pow="'+_powVal+'">';
@@ -828,7 +828,18 @@ function mdRenderSumar(d){
       var bItems=[['Poisson',bd.poisson],['Formă',bd.forma],['H2H',bd.h2h],['Live',bd.live],['Consistență',bd.consistenta],['Putere Echipe',bd.putereEchipe]];
       out+='<div class="conf-breakdown">';
       bItems.forEach(function(b){
-        if(b[1]==null)return;
+        if(b[1]==null){
+          // UPGRADE 2/3: mesaj explicit pentru H2H / Live când lipsesc (NU mai dispar din UI)
+          var missingMsg=null;
+          if(b[0]==='H2H')  missingMsg='Date insuficiente';
+          else if(b[0]==='Live') missingMsg='Doar meciuri active';
+          if(missingMsg){
+            out+='<div class="conf-bd-row"><div class="conf-bd-lbl">'+b[0]+'</div>'+
+              '<div class="conf-bd-bar"></div>'+
+              '<div class="conf-bd-val" style="color:var(--mu);font-size:9px;min-width:auto">'+missingMsg+'</div></div>';
+          }
+          return;
+        }
         var bc=b[1]>=80?'#22c55e':b[1]>=60?'#f59e0b':'#ef4444';
         var isPo=b[0]==='Poisson';
         out+='<div class="conf-bd-row"><div class="conf-bd-lbl">'+b[0]+'</div>'+
@@ -847,13 +858,17 @@ function mdRenderSumar(d){
         out+='<div class="pi-na">Date indisponibile — statistici jucători lipsesc pentru ambele echipe</div>';
       } else {
         out+='<div class="pi-teams">';
+        // UPGRADE 4: badge "(date limitate)" când strength < 40 (date player_stats insuficiente)
+        var _limWarn=' <span style="color:var(--mu);font-size:10px;font-weight:500">(date limitate)</span>';
         if(sh2){
-          out+='<div class="pi-team"><div class="pi-team-name">'+hn+'</div><div class="pi-str-val">'+sh2+'</div><div class="pi-str-bar"><div class="pi-str-fill" style="width:'+sh2+'%"></div></div></div>';
+          var _shWarn=sh2<40?_limWarn:'';
+          out+='<div class="pi-team"><div class="pi-team-name">'+hn+'</div><div class="pi-str-val">'+sh2+_shWarn+'</div><div class="pi-str-bar"><div class="pi-str-fill" style="width:'+sh2+'%"></div></div></div>';
         } else {
           out+='<div class="pi-team"><div class="pi-team-name">'+hn+'</div><div class="pi-str-val pi-str-na">—</div><div class="pi-str-bar"></div></div>';
         }
         if(sa2){
-          out+='<div class="pi-team"><div class="pi-team-name">'+an+'</div><div class="pi-str-val">'+sa2+'</div><div class="pi-str-bar"><div class="pi-str-fill" style="width:'+sa2+'%"></div></div></div>';
+          var _saWarn=sa2<40?_limWarn:'';
+          out+='<div class="pi-team"><div class="pi-team-name">'+an+'</div><div class="pi-str-val">'+sa2+_saWarn+'</div><div class="pi-str-bar"><div class="pi-str-fill" style="width:'+sa2+'%"></div></div></div>';
         } else {
           out+='<div class="pi-team"><div class="pi-team-name">'+an+'</div><div class="pi-str-val pi-str-na">—</div><div class="pi-str-bar"></div></div>';
         }
