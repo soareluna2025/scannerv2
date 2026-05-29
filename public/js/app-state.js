@@ -239,10 +239,7 @@ function g2Calibrate(cat,sub,thr,raw,m){
   var tbl=G2_CALIBRATION[key];
   if(!tbl)return raw;
   for(var i=0;i<tbl.length;i++){
-    // Cap inflația calibrării la max +15pp față de scorul brut.
-    // Calibrarea e globală (nu per-ligă) → poate umfla artificial probabilitățile
-    // pentru ligi mici/atipice. Limita protejează împotriva supra-corecției.
-    if(raw>=tbl[i][0]&&raw<tbl[i][1])return Math.min(tbl[i][2], raw + 15);
+    if(raw>=tbl[i][0]&&raw<tbl[i][1])return tbl[i][2];
   }
   return raw;
 }
