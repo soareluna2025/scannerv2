@@ -215,7 +215,12 @@ function buildCardHtml(m,lgName){
     if(ed.over15Prob!=null)o+='<span class="enr" style="color:'+ec(ed.over15Prob)+'">O1.5 '+Math.round(ed.over15Prob)+'%</span>';
     if(ed.ggProb!=null)o+='<span class="enr" style="color:'+ec(ed.ggProb)+'">GG '+Math.round(ed.ggProb)+'%</span>';
     if(ed.lambdaTotal!=null)o+='<span class="enr" style="color:var(--mu2)">λ '+Number(ed.lambdaTotal).toFixed(2)+'</span>';
-    if(ed.confidence)o+='<span class="badge-conf '+ed.confidence+'">'+ed.confidence+'</span>';
+    // Badge LOW/MED/HIGH derivat din confidenceScore (pragurile noi 70/55)
+    if(ed.confidenceScore!=null){
+      var _cs=ed.confidenceScore;
+      var _cb=_cs>=70?'HIGH':_cs>=55?'MED':'LOW';
+      o+='<span class="badge-conf '+_cb+'">'+_cb+'</span>';
+    }
     o+='</div>';
     o+='<div class="enrich-row">';
     if(ed.homeScoreRate!=null)o+='<span class="enr" style="color:'+ec(ed.homeScoreRate)+'">Gazde '+ed.homeScoreRate+'%</span>';
@@ -643,7 +648,12 @@ function renderPM(){
       html+='<span class="pm-stat">λ <span>'+Number(enr.lambdaTotal||0).toFixed(2)+'</span></span>';
       html+='<span class="pm-stat">Gazde <span style="color:'+ec(enr.homeScoreRate)+'">'+( enr.homeScoreRate!=null?enr.homeScoreRate+'%':'—')+'</span></span>';
       html+='<span class="pm-stat">Oaspeti <span style="color:'+ec(enr.awayScoreRate)+'">'+( enr.awayScoreRate!=null?enr.awayScoreRate+'%':'—')+'</span></span>';
-      if(enr.confidence)html+='<span class="badge-conf '+enr.confidence+'">'+enr.confidence+'</span>';
+      // Badge LOW/MED/HIGH derivat din confidenceScore (pragurile noi 70/55)
+      if(enr.confidenceScore!=null){
+        var _csPm=enr.confidenceScore;
+        var _cbPm=_csPm>=70?'HIGH':_csPm>=55?'MED':'LOW';
+        html+='<span class="badge-conf '+_cbPm+'">'+_cbPm+'</span>';
+      }
       html+='</div>';
       if(enr.homeWin!=null)html+='<div class="enrich-row hda-row"><span style="color:'+ec(enr.homeWin)+'">H:'+enr.homeWin+'%</span><span style="color:'+ec(enr.draw)+'">D:'+enr.draw+'%</span><span style="color:'+ec(enr.awayWin)+'">A:'+enr.awayWin+'%</span></div>';
       if(enr.confidenceScore!=null){
@@ -1048,7 +1058,12 @@ function mdRenderSumar(d){
       out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_lt" style="color:var(--mu2)">'+Number(en.lambdaTotal||0).toFixed(2)+'</div><div class="md-prob-lbl">λ Total</div></div>';
       out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_asc" style="color:'+ec(en.awayScoreRate)+'">'+(en.awayScoreRate!=null?en.awayScoreRate+'%':'—')+'</div><div class="md-prob-lbl">Oaspeti marcheaza</div></div>';
       out+='</div>';
-      if(en.confidence)out+='<div style="text-align:center;margin-top:6px"><span class="badge-conf '+en.confidence+'">Incredere: '+en.confidence+'</span></div>';
+      // Badge LOW/MED/HIGH derivat din confidenceScore (pragurile noi 70/55)
+      if(en.confidenceScore!=null){
+        var _csMd=en.confidenceScore;
+        var _cbMd=_csMd>=70?'HIGH':_csMd>=55?'MED':'LOW';
+        out+='<div style="text-align:center;margin-top:6px"><span class="badge-conf '+_cbMd+'">Incredere: '+_cbMd+'</span></div>';
+      }
     }
     out+='</div>';
   }
