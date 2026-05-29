@@ -142,8 +142,8 @@
 .spin{width:28px;height:28px;border:2px solid var(--sur3);border-top-color:var(--ac);border-radius:50%;animation:spin .7s linear infinite}
 
 /* SIMULATOR */
-.sim-select{width:100%;background:var(--sur2);border:1px solid var(--bor);color:var(--txt);border-radius:8px;padding:8px 10px;font-size:12px}
-.sim-inp{background:var(--sur2);border:1px solid var(--bor);color:var(--txt);border-radius:8px;padding:8px 10px;font-size:12px;width:100%;box-sizing:border-box}
+.sim-select{width:100%;background:var(--sur2);border:1px solid var(--bor);color:var(--tx);border-radius:8px;padding:8px 10px;font-size:12px}
+.sim-inp{background:var(--sur2);border:1px solid var(--bor);color:var(--tx);border-radius:8px;padding:8px 10px;font-size:12px;width:100%;box-sizing:border-box}
 .sim-run-btn{width:100%;margin-top:10px;padding:13px;background:var(--ac);color:#000;font-weight:900;font-size:13px;border:none;border-radius:10px;cursor:pointer;letter-spacing:.5px}
 .sim-progress-wrap{height:6px;background:var(--sur3);border-radius:3px;overflow:hidden;width:80%;margin:0 auto}
 .sim-progress-fill{height:100%;background:var(--ac);border-radius:3px;width:0%;transition:width .3s}
@@ -160,7 +160,7 @@
 .sim-bar-val{font-size:11px;color:var(--mu2);width:40px;text-align:right;flex-shrink:0}
 .sim-score-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
 .sim-score-item{background:var(--sur2);border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center}
-.sim-score-name{font-size:13px;font-weight:700;color:var(--txt)}
+.sim-score-name{font-size:13px;font-weight:700;color:var(--tx)}
 .sim-score-prob{font-size:12px;color:var(--mu)}
 .sim-score-badge{font-size:9px;background:var(--ac);color:#000;border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px}
 .sim-market-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
@@ -179,7 +179,7 @@
 .sim-data-tbl td:first-child{color:var(--mu)}
 .sim-rec-box{background:var(--sur2);border:1px solid var(--ac);border-radius:12px;padding:14px;margin-top:14px}
 .sim-rec-title{font-size:10px;color:var(--ac);font-weight:700;letter-spacing:.8px;margin-bottom:6px}
-.sim-rec-bet{font-size:20px;font-weight:900;color:var(--txt)}
+.sim-rec-bet{font-size:20px;font-weight:900;color:var(--tx)}
 .sim-rec-meta{font-size:11px;color:var(--mu);margin-top:4px}
 .sim-rec-reason{font-size:10px;color:var(--mu);margin-top:6px;font-style:italic}
 .sim-elo-row{display:flex;justify-content:space-between;margin-top:8px}
