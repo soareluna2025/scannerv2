@@ -4405,3 +4405,8 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   FIX 2 (recalibrate cron) nu am putut rula — cloud sandbox fără SSH la VPS.
     De rulat manual pe VPS:
       curl -sf http://localhost:3000/api/cron/recalibrate-tables
+
+[29.05 ~13:15] - REVERT: cap +15pp din g2Calibrate (commit 8446788 revert) | Commit: 504764d
+  g2Calibrate restaurat la starea originală — fără Math.min, fără cap.
+  Calibrarea globală (calibration_tables) se aplică direct: real_pct e
+  returnat ca atare, indiferent de Δ față de raw.
