@@ -881,6 +881,13 @@ export default async function handler(req, res) {
     const lgHome = parseFloat(leagueStats?.avg_home_goals) || 1.2;
     const lgAway = parseFloat(leagueStats?.avg_away_goals) || 1.2;
     const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota, lgHome, lgAway, leagueStats);
+    // Fix h2hSample: când fallback API se activează dar și DB combinat are date,
+    // h2hSample trebuie să reflecte ARRAYUL FINAL real folosit în calcPoisson.
+    // calcPoisson primește h2h care e: needH2H ? API : h2hToFixtures(sbH2H combinat).
+    // sbH2H este deja combinat (h2h table + fixtures_history fallback) prin getH2HFromDB.
+    // Suprascriem cu lungimea reală a sample-ului DB combinat când acesta există,
+    // pentru a evita raportarea h2hSample=0 când datele DB au fost incluse.
+    result.h2hSample = Math.max(result.h2hSample || 0, sbH2H.length, h2h.length);
     const lambdaHomeRaw = result.lambdaHome;
     const lambdaAwayRaw = result.lambdaAway;
 
