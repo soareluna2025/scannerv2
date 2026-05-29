@@ -102,6 +102,28 @@ function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
 }
 
 function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agParam, sothParam, sotaParam, lgHome = 1.2, lgAway = 1.2, leagueStats = null) {
+  // Sprint 4D — clamp scoruri extreme: orice meci cu total > 5 goluri
+  // se tratează proporțional ca și cum totalul ar fi 5. Previne outliers
+  // (ex: 6-0 demolare sau 5-3 carnaval) să infleze artificial lambdaHome/lambdaAway
+  // și să distorsioneze attack/defense strength în Maher.
+  const clampGoals = (m) => {
+    const gh = m.goals?.home || 0;
+    const ga = m.goals?.away || 0;
+    const total = gh + ga;
+    if (total <= 5) return m;
+    const factor = 5 / total;
+    return {
+      ...m,
+      goals: {
+        ...m.goals,
+        home: Math.round(gh * factor * 10) / 10,
+        away: Math.round(ga * factor * 10) / 10,
+      },
+    };
+  };
+  hGames = hGames.map(clampGoals);
+  aGames = aGames.map(clampGoals);
+
   const avg = (arr, fn) => arr.length ? arr.reduce((s, m) => s + fn(m), 0) / arr.length : 0;
   const pct = (arr, fn) => arr.length >= 5 ? Math.round(arr.filter(fn).length / arr.length * 100) : null;
 
