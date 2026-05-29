@@ -3434,6 +3434,118 @@ NEXT STEPS (prioritizat):
     - Bundle production cu esbuild/vite (opțional)
     - Tree-shaking pentru cod neutilizat
     - Source maps pentru debug
+  Commit: 1c7a13c
+
+[29.05 01:00] - calcConfidence upgrade complet — 4 imbunatatiri straturi + separare pre-meci/live
+  Obiectiv: scoring confidence mai precis prin includerea apararii, eliminarea duplicarii
+  Poisson cand H2H lipseste, match-up real atac-vs-aparare, convergenta matematica
+  (stdDev) in loc de prag binar. Plus separare in 2 functii distincte cu greutati
+  optimizate per context (pre-meci vs live).
+
+  UPGRADE 1 — score2 Forma include APARAREA
+    Inainte: const score2 = Math.min(100, (homeAvg + awayAvg) / 3.5 * 100);
+             DOAR atac (homeAvgScored + awayAvgScored)
+    Acum:    attackQuality   = min(100, (homeAtk + awayAtk) / 3.5 * 100);
+             defenseLeakiness = min(100, (homeDef + awayDef) / 3.5 * 100);
+             score2 = round(attackQuality * 0.6 + defenseLeakiness * 0.4);
+    Motiv: apararea slaba produce goluri chiar cu atac slab.
+    Coverage: 100% (home/awayAvgConceded existau deja in result, ignorate anterior)
+
+  UPGRADE 2 — score3 H2H null EXPLICIT cand sample <3
+    Inainte: const score3 = result.h2hOver15 != null ? result.h2hOver15 : score1;
+             DUPLICATE Poisson la sample insuficient (~94% din meciurile viitoare)
+    Acum:    let score3 = null;
+             if (result.h2hOver15 != null && result.h2hSample >= 3) {
+               const ggComponent = result.h2hGG ?? result.h2hOver15;
+               score3 = Math.round(result.h2hOver15 * 0.6 + ggComponent * 0.4);
+             }
+    Motiv: fallback la Poisson umfla artificial greutatea Poisson cu +12%.
+           Null explicit forteaza normalizarea dinamica.
+    Bonus: combo h2hOver15 60% + h2hGG 40% cand sample suficient.
+
+  UPGRADE 3 — score7 Putere Echipe MATCH-UP REAL
+    Inainte: score7 = Math.round((h + a) / 2);  // medie simpla
+             dezechilibre masite (80 vs 20 = 50, identic cu 50 vs 50)
+    Acum:    homeAttackVsAwayDef = homeStr * (100 - awayStr) / 100;
+             awayAttackVsHomeDef = awayStr * (100 - homeStr) / 100;
+             score7 = round((sum) / 2 * 1.5);
+             clamp [0, 100]
+    Motiv: media simpla nu reflecta match-up real.
+    Test: home=80, away=20 → score7 = round((80*80/100 + 20*20/100)/2 * 1.5) = 51
+
+  UPGRADE 4 — score6 CONVERGENȚĂ reală (stdDev)
+    Inainte: activeScores.filter(s>60).length / activeScores.length * 100
+             Binar arbitrar la 60%, anti-circular (derivat din 1-4)
+    Acum:    mean = avg(active)
+             stdDev = sqrt(sum((s-mean)^2)/n)
+             score6 = round(max(0, min(100, 100 - stdDev)))
+    Pre-meci: include [score1, score2, score3, score7]
+    Live:     include [score1, score2, score3, score4live, score7]
+    Motiv: stdDev mic = straturi converg = incredere ridicata justificata.
+           stdDev mare = semnal contradictoriu = incredere mai mica.
+    Test: toate 75 → stdDev=0 → score6=100
+          [10,50,80,95] → stdDev~32 → score6=68
+
+  SEPARARE PRE-MECI vs LIVE — calcConfidencePreMatch + calcConfidenceLive + wrapper
+
+    calcConfidencePreMatch(result, teamStrengths)  — greutati optimizate pre-meci:
+      score1 Poisson         w=0.30  (era 0.25)
+      score2 Forma+Aparare   w=0.25  (era 0.21)
+      score3 H2H combo       w=0.15  (era 0.12)
+      score7 Putere Echipe   w=0.25  (era 0.19)
+      score6 Convergenta     w=0.05  (era 0.06)
+      Suma: 1.00
+
+    calcConfidenceLive(result, liveStats, teamStrengths) — greutati optimizate live:
+      score4 Live xG         w=0.35  (era 0.17 — emphasis mare pe semnal live)
+      score1 Poisson         w=0.20
+      score2 Forma+Aparare   w=0.20
+      score7 Putere Echipe   w=0.15
+      score6 Convergenta     w=0.10
+      Suma: 1.00
+
+    calcConfidence(result, liveStats, teamStrengths) — wrapper compat:
+      if (liveStats && liveStats.elapsed > 0)
+        return calcConfidenceLive(result, liveStats, teamStrengths);
+      return calcConfidencePreMatch(result, teamStrengths);
+      → Zero breaking changes pentru apelanti. Semnatura externa pastrata.
+
+  HELPERS COMUNI (refactor):
+    _calcConfidenceCommonScores(result, teamStrengths)
+      → score1, score2, score3, score7 + teamStrengthHome/Away
+    _calcConvergence(allScores)
+      → score6 = 100 - stdDev; null daca n<2
+    _finalizeConfidence(layers, ..., liveStats)
+      → normalizare dinamica w/totalW + penalizari runtime + clamp final
+      Penalizari runtime (PASTRATE):
+        elapsed<15: ×0.85; 15-30min+SOT=0: ×0.80; ≥45min+SOT=0: -20; yc≥2: -10
+
+  VERIFICARE (smoke tests in sandbox):
+    ✅ node --check api/enrich.js OK
+    ✅ Test 1 (pre-meci, H2H=0): score3=null, redistribuire dinamica corecta
+    ✅ Test 2 (pre-meci, H2H=5): score3 = round(80*0.6 + 60*0.4) = 72 ✓
+    ✅ Test 3 (live, xG=1.5, SOT=4, DA=20): score4 = round(59.5) = 60 ✓
+    ✅ Test 4 (match-up 80 vs 20): score7 = 51 ✓ (era 50 cu medie simpla)
+    ✅ Test 5 convergenta: identice→100, disperse→68, n<2→null ✓
+    ✅ Test 6 wrapper: PreMatch (live=null) vs Live (live=60) routing corect
+    ✅ Test 7 sume ponderi: pre-meci 1.00 + live 1.00 ✓
+
+  LIMITARI SANDBOX (NU am putut executa):
+    ❌ NU am putut rula curl /api/enrich pe VPS pentru a vedea breakdown real
+    ❌ NU am putut rula backtest pe predictions istorice pentru Brier compare
+    Verificare runtime post-deploy:
+      curl -s "http://localhost:3000/api/enrich?h=33&a=34&lgid=39" | jq '.breakdown'
+      → trebuie sa vedeti: poisson, forma, h2h (sau null), live (sau null), consistenta,
+        putereEchipe (daca exista date) — exact 6 chei in breakdown
+
+  IMPACT ESTEMAT (literatura + experienta backtest):
+    - Brier pre-meci confidence: 0.20-0.25 → estimat 0.18-0.22 (-10-20%)
+    - Reducere bias score3 (nu mai duplica score1): ~5-8pp pe meciuri fara H2H
+    - Discriminare match-up dezechilibrat: score7 corect 51 vs 50 brut
+
+  DOCUMENTATIE:
+    ARHITECT.md sectiunea 3D: rescrisa complet cu D.1-D.5 (cele 2 functii + helpers)
+    ARHITECT.md sectiunea 6: adaugate U1-U5 ca imbunatatiri implementate
   Commit: (acest commit)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

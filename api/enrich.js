@@ -395,61 +395,80 @@ async function getInjuredPlayerScores(injuries, homeId, awayId) {
   } catch (_) { return { home: [], away: [] }; }
 }
 
-function calcConfidence(result, liveStats, teamStrengths) {
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIDENCE SCORING — 2 funcții distincte (pre-meci / live) + wrapper compat
+// ─────────────────────────────────────────────────────────────────────────────
+// Upgrade 29.05.2026 (Sprint Confidence Refactor):
+//   - score2: include apărarea (atac 60% + apărare 40%) — nu doar atac
+//   - score3: null explicit când H2H sample <3 (forțează redistribuire dinamică);
+//             combo h2hOver15 60% + h2hGG 40% când sample suficient
+//   - score6: convergență reală (100 - stdDev), nu prag binar arbitrar
+//   - score7: match-up atac vs apărare (multiplier 1.5), nu medie simplă H+A
+//
+// Helper comun — calculează score1, score2, score3, score6, score7 (fără score4)
+function _calcConfidenceCommonScores(result, teamStrengths) {
+  // ── score1 — Poisson ─────────────────────────────────────────────
   const score1 = result.over15Prob ?? 50;
-  const elapsed  = liveStats?.elapsed ?? 0;
-  const sotTotal = liveStats?.sot     ?? null;
-  const ycTotal  = liveStats?.yc      ?? 0;
 
-  const homeAvg = result.homeAvgScored ?? 1.2;
-  const awayAvg = result.awayAvgScored ?? 1.0;
-  const score2 = Math.min(100, (homeAvg + awayAvg) / 3.5 * 100);
+  // ── score2 — Formă (atac + apărare) ──────────────────────────────
+  const homeAtk = result.homeAvgScored   ?? 1.2;
+  const awayAtk = result.awayAvgScored   ?? 1.0;
+  const homeDef = result.homeAvgConceded ?? 1.2;
+  const awayDef = result.awayAvgConceded ?? 1.0;
+  const attackQuality   = Math.min(100, (homeAtk + awayAtk) / 3.5 * 100);
+  const defenseLeakiness = Math.min(100, (homeDef + awayDef) / 3.5 * 100);
+  const score2 = Math.round(attackQuality * 0.6 + defenseLeakiness * 0.4);
 
-  const score3 = result.h2hOver15 != null ? result.h2hOver15 : score1;
-
-  // Layer 4 — Live: xG + SOT + DA (fără podea 50)
-  let score4 = score1; // fallback pentru pre-meci
-  if (liveStats) {
-    const sot = liveStats.sot || 0;
-    const xg  = liveStats.xg  || 0;
-    const da  = liveStats.da  || 0;
-    if (sot === 0 && elapsed > 10) {
-      score4 = 20; // niciun șut pe poartă după min 10 — semnal slab
-    } else {
-      score4 = Math.min(100, xg * 25 + sot * 3 + da * 0.5);
-    }
+  // ── score3 — H2H (null când sample <3) ───────────────────────────
+  let score3 = null;
+  if (result.h2hOver15 != null && result.h2hSample >= 3) {
+    const ggComponent = result.h2hGG ?? result.h2hOver15;
+    score3 = Math.round(result.h2hOver15 * 0.6 + ggComponent * 0.4);
   }
 
-  // BUG #8 FIX: împarte la numărul de straturi ACTIVE (nu null), nu la 4 fix
-  const activeScores = [score1, score2, score3, score4].filter(s => s !== null);
-  const score6 = activeScores.length > 0
-    ? (activeScores.filter(s => s > 60).length / activeScores.length) * 100
-    : null;
-
+  // ── score7 — Putere Echipe (match-up atac vs apărare) ────────────
   let score7 = null;
   let teamStrengthHome = null, teamStrengthAway = null;
   if (teamStrengths && (teamStrengths.home != null || teamStrengths.away != null)) {
     teamStrengthHome = teamStrengths.home;
     teamStrengthAway = teamStrengths.away;
-    const h = teamStrengths.home ?? 50;
-    const a = teamStrengths.away ?? 50;
-    score7 = Math.round((h + a) / 2);
+    const homeStr = teamStrengths.home ?? 50;
+    const awayStr = teamStrengths.away ?? 50;
+    const homeAttackVsAwayDef = homeStr * (100 - awayStr) / 100;
+    const awayAttackVsHomeDef = awayStr * (100 - homeStr) / 100;
+    score7 = Math.round((homeAttackVsAwayDef + awayAttackVsHomeDef) / 2 * 1.5);
+    score7 = Math.max(0, Math.min(100, score7));
   }
 
-  const layers = [
-    { score: score1, w: 0.25 },
-    { score: score2, w: 0.21 },
-    { score: score3, w: 0.12 },
-    { score: score4, w: 0.17 },
-    { score: score6, w: 0.06 },
-    { score: score7, w: 0.19 },
-  ].filter(l => l.score !== null).filter(l => l.w > 0);
-  const totalW = layers.reduce((s, l) => s + l.w, 0);
-  const confidenceScore = Math.round(layers.reduce((s, l) => s + l.score * (l.w / totalW), 0));
+  return { score1, score2, score3, score7, teamStrengthHome, teamStrengthAway };
+}
+
+// Helper comun — score6 (convergență stdDev) din scoruri active
+function _calcConvergence(allScores) {
+  const active = allScores.filter(s => s !== null);
+  if (active.length < 2) return null;
+  const mean = active.reduce((s, v) => s + v, 0) / active.length;
+  const variance = active.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / active.length;
+  const stdDev = Math.sqrt(variance);
+  return Math.round(Math.max(0, Math.min(100, 100 - stdDev)));
+}
+
+// Helper comun — penalizări runtime + clamp final + return shape
+function _finalizeConfidence(layers, score1, score2, score3, score6, score7,
+                             teamStrengthHome, teamStrengthAway, liveStats) {
+  const filtered = layers.filter(l => l.score !== null).filter(l => l.w > 0);
+  const totalW = filtered.reduce((s, l) => s + l.w, 0);
+  const confidenceScore = totalW > 0
+    ? Math.round(filtered.reduce((s, l) => s + l.score * (l.w / totalW), 0))
+    : 50;
   const hasStr = score7 != null;
 
+  // Penalizări runtime — aplicate pe scorul final, NU pe straturi individuale
   let adjustedScore = confidenceScore;
-  // Penalizare date insuficiente la minute mici
+  const elapsed  = liveStats?.elapsed ?? 0;
+  const sotTotal = liveStats?.sot     ?? null;
+  const ycTotal  = liveStats?.yc      ?? 0;
+
   if (elapsed > 0 && elapsed < 15) {
     adjustedScore = Math.round(adjustedScore * 0.85);
   } else if (elapsed >= 15 && elapsed < 30 && sotTotal !== null && sotTotal === 0) {
@@ -468,14 +487,85 @@ function calcConfidence(result, liveStats, teamStrengths) {
     breakdown: {
       poisson:      Math.round(score1),
       forma:        Math.round(score2),
-      h2h:          Math.round(score3),
-      live:         Math.round(score4),
-      consistenta:  Math.round(score6),
+      h2h:          score3 != null ? Math.round(score3) : null,
+      live:         score3 != null /* placeholder — supraînscris de caller */ ? null : null,
+      consistenta:  score6 != null ? Math.round(score6) : null,
       ...(hasStr ? { putereEchipe: score7 } : {}),
     },
     teamStrengthHome,
     teamStrengthAway,
   };
+}
+
+// FUNCȚIA 1: calcConfidencePreMatch — pre-meci (fără liveStats)
+function calcConfidencePreMatch(result, teamStrengths) {
+  const { score1, score2, score3, score7, teamStrengthHome, teamStrengthAway } =
+    _calcConfidenceCommonScores(result, teamStrengths);
+
+  // Convergența ia în calcul DOAR straturile pre-meci active
+  const score6 = _calcConvergence([score1, score2, score3, score7]);
+
+  // Greutăți pre-meci (suma = 1.00)
+  const layers = [
+    { score: score1, w: 0.30 }, // Poisson
+    { score: score2, w: 0.25 }, // Formă+Apărare
+    { score: score3, w: 0.15 }, // H2H combo
+    { score: score7, w: 0.25 }, // Putere Echipe
+    { score: score6, w: 0.05 }, // Convergență
+  ];
+
+  const out = _finalizeConfidence(
+    layers, score1, score2, score3, score6, score7,
+    teamStrengthHome, teamStrengthAway, null
+  );
+  // breakdown.live = null explicit pentru pre-meci
+  out.breakdown.live = null;
+  return out;
+}
+
+// FUNCȚIA 2: calcConfidenceLive — meci în desfășurare (cu liveStats)
+function calcConfidenceLive(result, liveStats, teamStrengths) {
+  const { score1, score2, score3, score7, teamStrengthHome, teamStrengthAway } =
+    _calcConfidenceCommonScores(result, teamStrengths);
+
+  // ── score4 — Live xG/SOT/DA ──────────────────────────────────────
+  const sot = liveStats.sot || 0;
+  const xg  = liveStats.xg  || 0;
+  const da  = liveStats.da  || 0;
+  const elapsed = liveStats.elapsed || 0;
+  let score4live;
+  if (sot === 0 && elapsed > 10) {
+    score4live = 20;
+  } else {
+    score4live = Math.min(100, xg * 25 + sot * 3 + da * 0.5);
+  }
+
+  // Convergența include score4 live (înlocuiește score3 dacă null — redundanță evitată)
+  const score6 = _calcConvergence([score1, score2, score3, score4live, score7]);
+
+  // Greutăți live (suma = 1.00)
+  const layers = [
+    { score: score4live, w: 0.35 }, // Live xG
+    { score: score1,     w: 0.20 }, // Poisson
+    { score: score2,     w: 0.20 }, // Formă+Apărare
+    { score: score7,     w: 0.15 }, // Putere Echipe
+    { score: score6,     w: 0.10 }, // Convergență
+  ];
+
+  const out = _finalizeConfidence(
+    layers, score1, score2, score3, score6, score7,
+    teamStrengthHome, teamStrengthAway, liveStats
+  );
+  out.breakdown.live = Math.round(score4live);
+  return out;
+}
+
+// WRAPPER — păstrează semnătura externă (zero breaking changes pentru apelanți)
+function calcConfidence(result, liveStats, teamStrengths) {
+  if (liveStats && liveStats.elapsed > 0) {
+    return calcConfidenceLive(result, liveStats, teamStrengths);
+  }
+  return calcConfidencePreMatch(result, teamStrengths);
 }
 
 // --- PostgreSQL data helpers ---

@@ -253,31 +253,85 @@ C. EXPECTED VALUE (calc-utils.js:67)
   De ce half-Kelly? Kelly complet maximizează creșterea logaritmică dar e
   volatil. Half-Kelly reduce riscul de drawdown semnificativ.
 
-D. CONFIDENCE SCORE 8 STRATURI (enrich.js:358 — calcConfidence)
+D. CONFIDENCE SCORE — 2 FUNCȚII DISTINCTE (enrich.js — Upgrade 29.05.2026)
 
-  Stratul       Greutate   Sursă                    Ce măsoară
-  ─────────────────────────────────────────────────────────────────
-  1. Poisson    0.20       over15Prob               Probabilitatea matematică
-  2. Formă      0.18       homeAvg+awayAvg gol/meci Cât de ofensive sunt echipele
-  3. H2H        0.10       h2hOver15 %              Istoricul direct al meciului
-  4. Live xG    0.14       xg×25+sot×3+da×0.5       Presiunea ofensivă live
-  5. EV market  0.08       best.ev×300              Alinierea cu piața
-  6. Consis.    0.05       (straturi>60/5)×100      Cât de mulți factori confirmă
-  7. TeamStr    0.18       player_stats strength     Calitatea individuală a jucătorilor
-  8. Consensus  0.08       API Poisson alignment     Confirmarea predicției externe
-  ─────────────────────────────────────────────────────────────────
-  Total         1.00 (normalizat, straturi null excluse)
+  Upgrade aplicat: separare în calcConfidencePreMatch + calcConfidenceLive cu
+  wrapper calcConfidence pentru compatibilitate. 4 îmbunătățiri per strat:
+  - score2 include apărarea (atac 60% + apărare 40%) — nu doar atac
+  - score3 null explicit când H2H sample <3 + combo h2hOver15 60% + h2hGG 40%
+  - score6 convergență reală (100 - stdDev), NU prag binar arbitrar
+  - score7 match-up atac vs apărare (×1.5 multiplier), NU medie simplă H+A
 
-  De ce greutăți inegale? Testat empiric. Form + TeamStrength au cel mai mare
-  predictor power. H2H și consistency au mai puțin.
+  D.1 — calcConfidencePreMatch(result, teamStrengths) — pre-meci
+    Activată când liveStats = null sau elapsed = 0.
+    Greutăți (sumă = 1.00):
+      score1 Poisson           w=0.30 — probabilitatea matematică Over 1.5
+      score2 Formă+Apărare      w=0.25 — atac 60% + apărare 40%
+      score3 H2H combo          w=0.15 — h2hOver15*0.6 + h2hGG*0.4 (null<3)
+      score7 Putere Echipe      w=0.25 — match-up atac vs apărare ×1.5
+      score6 Convergență        w=0.05 — 100 - stdDev([score1,2,3,7])
 
-  Penalizări runtime (aplicate DUPĂ weighted sum):
-  - elapsed < 15min: × 0.85 (prea puțin timp pentru date semnificative)
-  - 15-30min + SOT=0: × 0.80 (niciun șut după 15 min = meci defensiv)
-  - ≥45min + SOT=0: - 20 (dacă la pauză nu s-a tras pe poartă, Over 1.5 improbabil)
-  - yc ≥ 2: - 10 (cartonașe = meci mai lent, mai puțin ofensiv)
-  - injuries (stars>85: -15, >70: -10, >50: -5, ≥3 accidentați: -3)
-  - squads incomplete (<11: -10, <14: -5 per echipă)
+  D.2 — calcConfidenceLive(result, liveStats, teamStrengths) — meci LIVE
+    Activată când liveStats.elapsed > 0.
+    Greutăți (sumă = 1.00):
+      score4 Live xG            w=0.35 — xg×25+sot×3+da×0.5 (penalty 20 dacă SOT=0/min>10)
+      score1 Poisson           w=0.20
+      score2 Formă+Apărare      w=0.20
+      score7 Putere Echipe      w=0.15
+      score6 Convergență        w=0.10 — include score4 în calculul stdDev
+
+  D.3 — Formule detaliate per strat (upgrade complete):
+
+    score1 — Poisson (NESCHIMBAT):
+      const score1 = result.over15Prob ?? 50;
+
+    score2 — Formă cu Apărare (NOU):
+      attackQuality   = min(100, (homeAtk + awayAtk) / 3.5 * 100)
+      defenseLeakiness = min(100, (homeDef + awayDef) / 3.5 * 100)
+      score2 = round(attackQuality * 0.6 + defenseLeakiness * 0.4)
+      Motivație: apărarea slabă produce goluri chiar dacă atacul e slab.
+
+    score3 — H2H combo (NOU, null când sample insuficient):
+      if (h2hOver15 != null && h2hSample >= 3) {
+        ggComponent = h2hGG ?? h2hOver15
+        score3 = round(h2hOver15 * 0.6 + ggComponent * 0.4)
+      } else score3 = null  // forțează redistribuire dinamică, nu duplicare Poisson
+
+    score4 — Live xG (NESCHIMBAT formulă, DOAR live):
+      if (sot === 0 && elapsed > 10) score4 = 20
+      else score4 = min(100, xg*25 + sot*3 + da*0.5)
+
+    score6 — Convergență reală (NOU):
+      mean = sum(active) / n
+      stdDev = sqrt(sum((s-mean)^2) / n)
+      score6 = round(max(0, min(100, 100 - stdDev)))
+      Motivație: stdDev mic = straturi convergent = încredere ridicată justificată.
+      Pre-meci include [score1, score2, score3, score7] (n≥2 obligatoriu)
+      Live include [score1, score2, score3, score4live, score7]
+
+    score7 — Match-up atac vs apărare (NOU):
+      homeAttackVsAwayDef = homeStr * (100 - awayStr) / 100
+      awayAttackVsHomeDef = awayStr * (100 - homeStr) / 100
+      score7 = round((homeAttackVsAwayDef + awayAttackVsHomeDef) / 2 * 1.5)
+      score7 = clamp(0, 100)
+      Motivație: media simplă ignoră dezechilibrele match-up reale.
+
+  D.4 — Penalizări runtime (aplicate DUPĂ weighted sum, în _finalizeConfidence):
+    - elapsed < 15min: × 0.85 (date insuficiente)
+    - 15-30min + SOT=0: × 0.80
+    - ≥45min + SOT=0: - 20
+    - yc ≥ 2: - 10
+    Aplicate de helper-ul comun _finalizeConfidence indiferent pre/live.
+    Penalizări injuries (-5/-10/-15) și squads (-5/-10) aplicate în handler
+    (EXTERN calcConfidence), nu în straturi individuale.
+
+  D.5 — Helpers comuni (refactor):
+    _calcConfidenceCommonScores(result, teamStrengths)
+      → calculează score1, score2, score3, score7 (fără score4 — doar live)
+    _calcConvergence(allScores)
+      → returnează score6 = 100 - stdDev, sau null dacă n<2
+    _finalizeConfidence(layers, ...)
+      → aplicăm normalizare dinamică w/totalW + penalizări runtime + clamp final
 
 E. TEAM STRENGTH (enrich.js:262 — getTeamStrengths)
 
@@ -482,6 +536,37 @@ Format: [STATUS] #NR | Fișier:linie | Descriere scurtă
 [x] #22 | api/match.js:336 | ON CONFLICT DO NOTHING → predicții niciodată actualizate
          Fix: schimbă în ON CONFLICT DO UPDATE (ca în enrich.js)
 [ ] #23 | api/today.js:104 | Filtru ligă redundant (deja filtrat în DB query la linia 31)
+
+── ÎMBUNĂTĂȚIRI APLICATE — UPGRADE CONFIDENCE 29.05.2026 ────────────────────────
+
+[x] U1 | api/enrich.js calcConfidence score2 | Formă include apărarea
+       Înainte: score2 = (homeAvg + awayAvg) / 3.5 * 100  (DOAR atac)
+       Acum:    score2 = round(attackQuality * 0.6 + defenseLeakiness * 0.4)
+       Motiv: apărarea slabă produce goluri chiar cu atac slab.
+
+[x] U2 | api/enrich.js calcConfidence score3 | H2H null când sample <3
+       Înainte: score3 = h2hOver15 ?? score1  (DUPLICATE Poisson)
+       Acum:    null când h2hSample <3; combo h2hOver15*0.6 + h2hGG*0.4 altfel
+       Motiv: fallback la score1 duplica artificial greutatea Poisson cu +12%.
+
+[x] U3 | api/enrich.js calcConfidence score7 | Match-up atac vs apărare
+       Înainte: score7 = round((home + away) / 2)  (medie simplă)
+       Acum:    homeAttackVsAwayDef = home * (100 - away) / 100
+                awayAttackVsHomeDef = away * (100 - home) / 100
+                score7 = round((sum) / 2 * 1.5)
+       Motiv: dezechilibrele match-up (80 vs 20) erau masite ca medie 50.
+
+[x] U4 | api/enrich.js calcConfidence score6 | Convergență stdDev
+       Înainte: (active.filter(s>60).length / active.length) * 100  (binar prag 60)
+       Acum:    100 - stdDev([active scores])  (continuu)
+       Motiv: prag binar 60% era arbitrar; stdDev e matematic corect.
+
+[x] U5 | api/enrich.js calcConfidence | Separare PreMatch/Live
+       Funcții noi:
+       - calcConfidencePreMatch(result, teamStrengths) — greutăți 0.30/0.25/0.15/0.25/0.05
+       - calcConfidenceLive(result, liveStats, teamStrengths) — greutăți 0.35/0.20/0.20/0.15/0.10
+       - calcConfidence(result, liveStats, teamStrengths) — WRAPPER compat
+       Zero breaking changes pentru apelanți. Semnătura externă păstrată.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECȚIUNEA 7 — DECIZII ARHITECTURALE (de ce s-a ales fiecare soluție)
