@@ -4371,3 +4371,23 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   - Expune: lambda_home/away/total, confidence, best_ev/cota/bet, h2h_over15
   - 594 linii sterse, 80 linii noi — sursa unica de adevar = tabela predictions
   - NU am modificat calcConfidencePreMatch/Live sau score2/3/6/7 in enrich.js
+
+[29.05 ~12:30] - FIX: /api/generator UI gol — enrich predictions cu fields nested | Commit: e42d9a2
+  Root cause:
+    1. mode=live ignorat — SQL filtra status_short='NS' → 0 meciuri live
+    2. Frontend g2RenderTop10 + g2Score + g2Detail accesează m.league.avg_goals,
+       m.form.home_avg_scored, m.h2h.pct_*, m.ref_stats, m.live, m.injuries,
+       m.venue_surface — toate lipsă în răspunsul minimalist => randare goală
+       sau crash silențios pe undefined.
+  Fix aplicat (api/generator.js):
+    - Restaurat branch-ul mode=live: fetch /fixtures?live=all + enrich
+      statistics + atașează predictions din DB dacă există
+    - PREMATCH: păstrat filtrul predictions (confidence≥70 + over15_prob≥70,
+      TOP 10 ORDER BY confidence DESC) — sursa de adevăr neschimbată
+    - Adăugat loadAuxData(): JOIN league_stats, form_stats, h2h, referee_stats,
+      teams_stats, venues, injuries pentru top-ul returnat
+    - buildMatchResult(): construiește forma completă cu nested objects
+      (league, form, h2h, ref_stats, live, injuries, venue_surface) +
+      lambda_*/confidence/best_* din predictions când există
+  NU am modificat calcConfidencePreMatch/Live sau score2/3/6/7 in enrich.js
+  NU am modificat frontend-ul (app-live.js neschimbat)
