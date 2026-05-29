@@ -4438,3 +4438,41 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     - calcConfidencePreMatch(), calcConfidenceLive()
     - score2, score3, score6, score7
     - calcDynamicLambda, calcPoisson6x6, blendul H2H, gate-ul lambdaHome
+
+[29.05 ~14:00] - SPRINT 4B: Calibrare per-profil de ligă (low/mid/high) | Commit: 7cee89c
+  Problema: calibrarea era globală — Premier League și Danish 1. Division
+    primeau același factor de corecție, ignorând profilul lor de scoring.
+  Soluție: 4 modificări coordinate.
+  ── 1. DB schema: calibration_tables ──
+     PK schimbat din (module) → (module, league_group).
+     Coloana nouă league_group TEXT NOT NULL DEFAULT 'global'.
+     Migrare auto la fiecare rulare (ALTER COLUMN + DROP/ADD PK dacă vechi).
+  ── 2. api/cron/recalibrate-tables.js ──
+     • Thresholds din league_stats.avg_goals_per_match (date REALE, nu hardcodate):
+         low:  < 2.3, mid: [2.3, 3.0), high: >= 3.0
+     • Single query JOIN predictions × league_stats.
+     • Pentru fiecare modul: 4 partiții (global, low, mid, high).
+     • Global: minim 50 mostre (pentru fallback universal).
+     • Per-grup: minim 500 mostre (sub asta → skip, frontend va folosi global).
+     • UPSERT cu PK (module, league_group).
+  ── 3. api/calibration.js ──
+     SELECT include league_group → cheie plată în răspuns:
+         'goals_total_2.5'        (global)
+         'goals_total_2.5_low'    (low scoring)
+         'goals_total_2.5_mid'    (mid)
+         'goals_total_2.5_high'   (high)
+  ── 4. public/js/app-state.js g2Calibrate() ──
+     • g2LeagueGroup(m) — detectează low/mid/high din m.league.avg_goals
+       (single source of truth — același prag ca în backend).
+     • Lookup order: G2_CALIBRATION[key+'_'+grp] || G2_CALIBRATION[key].
+     • Dacă grup nu există în DB → fallback automat la global.
+  ── 5. public/js/app-ui.js ──
+     5 apeluri g2Calibrate primesc `m` ca al 5-lea arg pentru per-profil lookup.
+     Apelurile din app-live.js (Simulator, Favorites) rămân fără m → fallback global.
+  Constrânți respectate:
+     ✓ Zero valori hardcodate per ligă — totul derivat din league_stats.
+     ✓ NU am modificat calcConfidencePreMatch/Live, score2/3/6/7.
+     ✓ Backward-compatible: dacă DB nu a rulat încă recalibrate, frontend
+       folosește G2_CALIBRATION static (global) ca fallback.
+  De rulat manual pe VPS pentru a popula tabelele per-grup:
+     curl -sf http://localhost:3000/api/cron/recalibrate-tables
