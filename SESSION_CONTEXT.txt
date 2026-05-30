@@ -4578,3 +4578,31 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   NU am modificat:
        calcConfidencePreMatch(), greutățile calcConfidenceLive(),
        score2, score3, score6, score7.
+
+[29.05 ~16:00] - CHORE: curățare api/leagues.js | Commit: e429e9c
+  Audit DB confirmat — șterse 19 ID-uri greșite:
+    100  (Japan J3 League — Tier 3)
+    238  (Russia Youth Championship — tineret)
+    261  (Luxembourg — neacoperit)
+    295  (South Korea K3 League — Tier 3)
+    322  (Jamaica — neacoperit)
+    391  (Malawi — neacoperit)
+    392  (Malta — neacoperit)
+    394  (Moldova — neacoperit)
+    415  (Benin — neacoperit)
+    435  (Spain Primera RFEF Group 1 — Tier 3)
+    461  (France National 3 Group A — Tier 5)
+    474  (Norway 2. Division Group 2 — Tier 3)
+    492  (Netherlands Tweede Divisie — Tier 3)
+    518  (Belgium Reserve Pro League — rezerve)
+    552  (Turkey 3. Lig Group 1 — Tier 3)
+    671  (Iceland Úrvalsdeild Women — feminin)
+    783, 784, 787 (Romania — ID-uri greșite)
+  Romania corectă cu ID-urile canonice API-Football:
+    283 → Liga I (Superliga)
+    284 → Liga II
+    285 → Cupa României
+  Secțiunea Peru păstrează 281 (Liga 1) + 282 (Liga 2); 283 mutat la Romania.
+  Secțiunile devenite goale eliminate complet din fișier:
+    Serbia, Bahrain  (singurele ID-uri erau cele șterse)
+  Total: 408 → 365 linii (-3 ID + -24 metadata wrapper).
