@@ -4969,3 +4969,30 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat score2/3/6/7
     ✓ loadPM() rămâne neschimbat (utilizator poate forța prin buton)
     ✓ Gate-urile nu afectează zilele AZI (back-compat 100%)
+
+[29.05 ~23:00] - STYLE: .pm-group-h vizibil pe fundal negru | Commit: b2fea60
+  Cele 5 cerințe aplicate în public/css/cards.css:
+  ── 1. Background distinct ──
+     bg: rgba(255,255,255,.04) → #111827 (slate-900) — clar diferit de
+     negru pur, dă card-look. Plus border:1px solid rgba(255,255,255,.06)
+     pentru contur subtil.
+  ── 2. Border-left colorat ──
+     border-left: 3px solid rgba(255,255,255,.18) — accent vertical pe
+     stânga, ușor mai luminat decât borderul restant.
+  ── 3. Hover mai vizibil ──
+     :hover background → #1e293b (slate-800 mai luminos)
+     :hover border-left-color → #22c55e (verde brand, semnal interactiv)
+     transition extinsă cu border-color (.15s) pentru tranziție suavă.
+  ── 4. Collapsed opacity = 1 ──
+     .pm-group.collapsed .pm-group-h { opacity: 1 }
+     (anterior .85 — împiedica vizibilitatea când toate grupurile erau
+     compactate; acum bar-urile rămân la fel de tapabile).
+  ── 5. Separator între grupuri ──
+     .pm-group { margin-bottom: 2px } (anterior 14px)
+     Separare strânsă — distincția vizuală vine din bg + border, nu din
+     gap mare. Listă mai densă, mai informativă.
+  Plus minor: padding header crescut 8/10 → 10/12 (touch target mai mare).
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Doar CSS — zero impact JS/Backend
