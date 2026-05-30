@@ -4764,3 +4764,36 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
     ✓ NU am modificat score2/3/6/7
     ✓ Endpoint nou — pipeline-ul de predicție neatins
+
+[29.05 ~20:00] - CRON FIX: collect-finished 3 fix-uri critice | Commit: db702da
+  Audit confirmase: 89.6% din FT matches din ultimele 7 zile fără match_stats.
+  Root causes:
+    - cron rula doar pe data=today (1 zi) → fixturile pierdute la prima
+      încercare rămâneau pentru totdeauna nepopulate
+    - status=FT excludea AET/PEN (cupe cu prelungiri)
+    - fără filtru ALLOWED_LEAGUE_IDS → 60-70% calls irosite pe ligi
+      pe care pipeline-ul nu le folosea
+  ── FIX 1: filtru ALLOWED_LEAGUE_IDS + isAllowedMatch ──
+     import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
+     import { isAllowedMatch } from '../utils/league-filter.js';
+     fixtures.filter(f => allowed.has(f.league?.id) && isAllowedMatch(...))
+     → ~70% reducere API calls per rulare.
+  ── FIX 2: fereastră 3 zile retroactiv ──
+     const dates = [0, -1, -2].map(off => dateOffset(today, off));
+     for (dt of dates) → /fixtures?date=dt&status=FT-AET-PEN
+     Dedup pe fixture_id între cele 3 zile.
+     dateOffset() folosește UTC pentru a evita TZ bugs la miezul nopții.
+     → fixturile pierdute la zilele precedente sunt re-procesate automat.
+  ── FIX 3: status=FT-AET-PEN ──
+     URL: /fixtures?date=…&status=FT-AET-PEN (în loc de doar FT)
+     → meciurile cu prelungiri/penalty (cupe) sunt acum prinse.
+  ── BONUS — prioritizare + telemetrie ──
+     toProcess sortat: cele cu match_stats lipsă procesate primele
+     (problema raportată).
+     Contoare per-step de fail: psFailed/msFailed/evFailed/oddsFailed
+     loguite în cron_logs.error_msg pentru triaj.
+  Răspuns endpoint extins: { dates, api_total, after_filter, fails }.
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Modificări izolate în cron, zero impact asupra pipeline-ului calc
