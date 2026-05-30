@@ -4948,3 +4948,24 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
     ✓ NU am modificat score2/3/6/7
     ✓ Doar funcția pmRenderHistory + helpere noi
+
+[29.05 ~22:50] - FIX: auto-refresh la AZI din alte 2 locuri | Commit: 88f3134
+  Audit ⇒ 3 căi spre suprascrierea pm-body:
+    [1] app-live.js setInterval(30s) — DEJA gated în b64040d ✓
+    [2] app-state.js setTab('pre') — tab switch reactiva loadPM() când
+        _pmMatches era gol. _pmMatches NU se umple pe pmLoadDate (doar
+        _pmHistData), deci după ce userul vizualiza o zi istorică și
+        comuta tab → înapoi, setTab vedea _pmMatches.length===0 și
+        forța loadPM() → /api/today → renderPM() suprascria view-ul.
+        Fix: în setTab, înainte de loadPM(), check PM_DATE !== today
+        (skip dacă userul nu e pe AZI).
+    [3] app-ui.js renderPM() — analyzeMatch (linia 609) chema renderPM()
+        după enrich. Dacă userul era pe altă zi (rar dar posibil),
+        renderPM ar fi suprascris view-ul cu _pmMatches (today).
+        Fix: gate la începutul renderPM() — early return dacă
+        PM_DATE !== today.
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ loadPM() rămâne neschimbat (utilizator poate forța prin buton)
+    ✓ Gate-urile nu afectează zilele AZI (back-compat 100%)
