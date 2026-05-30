@@ -79,7 +79,11 @@ function setTab(t){
     renderFavs();
   }
   if (t === 'pre' && _pmMatches.length === 0) {
-    loadPM();
+    // Bug fix: dacă userul a navigat pe altă zi în date picker (PM_DATE !== today),
+    // NU forța loadPM() — ar suprascrie view-ul istoric/viitor cu meciurile de azi.
+    var _todayLocal = (typeof pmTodayStr === 'function') ? pmTodayStr() : null;
+    var _onOtherDay = (typeof PM_DATE === 'string') && PM_DATE && _todayLocal && PM_DATE !== _todayLocal;
+    if (!_onOtherDay) loadPM();
   }
 }
 

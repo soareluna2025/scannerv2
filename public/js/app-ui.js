@@ -611,6 +611,10 @@ async function analyzeMatch(fid,hid,aid){
   }catch(e){if(btn){btn.textContent='ANALIZEAZA';btn.disabled=false;}}
 }
 function renderPM(){
+  // Defense in depth: dacă userul e pe altă zi în date picker, NU suprascrie
+  // pm-body cu view-ul de azi (analyzeMatch, setInterval, callbacks externe etc).
+  var _todayLocal=(typeof pmTodayStr==='function')?pmTodayStr():null;
+  if((typeof PM_DATE==='string')&&PM_DATE&&_todayLocal&&PM_DATE!==_todayLocal) return;
   var body=document.getElementById('pm-body');
   var total=_pmMatches.length;
   if(!total){body.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-t">Niciun meci</div></div>';return;}
