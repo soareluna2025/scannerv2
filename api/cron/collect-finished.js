@@ -1,6 +1,8 @@
 import { query } from '../db.js';
 import { calcPlayerScore } from '../calc-utils.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
+import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
+import { isAllowedMatch } from '../utils/league-filter.js';
 
 async function collectFixture(fixtureId) {
   const r = await fetchApiFootball(`/fixtures/players?fixture=${fixtureId}`);
@@ -203,83 +205,112 @@ async function logCron(fixtures, players, status, errorMsg) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+function dateOffset(baseYmd, offsetDays) {
+  const d = new Date(baseYmd + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   const key = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
-
   if (!key) return res.status(500).json({ error: 'Environment vars lipsa' });
 
   const today = new Date().toISOString().split('T')[0];
+  // FIX 2 — fereastră 3 zile retroactiv: azi + ultimele 2 zile
+  const dates = [0, -1, -2].map(off => dateOffset(today, off));
 
   try {
-    // Get today's FT fixtures
-    const fxRes = await fetchApiFootball(`/fixtures?date=${today}&status=FT`);
-    const fxData = await fxRes.json();
-    const fixtures = fxData.response || [];
-
-    if (!fixtures.length) {
-      await logCron(0, 0, 'success', null);
-      return res.status(200).json({ ok: true, message: 'No FT fixtures today', date: today });
+    // Pas 1: agregează fixturile FT/AET/PEN din toate cele 3 zile, dedupate pe fid
+    // FIX 3 — include AET + PEN (prelungiri + penalty), nu doar FT
+    const allFixtures = [];
+    const seenFids    = new Set();
+    let apiTotal = 0;
+    for (const dt of dates) {
+      const fxRes  = await fetchApiFootball(`/fixtures?date=${dt}&status=FT-AET-PEN`);
+      const fxData = await fxRes.json();
+      const list   = fxData.response || [];
+      apiTotal += list.length;
+      for (const f of list) {
+        const fid = f.fixture?.id;
+        if (!fid || seenFids.has(fid)) continue;
+        seenFids.add(fid);
+        allFixtures.push(f);
+      }
     }
 
-    // Filter out fixtures already FULLY processed (player_stats + match_stats)
-    // Inainte verifica DOAR player_stats, lasand match_stats nepopulat pentru
-    // meciuri unde collectMatchStats a esuat silentios. Acum cer ambele.
+    // FIX 1 — filtru ALLOWED_LEAGUE_IDS + isAllowedMatch (elimină women/youth/Tier3+)
+    const allowed = new Set([...ALLOWED_LEAGUE_IDS]);
+    const fixtures = allFixtures.filter(f =>
+      allowed.has(f.league?.id) && isAllowedMatch(f, ALLOWED_LEAGUE_IDS)
+    );
+
+    if (!fixtures.length) {
+      await logCron(0, 0, 'success', `no FT/AET/PEN fixtures after filters (api:${apiTotal})`);
+      return res.status(200).json({
+        ok: true, dates, api_total: apiTotal, after_filter: 0,
+        message: 'No allowed FT/AET/PEN fixtures across 3-day window',
+      });
+    }
+
+    // Pas 2: identifică fixturile fără date complete (player_stats SAU match_stats)
     const fixtureIds = fixtures.map(f => f.fixture.id);
     const [psRes, msRes] = await Promise.all([
       query('SELECT DISTINCT fixture_id FROM player_stats WHERE fixture_id = ANY($1)', [fixtureIds]),
-      query('SELECT DISTINCT fixture_id FROM match_stats WHERE fixture_id = ANY($1)', [fixtureIds]),
+      query('SELECT DISTINCT fixture_id FROM match_stats  WHERE fixture_id = ANY($1)', [fixtureIds]),
     ]);
     const psSet = new Set(psRes.rows.map(r => r.fixture_id));
     const msSet = new Set(msRes.rows.map(r => r.fixture_id));
 
-    // Re-procesez daca lipseste oricare (player_stats SAU match_stats)
-    const toProcess = fixtures.filter(f => !psSet.has(f.fixture.id) || !msSet.has(f.fixture.id));
+    // Re-procesez dacă lipsește oricare. Prioritizez cele cu match_stats lipsă
+    // (problema curentă: 89.6% din FT au match_stats lipsă).
+    const toProcess = fixtures
+      .filter(f => !psSet.has(f.fixture.id) || !msSet.has(f.fixture.id))
+      .sort((a, b) => {
+        // pri 3 = lipsesc ambele; 2 = doar match_stats; 1 = doar player_stats; 0 = niciuna
+        const pri = (f) => (msSet.has(f.fixture.id) ? 0 : 2) + (psSet.has(f.fixture.id) ? 0 : 1);
+        return pri(b) - pri(a);
+      });
 
-    let totalPlayers    = 0;
-    let totalMatchStats = 0;
-    let totalEvents     = 0;
-    let totalOdds       = 0;
+    let totalPlayers = 0, totalMatchStats = 0, totalEvents = 0, totalOdds = 0;
+    let psFailed = 0, msFailed = 0, evFailed = 0, oddsFailed = 0;
 
     for (const fx of toProcess) {
       const fixtureId  = fx.fixture.id;
       const homeTeamId = fx.teams?.home?.id;
 
-      try {
-        const count = await collectFixture(fixtureId);
-        totalPlayers += count;
-      } catch (e) { console.error('collectFixture error:', fixtureId, e.message); }
+      try { totalPlayers    += await collectFixture(fixtureId); }
+      catch (e) { psFailed++; console.error('collectFixture error:', fixtureId, e.message); }
 
-      try {
-        const count = await collectMatchStats(fixtureId, homeTeamId);
-        totalMatchStats += count;
-      } catch (_) {}
+      try { totalMatchStats += await collectMatchStats(fixtureId, homeTeamId); }
+      catch (e) { msFailed++; console.error('collectMatchStats error:', fixtureId, e.message); }
 
-      try {
-        const count = await collectMatchEvents(fixtureId);
-        totalEvents += count;
-      } catch (_) {}
+      try { totalEvents     += await collectMatchEvents(fixtureId); }
+      catch (e) { evFailed++; }
 
-      try {
-        const count = await collectOdds(fixtureId);
-        totalOdds += count;
-      } catch (_) {}
+      try { totalOdds       += await collectOdds(fixtureId); }
+      catch (e) { oddsFailed++; }
 
       await sleep(200);
     }
 
-    await logCron(toProcess.length, totalPlayers, 'success', null);
+    const failNote = (psFailed || msFailed || evFailed || oddsFailed)
+      ? `failed ps:${psFailed} ms:${msFailed} ev:${evFailed} odds:${oddsFailed}`
+      : null;
+    await logCron(toProcess.length, totalPlayers, 'success', failNote);
     return res.status(200).json({
       ok: true,
-      date: today,
-      total_ft:    fixtures.length,
-      processed:   toProcess.length,
-      skipped:     fixtures.length - toProcess.length,
-      players:     totalPlayers,
-      match_stats: totalMatchStats,
-      events:      totalEvents,
-      odds:        totalOdds,
+      dates,
+      api_total:    apiTotal,
+      after_filter: fixtures.length,
+      processed:    toProcess.length,
+      skipped:      fixtures.length - toProcess.length,
+      players:      totalPlayers,
+      match_stats:  totalMatchStats,
+      events:       totalEvents,
+      odds:         totalOdds,
+      fails: { player_stats: psFailed, match_stats: msFailed, events: evFailed, odds: oddsFailed },
     });
   } catch (e) {
     await logCron(0, 0, 'error', e.message);
