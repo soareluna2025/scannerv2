@@ -5544,3 +5544,25 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Notă proces: SESSION_CONTEXT pentru acest task a fost adăugat într-un commit
     follow-up (Edit-ul inițial a ratat indentarea); codul e în 48cd84d.
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[30.05 ~08:?? ] - RETENȚIE 2 ani: ajustare backfill + script curățare DB
+  Fișiere: api/backfill.js (PAS 1), scripts/cleanup-old-data.sql (PAS 2, nou)
+  Motiv: audit DB → 31.312 h2h + 55.304 fixtures_history vechi (>2 ani) inutile;
+    backfill repopula activ 2022-2023 (SEASONS) + h2h 4 ani → tensiune cu retenția.
+  PAS 1 — api/backfill.js (3 modificări):
+    • SEASONS [2026,2025,2024,2023,2022] → [2026,2025,2024] (nu mai trage 2022/2023).
+    • H2H builder INTERVAL '4 years' → '2 years' (linia ~295).
+    • Guard nou în loop processLeagueSeason: skip fixture dacă
+      fixture.fixture.date < '2024-05-30' (nu mai stochează meciuri sub cutoff).
+    ⚠ STOP_AT=280k / nSims / cod intangibil NEATINSE — doar retenție.
+    node --check api/backfill.js → OK.
+  PAS 2 — scripts/cleanup-old-data.sql: DELETE în ordine copil→părinte în BEGIN/COMMIT:
+    1) player_stats (JOIN fixtures_history<cutoff) 2) match_events (idem)
+    3) h2h<cutoff 4) fixtures_history<cutoff → apoi VACUUM ANALYZE pe cele 4.
+    + SELECT-uri înainte/după pentru verificare. NU atinge form_stats/standings/
+    referee_stats/coach_stats/league_stats/bets.
+  PAS 3 — EXECUȚIE MANUALĂ PE VPS (NU rulată din sandbox; comenzile în chat).
+    Estimare recuperat: ~31 MB direct (h2h 6MB + fixtures_history 25MB parțial)
+    + player_stats/match_events asociate, după VACUUM.
+  ⚠ Cleanup-ul e IREVERSIBIL → backup obligatoriu înainte. Script NErulat aici.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins

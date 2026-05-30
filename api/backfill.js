@@ -8,7 +8,7 @@ import { calcPlayerScore } from './calc-utils.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
 import { isAllowedLeague } from './utils/league-filter.js';
 
-const SEASONS    = [2026, 2025, 2024, 2023, 2022];
+const SEASONS    = [2026, 2025, 2024];
 const LEAGUE_IDS = [...ALLOWED_LEAGUE_IDS];
 const BASE_URL   = 'https://v3.football.api-sports.io';
 const DELAY_MS   = 250;
@@ -293,7 +293,7 @@ async function buildH2H(homeId, awayId) {
           OR (home_team_id = $2 AND away_team_id = $1))
         AND status_short = 'FT'
         AND home_goals IS NOT NULL
-        AND match_date >= NOW() - INTERVAL '4 years'
+        AND match_date >= NOW() - INTERVAL '2 years'
       ORDER BY match_date DESC
       LIMIT 10`,
     [team1, team2]
