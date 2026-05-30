@@ -266,9 +266,11 @@
 .pm-datebtn-day{display:block;font-size:9px;opacity:.75;margin-bottom:2px}
 .pm-datebtn-num{display:block;font-size:14px;font-weight:800}
 
-.pm-group{margin-bottom:14px}
-.pm-group-h{display:flex;align-items:center;gap:6px;padding:8px 10px;
-  background:rgba(255,255,255,.04);border-radius:8px;margin-bottom:4px;font-size:11px}
+.pm-group{margin-bottom:2px}
+.pm-group-h{display:flex;align-items:center;gap:6px;padding:10px 12px;
+  background:#111827;border:1px solid rgba(255,255,255,.06);
+  border-left:3px solid rgba(255,255,255,.18);border-radius:8px;
+  margin-bottom:4px;font-size:11px}
 .pm-group-country{color:var(--mu2);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
 .pm-group-league{color:var(--tx);font-weight:700}
 .pm-group-cup{margin-left:auto;color:var(--mu);font-size:10px;font-weight:500}
@@ -293,12 +295,12 @@
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* ── Calendar improvements: flag + logo + collapse + date prefix ── */
-.pm-group-h{cursor:pointer;transition:background .15s;user-select:none}
-.pm-group-h:hover{background:rgba(255,255,255,.06)}
+.pm-group-h{cursor:pointer;transition:background .15s,border-color .15s;user-select:none}
+.pm-group-h:hover{background:#1e293b;border-left-color:#22c55e}
 .pm-group-flag{font-size:14px;line-height:1;margin-right:2px}
 .pm-group-logo{width:16px;height:16px;vertical-align:middle;margin-left:4px;object-fit:contain;flex-shrink:0}
 .pm-group-chev{margin-left:auto;font-size:10px;color:var(--mu);opacity:.8;flex-shrink:0}
 .pm-group.collapsed .pm-group-body{display:none}
-.pm-group.collapsed .pm-group-h{opacity:.85}
+.pm-group.collapsed .pm-group-h{opacity:1}
 
 .hist-date-prefix{font-size:9px;color:var(--mu);font-weight:700;letter-spacing:.5px}
