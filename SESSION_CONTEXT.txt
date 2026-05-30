@@ -5474,3 +5474,30 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
       SQL-ul e standard GROUP BY/FILTER. Test rapid post-deploy:
       curl '/api/model-accuracy?days=30&minConf=80'.
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[30.05 ~06:?? ] - FIX: update-results lăsa 1.831 prediction_log PENDING cu meci FT
+  Fișier: api/update-results.js
+  ROOT CAUSE: prediction_log se rezolva DOAR ca efect secundar al loop-ului pe
+    tabela `predictions` (gated pe `if(pr.rowCount>0)`). Dacă un fixture avea
+    rând în prediction_log dar NU avea rând pending în `predictions` (deja
+    rezolvat, sau log-uit independent — NGP/CONFIDENCE din scanner) → rămânea
+    PENDING la nesfârșit. În plus, early-return „no pending" sărea complet
+    rezolvarea prediction_log.
+  FIX: funcție nouă resolvePredictionLogFromHistory() — set-based, DB-only (0 API):
+    UPDATE prediction_log ... FROM fixtures_history pe outcome='PENDING' +
+    status FT/AET/PEN, pentru fiecare modul (OVER15/OVER25/GG/CONFIDENCE/NGP),
+    indiferent de data predicției. Rulează PASUL 0 (primul, ÎNTOTDEAUNA) în handler.
+    • Backlog retroactiv (1.831) rezolvat la primul run + acoperă cazurile noi.
+    • CONFIDENCE: aceeași regulă direcțională (predicted_value 55/45) ca în loop.
+    • NGP: guard regex '^[0-9]+-[0-9]+$' pe score_at_prediction (altfel un rând
+      malformat ar pica tot UPDATE-ul set-based via CAST).
+    • Mutat înaintea early-return-ului „no pending" → rulează chiar fără predictions.
+  LOG (pas 5): console.log + cron_logs + răspuns JSON cu prediction_log_resolved
+    (total) + prediction_log_by_module (per modul).
+  Loop-ul existent pe `predictions` (API) păstrat neatins pentru tabela predictions.
+  Verificare: node --check api/update-results.js → OK. Wiring confirmat (PASUL 0 +
+    ambele căi de return includ plResolved).
+    ⚠ NEtestat pe DB live (sandbox fără PG); SQL standard UPDATE..FROM. Test
+    post-deploy: GET /api/update-results → vezi prediction_log_resolved; apoi
+    re-rulează query-ul de verificare (ar trebui ~0 PENDING cu FT).
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins

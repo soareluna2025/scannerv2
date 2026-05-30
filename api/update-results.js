@@ -15,12 +15,84 @@ async function logCron(status, msg = '') {
   } catch (_) {}
 }
 
+// Rezolvă prediction_log DIRECT din fixtures_history (0 apeluri API, set-based).
+// Independent de tabela `predictions` — acoperă predicțiile log-uite separat
+// (NGP/CONFIDENCE din scanner) și backlog-ul istoric, indiferent de data predicției.
+// Înainte: prediction_log se rezolva DOAR ca efect secundar al loop-ului pe
+// `predictions` (gated pe pr.rowCount>0) → 1.831 rămâneau PENDING deși meciul era FT.
+async function resolvePredictionLogFromHistory() {
+  const ft = `fh.status_short IN ('FT','AET','PEN') AND fh.home_goals IS NOT NULL AND fh.away_goals IS NOT NULL`;
+  const base = (mod, setClause) => `
+    UPDATE prediction_log pl SET ${setClause}, resolved_at=NOW()
+    FROM fixtures_history fh
+    WHERE pl.fixture_id = fh.fixture_id
+      AND pl.outcome = 'PENDING'
+      AND pl.module = '${mod}'
+      AND ${ft}`;
+  const counts = {};
+  let r;
+
+  r = await query(base('OVER15',
+    `outcome=CASE WHEN (fh.home_goals+fh.away_goals)>=2 THEN 'WIN' ELSE 'LOSS' END,
+     actual_value=fh.home_goals+fh.away_goals`));
+  counts.OVER15 = r.rowCount;
+
+  r = await query(base('OVER25',
+    `outcome=CASE WHEN (fh.home_goals+fh.away_goals)>=3 THEN 'WIN' ELSE 'LOSS' END,
+     actual_value=fh.home_goals+fh.away_goals`));
+  counts.OVER25 = r.rowCount;
+
+  r = await query(base('GG',
+    `outcome=CASE WHEN fh.home_goals>0 AND fh.away_goals>0 THEN 'WIN' ELSE 'LOSS' END,
+     actual_value=CASE WHEN fh.home_goals>0 AND fh.away_goals>0 THEN 1 ELSE 0 END`));
+  counts.GG = r.rowCount;
+
+  // CONFIDENCE — aceeași regulă direcțională ca în loop-ul existent (predicted_value)
+  r = await query(base('CONFIDENCE',
+    `outcome=CASE WHEN (pl.predicted_value>=55 AND (fh.home_goals+fh.away_goals)>=2)
+                    OR (pl.predicted_value<45  AND (fh.home_goals+fh.away_goals)<2)
+                  THEN 'WIN' ELSE 'LOSS' END,
+     actual_value=fh.home_goals+fh.away_goals`));
+  counts.CONFIDENCE = r.rowCount;
+
+  // NGP — WIN dacă totalul final > totalul la momentul predicției (din score_at_prediction).
+  // Guard regex '^d+-d+$': sărim rândurile fără scor valid (altfel CAST ar pica tot UPDATE-ul).
+  r = await query(`
+    UPDATE prediction_log pl SET
+      outcome=CASE WHEN (fh.home_goals+fh.away_goals) >
+        (CAST(SPLIT_PART(pl.score_at_prediction,'-',1) AS INT) +
+         CAST(SPLIT_PART(pl.score_at_prediction,'-',2) AS INT))
+        THEN 'WIN' ELSE 'LOSS' END,
+      actual_value=fh.home_goals+fh.away_goals, resolved_at=NOW()
+    FROM fixtures_history fh
+    WHERE pl.fixture_id = fh.fixture_id
+      AND pl.outcome = 'PENDING'
+      AND pl.module = 'NGP'
+      AND pl.score_at_prediction ~ '^[0-9]+-[0-9]+$'
+      AND ${ft}`);
+  counts.NGP = r.rowCount;
+
+  const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
+  return { counts, total };
+}
+
 export default async function handler(req, res) {
   const afKey = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
   if (!afKey) return res.status(500).json({ error: 'API_FOOTBALL_KEY not configured' });
 
   try {
+    // ── PASUL 0: rezolvă prediction_log din fixtures_history (DB, 0 API).
+    // Rulează ÎNTOTDEAUNA primul → curăță backlog-ul (1.831) + cazurile noi,
+    // indiferent dacă există rânduri pending în tabela `predictions`.
+    let plResolved = { counts: {}, total: 0 };
+    try {
+      plResolved = await resolvePredictionLogFromHistory();
+      console.log(`[update-results] prediction_log rezolvate din history: ${plResolved.total}`, plResolved.counts);
+    } catch (e) {
+      console.error('[update-results] resolvePredictionLogFromHistory:', e.message);
+    }
+
     // Select predictions without results where match_date has passed
     const pendingRes = await query(
       `SELECT id, fixture_id FROM predictions
@@ -29,8 +101,8 @@ export default async function handler(req, res) {
 
     const pending = pendingRes.rows;
     if (!pending.length) {
-      await logCron('success', 'no pending');
-      return res.status(200).json({ updated: 0, total: 0 });
+      await logCron('success', `no pending predictions; prediction_log resolved ${plResolved.total}`);
+      return res.status(200).json({ updated: 0, total: 0, prediction_log_resolved: plResolved.total, prediction_log_by_module: plResolved.counts });
     }
 
     let updated = 0;
@@ -108,8 +180,13 @@ export default async function handler(req, res) {
       await sleep(500);
     }
 
-    await logCron('success', `updated ${updated}/${pending.length}`);
-    return res.status(200).json({ updated, total: pending.length });
+    await logCron('success', `updated ${updated}/${pending.length}; prediction_log resolved ${plResolved.total}`);
+    return res.status(200).json({
+      updated,
+      total: pending.length,
+      prediction_log_resolved: plResolved.total,
+      prediction_log_by_module: plResolved.counts,
+    });
   } catch (e) {
     await logCron('error', e.message);
     return res.status(500).json({ error: e.message });
