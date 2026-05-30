@@ -5188,3 +5188,39 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat score2/3/6/7
     ✓ NU am modificat calcNextGoal / calibrateNgp (refolosite as-is)
     ✓ Schema DB neatinsă
+
+[30.05 ~01:40] - FIX: minute prelungiri (45+2, 90+3) în UI | Commit: a8a2a21
+  Bug: API-Football v3 separă elapsed (cap 45/90) de extra (minutele
+  adăugate). Frontend ignora complet status.extra → afișa doar "45'"
+  sau "90'" în loc de "45+2'" sau "90+3'".
+  Locații audited:
+    1. Card LIVE (app-ui.js:193 buildCardHtml)        — ❌ ignora extra
+    2. Modal header (app-ui.js:1320 sumar isLive)     — ❌ ignora extra
+    3. Favorite item (app-live.js:901)                  — ❌ ignora extra
+    4. Timeline evenimente (app-ui.js:1349)            — ✓ DEJA corect
+       (fixed în commit a31f993 — `extra=(time.extra?'+'+time.extra:'')`)
+  Fix-uri aplicate:
+    ── app-state.js matchTimeBadge(sh, elapsed, extra) ──
+       Acceptă acum al 3-lea param `extra`.
+       Logica nouă cu prioritate:
+         dacă extra > 0 → "R1/R2 · elapsed+extra'"
+         altfel dacă elapsed > 45/90 → "R1/R2 · 45/90+(elapsed-45/90)'"
+                                       (fallback istoric)
+         altfel → "R1/R2 · elapsed'"
+       Acoperă: 1H, 2H, ET, plus branch generic (when elapsed > 0).
+       Adăugat helper fmtMinute(elapsed, extra) pentru uz general.
+    ── app-ui.js buildCardHtml linia 193 ──
+       Citește m.fixture.status.extra în _ex, pasează la matchTimeBadge.
+    ── app-ui.js mdRender Sumar linia 1320 ──
+       Citește fix.fixture.status.extra în _mdEx, pasează la matchTimeBadge.
+    ── app-live.js renderFavs linia 901 ──
+       Citește m.fixture.status.extra în ex, pasează la matchTimeBadge.
+  Sursa date — API-Football status object:
+    { short: '1H' | '2H' | 'HT' | 'ET' | 'P' | …,
+      long:  'First Half' | …,
+      elapsed: integer (capped 45 in 1H, 90 in 2H),
+      extra:   integer | null (minute adăugate, separate) }
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Logica fallback elapsed > 45/90 păstrată (backward compat)
