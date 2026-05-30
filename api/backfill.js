@@ -368,6 +368,9 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
     const fx  = fixtures[fi];
     const fid = fx?.fixture?.id;
     if (!fid) continue;
+    // Retenție 2 ani: skip meciuri mai vechi de 2024-05-30 (nu le mai stocăm)
+    const _mDate = fx?.fixture?.date;
+    if (_mDate && new Date(_mDate) < new Date('2024-05-30')) continue;
     const hid = fx?.teams?.home?.id;
     const aid = fx?.teams?.away?.id;
 
