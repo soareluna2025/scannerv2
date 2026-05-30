@@ -5726,3 +5726,21 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
       (subscription.plan/end, requests.current/limit_day). Confirm post-deploy cu
       curl /status sau refresh admin.
   Constrânți: ✓ niciun cod intangibil atins (doar endpoint admin)
+
+[31.05 ~14:?? ] - FIX: limită API 150k→300k în backfill + log eroare auto-predict
+  Fișiere: api/backfill.js, api/cron/auto-predict.js
+  TASK1: backfill.js:101 — fallback getRealApiUsage `|| 150_000` → `|| API_PLAN_LIMIT`
+    (300k). Admin „API azi: X / 150.000" venea din backfill_api_limit setat din acest
+    fallback când /status nu raporta limit_day. Acum 300k. (admin.html nu avea 150k
+    hardcodat — citește planLimit din status; deja 300k după fix-ul anterior.)
+  TASK2: auto-predict.js — eroarea 1/15 era ASCUNSĂ de `catch(_){}` + `else errors++`
+    fără detalii. Acum:
+    • HTTP non-ok → console.error cu status + corp răspuns (primele 300 char).
+    • excepție → console.error cu stack complet (timeout/network/etc).
+    Logica de predicție NEATINSĂ (predicted/errors/total identice). Cauza reală a
+    celei 1 erori va fi vizibilă în log la următoarea rulare (00:30) — probabil
+    timeout 20s pe /api/enrich (meci cu multe fallback-uri API) sau 500 din enrich.
+  Verificare: node --check backfill.js + auto-predict.js → OK.
+    ⚠ Cauza exactă a erorii 1/15 NEconfirmată (sandbox fără runtime); fix-ul
+      EXPUNE cauza, nu o presupune. Verifică log după 00:30 sau rulare manuală.
+  Constrânți: ✓ niciun cod intangibil atins

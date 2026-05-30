@@ -72,10 +72,19 @@ export default async function handler(req, res) {
           { signal: AbortSignal.timeout(20000) }
         );
 
-        if (r.ok) predicted++;
-        else errors++;
-      } catch (_) {
+        if (r.ok) {
+          predicted++;
+        } else {
+          errors++;
+          // Loghează cauza reală (status + corp răspuns) — înainte eroarea era mută.
+          let body = '';
+          try { body = (await r.text()).slice(0, 300); } catch (_) {}
+          console.error(`[auto-predict] fixture ${fx.fixture_id} HTTP ${r.status}: ${body}`);
+        }
+      } catch (e) {
         errors++;
+        // Stack complet — înainte `catch(_){}` ascundea total eroarea (timeout/network/etc).
+        console.error(`[auto-predict] fixture ${fx.fixture_id} exception:`, e && e.stack ? e.stack : e);
       }
       await sleep(300);
     }

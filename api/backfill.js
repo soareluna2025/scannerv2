@@ -98,7 +98,7 @@ async function getRealApiUsage() {
     const res  = await fetchApiFootball('/status');
     const d    = await res.json();
     const used  = d.response?.requests?.current || 0;
-    const limit = d.response?.requests?.limit_day || 150_000;
+    const limit = d.response?.requests?.limit_day || API_PLAN_LIMIT;
     await setSetting('backfill_api_used',  String(used));
     await setSetting('backfill_api_limit', String(limit));
     apiUsedToday = used;
