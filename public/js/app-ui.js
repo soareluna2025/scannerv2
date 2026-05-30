@@ -1333,12 +1333,21 @@ function mdRenderForma(d){
   }
 
   if(en.h2hOver15!=null){
+    // Bug fix: când h2hSample === 0 (sau null), procentele NU sunt H2H reale —
+    // în api/enrich.js, h2hOver15/h2hGG cad pe `?? matrix.X` (Poisson model)
+    // când nu există h2h în DB. Afișarea acelor procente ca „H2H" e falsă.
+    var nH2H=(typeof en.h2hSample==='number')?en.h2hSample:0;
     out+='<div class="md-section"><div class="md-section-title">Statistici H2H</div>';
     out+='<div class="md-prob-row">';
     var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
-    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.h2hOver15)+'">'+en.h2hOver15+'%</div><div class="md-prob-lbl">H2H Over 1.5</div></div>';
-    out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.h2hGG)+'">'+en.h2hGG+'%</div><div class="md-prob-lbl">H2H GG</div></div>';
-    out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2)">'+en.h2hSample+'</div><div class="md-prob-lbl">Meciuri H2H</div></div>';
+    if(nH2H>0){
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.h2hOver15)+'">'+en.h2hOver15+'%</div><div class="md-prob-lbl">H2H Over 1.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.h2hGG)+'">'+en.h2hGG+'%</div><div class="md-prob-lbl">H2H GG</div></div>';
+    }else{
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2);font-size:11px">Date insuficiente</div><div class="md-prob-lbl">H2H Over 1.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2);font-size:11px">Date insuficiente</div><div class="md-prob-lbl">H2H GG</div></div>';
+    }
+    out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2)">'+nH2H+'</div><div class="md-prob-lbl">Meciuri H2H</div></div>';
     out+='</div></div>';
   }
 
