@@ -768,6 +768,91 @@ async function pmLoadDate(dateStr){
   }
 }
 
+// Maparea numelui de țară (din DB) la emoji-drapel.
+// Acoperă întregul whitelist + variante de scriere ('Czech-Republic' vs
+// 'Czech Republic'). Țări non-ISO (England/Scotland/Wales) au flag-uri
+// tag-sequence speciale. Internaționale → emoji generic 🌍/🌎/🌏.
+var PM_FLAG_MAP = {
+  'England':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Scotland':'🏴󠁧󠁢󠁳󠁣󠁴󠁿','Wales':'🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+  'World':'🌍','Europe':'🇪🇺','South-America':'🌎','South America':'🌎',
+  'North-America':'🌎','North America':'🌎','Africa':'🌍','Asia':'🌏',
+  // ISO 3166-1 alpha-2 codes (convertite la flag emoji prin offset 0x1F1E6)
+  'Argentina':'AR','Australia':'AU','Austria':'AT','Bahrain':'BH','Belarus':'BY',
+  'Belgium':'BE','Bolivia':'BO','Brazil':'BR','Bulgaria':'BG','Cambodia':'KH',
+  'Canada':'CA','Chile':'CL','China':'CN','Colombia':'CO',
+  'Costa-Rica':'CR','Costa Rica':'CR','Croatia':'HR',
+  'Czech-Republic':'CZ','Czech Republic':'CZ','Czechia':'CZ',
+  'Denmark':'DK','Ecuador':'EC','Egypt':'EG',
+  'El-Salvador':'SV','El Salvador':'SV','Estonia':'EE','Ethiopia':'ET',
+  'Finland':'FI','France':'FR','Germany':'DE','Ghana':'GH','Greece':'GR',
+  'Guatemala':'GT','Honduras':'HN','Hong-Kong':'HK','Hong Kong':'HK',
+  'Hungary':'HU','Iceland':'IS','India':'IN','Indonesia':'ID','Iran':'IR',
+  'Iraq':'IQ','Ireland':'IE','Israel':'IL','Italy':'IT',
+  'Ivory-Coast':'CI','Ivory Coast':'CI','Côte d\'Ivoire':'CI',
+  'Jamaica':'JM','Japan':'JP','Jordan':'JO','Kazakhstan':'KZ','Kenya':'KE',
+  'Korea-Republic':'KR','Korea Republic':'KR',
+  'Kuwait':'KW','Latvia':'LV','Lithuania':'LT','Luxembourg':'LU',
+  'Malaysia':'MY','Malta':'MT','Mexico':'MX','Moldova':'MD','Morocco':'MA',
+  'Netherlands':'NL','New-Zealand':'NZ','New Zealand':'NZ','Nicaragua':'NI',
+  'Nigeria':'NG','Norway':'NO','Oman':'OM','Panama':'PA','Paraguay':'PY',
+  'Peru':'PE','Philippines':'PH','Poland':'PL','Portugal':'PT','Qatar':'QA',
+  'Romania':'RO','Russia':'RU','Saudi-Arabia':'SA','Saudi Arabia':'SA',
+  'Serbia':'RS','Singapore':'SG','Slovakia':'SK','Slovenia':'SI',
+  'South-Africa':'ZA','South Africa':'ZA','South-Korea':'KR','South Korea':'KR',
+  'Spain':'ES','Sweden':'SE','Switzerland':'CH','Thailand':'TH',
+  'Tunisia':'TN','Turkey':'TR','Türkiye':'TR','UAE':'AE',
+  'United-Arab-Emirates':'AE','United Arab Emirates':'AE',
+  'Ukraine':'UA','United-States':'US','USA':'US','United States':'US',
+  'Uruguay':'UY','Uzbekistan':'UZ','Venezuela':'VE',
+  'Vietnam':'VN','Viet Nam':'VN',
+};
+
+function countryToFlag(country){
+  if (!country) return '';
+  var v = PM_FLAG_MAP[country];
+  if (!v) return '';
+  // Direct emoji (England/World/etc) — return ca atare
+  if (v.length > 2) return v;
+  // ISO 2-letter code → regional indicators (A=0x1F1E6)
+  var A = 0x1F1E6;
+  var c0 = v.charCodeAt(0) - 65;
+  var c1 = v.charCodeAt(1) - 65;
+  if (c0 < 0 || c0 > 25 || c1 < 0 || c1 > 25) return '';
+  return String.fromCodePoint(A + c0) + String.fromCodePoint(A + c1);
+}
+
+// Format dată scurt românesc: DU/LU/MA/MI/JO/VI/SA + zi luna
+function pmFmtDateShort(dateLike){
+  if (!dateLike) return '';
+  var d = new Date(dateLike);
+  if (isNaN(d.getTime())) return '';
+  return _PM_DAYS_RO[d.getDay()] + ' ' + String(d.getDate()).padStart(2,'0');
+}
+function pmFmtTime(dateLike){
+  if (!dateLike) return '';
+  var d = new Date(dateLike);
+  if (isNaN(d.getTime())) return '';
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+// Expand/collapse helpers (state persistat în localStorage per league_id)
+function pmIsCollapsed(leagueId){
+  try { return localStorage.getItem('pm_collapse_' + leagueId) === '1'; }
+  catch(e) { return false; }
+}
+function pmToggleGroup(leagueId){
+  var key = 'pm_collapse_' + leagueId;
+  var newCollapsed;
+  try {
+    newCollapsed = localStorage.getItem(key) === '1' ? '0' : '1';
+    localStorage.setItem(key, newCollapsed);
+  } catch(e) { newCollapsed = '0'; }
+  var grpEl = document.getElementById('pmg_' + leagueId);
+  if (grpEl) grpEl.classList.toggle('collapsed', newCollapsed === '1');
+  var chevEl = document.getElementById('pmgc_' + leagueId);
+  if (chevEl) chevEl.textContent = newCollapsed === '1' ? '▼' : '▲';
+}
+
 function pmRenderHistory(data){
   var body = document.getElementById('pm-body');
   if (!data.groups || !data.groups.length) {
@@ -783,12 +868,23 @@ function pmRenderHistory(data){
     + htmlEsc(data.date) + '</span></div>';
 
   data.groups.forEach(function(grp){
-    html += '<div class="pm-group">';
-    html += '<div class="pm-group-h">';
+    var lid = grp.league_id;
+    var collapsed = lid ? pmIsCollapsed(lid) : false;
+    var flag = countryToFlag(grp.country);
+    var leagueLogo = lid
+      ? '<img src="https://media.api-sports.io/football/leagues/' + lid + '.png" class="pm-group-logo" onerror="this.style.display=\'none\'">'
+      : '';
+    html += '<div class="pm-group' + (collapsed ? ' collapsed' : '') + '" id="pmg_' + lid + '">';
+    html += '<div class="pm-group-h" onclick="pmToggleGroup(' + lid + ')">';
+    if (flag) html += '<span class="pm-group-flag">' + flag + '</span>';
     html += '<span class="pm-group-country">' + htmlEsc(grp.country || '?') + '</span>';
     html += '<span style="color:var(--mu)">·</span>';
     html += '<span class="pm-group-league">' + htmlEsc(grp.league_name || '?') + '</span>';
+    html += leagueLogo;
+    html += '<span class="pm-group-cup">' + grp.matches.length + ' meciuri</span>';
+    html += '<span class="pm-group-chev" id="pmgc_' + lid + '">' + (collapsed ? '▼' : '▲') + '</span>';
     html += '</div>';
+    html += '<div class="pm-group-body">';
     grp.matches.forEach(function(m){
       var st = m.status_short || 'NS';
       var isLive = LIVE[st] === 1;
@@ -797,11 +893,25 @@ function pmRenderHistory(data){
       var hg = m.home_goals, ag = m.away_goals;
       var hBold = (isFT && hg > ag) ? 'font-weight:800' : '';
       var aBold = (isFT && ag > hg) ? 'font-weight:800' : '';
+      var dStr = pmFmtDateShort(m.match_date);
+      var tStr = pmFmtTime(m.match_date);
       var mid = '';
-      if (isLive)      mid = '<span class="hist-score-live"><span class="live-dot"></span>' + (hg||0) + ' - ' + (ag||0) + '</span><span class="hist-live-badge">LIVE</span>';
-      else if (isFT)   mid = '<span class="hist-score-ft">' + (hg||0) + ' - ' + (ag||0) + '</span><span class="hist-ft-badge">' + st + '</span>';
-      else if (isNS)   mid = '<span class="hist-time">' + new Date(m.match_date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + '</span><span class="hist-ns-badge">NS</span>';
-      else             mid = '<span class="hist-time">' + htmlEsc(st) + '</span>';
+      if (isLive) {
+        mid = '<span class="hist-date-prefix">' + dStr + '</span>'
+            + '<span class="hist-score-live"><span class="live-dot"></span>' + (hg||0) + ' - ' + (ag||0) + '</span>'
+            + '<span class="hist-live-badge">LIVE</span>';
+      } else if (isFT) {
+        mid = '<span class="hist-date-prefix">' + dStr + '</span>'
+            + '<span class="hist-score-ft">' + (hg||0) + ' - ' + (ag||0) + '</span>'
+            + '<span class="hist-ft-badge">' + st + '</span>';
+      } else if (isNS) {
+        mid = '<span class="hist-date-prefix">' + dStr + '</span>'
+            + '<span class="hist-time">' + tStr + '</span>'
+            + '<span class="hist-ns-badge">NS</span>';
+      } else {
+        mid = '<span class="hist-date-prefix">' + dStr + '</span>'
+            + '<span class="hist-time">' + htmlEsc(st) + '</span>';
+      }
 
       var clickable = isFT && m.fixture_id && m.home_team_id && m.away_team_id;
       var rowAttrs = clickable
@@ -819,7 +929,8 @@ function pmRenderHistory(data){
       html += '</div>';
       html += '</div>';
     });
-    html += '</div>';
+    html += '</div>';   // /pm-group-body
+    html += '</div>';   // /pm-group
   });
 
   var sy = body.scrollTop;

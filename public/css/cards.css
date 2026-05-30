@@ -291,3 +291,14 @@
 .hist-ns-badge{font-size:8px;color:var(--mu2);font-weight:700;letter-spacing:1px}
 .hist-live-badge{font-size:9px;color:#ef4444;font-weight:700}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── Calendar improvements: flag + logo + collapse + date prefix ── */
+.pm-group-h{cursor:pointer;transition:background .15s;user-select:none}
+.pm-group-h:hover{background:rgba(255,255,255,.06)}
+.pm-group-flag{font-size:14px;line-height:1;margin-right:2px}
+.pm-group-logo{width:16px;height:16px;vertical-align:middle;margin-left:4px;object-fit:contain;flex-shrink:0}
+.pm-group-chev{margin-left:auto;font-size:10px;color:var(--mu);opacity:.8;flex-shrink:0}
+.pm-group.collapsed .pm-group-body{display:none}
+.pm-group.collapsed .pm-group-h{opacity:.85}
+
+.hist-date-prefix{font-size:9px;color:var(--mu);font-weight:700;letter-spacing:.5px}
