@@ -3,11 +3,17 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 
 process.on('uncaughtException', (err) => {
-  console.error('[crash] uncaughtException:', err.message, err.stack);
+  console.error('[FATAL] uncaughtException:', err && err.stack ? err.stack : err);
 });
-process.on('unhandledRejection', (reason) => {
-  console.error('[crash] unhandledRejection:', reason);
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[FATAL] unhandledRejection:', reason && reason.stack ? reason.stack : reason);
 });
+// Loghează semnalele externe (systemd/PM2/OOM) — dacă procesul e oprit din afară,
+// logurile JS rămân goale; aceste handler-e dezvăluie cine/ce îl termină.
+process.on('SIGTERM', () => { console.error('[FATAL] SIGTERM primit (oprire externă: systemd/PM2)'); process.exit(0); });
+process.on('SIGINT',  () => { console.error('[FATAL] SIGINT primit');  process.exit(0); });
+process.on('warning', (w) => { console.warn('[node warning]', w && w.message); });
+process.on('exit', (code) => { console.error('[FATAL] process exit, code=', code); });
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { query } from './api/db.js';
@@ -137,6 +143,16 @@ const httpServer = app.listen(PORT, '0.0.0.0', async () => {
   startScanner();
   ensureIndexes();
   loadModelWeights().catch(e => console.error('[weights] initial load failed:', e.message));
+});
+
+// Crash silentios frecvent = portul deja ocupat (alt proces / dublu process manager).
+// Fără acest handler, EADDRINUSE arunca o eroare care oprea procesul fără log util.
+httpServer.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`[FATAL] Portul ${PORT} este deja ocupat (EADDRINUSE) — alt proces alohascan rulează deja? (verifică systemd + PM2)`);
+  } else {
+    console.error('[FATAL] httpServer error:', err && err.stack ? err.stack : err);
+  }
 });
 
 const wss = new WebSocketServer({

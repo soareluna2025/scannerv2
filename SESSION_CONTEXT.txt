@@ -5566,3 +5566,38 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     + player_stats/match_events asociate, după VACUUM.
   ⚠ Cleanup-ul e IREVERSIBIL → backup obligatoriu înainte. Script NErulat aici.
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[30.05 ~08:?? ] - URGENȚĂ: server cade repetat (errored ~15min) — diagnostic + handlers
+  Fișier: server.js
+  DIAGNOSTIC (cheie): handler-ele uncaughtException/unhandledRejection EXISTAU
+    DEJA (server.js:5-10) iar error.log e GOL → NU e excepție JS. „Memorie → 0b" +
+    kill periodic + log gol = SIGKILL EXTERN (OOM sau al doilea process manager),
+    pe care JS NU îl poate prinde/loga.
+  SUSPECT #1: dublu process manager. Deploy folosește systemd (systemctl restart
+    alohascan) DAR simptomul e raportat din PM2 → probabil ruleazĂ ȘI PM2 ȘI
+    systemd pe același server.js → al doilea instance lovește portul 3000 →
+    EADDRINUSE → crash silențios (nu exista httpServer.on('error')).
+  SUSPECT #2: OOM (systemd MemoryMax / pm2 max_memory_restart). Caches scanner
+    (liveCache/prematchCache/formCache): formCache are evicție (FORM_CACHE_MAX),
+    liveCache se curăță la FT, prematchCache se rescrie pe ts — fără leak evident
+    în cod. startScanner NU are guard anti-dublă-pornire (dacă 2 procese → 2×
+    scanner = 2× memorie + 2× API).
+  FIX aplicat (server.js) — vizibilitate, fără a opri procesul:
+    • uncaughtException/unhandledRejection → format [FATAL] + stack complet
+      (înainte logau doar .message → puteau părea „goale").
+    • NOU httpServer.on('error'): prinde EADDRINUSE explicit („portul ocupat —
+      alt proces?") + orice eroare de server (înainte = crash silențios).
+    • NOU process.on SIGTERM/SIGINT/exit/warning → loghează opririle EXTERNE
+      (systemd/PM2/OOM-killer trimit SIGTERM) → la următorul crash vedem cine-l oprește.
+  Verificare: node --check server.js → OK.
+  ⚠ ACȚIUNE PE VPS (manual, cele 2 cauze probabile NU se rezolvă din cod):
+    1. Verifică dublu manager: `pm2 list` + `systemctl status alohascan`. Dacă
+       AMBELE rulează alohascan → oprește unul: `pm2 delete alohascan` (păstrează
+       systemd) SAU `systemctl stop/disable alohascan` (păstrează PM2). Un singur
+       manager pe portul 3000.
+    2. Verifică OOM: `journalctl -u alohascan --since "1 hour ago" | grep -i
+       "killed\|memory\|oom"` + `dmesg | grep -i oom`. Dacă MemoryMax prea mic →
+       mărește în unit-ul systemd.
+    3. După deploy, monitorizează log-ul: noile [FATAL]/SIGTERM vor arăta cauza.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+    (modificat DOAR handlers de proces în server.js — fără logică de business)
