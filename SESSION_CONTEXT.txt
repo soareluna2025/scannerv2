@@ -4717,3 +4717,13 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
     ✓ NU am modificat score2/3/6/7
     ✓ Doar lectură din `en` + render
+
+[29.05 ~18:45] - FIX: Piețe Speciale ×100 duplicat | Commit: 6333e4a
+  Bug introdus în commit 317f459 (FIX 4 din task-ul "expose"): am
+  multiplicat cardsOver35/45 + cornersOver85/95 cu 100 sub presupunerea
+  că sunt în scale 0-1.
+  Realitate: poissonProbOver() în api/calc-utils.js:65-71 returnează
+    Math.max(0, Math.min(100, Math.round((1 - cdf) * 100)))
+  → deja în scale 0-100, deja rotunjit la integer, deja clampat.
+  Înmulțirea cu 100 producea valori absurde (75 → 7500%).
+  Fix: eliminat *100 din toate 4 valori. Folosim direct Math.round(value).
