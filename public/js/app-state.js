@@ -526,21 +526,39 @@ async function fetchSupabaseWinRate(){
 
 
 // ── MATCH TIME BADGE ──────────────────────────────────────────
-function matchTimeBadge(sh,elapsed){
+function matchTimeBadge(sh,elapsed,extra){
   elapsed=elapsed||0;
+  // Bug fix: prelungiri din API-Football vin în status.extra (separat de elapsed).
+  // Fallback istoric: elapsed > 45/90 (când API întoarce direct elapsed inflated).
+  extra=(typeof extra==='number'&&extra>0)?extra:0;
   if(sh==='1H'){
-    if(elapsed<=45)return{dot:true,c:'#22c55e',t:"R1 · "+elapsed+"'"};
+    if(extra>0)         return{dot:true,c:'#f97316',t:"R1 · "+elapsed+"+"+extra+"'"};
+    if(elapsed<=45)     return{dot:true,c:'#22c55e',t:"R1 · "+elapsed+"'"};
     return{dot:true,c:'#f97316',t:"R1 · 45+"+(elapsed-45)+"'"};
   }
   if(sh==='HT')return{dot:false,c:'#eab308',t:'PAUZĂ · HT'};
   if(sh==='2H'){
-    if(elapsed<=90)return{dot:true,c:'#3b82f6',t:"R2 · "+elapsed+"'"};
+    if(extra>0)         return{dot:true,c:'#f97316',t:"R2 · "+elapsed+"+"+extra+"'"};
+    if(elapsed<=90)     return{dot:true,c:'#3b82f6',t:"R2 · "+elapsed+"'"};
     return{dot:true,c:'#f97316',t:"R2 · 90+"+(elapsed-90)+"'"};
   }
-  if(sh==='ET')return{dot:true,c:'#ef4444',t:"EXTRA · "+elapsed+"'"};
+  if(sh==='ET'){
+    var et=extra>0?elapsed+"+"+extra:elapsed;
+    return{dot:true,c:'#ef4444',t:"EXTRA · "+et+"'"};
+  }
   if(sh==='P')return{dot:true,c:'#a855f7',t:'PENALTYURI'};
   if(sh==='FT'||sh==='AET'||sh==='PEN')return{dot:false,c:'#6b7280',t:'FINAL'};
-  if(elapsed>0)return{dot:true,c:'var(--ac)',t:elapsed+"'"};
+  if(elapsed>0){
+    var generic=extra>0?elapsed+"+"+extra+"'":elapsed+"'";
+    return{dot:true,c:'var(--ac)',t:generic};
+  }
   return{dot:false,c:'var(--mu)',t:sh||'—'};
+}
+
+// Helper: format minut + extra ("45+2'" sau "45'"). Folosit pentru evenimente.
+function fmtMinute(elapsed,extra){
+  if(!elapsed&&elapsed!==0)return '';
+  if(typeof extra==='number'&&extra>0)return elapsed+"+"+extra+"'";
+  return elapsed+"'";
 }
 

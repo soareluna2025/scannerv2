@@ -897,8 +897,9 @@ function renderFavs(){
     if(item.type==='live'){
       var mn=m.fixture&&m.fixture.status&&m.fixture.status.elapsed||0;
       var sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
+      var ex=m.fixture&&m.fixture.status&&m.fixture.status.extra;
       var isLv=['1H','2H','HT','ET','P'].indexOf(sh)>=0;
-      var _fb=matchTimeBadge(sh,mn);
+      var _fb=matchTimeBadge(sh,mn,ex);
       timeStr=isLv?'<span style="color:'+_fb.c+';font-size:10px;font-family:monospace">'+(_fb.dot?'● ':'')+_fb.t+'</span>':'<span style="color:#6b7280;font-size:10px">FINAL</span>';
     }else{
       timeStr=m.fixture&&m.fixture.date?'<span style="font-size:10px;color:var(--mu)">🕐 '+new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>':'';

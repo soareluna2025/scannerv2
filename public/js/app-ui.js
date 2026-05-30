@@ -190,7 +190,8 @@ function buildCardHtml(m,lgName){
   var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.home&&m.teams.home.id);});
   var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.away&&m.teams.away.id);});
   var _sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
-  var _b=matchTimeBadge(_sh,mn);
+  var _ex=m.fixture&&m.fixture.status&&m.fixture.status.extra;
+  var _b=matchTimeBadge(_sh,mn,_ex);
   var o='';
   o+='<div class="card'+(goodLg?' card-good-lg':badLg?' card-bad-lg':'')+'" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer">';
   o+='<div class="card-league">';
@@ -1316,7 +1317,8 @@ function mdRenderSumar(d){
   out+='<div class="md-team-name">'+tLogo(fix&&fix.teams&&fix.teams.away,48)+'<span>'+an+'</span></div>';
   out+='</div></div>';
   if(isLive){
-    var _mb=matchTimeBadge(sh,mn);
+    var _mdEx=fix&&fix.fixture&&fix.fixture.status?fix.fixture.status.extra:0;
+    var _mb=matchTimeBadge(sh,mn,_mdEx);
     out+='<div class="md-minute"><div class="md-min-badge" style="color:'+_mb.c+';border-color:'+_mb.c+'40;background:'+_mb.c+'18">'
       +(_mb.dot?'<div class="min-dot" style="background:'+_mb.c+'"></div>':'')
       +_mb.t+'</div></div>';
