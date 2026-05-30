@@ -1321,27 +1321,70 @@ function mdRenderSumar(d){
   var cardEvts=evts.filter(function(e){return e.type==='Card';});
   var subEvts=evts.filter(function(e){return e.type==='subst';});
   if(evts.length){
-    out+='<div class="md-section"><div class="md-section-title">Evenimente</div>';
-    evts.slice(0,25).forEach(function(e){
-      var etype=(e.type||'').toLowerCase();
-      var icon=etype==='goal'?(e.detail==='Own Goal'?'⚽🔴':e.detail==='Penalty'?'⚽⚪':'⚽')
-              :etype==='card'?(e.detail==='Yellow Card'?'🟨':'🟥')
-              :(etype==='subst'||etype==='substitution')?'↔':'•';
-      out+='<div class="md-event">';
-      out+='<div class="md-event-min">'+(e.time&&e.time.elapsed||'?')+"'</div>";
-      out+='<div class="md-event-icon">'+icon+'</div>';
-      out+='<div style="flex:1">';
-      if(etype==='subst'||etype==='substitution'){
-        var playerIn=e.player&&e.player.name||'';
-        var playerOut=e.assist&&e.assist.name||'';
-        out+='<div class="md-event-detail">'+playerIn+(playerOut?' <span style="color:var(--red);font-size:10px">↓'+playerOut+'</span>':'')+'</div>';
-      }else{
-        out+='<div class="md-event-detail">'+(e.player&&e.player.name||'')+(e.assist&&e.assist.name?' <span style="color:var(--mu);font-size:10px">('+e.assist.name+')</span>':'')+'</div>';
-      }
-      out+='<div class="md-event-team">'+(e.team&&e.team.name||'')+'</div>';
-      out+='</div></div>';
+    // Timeline 2 coloane (FlashScore-like): home stânga, away dreapta.
+    // Sortat cronologic (elapsed ASC, apoi extra ASC pentru prelungiri).
+    var _tlHid = (fix && fix.teams && fix.teams.home && fix.teams.home.id);
+    var sortedEvts = evts.slice().sort(function(a,b){
+      var ea=(a.time&&a.time.elapsed)||0;
+      var eb=(b.time&&b.time.elapsed)||0;
+      if(ea!==eb) return ea-eb;
+      var xa=(a.time&&a.time.extra)||0;
+      var xb=(b.time&&b.time.extra)||0;
+      return xa-xb;
     });
-    out+='</div>';
+    out+='<div class="md-section"><div class="md-section-title">Timeline evenimente</div>';
+    out+='<div class="md-timeline">';
+    sortedEvts.forEach(function(ev){
+      var teamId=ev.team&&ev.team.id;
+      var isHome=teamId===_tlHid;
+      var elapsed=(ev.time&&ev.time.elapsed!=null)?ev.time.elapsed:'?';
+      var extra  =(ev.time&&ev.time.extra)?'+'+ev.time.extra:'';
+      var minStr =elapsed+extra+"'";
+      var t =(ev.type||'').toLowerCase();
+      var de=(ev.detail||'').toLowerCase();
+      var icon,body='';
+      if(t==='goal'){
+        icon=(de==='own goal')?'⚽🔴':(de.indexOf('penalty')>=0?'⚽⚪':'⚽');
+        body='<span class="md-tl-player">'+htmlEsc(ev.player&&ev.player.name||'?')+'</span>';
+        if(ev.assist&&ev.assist.name)
+          body+=' <span class="md-tl-assist">('+htmlEsc(ev.assist.name)+')</span>';
+      } else if(t==='card'){
+        icon=(de==='red card')?'🟥':(de==='yellow+red card'?'🟥':'🟨');
+        body='<span class="md-tl-player">'+htmlEsc(ev.player&&ev.player.name||'?')+'</span>';
+      } else if(t==='subst'||t==='substitution'){
+        icon='🔄';
+        var pIn =ev.player&&ev.player.name||'?';
+        var pOut=ev.assist&&ev.assist.name||'';
+        body='<span class="md-tl-in">'+htmlEsc(pIn)+'</span>';
+        if(pOut) body+=' <span class="md-tl-out">↓ '+htmlEsc(pOut)+'</span>';
+      } else if(t==='var'){
+        icon='📺';
+        body=htmlEsc(ev.detail||'VAR');
+      } else {
+        icon='•';
+        body=htmlEsc(ev.detail||ev.type||'');
+      }
+      out+='<div class="md-tl-row '+(isHome?'home':'away')+'">';
+      if(isHome){
+        out+='<div class="md-tl-cell home">'
+           +   '<span class="md-tl-body">'+body+'</span>'
+           +   '<span class="md-tl-icon">'+icon+'</span>'
+           +   '<span class="md-tl-min">'+minStr+'</span>'
+           +'</div>'
+           +'<div class="md-tl-line"></div>'
+           +'<div class="md-tl-cell away"></div>';
+      } else {
+        out+='<div class="md-tl-cell home"></div>'
+           +'<div class="md-tl-line"></div>'
+           +'<div class="md-tl-cell away">'
+           +   '<span class="md-tl-min">'+minStr+'</span>'
+           +   '<span class="md-tl-icon">'+icon+'</span>'
+           +   '<span class="md-tl-body">'+body+'</span>'
+           +'</div>';
+      }
+      out+='</div>';
+    });
+    out+='</div></div>';
   }
 
   // Match statistics bars
