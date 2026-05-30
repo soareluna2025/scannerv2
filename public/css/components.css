@@ -200,9 +200,11 @@
 
 /* Shared helpers (gen live dot, star button, favorites) */
 .gen-live-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--ac);animation:pulse 1.5s ease-in-out infinite;vertical-align:middle;margin-right:2px}
-.star-btn{background:none;border:none;font-size:13px;cursor:pointer;opacity:0.45;transition:opacity .2s;line-height:1;padding:0 4px 0 0;flex-shrink:0;vertical-align:middle}
-.star-btn.active{opacity:1}
-.star-btn:hover{opacity:1}
+/* Steluță favorit — mărită (≥22px) + zonă de tap ≥36×36px + culori clare pe fundal întunecat */
+.star-btn{background:none;border:none;font-size:22px;cursor:pointer;color:#FFFFFF99;transition:color .2s,transform .1s;line-height:1;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;min-width:36px;min-height:36px;padding:0;vertical-align:middle}
+.star-btn.active{color:#FFD700}
+.star-btn:hover{color:#FFD700}
+.star-btn:active{transform:scale(0.88)}
 .fav-header{display:flex;align-items:center;justify-content:space-between;padding:10px 12px 4px}
 .fav-header-t{font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.5px;text-transform:uppercase}
 .fav-clear-btn{font-size:11px;color:#ef4444;background:none;border:none;cursor:pointer;padding:2px 6px}

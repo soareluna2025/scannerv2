@@ -5425,3 +5425,20 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Verificare: node --check pe enrich.js/match.js/app-ui.js/server.js → toate OK.
     add-indexes.sql: 9× CREATE INDEX. Referințe enrich (cache/havePred/dbLambda) coerente.
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[30.05 ~05:?? ] - UI: steluță favorit mai mare și vizibilă pe carduri
+  Fișier: public/css/components.css (.star-btn — clasă partajată de TOATE
+    cardurile: live, PRE-MECI, generator, favorite).
+  Înainte: font-size 13px, opacity 0.45, fără zonă de tap dedicată.
+  Modificat:
+    • font-size 13px → 22px.
+    • Zonă tap: display:inline-flex + min-width/min-height 36px + centrat
+      (align/justify center) → respectă minimul 36×36px.
+    • Inactivă (☆): color #FFFFFF99 (alb semi-transparent, vizibilă dar subtilă);
+      scos opacity:0.45 (înlocuit de alpha din culoare, ca să nu fie prea palidă).
+    • Activă (★/⭐): color #FFD700 (galben auriu) + :hover #FFD700.
+    • Feedback tactil: :active transform scale(0.88).
+  Notă: starea activă randează emoji '⭐' (deja auriu de sistem); #FFD700 se
+    aplică pe glif text — vizual ambele cerințe sunt îndeplinite.
+  Verificare: brace-balance CSS OK (184/184). node --check N/A (doar CSS, 0 JS).
+  Constrânți: ✓ niciun cod intangibil atins (modificare pur CSS)
