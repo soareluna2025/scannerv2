@@ -293,6 +293,35 @@ async function collectPlayers(fixtureId) {
   }
 }
 
+// TASK1 — UPSERT meci FT în fixtures_history din obiectul /fixtures (fx).
+// Toate câmpurile vin direct din răspunsul API (fx.fixture/teams/goals/league).
+async function saveFixtureHistory(fx, season) {
+  const fid = fx?.fixture?.id;
+  if (!fid) return;
+  const status = fx?.fixture?.status?.short || 'FT';
+  const hg = fx?.goals?.home;
+  const ag = fx?.goals?.away;
+  if (hg == null || ag == null) return; // fără scor → nu e util ca istoric
+  await query(
+    `INSERT INTO fixtures_history
+       (fixture_id, league_id, season, home_team_id, home_team_name,
+        away_team_id, away_team_name, match_date, status_short, home_goals, away_goals)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     ON CONFLICT (fixture_id) DO UPDATE SET
+       league_id=EXCLUDED.league_id, season=EXCLUDED.season,
+       home_team_id=EXCLUDED.home_team_id, home_team_name=EXCLUDED.home_team_name,
+       away_team_id=EXCLUDED.away_team_id, away_team_name=EXCLUDED.away_team_name,
+       match_date=EXCLUDED.match_date, status_short=EXCLUDED.status_short,
+       home_goals=EXCLUDED.home_goals, away_goals=EXCLUDED.away_goals`,
+    [
+      fid, fx?.league?.id || null, fx?.league?.season || season || null,
+      fx?.teams?.home?.id || null, fx?.teams?.home?.name || null,
+      fx?.teams?.away?.id || null, fx?.teams?.away?.name || null,
+      fx?.fixture?.date || null, status, hg, ag,
+    ]
+  );
+}
+
 // FIX 3 — buildH2H: populează tabela h2h (row-per-fixture) din fixtures_history.
 // Schema h2h e per-meci (UNIQUE team1,team2,fixture); agregările pct_over_15/total
 // etc. sunt computate query-side în api/generator.js, NU coloane pe h2h.
@@ -418,6 +447,11 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
       if (!statsSet.has(fid)   && !nodataSet.has(`no_data:stats:${fid}`))   { try { await collectStats(fid);   } catch (e) { log(`stats   ${fid}: ${e.message}`); } }
       if (!eventsSet.has(fid)  && !nodataSet.has(`no_data:events:${fid}`))  { try { await collectEvents(fid);  } catch (e) { log(`events  ${fid}: ${e.message}`); } }
       if (!playersSet.has(fid) && !nodataSet.has(`no_data:players:${fid}`)) { try { await collectPlayers(fid); } catch (e) { log(`players ${fid}: ${e.message}`); } }
+
+      // TASK1 — UPSERT în fixtures_history (DUPĂ stats/events/players). Repară
+      // lacuna structurală: backfill colecta date brute dar nu istoricul FT →
+      // h2h/form/league-stats rămâneau goale pentru sezoanele backfill-uite.
+      try { await saveFixtureHistory(fx, season); } catch (e) { log(`history ${fid}: ${e.message}`); }
 
       if (hid && aid && hid !== aid) {
         try { await buildH2H(hid, aid); } catch (e) { log(`h2h ${hid}-${aid}: ${e.message}`); }

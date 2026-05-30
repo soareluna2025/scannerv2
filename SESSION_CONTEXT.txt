@@ -5744,3 +5744,28 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ⚠ Cauza exactă a erorii 1/15 NEconfirmată (sandbox fără runtime); fix-ul
       EXPUNE cauza, nu o presupune. Verifică log după 00:30 sau rulare manuală.
   Constrânți: ✓ niciun cod intangibil atins
+
+[31.05 ~15:?? ] - FEATURE: backfill scrie fixtures_history + buton „Stabilizare completă DB"
+  Fișiere: api/backfill.js, api/admin.js, admin.html
+  TASK1 — backfill.js: saveFixtureHistory(fx, season) nou, apelat DUPĂ
+    stats/events/players în batch. UPSERT fixtures_history (fixture_id, league_id,
+    season, home/away_team_id+name, match_date, status_short, home/away_goals)
+    ON CONFLICT(fixture_id) DO UPDATE. Câmpuri direct din obiectul /fixtures (fx).
+    Skip dacă scor null. Repară lacuna: backfill colecta date brute dar NU istoricul
+    FT → h2h/form/league-stats goale pentru sezoane backfill-uite.
+  TASK2 — admin.js: POST /api/admin/stabilize + GET /stabilize-status.
+    STABILIZE_STEPS[13] în ordinea cerută (collect-finished→squads→coaches→venues→
+    collect-daily→league-stats→referee-stats→referee-extended→coach-stats→
+    update-results→learning-analysis→recalibrate-tables→calibrate-live).
+    runStabilize(): secvențial, await per pas (timeout 15min), pas eșuat NU oprește
+    lanțul; progres în _stabilize (currentStep/currentName/steps[]/timing). console.log
+    „Pas X/13: nume → OK/EROARE". 409 dacă deja rulează. Toate 13 endpoint-uri
+    confirmate existente + înregistrate în server.js.
+  FRONTEND — admin.html: card nou #cardStabilize DEASUPRA Cron Jobs. Buton
+    „PORNEȘTE STABILIZARE" (confirm) → disable + progress bar + pas curent + timp
+    scurs + listă pași (✅/❌ + durată). Poll /stabilize-status la 3s. La final
+    „✅ Stabilizare completă în Xm Ys". Butoanele individuale neatinse.
+  Verificare: node --check backfill.js/admin.js + admin JS extras → toate OK.
+    13 endpoint-uri există ca fișiere + în cronFiles server.js.
+    ⚠ NEtestat pe runtime (sandbox); flux HTTP intern localhost ca trigger-cron.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins

@@ -394,6 +394,74 @@ router.post('/trigger-cron', async (req, res) => {
   }
 });
 
+// ── POST /api/admin/stabilize — rulează cele 13 cron-uri SECVENȚIAL ──────────
+// Ordine: brut → agregat → predicții → calibrare. Fiecare AȘTEAPTĂ finalizarea
+// celui anterior. Un pas eșuat NU oprește lanțul (continuă). Progres în memorie.
+const STABILIZE_STEPS = [
+  { name: 'collect-finished',   path: '/api/cron/collect-finished' },
+  { name: 'collect-squads',     path: '/api/cron/collect-squads' },
+  { name: 'collect-coaches',    path: '/api/cron/collect-coaches' },
+  { name: 'collect-venues',     path: '/api/cron/collect-venues' },
+  { name: 'collect-daily',      path: '/api/cron/collect-daily' },
+  { name: 'league-stats',       path: '/api/cron/league-stats' },
+  { name: 'referee-stats',      path: '/api/cron/referee-stats' },
+  { name: 'referee-extended',   path: '/api/cron/referee-extended' },
+  { name: 'coach-stats',        path: '/api/cron/coach-stats' },
+  { name: 'update-results',     path: '/api/update-results' },
+  { name: 'learning-analysis',  path: '/api/cron/learning-analysis' },
+  { name: 'recalibrate-tables', path: '/api/cron/recalibrate-tables' },
+  { name: 'calibrate-live',     path: '/api/cron/calibrate-live' },
+];
+
+// Stare partajată (un singur run global) — citită de /stabilize-status.
+let _stabilize = { running: false, currentStep: 0, total: STABILIZE_STEPS.length,
+  currentName: null, startedAt: null, finishedAt: null, steps: [] };
+
+async function runStabilize() {
+  const port = process.env.PORT || 3000;
+  _stabilize = { running: true, currentStep: 0, total: STABILIZE_STEPS.length,
+    currentName: null, startedAt: Date.now(), finishedAt: null, steps: [] };
+  for (let i = 0; i < STABILIZE_STEPS.length; i++) {
+    const step = STABILIZE_STEPS[i];
+    _stabilize.currentStep = i + 1;
+    _stabilize.currentName = step.name;
+    const t0 = Date.now();
+    let ok = false, errMsg = null;
+    try {
+      const r = await fetch(`http://localhost:${port}${step.path}`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(15 * 60 * 1000), // 15 min/pas
+      });
+      ok = r.ok;
+      if (!r.ok) errMsg = `HTTP ${r.status}`;
+    } catch (e) {
+      errMsg = e.message;
+    }
+    const durMs = Date.now() - t0;
+    _stabilize.steps.push({ step: i + 1, name: step.name, ok, error: errMsg, durMs });
+    console.log(`[stabilize] Pas ${i + 1}/${STABILIZE_STEPS.length}: ${step.name} → ${ok ? 'OK' : 'EROARE ' + errMsg} (${Math.round(durMs / 1000)}s)`);
+    // continuă chiar dacă pasul a eșuat
+  }
+  _stabilize.running = false;
+  _stabilize.finishedAt = Date.now();
+  _stabilize.currentName = null;
+}
+
+router.post('/stabilize', async (req, res) => {
+  if (_stabilize.running) {
+    return res.status(409).json({ ok: false, error: 'Stabilizare deja în curs', progress: _stabilize });
+  }
+  runStabilize().catch(e => { console.error('[stabilize] fatal:', e.message); _stabilize.running = false; });
+  res.json({ ok: true, started: true, total: STABILIZE_STEPS.length });
+});
+
+router.get('/stabilize-status', async (req, res) => {
+  const totalMs = _stabilize.startedAt
+    ? (_stabilize.finishedAt || Date.now()) - _stabilize.startedAt
+    : 0;
+  res.json({ ...(_stabilize), totalMs });
+});
+
 // ── GET /api/admin/prediction-accuracy ──────────────────────────────────────
 router.get('/prediction-accuracy', async (req, res) => {
   try {

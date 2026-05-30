@@ -1089,6 +1089,22 @@ body{
     <div class="live-list" id="liveList"><div class="empty">—</div></div>
   </section>
 
+  <section class="card" id="cardStabilize">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg></span>
+      <h2>Stabilizare completă DB</h2>
+    </div>
+    <div style="font-size:12px;color:var(--tx-2);margin-bottom:4px">Rulează toate 13 cron-uri în ordine (brut → agregat → predicții → calibrare).</div>
+    <div style="font-size:11px;color:var(--mu,#888);margin-bottom:10px">Timp estimat: 20–40 minute · rulare secvențială (un pas eșuat nu oprește restul)</div>
+    <button id="stab-btn" class="bf-start" onclick="startStabilize()" style="width:100%">🔄 PORNEȘTE STABILIZARE</button>
+    <div id="stab-progress" style="display:none;margin-top:12px">
+      <div class="bf-label">Progres: <span id="stab-step">0</span>/<span id="stab-total">13</span> · Curent: <span id="stab-current">—</span></div>
+      <div class="bf-bar"><div class="bf-bar-fill" id="stab-fill" style="width:0%"></div></div>
+      <div class="bf-label">Timp scurs: <span id="stab-elapsed">0s</span></div>
+      <div id="stab-steps" style="font-size:11px;color:var(--tx-2);margin-top:8px"></div>
+    </div>
+  </section>
+
   <section class="card" id="cardCron">
     <div class="card-h">
       <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7 V12 L15 14"/></svg></span>
@@ -1719,6 +1735,50 @@ async function refreshBFStatus() {
       if (_bfTimer) { clearInterval(_bfTimer); _bfTimer = null; }
     }
   } catch(e) { console.error('refreshBFStatus:', e.message); }
+}
+
+var _stabTimer = null;
+function _stabDur(ms){var s=Math.floor((ms||0)/1000);var m=Math.floor(s/60);s=s%60;return m>0?(m+'m '+s+'s'):(s+'s');}
+async function startStabilize() {
+  if (!confirm('Pornești stabilizarea completă (13 cron-uri, 20–40 min)?')) return;
+  try {
+    var r = await fetch('/api/admin/stabilize', { method:'POST', headers:{'X-Api-Key':_key} });
+    var d = await r.json();
+    if (!d.ok) { toast('✗ ' + (d.error||'eroare'), 'var(--red)'); return; }
+    toast('🔄 Stabilizare pornită');
+    document.getElementById('stab-btn').disabled = true;
+    document.getElementById('stab-btn').textContent = '⏳ Stabilizare în curs...';
+    document.getElementById('stab-progress').style.display = 'block';
+    refreshStabilize();
+    if (_stabTimer) clearInterval(_stabTimer);
+    _stabTimer = setInterval(refreshStabilize, 3000);
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+}
+async function refreshStabilize() {
+  try {
+    var r = await fetch('/api/admin/stabilize-status', { headers:{'X-Api-Key':_key} });
+    var d = await r.json();
+    var _set=function(id,v){var el=document.getElementById(id);if(el)el.textContent=v;};
+    _set('stab-step', d.currentStep||0);
+    _set('stab-total', d.total||13);
+    _set('stab-current', d.currentName || (d.running?'—':'finalizat'));
+    _set('stab-elapsed', _stabDur(d.totalMs));
+    var pct = d.total ? Math.round((d.currentStep||0)/d.total*100) : 0;
+    var fill = document.getElementById('stab-fill'); if (fill) fill.style.width = pct + '%';
+    // listă pași finalizați
+    if (d.steps && d.steps.length) {
+      document.getElementById('stab-steps').innerHTML = d.steps.map(function(s){
+        return (s.ok?'✅':'❌') + ' ' + s.step + '. ' + s.name + ' (' + Math.round((s.durMs||0)/1000) + 's)' + (s.error?(' — '+s.error):'');
+      }).join('<br>');
+    }
+    if (!d.running && d.finishedAt) {
+      var btn = document.getElementById('stab-btn');
+      btn.disabled = false; btn.textContent = '🔄 PORNEȘTE STABILIZARE';
+      _set('stab-current', 'finalizat');
+      if (_stabTimer) { clearInterval(_stabTimer); _stabTimer = null; }
+      toast('✅ Stabilizare completă în ' + _stabDur(d.totalMs));
+    }
+  } catch(e) { console.error('refreshStabilize:', e.message); }
 }
 
 async function runHealthCheck() {
