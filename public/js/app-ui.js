@@ -205,8 +205,11 @@ function buildCardHtml(m,lgName){
   o+='<div class="card-footer">';
   o+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
   if(s.forte)o+='<div class="badge-forte">⚡ FORTE</div>';
-  o+='<div class="ngp-pct" style="color:'+c+'">'+ng+'%</div></div>';
-  o+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+ng+'%;background:'+c+'"></div></div>';
+  // NGP nesigur în primele 10 min (scanner forțează 0) → afișăm „—" în loc de „0%"
+  var _ngShow=(mn<10||ng===0)?'—':(ng+'%');
+  var _ngW=(mn<10||ng===0)?0:ng;
+  o+='<div class="ngp-pct" style="color:'+c+'">'+_ngShow+'</div></div>';
+  o+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+_ngW+'%;background:'+c+'"></div></div>';
   var tg=hg+ag;var _cc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
   o+='<div class="markets">';
   if(tg===0)o+='<div class="mkt">Over 0.5 <span>'+mk.over05+'%</span></div>';
@@ -1609,6 +1612,8 @@ function mdRenderSumar(d){
     var ngCal=calibrateNgpRest(ngRaw);
     var ngpClr=ngCal>=80?'#00d4a8':ngCal>=60?'#ffd166':'#ff6b6b';
     var ng15Clr=ng15===null?'#888':ng15>=40?'#00d4a8':ng15>=25?'#ffd166':'#ff6b6b';
+    // NGP nesigur în primele 10 min (scanner forțează 0) → „—" în loc de „0%"
+    var _ngEarly=(mn<10||ngCal===0);
     var minCotaNgp=ngCal>0?(100/ngCal).toFixed(2):'—';
     out+='<div class="md-section"><div class="md-section-title">Probabilitate Gol</div>';
     // Two columns: anytime in match vs next 15 min
@@ -1616,10 +1621,10 @@ function mdRenderSumar(d){
     // Column 1: anytime in match — CALIBRAT din backtest 26297 predictii
     out+='<div style="padding:12px;background:rgba(0,212,168,.06);border-radius:8px;text-align:center">';
     out+='<div style="font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Gol oric&acirc;nd &icirc;n meci</div>';
-    out+='<div style="font-size:24px;font-weight:800;color:'+ngpClr+'">'+ngCal+'%</div>';
-    out+='<div style="font-size:9px;color:var(--mu);margin-top:3px">calibrat &middot; cot&#259; min '+minCotaNgp+'</div>';
-    if(ngCal!==ngRaw)out+='<div style="font-size:9px;color:var(--mu);margin-top:2px;opacity:.7">raw: '+ngRaw+'%</div>';
-    if(ngpData.forte)out+='<div class="badge-forte" style="margin-top:6px;display:inline-block">⚡ FORTE</div>';
+    out+='<div style="font-size:24px;font-weight:800;color:'+(_ngEarly?'#888':ngpClr)+'">'+(_ngEarly?'—':ngCal+'%')+'</div>';
+    out+='<div style="font-size:9px;color:var(--mu);margin-top:3px">'+(_ngEarly?'se calculează (min &lt;10)':'calibrat &middot; cot&#259; min '+minCotaNgp)+'</div>';
+    if(!_ngEarly&&ngCal!==ngRaw)out+='<div style="font-size:9px;color:var(--mu);margin-top:2px;opacity:.7">raw: '+ngRaw+'%</div>';
+    if(!_ngEarly&&ngpData.forte)out+='<div class="badge-forte" style="margin-top:6px;display:inline-block">⚡ FORTE</div>';
     out+='</div>';
     // Column 2: next 15 min — necalibrat (backtest arata discrimination slaba)
     out+='<div style="padding:12px;background:rgba(245,158,11,.06);border-radius:8px;text-align:center">';

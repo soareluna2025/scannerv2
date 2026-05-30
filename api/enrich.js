@@ -745,7 +745,17 @@ async function getH2HFromDB(homeId, awayId) {
 
 async function getInjuriesFromDB(fixtureId) {
   try {
-    const r = await query('SELECT * FROM injuries WHERE fixture_id = $1', [fixtureId]);
+    // Filtru type: doar indisponibili REALI (accidentați / absenți), NU întreg
+    // cumulul sezonier raportat de API. Cap 15/echipă ca plasă de siguranță.
+    const r = await query(
+      `SELECT * FROM (
+         SELECT *, ROW_NUMBER() OVER (PARTITION BY team_id ORDER BY player_id) AS _rn
+           FROM injuries
+          WHERE fixture_id = $1
+            AND (type IS NULL OR type IN ('Missing Fixture', 'Injured', 'Injury'))
+       ) q WHERE _rn <= 15`,
+      [fixtureId]
+    );
     if (r.rows.length > 0) return r.rows;
 
     // Fallback: prematch_data stochează injuries ca array JSON brut

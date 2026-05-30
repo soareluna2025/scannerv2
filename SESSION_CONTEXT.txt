@@ -5601,3 +5601,22 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     3. După deploy, monitorizează log-ul: noile [FATAL]/SIGTERM vor arăta cauza.
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
     (modificat DOAR handlers de proces în server.js — fără logică de business)
+
+[31.05 ~10:?? ] - FIX: NGP „—" sub min 10 + injuries filtrate (+ diagnostic H2H)
+  Fișiere: public/js/app-ui.js, api/enrich.js
+  FIX 1 — NGP afișează „—" în loc de „0%" când mn<10 sau ng===0:
+    • Card live (buildCardHtml ~206): _ngShow=(mn<10||ng===0)?'—':ng+'%';
+      bara _ngW=0 în acest caz. (scanner.js forțează ng=0 sub min 10.)
+    • Modal „Probabilitate Gol" col 1 (~1613): _ngEarly=(mn<10||ngCal===0) →
+      „—" + subtitlu „se calculează (min <10)"; ascunde raw/FORTE când early.
+    ⚠ NU am atins calcNextGoal/calibrateNgp/scanner.js — pur prezentare frontend.
+  FIX 2 — api/enrich.js getInjuriesFromDB: filtru type IN ('Missing Fixture',
+    'Injured','Injury') (sau NULL) + cap 15/echipă via ROW_NUMBER() PARTITION BY
+    team_id. Elimină umflarea „24 accidentați" (cumul sezonier API). ⚠ NU am atins
+    injuryPenalty/confidence — doar sursa de date a listei.
+  FIX 3 — H2H Bahia/Botafogo: DIAGNOSTIC ONLY (SQL în răspuns chat; sandbox fără PG).
+    Cauză cod probabilă: backfill buildH2H rulează doar când loop-ul atinge perechea
+    + marker refresh 30 zile; getH2HFromDB cere match_date>=2 ani + sample>=3.
+    SQL-uri de rulat furnizate userului pentru confirmare team_id/fixtures/h2h.
+  Verificare: node --check enrich.js/app-ui.js → OK.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
