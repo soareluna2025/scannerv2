@@ -92,18 +92,13 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   211,   // Druga HNL (Liga 2)
   212,   // Croatian Cup
 
-  // Serbia
-  392,   // SuperLiga
-  394,   // Kup Srbije
-
   // Romania
-  783,   // Superliga (Liga 1)
-  784,   // Liga II
-  787,   // Cupa Romaniei
+  283,   // Liga I (Superliga)
+  284,   // Liga II
+  285,   // Cupa României
 
   // Greece
   551,   // Super League 1
-  552,   // Super League 2 (Liga 2)
   556,   // Greek Cup
 
   // Hungary
@@ -180,7 +175,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Peru
   281,   // Liga 1
   282,   // Liga 2
-  283,   // Copa Peru
 
   // Ecuador
   286,   // LigaPro Serie A
@@ -213,7 +207,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Canada
   321,   // Canadian Premier League
-  322,   // Canadian Championship (Cup)
 
   // Costa Rica
   258,   // Primera Division
@@ -221,7 +214,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   260,   // Copa Costa Rica
 
   // Honduras
-  261,   // Liga Nacional
   319,   // Liga de Ascenso (Liga 2)
   320,   // Copa Honduras
 
@@ -252,7 +244,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Japan
   98,    // J1 League
   99,    // J2 League (Liga 2)
-  100,   // Emperor's Cup
 
   // South Korea
   292,   // K League 1
@@ -262,7 +253,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Iran
   290,   // Persian Gulf Pro League
   291,   // Azadegan League (Liga 2)
-  295,   // Hazfi Cup
 
   // Qatar
   19,    // Qatar Stars League
@@ -272,7 +262,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // UAE
   433,   // Pro League
   434,   // First Division (Liga 2)
-  435,   // UAE Cup
 
   // China
   169,   // Super League
@@ -297,14 +286,11 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   325,   // Durand Cup
 
   // Malaysia
-  518,   // Super League
   519,   // Premier League (Liga 2)
   520,   // Malaysia Cup
 
   // Indonesia
-  391,   // Liga 1
   460,   // Liga 2
-  461,   // Indonesian Cup
 
   // Vietnam
   340,   // V.League 1
@@ -317,7 +303,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   304,   // Iraqi Cup
 
   // Jordan
-  474,   // Pro League
   475,   // Division 1 (Liga 2)
   494,   // Jordan Cup
 
@@ -329,10 +314,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Oman
   309,   // Professional League
   491,   // Division 1 (Liga 2)
-  492,   // Sultan Qaboos Cup
-
-  // Bahrain
-  415,   // Premier League
 
   // Hong Kong
   499,   // Premier League
@@ -348,7 +329,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Egypt
   233,   // Premier League
   234,   // Second Division (Liga 2)
-  238,   // Egyptian Cup
 
   // Morocco
   200,   // Botola Pro
@@ -368,7 +348,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // South Africa
   288,   // Premier Division (PSL)
   670,   // National First Division (Liga 2)
-  671,   // Nedbank Cup
 
   // Nigeria
   399,   // NPFL
