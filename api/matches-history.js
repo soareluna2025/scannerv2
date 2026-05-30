@@ -29,9 +29,15 @@ export default async function handler(req, res) {
   const isToday = dateParam === today;
 
   const sourceTable = isPast ? 'fixtures_history' : 'fixtures';
+  // FIX 1 — fixtures_history NU are coloana `round` (vezi scripts/create-tables.sql:104-120).
+  // Doar fixtures o are. Folosesc NULL ca placeholder pe ramura istorică.
+  const roundExpr = isPast ? 'NULL::TEXT' : 'f.round';
   let extraWhere   = '';
-  if (isPast)       extraWhere = "AND f.status_short = 'FT'";
-  else if (!isToday) extraWhere = "AND f.status_short = 'NS'";
+  if (isPast)        extraWhere = "AND f.status_short = 'FT'";
+  // FIX 2 (defensiv) — pentru zile viitoare nu doar 'NS', dar și 'TBD' (To Be
+  // Decided, oră confirmată ulterior) și 'PST' (postponed re-programat) —
+  // 'NS' singur lăsa în afară meciuri programate corect dar cu alt status.
+  else if (!isToday) extraWhere = "AND f.status_short IN ('NS','TBD','PST')";
 
   try {
     const sql = `
@@ -40,7 +46,7 @@ export default async function handler(req, res) {
              f.home_team_id,   f.away_team_id,
              f.home_goals,     f.away_goals,
              f.status_short,   f.match_date,
-             f.league_id,      f.round,
+             f.league_id,      ${roundExpr} AS round,
              l.name    AS league_name,
              l.country AS country,
              th.logo   AS home_logo,
