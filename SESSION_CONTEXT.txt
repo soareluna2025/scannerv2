@@ -5620,3 +5620,23 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     SQL-uri de rulat furnizate userului pentru confirmare team_id/fixtures/h2h.
   Verificare: node --check enrich.js/app-ui.js → OK.
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[31.05 ~11:?? ] - FIX: injuries fetch LIVE din API (înlocuiește DB acumulat „24")
+  Fișier: api/enrich.js
+  Cauză: DB acumula injuries per fixture_id din meciuri anterioare → jucători
+    recuperați rămâneau marcați → „24 accidentați" în loc de 11 reali.
+  FIX: funcție nouă getInjuries(fid) — sursă PRINCIPALĂ = fetch LIVE
+    /injuries?fixture=X (DOAR indisponibilii reali pentru ACEST meci):
+    • Filtru: include type IN ('Missing Fixture','Injured','Injury') sau '';
+      exclude type='Questionable' + reason inactiv/inactive.
+    • Format identic (fixture_id, team_id, team_name, player_id, player_name,
+      type, reason) → input neschimbat pentru calcConfidence/injuryPenalty.
+    • Fallback: API gol/eroare → getInjuriesFromDB(fid) (DB ca rezervă).
+    • Cache 30 min/fixture (_injuriesCache Map; eroarea NU cache-uiește → reîncearcă).
+    • Handler (linia 1014): getInjuriesFromDB → getInjuries.
+    ⚠ NU am atins calcConfidencePreMatch/injuryPenalty/score* — doar sursa datelor.
+  getInjuriesFromDB păstrat ca fallback (filtrul type + cap 15/echipă rămâne util).
+  Verificare: node --check api/enrich.js → OK. Wiring confirmat (hoisting OK).
+    ⚠ NEtestat pe API live (sandbox); +1 call API /injuries per enrich necachat
+      (acceptabil — cache 30min reduce dramatic).
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins

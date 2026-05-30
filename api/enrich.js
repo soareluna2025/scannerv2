@@ -743,6 +743,56 @@ async function getH2HFromDB(homeId, awayId) {
   return h2hRows;
 }
 
+// Cache injuries — 30 min per fixture (nu se schimbă des). { [fid]: {ts, data} }
+const _injuriesCache = new Map();
+const INJURIES_TTL = 30 * 60 * 1000;
+
+// Sursă PRINCIPALĂ injuries: fetch LIVE din API-Football pentru ACEST fixture.
+// Rezolvă „24 accidentați": DB acumula jucători din meciuri anterioare (recuperați
+// rămâneau marcați). API /injuries?fixture=X întoarce DOAR indisponibilii reali
+// pentru acest meci. Fallback la getInjuriesFromDB dacă API gol/eroare.
+async function getInjuries(fixtureId) {
+  if (!fixtureId) return [];
+  const fid = Number(fixtureId);
+  const c = _injuriesCache.get(fid);
+  if (c && Date.now() - c.ts < INJURIES_TTL) return c.data;
+
+  try {
+    const r = await fetchApiFootball(`/injuries?fixture=${fid}`);
+    const data = await r.json();
+    const list = data.response || [];
+    const mapped = list
+      .map(item => ({
+        fixture_id:  fid,
+        team_id:     item.team?.id     || null,
+        team_name:   item.team?.name   || null,
+        player_id:   item.player?.id   || null,
+        player_name: item.player?.name || null,
+        type:        item.player?.type || null,
+        reason:      item.player?.reason || null,
+      }))
+      // Include doar indisponibili reali; exclude Questionable + Inactiv/Inactive.
+      .filter(p => {
+        const t = (p.type || '').trim();
+        const reason = (p.reason || '').trim().toLowerCase();
+        if (t === 'Questionable') return false;
+        if (reason === 'inactiv' || reason === 'inactive') return false;
+        return t === 'Missing Fixture' || t === 'Injured' || t === 'Injury' || t === '';
+      });
+    if (mapped.length > 0) {
+      _injuriesCache.set(fid, { ts: Date.now(), data: mapped });
+      return mapped;
+    }
+    // API gol → fallback DB
+    const dbFallback = await getInjuriesFromDB(fid);
+    _injuriesCache.set(fid, { ts: Date.now(), data: dbFallback });
+    return dbFallback;
+  } catch (_) {
+    // Eroare API → fallback DB (fără cache, ca să reîncerce API data viitoare)
+    return await getInjuriesFromDB(fid);
+  }
+}
+
 async function getInjuriesFromDB(fixtureId) {
   try {
     // Filtru type: doar indisponibili REALI (accidentați / absenți), NU întreg
@@ -961,7 +1011,7 @@ export default async function handler(req, res) {
       getAwayForm(aId),
       getH2HFromDB(hId, aId),
       getTeamStrengths(hId, aId),
-      fid ? getInjuriesFromDB(Number(fid)) : Promise.resolve([]),
+      fid ? getInjuries(Number(fid)) : Promise.resolve([]),
       fid ? getMatchStatsFromDB(Number(fid)) : Promise.resolve([]),
       getLeagueStats(lgid),
       getRefereeStats(ref || null),
