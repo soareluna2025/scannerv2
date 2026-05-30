@@ -5077,3 +5077,54 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
     ✓ NU am modificat score2/3/6/7
     ✓ Doar UI render — backend neatins
+
+[30.05 ~00:30] - PERF: 5 optimizări live (rapiditate FlashScore-level) | Commit: 6089fb2
+  ── FIX 1: polling REST gated pe WS activ (public/js/app-ui.js) ──
+     Adăugat: var _wsLastMsg = 0
+     onmessage: _wsLastMsg = Date.now()
+     setInterval(_autoIt): skip loadLive() dacă _ws.readyState===1 &&
+                            (Date.now() - _wsLastMsg < 60000)
+     → când WS push activ → ZERO fetch /api/football. Elimină race
+       condition WS push vs polling refresh.
+
+  ── FIX 2: scanLive10s 10s → 3s (api/cron/scanner.js) ──
+     setInterval(scanLive10s, 10_000) → 3_000
+     Cost API: 1 call/3s = 1200/h = 28.8k/zi pentru /live=all.
+     În buget 300k/zi (9.6%).
+     Paritate FlashScore (~5s) cu margine.
+
+  ── FIX 3: scanLiveStats paralelizat (api/cron/scanner.js) ──
+     Înainte: for(const id of activeIds) { await … }  // secvențial
+     După:    BATCH=5, slice + Promise.all per batch.
+     Pe 20 meciuri × 200ms latency: 4s wall → ~0.8s wall.
+     ProcessOne extracted ca funcție internă (clean closure).
+
+  ── FIX 4: smoothing NGP adaptiv pe minut (scanner.js scanLive10s) ──
+     Înainte: MAX_DELTA = 5 (constant)
+     După:
+       f.mn >= 85 → MAX_DELTA = 25   (meciuri critice — schimbări dramatice)
+       f.mn >= 75 → MAX_DELTA = 15   (final de meci — semnale mai responsive)
+       altfel    → MAX_DELTA = 5    (anti-oscilație păstrat în prima oră)
+     Aplicat pe AMBELE ng (rest meci) și ng15 (15 min window).
+
+  ── FIX 5: priority buckets (scanner.js scanLive10s) ──
+     Nou: isLowPriority(m, prevNg) — return TRUE dacă:
+       mn < 30 ȘI diff > 2 ȘI NGP <= 60 ȘI mn < 75
+     LOW_PRIORITY: skipped 2 din 3 scan-uri (procesat la fiecare al 3-lea).
+     HIGH_PRIORITY (orice altceva): procesat fiecare scan (3s).
+     Cu PRIORITY_SKIP_EVERY=3 și _scanCounter incrementat fiecare ciclu,
+     meciurile low sunt procesate ~9s efective.
+     Economisește calcule pe meciuri "neinteresante" (e.g. 4-0 min 15).
+
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Calcule per meci (calcFeatures, calcNextGoal, calcGG, calcMarkets) neatinse
+    ✓ Schema DB neatinsă
+    ✓ WS broadcast pattern (LIVE_UPDATE/DELTA) neschimbat
+
+  EFFECT GLOBAL ESTIMAT:
+    Latență end-to-end: ~10s → ~3-5s (paritate FlashScore)
+    API daily budget: scanner ~37k → ~50k/zi (16% din 300k, sustenabil)
+    Bandwidth UI: polling redundant eliminat → ~50% reducere traffic
+    UX live final meci: responsiv în min 75+ (smoothing relax)
