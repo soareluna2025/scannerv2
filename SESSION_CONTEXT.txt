@@ -4664,3 +4664,34 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
       (alături de 273 Primera și 276 Copa Bolivia).
     - Ecuador LigaPro lipsește în DB → nu am adăugat niciun ID nou.
     - 240 — verificare DB amânată (sandbox cloud nu poate rula psql).
+
+[29.05 ~18:00] - EXPOSE: 4 fix-uri pentru date pre-meci ascunse | Commit: 317f459
+  Bazat pe auditul anterior — câmpuri calculate de enrich.js dar nefolosite
+  în UI. Plus un bug ascuns (h2hForm cerut de UI dar netrimis de backend).
+  ── FIX 1: api/enrich.js — h2hForm în payload ──
+    Adăugat h2hForm: [{date, homeTeam, awayTeam, homeGoals, awayGoals}] (top 5)
+    Sursă: sbH2H (h2h table + fixtures_history fallback prin getH2HFromDB).
+    Numele echipelor derivate prin team_id față de hId/aId actuali, cu
+    fallback la "Gazde"/"Oaspeți" dacă numele lipsesc.
+  ── FIX 1 cont.: app-ui.js — display update ──
+    Ambele forEach pe h2hForm (md modal, ~liniile 1235 + 1369) actualizate
+    să accepte fie schema nouă (homeTeam/awayTeam/homeGoals/awayGoals/date)
+    fie cea veche (home/away/score) — backward compat. Data formatată
+    Romanian locale dd.mm.yyyy.
+  ── FIX 2: app-ui.js — λ split per echipă ──
+    Adăugat row nou în "Predicții Poisson" cu λ Gazde + λ Oaspeți
+    (lambdaTotal rămâne în row-ul precedent).
+  ── FIX 3: app-ui.js — 1X2 + Double Chance ──
+    Adăugat 2 rows noi în "Predicții Poisson":
+      Row 1X2: 1 (Gazde) / X (Egal) / 2 (Oaspeți)  — homeWin/draw/awayWin
+      Row DC:  1X / X2                              — dc1x/dcx2
+  ── FIX 4: app-ui.js — secțiune "Piețe Speciale" ──
+    Nou section după "Predicții Poisson" (înainte de "Calibrare cote reale"):
+      Cărți Over 3.5/4.5     din cardsOver35/45     (gated pe > 0)
+      Cornere Over 8.5/9.5   din cornersOver85/95   (gated pe > 0)
+    Valorile vin direct din poissonProbOver(ref/ligă avg) calculat de
+    enrich. Multiplicate × 100 (sunt în 0-1 scale).
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch(), calcConfidenceLive()
+    ✓ NU am modificat score2, score3, score6, score7
+    ✓ Doar UI/payload — pipeline-ul de calc neschimbat
