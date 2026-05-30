@@ -6,6 +6,22 @@ const matchCache = new Map();
 const MATCH_CACHE_TTL        =      60_000; // 1 min — live matches
 const MATCH_CACHE_TTL_STATIC = 10 * 60_000; // 10 min — NS / FT
 
+// ── fmtDate — normalizează data la "YYYY-MM-DD" indiferent de tip ─────────────
+// API-Football trimite string ISO ("2026-05-30T20:00:00+00:00"), dar fallback-ul
+// din DB (h2hFromDB cu r.match_date) întoarce un obiect Date din node-postgres,
+// pe care `.slice()` îl făcea să crape ("m.fixture?.date?.slice is not a function").
+// Acoperă: Date object, timestamp Unix (sec/ms), string ISO, null/undefined.
+function fmtDate(val) {
+  if (!val) return '';
+  if (val instanceof Date) return val.toISOString().slice(0, 10);
+  if (typeof val === 'number') {
+    const ms = val < 1e12 ? val * 1000 : val; // sec → ms dacă pare timestamp în secunde
+    const d = new Date(ms);
+    return isNaN(d) ? '' : d.toISOString().slice(0, 10);
+  }
+  return String(val).slice(0, 10);
+}
+
 // ── DB helpers — fallback chain pentru lambda Poisson ─────────────────────────
 // Pattern identic cu enrich.js: form_stats → teams_stats → league_stats → 1.2
 async function getFormFromDB(teamId) {
@@ -114,20 +130,20 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, lgHome = 1.2, lgAway = 1.2) 
     score: `${m.goals?.home ?? 0}-${m.goals?.away ?? 0}`,
     // BUG #10 FIX: opponent corect — când hId a jucat în deplasare, adversarul e home
     opponent: (m.teams?.home?.id === hId ? m.teams?.away?.name : m.teams?.home?.name) || '?',
-    date: m.fixture?.date?.slice(0, 10) || ''
+    date: fmtDate(m.fixture?.date)
   }));
   const awayForm = aGames.slice(0, 5).map(m => ({
     result: formResult(m, m.teams?.home?.id === aId),
     score: `${m.goals?.home ?? 0}-${m.goals?.away ?? 0}`,
     // BUG #10 FIX: opponent corect — când aId a jucat acasă, adversarul e away
     opponent: (m.teams?.away?.id === aId ? m.teams?.home?.name : m.teams?.away?.name) || '?',
-    date: m.fixture?.date?.slice(0, 10) || ''
+    date: fmtDate(m.fixture?.date)
   }));
   const h2hForm = h2h.slice(0, 5).map(m => ({
     home: m.teams?.home?.name || '?',
     away: m.teams?.away?.name || '?',
     score: `${m.goals?.home ?? 0}-${m.goals?.away ?? 0}`,
-    date: m.fixture?.date?.slice(0, 10) || ''
+    date: fmtDate(m.fixture?.date)
   }));
 
   return {

@@ -5224,3 +5224,36 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
     ✓ NU am modificat score2/3/6/7
     ✓ Logica fallback elapsed > 45/90 păstrată (backward compat)
+
+[30.05 ~02:?? ] - FIX URGENT: crash modal SUMAR "date.slice is not a function"
+  Eroare raportată: "m.fixture?.date?.slice is not a function" la deschidere modal.
+  ROOT CAUSE (NU era în frontend!):
+    app-ui.js / app-live.js NU conțin niciun .slice()/.substring() pe un câmp date
+    (grep complet → 0 hit-uri). Crash-ul venea din BACKEND, api/match.js:
+      liniile 117 / 124 / 130 →  m.fixture?.date?.slice(0, 10) || ''
+    Sursa datelor (hGames/aGames/h2h) e un lanț de fallback:
+      • API-Football → m.fixture.date = string ISO (OK)
+      • DB fallback h2hFromDB (match.js:234) → fixture:{date: r.match_date}
+        unde r.match_date din node-postgres e un OBIECT Date, nu string.
+      Date object este truthy → `date?.slice` trece de optional chaining →
+      accesează .slice (undefined pe Date) → "...slice is not a function".
+  FIX aplicat (api/match.js):
+    Helper module-level fmtDate(val) adăugat (după constante cache):
+      - val instanceof Date  → val.toISOString().slice(0,10)
+      - typeof === 'number'  → Unix sec/ms autodetect (<1e12 ⇒ *1000), guard isNaN
+      - string ISO           → String(val).slice(0,10)
+      - null/undefined       → ''
+    NOTĂ: helper-ul propus în task folosea String(val) pe Date object → ar fi
+    produs "Wed May 30 20..." → slice greșit. Am extins cu `instanceof Date`
+    fiindcă ACEASTA era cauza reală a crash-ului (Date din PG).
+    Cele 3 apeluri înlocuite cu: date: fmtDate(m.fixture?.date)
+  Verificare serializare (task pas 3):
+    • today.js:115 trimite fixture.date = f.kickoff_time (Date din PG), DAR
+      res.json() îl serializează automat la string ISO → frontend primește
+      string → OK, fără risc de slice pe Date în client.
+    • Frontend: 0 apeluri .slice/.substring pe date → nimic de patch-uit acolo.
+  node --check api/match.js → OK.
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7 / getLiveStatsFromDB
+    ✓ Schema DB neatinsă
