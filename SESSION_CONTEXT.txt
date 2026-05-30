@@ -5038,3 +5038,42 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat score2/3/6/7
     ✓ Cache match.js neschimbat (matchCache rămâne valid)
     ✓ 18 coloane match_stats expuse din 19 — created_at exclus
+
+[29.05 ~23:55] - FEATURE: Timeline evenimente 2-col în SUMAR | Commit: a31f993
+  Înlocuit secțiunea Evenimente liniară (single column cu team name) cu
+  timeline 2 coloane stil FlashScore: home stânga | line | away dreapta.
+  ── 1. BACKEND: /api/match returnează deja events ──
+     /fixtures/events?fixture=X → d.events:
+       [{ time:{elapsed,extra}, team:{id,name}, player:{id,name},
+          assist:{id,name}, type, detail, comments }]
+     NU am modificat backend — era deja complet.
+  ── 2. FRONTEND: mdRenderSumar timeline ──
+     Sortare cronologică: elapsed ASC, apoi extra ASC (prelungiri).
+     Pentru fiecare event:
+       - teamId === fix.teams.home.id → row .home (left cell populat)
+       - altfel → row .away (right cell populat)
+     Iconițe semantice:
+       Goal: ⚽ (own goal: ⚽🔴, penalty: ⚽⚪)
+       Card: 🟨 yellow / 🟥 red sau yellow+red
+       subst/substitution: 🔄 + IN verde + ↓ OUT roșu
+       VAR: 📺
+     Format minut: "45+2'" pentru extra time, "45'" altfel.
+     Goluri afișează asist între paranteze: "Messi (Suárez)".
+     Empty: dacă d.events e gol → secțiunea nu apare (early return).
+  ── 3. CSS (public/css/cards.css) ──
+     .md-timeline (vertical flex)
+     .md-tl-row (grid 1fr 12px 1fr)
+     .md-tl-cell home/away (flex justify capete + text-align)
+     .md-tl-line (track central vertical 2px rgba(.10))
+     .md-tl-min/icon/body/player/assist/in/out (typo)
+  ── 4. Funcționează pentru FT istoric + LIVE ──
+     /api/match e apelat la fiecare click pe meci (mdOpen).
+     Pentru FT: events sunt populate de collect-finished în match_events
+     dar /api/match folosește /fixtures/events (API-Football) — datele
+     sunt complete pe orice fixture cu istoric.
+     Pentru LIVE: same flow — events se actualizează la fiecare refresh
+     al modalului (md auto-refresh la 30s deja existent).
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Doar UI render — backend neatins
