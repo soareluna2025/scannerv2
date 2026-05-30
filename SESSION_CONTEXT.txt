@@ -4996,3 +4996,45 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
     ✓ NU am modificat score2/3/6/7
     ✓ Doar CSS — zero impact JS/Backend
+
+[29.05 ~23:30] - FEATURE: tab STATISTICI nou în modal meci | Commit: 13529e6
+  Structură FlashScore-like — date din match_stats afișate cu bare
+  comparative home vs away.
+  ── 1. BACKEND (api/match.js) ──
+     După construirea responseData, query nou:
+       SELECT team_id, team_name,
+              shots_on_goal, shots_total, blocked_shots,
+              shots_insidebox, shots_outsidebox,
+              fouls, corner_kicks, offsides,
+              ball_possession, yellow_cards, red_cards,
+              goalkeeper_saves,
+              total_passes, passes_accurate, pass_percentage,
+              expected_goals
+         FROM match_stats WHERE fixture_id = $1
+     Map la responseData.matchStats = { home: row, away: row }.
+     Fallback: { home:null, away:null } dacă lipsesc.
+  ── 2. DOM (index.html) ──
+     Adăugat al 6-lea tab: <button class="md-tab" onclick="mdTab(5)">STATISTICI</button>
+  ── 3. JS (public/js/app-ui.js) ──
+     mdStatBar(label, hVal, aVal, fmt) — helper bară comparativă:
+       Total = h + a, hPct = h/total*100. Verde=avantaj, roșu=dezavantaj,
+       gri=egalitate. Ascunde rând complet dacă ambele null.
+     mdRenderStatistici(d) — composer cu 4 secțiuni:
+       ⚽ ATAC: xG (formatat 2 zecimale), Șuturi totale/pe poartă/interior/
+                exterior/blocate, Cornere, Ofsaiduri
+       🎯 POSESIE & PASE: Posesie (%), Total pase, Pase precise,
+                           Acuratețe pase (%)
+       🛡️ APĂRARE: Faulturi, Cartonașe galbene/roșii
+       🧤 PORTARI: Intervenții (goalkeeper_saves)
+     Empty state: "Statistici indisponibile" cu icon 📊 dacă matchStats lipsesc.
+     Hook: mdRender() linia 1057 → adăugat case tabIdx===5.
+  ── 4. CSS (public/css/cards.css) ──
+     .stat-header (banner cu team names)
+     .stat-section + .stat-section-title (4 categorii)
+     .stat-row (3-col grid: home_val / label / away_val)
+     .stat-bar + .stat-bar-h + .stat-bar-a (transition .3s pe width)
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Cache match.js neschimbat (matchCache rămâne valid)
+    ✓ 18 coloane match_stats expuse din 19 — created_at exclus
