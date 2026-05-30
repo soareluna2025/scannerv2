@@ -9,6 +9,29 @@ const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
 const FINISHED_STATUSES = new Set(['FT','AET','PEN','SUSP','ABD','AWD','WO']);
 const SEASON = new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1;
 
+// [C3] Cache in-memory pentru /api/enrich — taie recalculul (~17 query-uri DB
+// + posibile apeluri API) la fiecare tap / refresh live. Key: h-a-fid.
+// TTL: 60s live, 600s pre-meci/FT. Evicție FIFO la >200 intrări.
+const enrichCache = new Map();
+const ENRICH_TTL_LIVE   =  60_000;
+const ENRICH_TTL_STATIC = 600_000;
+
+// [C4] λ pre-calculat din tabela predictions (populat de collect-daily / enrich
+// anterior). Folosit pentru a EVITA re-fetch-ul duplicat de formă + H2H din API
+// (match.js le aduce deja). Returnează {lambda_home, lambda_away} sau null.
+async function getLambdaFromPredictions(fixtureId) {
+  if (!fixtureId) return null;
+  try {
+    const { rows } = await query(
+      `SELECT lambda_home, lambda_away FROM predictions WHERE fixture_id = $1`,
+      [Number(fixtureId)]
+    );
+    const r = rows[0];
+    if (r && r.lambda_home != null && r.lambda_away != null) return r;
+    return null;
+  } catch (_) { return null; }
+}
+
 // Referee impact: home bias + cards markets adjustments
 async function getRefereeImpact(refereeName) {
   const impact = { homeWin: 1, over25: 1, cards: 1, over35Cards: null, source: [] };
@@ -913,9 +936,17 @@ export default async function handler(req, res) {
   const hId = Number(h);
   const aId = Number(a);
 
+  // [C3] Cache lookup — live (elapsed>0 / status live) = TTL scurt, altfel lung.
+  const _isLiveReq = (parseInt(elapsed) || 0) > 0 || LIVE_STATUSES.has(status_short);
+  const cacheKey = `${hId}-${aId}-${fid || 0}`;
+  const _cached = enrichCache.get(cacheKey);
+  if (_cached && Date.now() - _cached.ts < (_isLiveReq ? ENRICH_TTL_LIVE : ENRICH_TTL_STATIC)) {
+    return res.status(200).json(_cached.data);
+  }
+
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats + venue in parallel ---
-    const [sbHForm, sbAForm, sbH2H, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA, lineupFactor] = await Promise.all([
+    const [sbHForm, sbAForm, sbH2H, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA, lineupFactor, dbLambda] = await Promise.all([
       getHomeForm(hId),
       getAwayForm(aId),
       getH2HFromDB(hId, aId),
@@ -933,12 +964,18 @@ export default async function handler(req, res) {
       getSquadCount(hId),
       getSquadCount(aId),
       fid ? getLineupStrengthFactor(Number(fid), hId, aId) : Promise.resolve({ home: 1.0, away: 1.0 }),
+      getLambdaFromPredictions(fid),
     ]);
 
+    // [C4] Dacă predictions DB are λ (collect-daily) → NU mai re-fetch-uim formă
+    // + H2H din API (match.js le aduce deja). Folosim doar datele DB existente
+    // și suprascriem λ din predictions mai jos. Elimină apelurile API duplicate.
+    const havePred = dbLambda && dbLambda.lambda_home != null && dbLambda.lambda_away != null;
+
     // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
-    const needHForm = sbHForm.length  < 3;
-    const needAForm = sbAForm.length  < 3;
-    const needH2H   = sbH2H.length    < 3;
+    const needHForm = !havePred && sbHForm.length  < 3;
+    const needAForm = !havePred && sbAForm.length  < 3;
+    const needH2H   = !havePred && sbH2H.length    < 3;
 
     const [apiFbHForm, apiFbAForm, apiFbH2H, injuredScores] = await Promise.all([
       needHForm ? fetchApiFootball(`/fixtures?team=${h}&last=20&status=FT`).then(r => r.json()) : null,
@@ -1006,6 +1043,22 @@ export default async function handler(req, res) {
       if (csRateH > 0.35) result.ggProb = Math.max(0, result.ggProb * (1 - (csRateH - 0.35)));
       if (csRateA > 0.35) result.ggProb = Math.max(0, result.ggProb * (1 - (csRateA - 0.35)));
       result._teamsStatsUsed = true;
+    }
+
+    // [C4] λ din predictions (collect-daily) — sursă unică când forma lipsește
+    // și am sărit fetch-ul API (havePred). Aplicat înainte de topscorer/venue
+    // (care îl ajustează mai jos). Când forma EXISTĂ, lăsăm pipeline-ul complet.
+    if (havePred && formInsufficient) {
+      const r2 = v => +(Number(v)).toFixed(2);
+      result.lambdaHome  = r2(dbLambda.lambda_home);
+      result.lambdaAway  = r2(dbLambda.lambda_away);
+      result.lambdaTotal = r2(result.lambdaHome + result.lambdaAway);
+      const mxL = calcPoisson6x6(result.lambdaHome, result.lambdaAway);
+      Object.assign(result, {
+        over15Prob: mxL.over15Prob, over25Prob: mxL.over25Prob,
+        ggProb: mxL.ggProb, homeWin: mxL.homeWin, draw: mxL.draw, awayWin: mxL.awayWin,
+      });
+      result._lambdaFromPredictions = true;
     }
 
     // Standings lambda blend — 60% form recent + 40% medie sezonala (Hybrid V2)
@@ -1417,6 +1470,12 @@ export default async function handler(req, res) {
       }
 
     }
+
+    // [C3] Salvează în cache (evicție FIFO la >200 intrări).
+    if (enrichCache.size > 200) {
+      [...enrichCache.keys()].slice(0, 100).forEach(k => enrichCache.delete(k));
+    }
+    enrichCache.set(cacheKey, { data: payload, ts: Date.now() });
 
     res.status(200).json(payload);
   } catch (e) {

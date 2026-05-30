@@ -321,6 +321,9 @@ function renderMatches(){
 var PM_SENT=new Set();var PM_LOADED=false;
 var _pmMatches=[];
 var _pmEnrich={};
+// [M1] timestamp ultimul fetch /api/enrich per fixture — la refresh live silent
+// NU re-fetch dacă <60s (enrich are oricum cache server-side de 60s live).
+var _enrichFetchTs={};
 
 function enrichUrl(hid,aid,m){
   var u='/api/enrich?h='+hid+'&a='+aid;
@@ -1020,10 +1023,13 @@ async function mdFetch(silent){
     var liveInd=document.getElementById('md-live-ind');
     if(liveInd)liveInd.style.display=isLive?'inline-block':'none';
     mdRender();
-    // On silent refresh always fetch fresh enrich; on first load skip if cached
+    // On first load skip if cached; on silent refresh re-fetch DOAR dacă >60s
+    // de la ultimul enrich (M1) — evită recalcul/redere inutilă la fiecare 10s.
     var hasCached=(!silent)&&((_pmEnrich&&_pmEnrich[fid]&&_pmEnrich[fid].confidenceScore!=null)||
                   (_genLiveEnrich&&_genLiveEnrich[fid]&&_genLiveEnrich[fid].confidenceScore!=null));
-    if(!hasCached&&_md.homeId&&_md.awayId){
+    var _recentEnrich=silent&&_enrichFetchTs[fid]&&(Date.now()-_enrichFetchTs[fid]<60000);
+    if(!hasCached&&!_recentEnrich&&_md.homeId&&_md.awayId){
+      _enrichFetchTs[fid]=Date.now();
       fetch(enrichUrl(_md.homeId,_md.awayId,fix||null)).then(function(er){return er.json();}).then(function(ed){
         if(!ed.error&&_md.fixtureId===fid){
           _genLiveEnrich[fid]=ed;

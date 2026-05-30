@@ -116,11 +116,26 @@ app.get('*', (req, res) => {
   res.sendFile(join(__dirname, 'index.html'));
 });
 
+// [C1] Aplică idempotent indecșii de performanță la pornire (scripts/add-indexes.sql).
+// Fire-and-forget — CREATE INDEX IF NOT EXISTS construiește o singură dată; la
+// restart-urile ulterioare e no-op. Garantează indecșii fără psql manual pe VPS.
+async function ensureIndexes() {
+  try {
+    const { readFileSync } = await import('fs');
+    const sql = readFileSync(join(__dirname, 'scripts', 'add-indexes.sql'), 'utf8');
+    await query(sql);
+    console.log('[indexes] add-indexes.sql aplicat (idempotent)');
+  } catch (e) {
+    console.error('[indexes] ensureIndexes:', e.message);
+  }
+}
+
 const httpServer = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`AlohaScan pornit pe http://0.0.0.0:${PORT}`);
   await initBackfillProgress();
   await resumeOnStartup();
   startScanner();
+  ensureIndexes();
   loadModelWeights().catch(e => console.error('[weights] initial load failed:', e.message));
 });
 

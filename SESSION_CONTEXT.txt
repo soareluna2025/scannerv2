@@ -5400,3 +5400,28 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Comentariu secțiune actualizat („Tap pe meci (NS/LIVE/FT) → mdOpen").
   Verificare: node --check public/js/app-ui.js → OK.
   Constrânți: ✓ NU am atins calcConfidence*/score2/3/6/7
+
+[30.05 ~05:?? ] - PERF: fix 4 probleme critice din audit (C1/C3/C4/M1)
+  Fișiere: scripts/add-indexes.sql (nou), scripts/create-tables.sql, server.js,
+           api/enrich.js, public/js/app-ui.js
+  [C1] INDECȘI lipsă → scripts/add-indexes.sql (9 indecși, IF NOT EXISTS):
+    fixtures(match_date), (league_id,status_short), (home_team_id), (away_team_id),
+    ((match_date::date) — funcțional pt matches-history); fixtures_history idem (4).
+    Aceiași indecși adăugați și în create-tables.sql (setup-uri noi).
+    Aplicare auto: server.js ensureIndexes() la startup (citește add-indexes.sql,
+    pool.query, fire-and-forget) → se aplică la restart-ul de deploy, fără psql manual.
+    ⚠ NU am putut rula psql pe VPS din sandbox (fără acces) — se aplică la restart.
+  [C3] CACHE /api/enrich: Map enrichCache, key `h-a-fid`, TTL 60s live / 600s
+    static, evicție FIFO la >200. Lookup la început, set înainte de res.json.
+    Taie recalculul (~17 query + posibil API) la fiecare tap/refresh.
+  [C4] DUPLICAT formă+H2H eliminat: getLambdaFromPredictions(fid) citește λ din
+    tabela predictions (collect-daily). havePred → needHForm/AForm/H2H gated pe
+    !havePred (NU mai fetch API duplicat). Când forma lipsește dar havePred →
+    override λ din predictions după teams_stats (înainte de standings/topscorer).
+    Când forma EXISTĂ în DB → pipeline complet enrich neatins (fără regresie).
+    ⚠ calcConfidencePreMatch/score2-7 NEATINSE — doar datele de intrare gestionate.
+  [M1] app-ui.js: _enrichFetchTs[fid] — la refresh live silent NU re-fetch enrich
+    dacă <60s de la ultimul (înainte: „always fetch fresh enrich" la fiecare 10s).
+  Verificare: node --check pe enrich.js/match.js/app-ui.js/server.js → toate OK.
+    add-indexes.sql: 9× CREATE INDEX. Referințe enrich (cache/havePred/dbLambda) coerente.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins

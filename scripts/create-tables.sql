@@ -1050,6 +1050,19 @@ CREATE TABLE IF NOT EXISTS league_patterns (
 );
 
 -- ================================================================
+--  INDECȘI PERFORMANȚĂ — fixtures / fixtures_history (vezi add-indexes.sql)
+-- ================================================================
+CREATE INDEX IF NOT EXISTS idx_fixtures_match_date    ON fixtures(match_date);
+CREATE INDEX IF NOT EXISTS idx_fixtures_league_status ON fixtures(league_id, status_short);
+CREATE INDEX IF NOT EXISTS idx_fixtures_home_team     ON fixtures(home_team_id);
+CREATE INDEX IF NOT EXISTS idx_fixtures_away_team     ON fixtures(away_team_id);
+CREATE INDEX IF NOT EXISTS idx_fixtures_date_func     ON fixtures((match_date::date));
+CREATE INDEX IF NOT EXISTS idx_fh_match_date          ON fixtures_history(match_date);
+CREATE INDEX IF NOT EXISTS idx_fh_league_status       ON fixtures_history(league_id, status_short);
+CREATE INDEX IF NOT EXISTS idx_fh_home_team           ON fixtures_history(home_team_id);
+CREATE INDEX IF NOT EXISTS idx_fh_away_team           ON fixtures_history(away_team_id);
+
+-- ================================================================
 --  VERIFICARE
 -- ================================================================
 SELECT 'Tables created: ' || COUNT(*) FROM information_schema.tables
