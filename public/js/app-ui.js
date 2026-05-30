@@ -860,6 +860,75 @@ function mdRenderSumar(d){
       });
       out+='</div>';
     }
+    // FACTORI INFLUENȚĂ — explică DE CE confidence-ul e ce e
+    // (date deja calculate de enrich.js, doar neafișate anterior)
+    (function(){
+      var badges=[];
+      var pHA=function(s){
+        if(!s||typeof s!=='string')return null;
+        var mm=s.match(/H:([0-9.]+)\|A:([0-9.]+)/);
+        return mm?{h:parseFloat(mm[1]),a:parseFloat(mm[2])}:null;
+      };
+      var fmtD=function(f){var d=Math.round((f-1)*100);return (d>=0?'+':'')+d+'%';};
+      var addBadge=function(icon,label,value,color){
+        badges.push(
+          '<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:8px;font-size:11px;font-weight:600;background:'+color+'22;border:1px solid '+color+'55;color:'+color+'">'+
+          icon+' <b>'+label+'</b>'+(value?' <span style="opacity:.85;font-weight:500">'+value+'</span>':'')+'</span>'
+        );
+      };
+      // 1. Top Scorer factor (boost/reducere lambda din atacanți de top)
+      var ts=pHA(en._topScorerFactor);
+      if(ts){
+        var hasUp=ts.h>1.02||ts.a>1.02;
+        var hasDn=ts.h<0.98||ts.a<0.98;
+        var clr=hasUp&&!hasDn?'#22c55e':(!hasUp&&hasDn)?'#ef4444':'#f59e0b';
+        addBadge('⚽','Top Scorer','H'+fmtD(ts.h)+' A'+fmtD(ts.a),clr);
+      }
+      // 2. Injury impact (reducere lambda din accidentați)
+      var il=pHA(en._injuryLambda);
+      if(il&&(il.h<0.99||il.a<0.99)){
+        addBadge('🤕','Accidentați','H'+fmtD(il.h)+' A'+fmtD(il.a),'#ef4444');
+      }
+      // 3. Meteo / stadion impact (altitudine, gazon artificial agregate)
+      if(en._venueMeteoImpact){
+        var meteoLabel=String(en._venueMeteoImpact)
+          .replace(/altitude_extreme/g,'altitudine extremă')
+          .replace(/altitude_high/g,'altitudine mare')
+          .replace(/altitude_mid/g,'altitudine medie')
+          .replace(/artificial_turf/g,'gazon artificial');
+        addBadge('🌧️','Stadion',meteoLabel,'#f59e0b');
+      }
+      // 4. Surface artificial (dacă nu deja inclus în meteo)
+      var meteoStr=String(en._venueMeteoImpact||'');
+      if(en._venueSurface==='artificial'&&meteoStr.indexOf('artificial')<0){
+        addBadge('🏟️','Gazon artificial','','#3b82f6');
+      }
+      // 5. Altitudine ridicată
+      var altM=Number(en._venueAltitude);
+      if(isFinite(altM)&&altM>1500&&meteoStr.indexOf('altitude')<0){
+        addBadge('⛰️','Altitudine',altM+'m','#f59e0b');
+      }
+      // 6. Coach impact (factori istorici antrenor)
+      if(en._coachImpact){
+        addBadge('👔','Coach impact','activ','#3b82f6');
+      }
+      // 7. Absențe stelare (din breakdown.injuries.note)
+      if(en.breakdown&&en.breakdown.injuries&&en.breakdown.injuries.note){
+        addBadge('⚠️','Absențe',en.breakdown.injuries.note,'#ef4444');
+      }
+      // 8. Lot incomplet (squad penalty)
+      if(en.breakdown&&en.breakdown.squads&&en.breakdown.squads.penalty<0){
+        var sq=en.breakdown.squads;
+        addBadge('⚠️','Lot incomplet','H:'+sq.home+' A:'+sq.away+' ('+sq.penalty+'pp)','#ef4444');
+      }
+      if(badges.length){
+        out+='<div class="md-section">';
+        out+='<div class="md-section-title">Factori Influență</div>';
+        out+='<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0">';
+        out+=badges.join('');
+        out+='</div></div>';
+      }
+    })();
     // Player Intelligence section
     if(en.teamStrengthHome!=null||en.teamStrengthAway!=null){
       var sh2=en.teamStrengthHome&&en.teamStrengthHome>0?en.teamStrengthHome:null;
