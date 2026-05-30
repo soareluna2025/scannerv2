@@ -7,6 +7,11 @@ import { getScannerPaused, setScannerPaused } from './cron/scanner.js';
 
 const router = express.Router();
 
+// Cache /status 10 min — evită consum de call API la fiecare refresh admin.
+let _apiStatusCache = null;
+let _apiStatusCacheTs = 0;
+const API_STATUS_TTL = 10 * 60 * 1000;
+
 // ── In-memory rate limiter + IP blocker ─────────────────────────────────────
 const rateMap    = new Map(); // IP → { count, resetAt }
 const failedMap  = new Map(); // IP → { count, blockedUntil }
@@ -159,7 +164,24 @@ router.get('/db-stats', async (req, res) => {
 
 // ── GET /api/admin/api-usage ─────────────────────────────────────────────────
 router.get('/api-usage', async (req, res) => {
-  const key = process.env.FOOTBALL_API_KEY || process.env.API_FOOTBALL_KEY || '';
+  // Cheia corectă din .env pe VPS = API_FOOTBALL_KEY (prima în lanț, aliniat cu restul app).
+  const key = process.env.API_FOOTBALL_KEY || process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || '';
+  const DEFAULT_LIMIT = 300_000; // plan Custom300 — fallback când API nu raportează limita
+
+  // recent_errors din cron_logs (independent de starea /status)
+  const { rows: errRows } = await query(
+    `SELECT job_name, ran_at, error_msg
+     FROM cron_logs
+     WHERE error_msg IS NOT NULL
+     ORDER BY ran_at DESC
+     LIMIT 10`
+  ).catch(() => ({ rows: [] }));
+
+  // Cache 10 min pe rezultatul /status
+  if (_apiStatusCache && Date.now() - _apiStatusCacheTs < API_STATUS_TTL) {
+    return res.json({ ..._apiStatusCache, recent_errors: errRows, cached: true });
+  }
+
   try {
     const r    = await fetch('https://v3.football.api-sports.io/status', {
       headers: { 'x-apisports-key': key },
@@ -168,28 +190,54 @@ router.get('/api-usage', async (req, res) => {
     const sub  = data.response?.subscription || {};
     const reqs = data.response?.requests     || {};
 
-    const { rows: errRows } = await query(
-      `SELECT job_name, ran_at, error_msg
-       FROM cron_logs
-       WHERE error_msg IS NOT NULL
-       ORDER BY ran_at DESC
-       LIMIT 10`
-    ).catch(() => ({ rows: [] }));
+    // Detectează răspuns gol/eroare: response lipsește SAU API a întors errors.
+    const apiErrors = data.errors && (Array.isArray(data.errors) ? data.errors.length : Object.keys(data.errors).length);
+    const statusUnavailable = !data.response || apiErrors;
+    if (statusUnavailable) {
+      const msg = apiErrors ? JSON.stringify(data.errors) : 'response gol';
+      console.error('[admin/api-usage] /status indisponibil:', msg);
+      // NU cache-uim un răspuns degradat → reîncearcă la următorul refresh.
+      return res.json({
+        ok:            false,
+        status_msg:    'API status indisponibil',
+        plan:          'API status indisponibil',
+        plan_end:      'API status indisponibil',
+        requests_today: 0,
+        limit_day:     DEFAULT_LIMIT,
+        remaining:     DEFAULT_LIMIT,
+        pct_used:      0,
+        recent_errors: errRows,
+      });
+    }
 
-    res.json({
+    const limitDay = Number(reqs.limit_day) || DEFAULT_LIMIT;
+    const current  = Number(reqs.current) || 0;
+    const payload = {
       ok:           true,
-      plan:         sub.plan   || '?',
-      plan_end:     sub.end    || '?',
-      requests_today: Number(reqs.current || 0),
-      limit_day:    Number(reqs.limit_day || 100_000),
-      remaining:    Number(reqs.limit_day || 100_000) - Number(reqs.current || 0),
-      pct_used:     reqs.limit_day
-        ? Math.round(reqs.current / reqs.limit_day * 100)
-        : 0,
-      recent_errors: errRows,
-    });
+      plan:         sub.plan || '?',
+      plan_end:     sub.end  || '?',
+      requests_today: current,
+      limit_day:    limitDay,
+      remaining:    Math.max(0, limitDay - current),
+      pct_used:     limitDay ? Math.round(current / limitDay * 100) : 0,
+    };
+    _apiStatusCache   = payload;
+    _apiStatusCacheTs = Date.now();
+    res.json({ ...payload, recent_errors: errRows, cached: false });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+    console.error('[admin/api-usage] fetch /status error:', e.message);
+    res.json({
+      ok:            false,
+      status_msg:    'API status indisponibil',
+      plan:          'API status indisponibil',
+      plan_end:      'API status indisponibil',
+      requests_today: 0,
+      limit_day:     DEFAULT_LIMIT,
+      remaining:     DEFAULT_LIMIT,
+      pct_used:      0,
+      recent_errors: errRows,
+      error:         e.message,
+    });
   }
 });
 

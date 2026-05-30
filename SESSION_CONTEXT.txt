@@ -5708,3 +5708,21 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Verificare: singura referință backfill rămasă = grep -v scrubber (corect);
     C3 zero referințe; subshell crontab balansat (paranteze + 15 echo-uri).
   Constrânți: ✓ niciun cod intangibil atins (doar workflow CI/crontab)
+
+[31.05 ~14:?? ] - FIX: API Football Usage în admin (300k + cheie + cache + erori)
+  Fișier: api/admin.js (endpoint /api/admin/api-usage)
+  1. Fallback limit_day 100_000 → 300_000 (DEFAULT_LIMIT, plan Custom300). remaining
+     calculat din limita reală (max(0, limit-current)). Zero referințe 100_000 rămase.
+  2. Lanț chei aliniat cu restul app: API_FOOTBALL_KEY întâi (era FOOTBALL_API_KEY
+     primul + omitea APIFOOTBALL_KEY).
+  3. Detectare răspuns gol/eroare: !data.response SAU data.errors prezent →
+     plan/plan_end='API status indisponibil' + status_msg + console.error (log debug).
+     Frontend afișează textul în loc de „?". NU cache-uiește răspunsul degradat.
+  4. Cache 10 min (_apiStatusCache/_apiStatusCacheTs) pe /status — evită 1 call API
+     per refresh admin. recent_errors din cron_logs servit MEREU (inclusiv din cache).
+  5. reqs.limit_day folosit dacă vine (300000); altfel fallback 300_000.
+  Verificare: node --check api/admin.js → OK. grep 100_000 → 0.
+    ⚠ NEtestat pe API live (sandbox); structura /status presupusă neschimbată
+      (subscription.plan/end, requests.current/limit_day). Confirm post-deploy cu
+      curl /status sau refresh admin.
+  Constrânți: ✓ niciun cod intangibil atins (doar endpoint admin)
