@@ -1060,6 +1060,27 @@ function mdRenderSumar(d){
       out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_lt" style="color:var(--mu2)">'+Number(en.lambdaTotal||0).toFixed(2)+'</div><div class="md-prob-lbl">λ Total</div></div>';
       out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_asc" style="color:'+ec(en.awayScoreRate)+'">'+(en.awayScoreRate!=null?en.awayScoreRate+'%':'—')+'</div><div class="md-prob-lbl">Oaspeti marcheaza</div></div>';
       out+='</div>';
+      // FIX 2 — λ split per echipă (date deja calculate, neexpuse anterior)
+      if(en.lambdaHome!=null||en.lambdaAway!=null){
+        out+='<div class="md-prob-row">';
+        out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2)">'+Number(en.lambdaHome||0).toFixed(2)+'</div><div class="md-prob-lbl">λ Gazde</div></div>';
+        out+='<div class="md-prob"><div class="md-prob-val" style="color:var(--mu2)">'+Number(en.lambdaAway||0).toFixed(2)+'</div><div class="md-prob-lbl">λ Oaspeți</div></div>';
+        out+='</div>';
+      }
+      // FIX 3 — 1X2 medalions + Double Chance (dc1x, dcx2 deja calculate)
+      if(en.homeWin!=null){
+        out+='<div class="md-prob-row">';
+        out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeWin)+'">'+Math.round(en.homeWin)+'%</div><div class="md-prob-lbl">1 (Gazde)</div></div>';
+        out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.draw)+'">'+Math.round(en.draw)+'%</div><div class="md-prob-lbl">X (Egal)</div></div>';
+        out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.awayWin)+'">'+Math.round(en.awayWin)+'%</div><div class="md-prob-lbl">2 (Oaspeți)</div></div>';
+        out+='</div>';
+      }
+      if(en.dc1x!=null||en.dcx2!=null){
+        out+='<div class="md-prob-row">';
+        out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.dc1x)+'">'+Math.round(en.dc1x||0)+'%</div><div class="md-prob-lbl">1X</div></div>';
+        out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.dcx2)+'">'+Math.round(en.dcx2||0)+'%</div><div class="md-prob-lbl">X2</div></div>';
+        out+='</div>';
+      }
       // Badge LOW/MED/HIGH derivat din confidenceScore (pragurile noi 70/55)
       if(en.confidenceScore!=null){
         var _csMd=en.confidenceScore;
@@ -1069,6 +1090,31 @@ function mdRenderSumar(d){
     }
     out+='</div>';
   }
+
+  // FIX 4 — PIEȚE SPECIALE (cărți / cornere, deja calculate de enrich)
+  (function(){
+    var hasCards=(en.cardsOver35!=null&&en.cardsOver35>0)||(en.cardsOver45!=null&&en.cardsOver45>0);
+    var hasCorn =(en.cornersOver85!=null&&en.cornersOver85>0)||(en.cornersOver95!=null&&en.cornersOver95>0);
+    if(!hasCards&&!hasCorn)return;
+    out+='<div class="md-section"><div class="md-section-title">Piețe Speciale</div>';
+    if(hasCards){
+      var c35=Math.round((+en.cardsOver35||0)*100);
+      var c45=Math.round((+en.cardsOver45||0)*100);
+      out+='<div class="md-prob-row">';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(c35)+'">'+c35+'%</div><div class="md-prob-lbl">🟨 Cărți Over 3.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(c45)+'">'+c45+'%</div><div class="md-prob-lbl">🟨 Cărți Over 4.5</div></div>';
+      out+='</div>';
+    }
+    if(hasCorn){
+      var k85=Math.round((+en.cornersOver85||0)*100);
+      var k95=Math.round((+en.cornersOver95||0)*100);
+      out+='<div class="md-prob-row">';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(k85)+'">'+k85+'%</div><div class="md-prob-lbl">📐 Cornere Over 8.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(k95)+'">'+k95+'%</div><div class="md-prob-lbl">📐 Cornere Over 9.5</div></div>';
+      out+='</div>';
+    }
+    out+='</div>';
+  })();
 
   // ── CALIBRARE CU COTE REALE ───────────────────────────────────────
   if(en.homeWin!=null||en.over15Prob!=null){
@@ -1189,10 +1235,14 @@ function mdRenderSumar(d){
   if(en.h2hForm&&en.h2hForm.length){
     out+='<div class="md-section"><div class="md-section-title">H2H Direct (ultimele 5)</div>';
     en.h2hForm.forEach(function(h){
+      var hT=h.homeTeam||h.home||'?';
+      var aT=h.awayTeam||h.away||'?';
+      var sc=(h.homeGoals!=null&&h.awayGoals!=null)?(h.homeGoals+'-'+h.awayGoals):(h.score||'—');
+      var dt=h.date?new Date(h.date).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
       out+='<div class="md-h2h-row">';
-      out+='<div class="md-h2h-teams">'+h.home+' vs '+h.away+'</div>';
-      out+='<div class="md-h2h-score">'+h.score+'</div>';
-      out+='<div class="md-h2h-date">'+h.date+'</div>';
+      out+='<div class="md-h2h-teams">'+hT+' vs '+aT+'</div>';
+      out+='<div class="md-h2h-score">'+sc+'</div>';
+      out+='<div class="md-h2h-date">'+dt+'</div>';
       out+='</div>';
     });
     out+='</div>';
@@ -1323,10 +1373,14 @@ function mdRenderForma(d){
   if(en.h2hForm&&en.h2hForm.length){
     out+='<div class="md-section"><div class="md-section-title">H2H Direct (ultimele 5)</div>';
     en.h2hForm.forEach(function(h){
+      var hT=h.homeTeam||h.home||'?';
+      var aT=h.awayTeam||h.away||'?';
+      var sc=(h.homeGoals!=null&&h.awayGoals!=null)?(h.homeGoals+'-'+h.awayGoals):(h.score||'—');
+      var dt=h.date?new Date(h.date).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
       out+='<div class="md-h2h-row">';
-      out+='<div class="md-h2h-teams">'+h.home+' vs '+h.away+'</div>';
-      out+='<div class="md-h2h-score">'+h.score+'</div>';
-      out+='<div class="md-h2h-date">'+h.date+'</div>';
+      out+='<div class="md-h2h-teams">'+hT+' vs '+aT+'</div>';
+      out+='<div class="md-h2h-score">'+sc+'</div>';
+      out+='<div class="md-h2h-date">'+dt+'</div>';
       out+='</div>';
     });
     out+='</div>';

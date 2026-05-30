@@ -1286,7 +1286,18 @@ export default async function handler(req, res) {
 
     const payload = { ...result, ...confData,
       cardsOver35, cardsOver45, cornersOver85, cornersOver95,
-      leagueStats: leagueStats || null, refereeStats: refereeStats || null };
+      leagueStats: leagueStats || null, refereeStats: refereeStats || null,
+      // Sprint expune-date: h2hForm — ultimele 5 meciuri H2H pentru display.
+      // Sursa primară: sbH2H (h2h table + fixtures_history fallback).
+      // Numele echipelor sunt derivate prin team_id față de hId/aId actuali.
+      h2hForm: (Array.isArray(sbH2H) ? sbH2H : []).slice(0, 5).map(row => ({
+        date:      row.match_date,
+        homeTeam:  row.home_team_id === hId ? (hn || 'Gazde')    : (an || 'Oaspeți'),
+        awayTeam:  row.away_team_id === aId ? (an || 'Oaspeți')  : (hn || 'Gazde'),
+        homeGoals: row.home_goals ?? 0,
+        awayGoals: row.away_goals ?? 0,
+      })),
+    };
 
     // Fire-and-forget: colectare injuries + prediction save + pre_match snapshot
     if (fid) {
