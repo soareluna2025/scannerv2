@@ -400,10 +400,36 @@ async function scanLive10s() {
 
     const processedMatches = [];
 
+    // FIX 5: priority buckets. La 3s cadența scanLive10s, meciurile
+    // LOW_PRIORITY (min < 30, scor_diff > 2, NGP slab) sunt procesate
+    // doar la fiecare al 3-lea scan (~9s) pentru a economisi cicluri.
+    // HIGH_PRIORITY (min ≥ 75 || scor_diff ≤ 1 || NGP > 60) — fiecare scan.
+    const PRIORITY_SKIP_EVERY = 3;
+    function isLowPriority(m, prevNg) {
+      const mn = m.fixture?.status?.elapsed ?? 0;
+      const hg = m.goals?.home ?? 0;
+      const ag = m.goals?.away ?? 0;
+      const diff = Math.abs(hg - ag);
+      const ngOK = (prevNg || 0) > 60;
+      if (mn >= 75) return false;       // final de meci → mereu high
+      if (diff <= 1) return false;       // scor close → mereu high
+      if (ngOK)     return false;       // NGP ridicat → mereu high
+      if (mn < 30 && diff > 2) return true;  // început + diferență mare → low
+      return false;
+    }
+
     for (const m of raw) {
       const sh = m.fixture?.status?.short || '';
       const id = m.fixture?.id;
       if (!id) continue;
+
+      // Skip LOW_PRIORITY 2 din 3 scan-uri (păstrează tot al 3-lea)
+      if (LIVE_STATUS.has(sh)) {
+        const prevNg = liveCache[id]?.ngLast || 0;
+        if (isLowPriority(m, prevNg) && (_scanCounter % PRIORITY_SKIP_EVERY) !== 0) {
+          continue;
+        }
+      }
 
       // Meci terminat — rezolvă outcome dacă îl urmăream
       if (DONE_STATUS.has(sh)) {
@@ -467,14 +493,15 @@ async function scanLive10s() {
       // Hide NGP în primele 10 min (date insuficiente pentru încredere)
       let ng = f.mn < 10 ? 0 : calibrateNgp(ngRaw);
       let ng15 = f.mn < 10 ? 0 : ng15Raw;  // ng15 e deja calibrat prin formula (cap 60)
-      // Smoothing anti-oscilație: max ±5pp change per scan cycle
+      // FIX 4: smoothing adaptiv. Pre-minutul 75 = ±5pp (anti-oscilație
+      // standard). Min 75-85 = ±15pp (semnale mai responsive în final).
+      // Min 85+ = ±25pp (meciuri critice — schimbări dramatice prinse repede).
+      const MAX_DELTA = (f.mn >= 85) ? 25 : (f.mn >= 75) ? 15 : 5;
       if (liveCache[id]?.ngLast !== undefined && ng > 0) {
-        const MAX_DELTA = 5;
         const prev = liveCache[id].ngLast;
         ng = Math.max(prev - MAX_DELTA, Math.min(prev + MAX_DELTA, ng));
       }
       if (liveCache[id]?.ng15Last !== undefined && ng15 > 0) {
-        const MAX_DELTA = 5;
         const prev = liveCache[id].ng15Last;
         ng15 = Math.max(prev - MAX_DELTA, Math.min(prev + MAX_DELTA, ng15));
       }
@@ -611,25 +638,30 @@ async function scanLiveStats() {
   if (!activeIds.length) return;
   log(`liveStats: ${activeIds.length} active matches`);
 
-  for (const id of activeIds) {
+  // FIX 3: paralelizare în batches de 5 concurent (era forEach + await
+  // secvențial — ~200ms × N latency). Reducere ~4× pe 20 meciuri.
+  async function processOne(id) {
     try {
       const stats = await fetchWithRetry(`/fixtures/statistics?fixture=${id}`);
-      if (!stats.length || !liveCache[id]) continue;
-
+      if (!stats.length || !liveCache[id]) return;
       const cached = liveCache[id];
-      // Construiește obiect compatibil cu calcFeatures/saveLiveStats
       const fakeMatch = {
         fixture:    { id: Number(id), status: { elapsed: cached.minute } },
         goals:      { home: cached.home_goals, away: cached.away_goals },
         statistics: stats,
       };
       const f = calcFeatures(fakeMatch, cached.formData || {});
-
       saveLiveStats(fakeMatch, f, cached.status)
         .catch(e => log(`saveLiveStats ${id}: ${e.message}`));
     } catch (e) {
       log(`liveStats error ${id}: ${e.message}`);
     }
+  }
+
+  const BATCH = 5;
+  for (let i = 0; i < activeIds.length; i += BATCH) {
+    const slice = activeIds.slice(i, i + BATCH);
+    await Promise.all(slice.map(processOne));
   }
 }
 
@@ -769,7 +801,9 @@ export function startScanner() {
   runIfActive(scanLive10s, 'live10s')();
   runIfActive(scanPreMatch, 'preMatch')();
 
-  setInterval(runIfActive(scanLive10s,    'live10s'),    10_000);
+  // FIX 2: scanLive10s la 3s în loc de 10s (paritate FlashScore ~5s).
+  // Cost API: 1 call/3s = 1200/h = 28.8k/zi pentru /live=all — în buget 300k.
+  setInterval(runIfActive(scanLive10s,    'live10s'),     3_000);
   setInterval(runIfActive(scanLiveStats,  'liveStats'),  60_000);
   setInterval(runIfActive(scanPreMatch,   'preMatch'),  3_600_000);
 

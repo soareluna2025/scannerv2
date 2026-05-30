@@ -10,6 +10,7 @@ var _wsReconnectTimer=null;
 var _wsHeartbeat=null;
 var _wsReconnectDelay=1000;
 var _wsMaxDelay=30000;
+var _wsLastMsg=0;             // FIX 1: timestamp ultim mesaj WS — gate polling redundant
 
 function updateWSState(state){
   var dot=document.getElementById('ws-dot');
@@ -36,6 +37,7 @@ function connectWS(){
     },25000);
   };
   _ws.onmessage=function(ev){
+    _wsLastMsg=Date.now();
     try{
       var msg=JSON.parse(ev.data);
       if(msg.type==='LIVE_UPDATE'&&msg.payload&&Array.isArray(msg.payload.matches)){
@@ -106,7 +108,12 @@ function connect(){
       document.getElementById('wr-bar').style.display='flex';
       fetchSupabaseWinRate();
       connectWS();
-      _autoIt=setInterval(function(){loadLive();},CFG.RI);
+      // FIX 1: polling REST redundant când WS conectat și activ recent.
+      // Skip fetch /api/football dacă WS a primit un mesaj în ultimele 60s.
+      _autoIt=setInterval(function(){
+        var wsActive=_ws&&_ws.readyState===1&&(Date.now()-_wsLastMsg<60000);
+        if(!wsActive)loadLive();
+      },CFG.RI);
     } else {
       btn.textContent='CONECTARE';
     }
