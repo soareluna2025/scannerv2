@@ -5346,3 +5346,39 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Constrânți respectate:
     ✓ NU am atins calcConfidence*/score2/3/6/7  ✓ calcScoringProbability neatins
       (doar mecanismul de toggle/persistență a fost modificat)
+
+[30.05 ~04:?? ] - FEATURE: Modal complet pentru meciuri NS din zile viitoare (hibrid, 0 API)
+  Fișiere: api/cron/collect-daily.js, api/match.js, public/js/app-ui.js
+  PROBLEMA: meciuri din calendar (zile viitoare) deschideau modal fără λ/probabilități.
+  PAS 1 — collect-daily.js: funcție NOUĂ computeUpcomingPredictions(stats),
+    rulată DUPĂ form_stats fresh, înainte de logCron. ZERO calls API:
+    • SELECT NS azi+3 din `fixtures` LEFT JOIN form_stats(home/away) + standings(home/away).
+    • rate(formAvg, goals, played): preferă forma recentă (>0), fallback media
+      sezonală (goals_for/played din standings), altfel null.
+    • λ_home=(scoredH+concededA)/2, λ_away=(scoredA+concededH)/2, clamp [0.1, 5].
+    • calcPoisson6x6 (import din calc-utils) → over15/25/gg + 1X2.
+    • Skip meciuri fără NICIO dată reală pentru vreo echipă (evită 1.2/1.2 garbage).
+    • UPSERT în `predictions` (ON CONFLICT fixture_id DO UPDATE) — setează DOAR
+      câmpurile Poisson + source='collect-daily' + updated_at; NU atinge
+      confidence/best_ev/best_bet (rămân de la enrich on-demand).
+    • ALTER TABLE predictions ADD COLUMN IF NOT EXISTS source TEXT (idempotent).
+    ⚠ NU apelează calcConfidencePreMatch — Poisson pur.
+  PAS 2 — match.js: getPredictionFromDB(id) nou, adăugat în Promise.all-ul DB (dbPred).
+    Override pre-meci: dacă !live && dbPred are λ → poissonResult.λ = λ din DB +
+    recalc matrix (calcPoisson6x6). Gated pe pre-meci; blocul live de mai jos
+    are prioritate. ⇒ λ instant & consistent cu restul aplicației.
+  PAS 3 — app-ui.js: blocul „Predicții Poisson" era DEJA în afara gate-ului
+    confidenceScore (gated pe en.over15Prob). Adăugat label „· date parțiale"
+    (galben) în titlu când confidenceScore lipsește dar λ există. Cercul %
+    confidence rămâne ascuns (gated separat). NU am atins calcConfidence*/score2-7.
+  Verificare:
+    • node --check pe toate 3 fișierele → OK.
+    • Test logic predicție (calc-utils real, /tmp/pred_test.mjs):
+      form both → λ1.60/0.95 O1.5=73% GG=50%; standings fallback → λ1.44/0.89;
+      away fără date → skip; zerouri mixte → fallback corect.
+    • Test vizual browser: NU rulat (mediu fără browser); logica validată în node.
+  Flux final NS viitor: collect-daily scrie predictions (0 API) → match.js
+    servește λ din DB instant → SUMAR afișează Poisson + „date parțiale".
+  Constrânți respectate:
+    ✓ NU am atins calcConfidence*/score2/3/6/7  ✓ calcScoringProbability neatins
+    ✓ confidence/best_ev din predictions neclobberate

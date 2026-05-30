@@ -1630,11 +1630,18 @@ function mdRenderSumar(d){
   }
 
   // Poisson probs — date PRE-MECI, periculoase la pariere live cand meciul a evoluat
+  // Acest bloc e INDEPENDENT de confidenceScore: λ + probabilități se afișează chiar
+  // dacă enrich-ul de încredere lipsește (ex. meci NS din zile viitoare). Când
+  // confidenceScore lipsește dar λ există → marcăm „date parțiale" (cercul % rămâne
+  // ascuns, fiind gated separat pe confidenceScore mai sus).
   if(en.over15Prob!=null){
     var _lambdaStale=Number(en.lambdaTotal||0)<0.5;
+    var _partialData=(en.confidenceScore==null);
     // Live + meciul a progresat = Poisson pre-meci nu mai e relevant
     var _liveProgressed = isLive && (mn > 15 || (hg + ag) > 0);
-    out+='<div class="md-section"><div class="md-section-title">Predicții Poisson <span style="font-size:10px;color:var(--mu);font-weight:400">(pre-meci)</span></div>';
+    out+='<div class="md-section"><div class="md-section-title">Predicții Poisson <span style="font-size:10px;color:var(--mu);font-weight:400">(pre-meci)</span>'
+      +(_partialData?' <span style="font-size:10px;color:#fbbf24;font-weight:400">· date parțiale</span>':'')
+      +'</div>';
     if(_lambdaStale){
       out+='<div style="padding:12px;background:rgba(245,158,11,0.1);border-left:3px solid #f59e0b;border-radius:6px;font-size:12px;color:#fbbf24;">';
       out+='⚠ Predicțiile Poisson nu sunt fiabile pentru acest meci (λ='+Number(en.lambdaTotal||0).toFixed(2)+' indică date pre-meci incomplete sau corupte). Folosește NGP de mai sus pentru deciziile live.';

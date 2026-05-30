@@ -83,6 +83,18 @@ async function getPlayerStatsFromDB(fixtureId) {
   } catch (_) { return []; }
 }
 
+// Predicție pre-calculată (collect-daily) — λ + probabilități Poisson din DB.
+// Folosită pentru a afișa instant date pre-meci, fără recalcul/fetch on-demand.
+async function getPredictionFromDB(fixtureId) {
+  try {
+    const r = await query(
+      `SELECT lambda_home, lambda_away FROM predictions WHERE fixture_id = $1`,
+      [Number(fixtureId)]
+    );
+    return r.rows[0] || null;
+  } catch (_) { return null; }
+}
+
 async function getTeamStatsFromDB(teamId, leagueId) {
   try {
     const r = leagueId
@@ -236,7 +248,7 @@ export default async function handler(req, res) {
 
   try {
     // ── DB fallback: form_stats → teams_stats, plus h2h/odds/logos/live ─
-    const [dbH2H, sbHForm, sbAForm, dbOddsRows, dbLogos, tsH, tsA, liveStats, dbPlayers] = await Promise.all([
+    const [dbH2H, sbHForm, sbAForm, dbOddsRows, dbLogos, tsH, tsA, liveStats, dbPlayers, dbPred] = await Promise.all([
       query('SELECT home_team_id, away_team_id, home_goals, away_goals, match_date FROM h2h WHERE (home_team_id=$1 AND away_team_id=$2) OR (home_team_id=$2 AND away_team_id=$1) ORDER BY match_date DESC LIMIT 10', [hId, aId]).catch(() => ({ rows: [] })),
       getFormFromDB(hId),
       getFormFromDB(aId),
@@ -246,6 +258,7 @@ export default async function handler(req, res) {
       getTeamStatsFromDB(aId, null),
       getLiveStatsFromDB(id),
       getPlayerStatsFromDB(id),
+      getPredictionFromDB(id),
     ]);
 
     const needH2H   = dbH2H.rows.length   < 3;
@@ -360,6 +373,25 @@ export default async function handler(req, res) {
         ggProb: mx2.ggProb, homeWin: mx2.homeWin,
         draw: mx2.draw, awayWin: mx2.awayWin,
       });
+    }
+
+    // ── Predicție pre-calculată (collect-daily) — λ instant pentru NS ─────────
+    // Folosește λ din tabela predictions (calcul Poisson pur, fără API), astfel
+    // încât modalul afișează aceleași date pre-meci consistente chiar dacă forma
+    // on-demand a fost slabă. DOAR pre-meci — blocul live de mai jos are prioritate.
+    const _isLiveNow = liveStats && Number(liveStats.elapsed) > 0;
+    if (!_isLiveNow && dbPred && dbPred.lambda_home != null && dbPred.lambda_away != null) {
+      const r2 = v => Math.round(v * 100) / 100;
+      poissonResult.lambdaHome  = r2(Number(dbPred.lambda_home));
+      poissonResult.lambdaAway  = r2(Number(dbPred.lambda_away));
+      poissonResult.lambdaTotal = r2(poissonResult.lambdaHome + poissonResult.lambdaAway);
+      const mxP = calcPoisson6x6(poissonResult.lambdaHome, poissonResult.lambdaAway);
+      Object.assign(poissonResult, {
+        over15Prob: mxP.over15Prob, over25Prob: mxP.over25Prob,
+        ggProb: mxP.ggProb, homeWin: mxP.homeWin,
+        draw: mxP.draw, awayWin: mxP.awayWin,
+      });
+      poissonResult._predSource = 'collect-daily';
     }
 
     // ── Dynamic lambda live — override final cand live_stats are date ─────────

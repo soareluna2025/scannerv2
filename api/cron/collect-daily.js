@@ -7,6 +7,7 @@ import { query } from '../db.js';
 import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 import { isAllowedMatch } from '../utils/league-filter.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
+import { calcPoisson6x6 } from '../calc-utils.js';
 
 const PRIORITY_LEAGUES = [...ALLOWED_LEAGUE_IDS];
 
@@ -86,6 +87,99 @@ async function collectUpcomingFixtures(stats) {
   stats.upcoming_scanned  = totalScanned;
   stats.upcoming_upserted = totalUpserted;
   stats.upcoming_days     = offsets.length;
+}
+
+// Pre-calculează predicții Poisson PURE pentru meciurile NS azi+3, din date
+// deja existente în DB (form_stats + standings) → ZERO calls API.
+// Scop: modalul afișează λ + probabilități instant, fără să aștepte enrich-ul
+// on-demand. NU folosește calcConfidencePreMatch — doar Poisson 6x6 standard.
+async function computeUpcomingPredictions(stats) {
+  // Coloana `source` — idempotent (același pattern ca goals_diff la standings).
+  try { await query(`ALTER TABLE predictions ADD COLUMN IF NOT EXISTS source TEXT`); } catch (_) {}
+
+  let rows = [];
+  try {
+    const r = await query(
+      `SELECT f.fixture_id, f.league_id, f.season,
+              f.home_team_id, f.away_team_id, f.home_team_name, f.away_team_name, f.match_date,
+              fh.avg_scored_home AS h_sc, fh.avg_conceded_home AS h_co,
+              fa.avg_scored_away AS a_sc, fa.avg_conceded_away AS a_co,
+              sh.goals_for AS h_gf, sh.goals_against AS h_ga, sh.played AS h_pl,
+              sa.goals_for AS a_gf, sa.goals_against AS a_ga, sa.played AS a_pl
+         FROM fixtures f
+         LEFT JOIN form_stats fh ON fh.team_id=f.home_team_id AND fh.league_id=f.league_id AND fh.season=f.season
+         LEFT JOIN form_stats fa ON fa.team_id=f.away_team_id AND fa.league_id=f.league_id AND fa.season=f.season
+         LEFT JOIN standings  sh ON sh.team_id=f.home_team_id AND sh.league_id=f.league_id AND sh.season=f.season
+         LEFT JOIN standings  sa ON sa.team_id=f.away_team_id AND sa.league_id=f.league_id AND sa.season=f.season
+        WHERE f.status_short='NS'
+          AND f.match_date >= NOW() - INTERVAL '6 hours'
+          AND f.match_date <= NOW() + INTERVAL '4 days'`
+    );
+    rows = r.rows;
+  } catch (e) {
+    stats.errors.push(`predictions-select: ${e.message}`);
+    return;
+  }
+
+  // Rata de goluri: preferă forma recentă (>0), apoi media sezonală (standings),
+  // altfel null (date necunoscute pentru echipa respectivă).
+  const rate = (formAvg, total, played) => {
+    const v = formAvg != null ? Number(formAvg) : null;
+    if (v != null && v > 0) return v;
+    const p = Number(played) || 0;
+    if (p > 0 && total != null) return Number(total) / p;
+    return null;
+  };
+  const r2 = v => Math.round(v * 1000) / 1000;
+  let upserted = 0;
+
+  for (const row of rows) {
+    const hS = rate(row.h_sc, row.h_gf, row.h_pl);
+    const hC = rate(row.h_co, row.h_ga, row.h_pl);
+    const aS = rate(row.a_sc, row.a_gf, row.a_pl);
+    const aC = rate(row.a_co, row.a_ga, row.a_pl);
+    // Sare peste meciuri fără NICIO dată reală pentru vreo echipă (evită 1.2/1.2 garbage).
+    const homeHas = hS != null || hC != null;
+    const awayHas = aS != null || aC != null;
+    if (!homeHas || !awayHas) continue;
+
+    const HS = hS != null ? hS : 1.2, HC = hC != null ? hC : 1.2;
+    const AS = aS != null ? aS : 1.2, AC = aC != null ? aC : 1.2;
+    let lambdaHome = (HS + AC) / 2;
+    let lambdaAway = (AS + HC) / 2;
+    // Clamp defensiv (în spiritul clamp-ului de scoruri extreme din calcPoisson).
+    lambdaHome = Math.min(Math.max(lambdaHome, 0.1), 5);
+    lambdaAway = Math.min(Math.max(lambdaAway, 0.1), 5);
+    const mx = calcPoisson6x6(lambdaHome, lambdaAway);
+
+    try {
+      await query(
+        `INSERT INTO predictions
+           (fixture_id, home_team, away_team, league_id, match_date,
+            lambda_home, lambda_away, lambda_total,
+            over15_prob, over25_prob, gg_prob,
+            home_win_prob, draw_prob, away_win_prob,
+            source, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'collect-daily',NOW())
+         ON CONFLICT (fixture_id) DO UPDATE SET
+           lambda_home=EXCLUDED.lambda_home, lambda_away=EXCLUDED.lambda_away,
+           lambda_total=EXCLUDED.lambda_total,
+           over15_prob=EXCLUDED.over15_prob, over25_prob=EXCLUDED.over25_prob,
+           gg_prob=EXCLUDED.gg_prob, home_win_prob=EXCLUDED.home_win_prob,
+           draw_prob=EXCLUDED.draw_prob, away_win_prob=EXCLUDED.away_win_prob,
+           source='collect-daily', updated_at=NOW()`,
+        [
+          row.fixture_id, row.home_team_name, row.away_team_name, row.league_id, row.match_date,
+          r2(lambdaHome), r2(lambdaAway), r2(lambdaHome + lambdaAway),
+          mx.over15Prob, mx.over25Prob, mx.ggProb,
+          mx.homeWin, mx.draw, mx.awayWin,
+        ]
+      );
+      upserted++;
+    } catch (_) { /* skip eșecuri punctuale (FK etc.) */ }
+  }
+  stats.predictions_scanned  = rows.length;
+  stats.predictions_upserted = upserted;
 }
 
 async function logCron(stats, status, errorMsg) {
@@ -249,6 +343,13 @@ export default async function handler(req, res) {
       stats.formStats = 'ok';
     } catch (e) {
       console.warn('[collect-daily] form_stats update:', e.message);
+    }
+
+    // Predicții Poisson pre-calculate pentru NS azi+3 (după form_stats fresh, 0 API)
+    try {
+      await computeUpcomingPredictions(stats);
+    } catch (e) {
+      stats.errors.push(`predictions: ${e.message}`);
     }
 
     await logCron(stats, 'success', stats.errors.length ? stats.errors.join('; ') : null);
