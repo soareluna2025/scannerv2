@@ -92,6 +92,10 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   211,   // Druga HNL (Liga 2)
   212,   // Croatian Cup
 
+  // Serbia
+  286,   // Super Liga (Tier 1)
+  287,   // Prva Liga (Tier 2)
+
   // Romania
   283,   // Liga I (Superliga)
   284,   // Liga II
@@ -177,8 +181,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   282,   // Liga 2
 
   // Ecuador
-  286,   // LigaPro Serie A
-  287,   // LigaPro Serie B (Liga 2)
   735,   // Copa Ecuador
   917,   // Copa Ecuador (ID alternativ)
 
@@ -189,7 +191,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Bolivia
   273,   // Primera Division
-  274,   // Liga de Ascenso (Liga 2)
   276,   // Copa Bolivia
 
   // Venezuela
@@ -290,6 +291,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   520,   // Malaysia Cup
 
   // Indonesia
+  274,   // Liga 1 (Tier 1)
   460,   // Liga 2
 
   // Vietnam
