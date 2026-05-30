@@ -5157,3 +5157,34 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ Schema DB neatinsă
     ✓ WS broadcast neschimbat (LIVE_DELTA mai des = mai multe push-uri,
       dar cu același payload pattern)
+
+[30.05 ~01:20] - FIX: live_stats.ngp_home/ngp_away salvate efectiv | Commit: d74e62c
+  Bug confirmat: 134.928 rânduri în live_stats, toate cu ngp_home/ngp_away
+  NULL. Root cause: saveLiveStats() în scanner.js:283-312 nu includea cele
+  2 coloane în INSERT — coloanele exist în schema, dar erau ignorate.
+  Fix:
+    1. Calculează ngTotal local în saveLiveStats:
+         ngTotal = f.mn < 10 ? 0 : calibrateNgp(calcNextGoal(f))
+         (calcNextGoal + calibrateNgp deja importate la top of scanner.js)
+    2. Split proporțional cu xG-ul per echipă:
+         if (hxg + axg > 0):
+           ngpHome = ngTotal * hxg/(hxg+axg)
+           ngpAway = ngTotal * axg/(hxg+axg)
+         else:
+           ngpHome = ngpAway = ngTotal / 2     (fallback 50/50)
+    3. INSERT extins cu cele 2 coloane (placeholders $17, $18).
+  Decizia split-ului proporțional cu xG:
+    - În live, echipa cu xG mai mare are șansă mai mare să marcheze
+    - Total = ng general (Poisson P(cel puțin un gol)
+    - Atribuire pe baza intensității ofensive prezente
+    - Alternativă (calcNextGoal per-team) ar fi mai costisitoare și ar
+      necesita re-arhitectura calcFeatures pentru per-team features
+  Efect:
+    În 2-4 săptămâni vom avea date suficiente pentru recalibrarea
+    NGP_CAL_REST cu rate-uri reale măsurate per bucket.
+    Query disponibil în task anterior (#2 alternativ pe live_stats).
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ NU am modificat calcNextGoal / calibrateNgp (refolosite as-is)
+    ✓ Schema DB neatinsă
