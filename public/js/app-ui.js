@@ -1167,16 +1167,18 @@ function mdRenderSumar(d){
     if(!hasCards&&!hasCorn)return;
     out+='<div class="md-section"><div class="md-section-title">Piețe Speciale</div>';
     if(hasCards){
-      var c35=Math.round((+en.cardsOver35||0)*100);
-      var c45=Math.round((+en.cardsOver45||0)*100);
+      // BUG FIX: poissonProbOver returnează deja 0-100 (vezi calc-utils.js).
+      // Înmulțirea cu 100 producea valori 7500% etc. Folosim direct valoarea.
+      var c35=Math.round(+en.cardsOver35||0);
+      var c45=Math.round(+en.cardsOver45||0);
       out+='<div class="md-prob-row">';
       out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(c35)+'">'+c35+'%</div><div class="md-prob-lbl">🟨 Cărți Over 3.5</div></div>';
       out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(c45)+'">'+c45+'%</div><div class="md-prob-lbl">🟨 Cărți Over 4.5</div></div>';
       out+='</div>';
     }
     if(hasCorn){
-      var k85=Math.round((+en.cornersOver85||0)*100);
-      var k95=Math.round((+en.cornersOver95||0)*100);
+      var k85=Math.round(+en.cornersOver85||0);
+      var k95=Math.round(+en.cornersOver95||0);
       out+='<div class="md-prob-row">';
       out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(k85)+'">'+k85+'%</div><div class="md-prob-lbl">📐 Cornere Over 8.5</div></div>';
       out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(k95)+'">'+k95+'%</div><div class="md-prob-lbl">📐 Cornere Over 9.5</div></div>';
