@@ -4881,3 +4881,34 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
     ✓ NU am modificat score2/3/6/7
     ✓ Doar gate-ul setInterval — restul flow neschimbat
+
+[29.05 ~22:00] - FEATURE: collect-daily — fixtures pentru azi+3 zile | Commit: 15a2593
+  Premisa task-ului user-ului: "extinde la 4 zile". Realitatea descoperită:
+    collect-daily NU colecta deloc fixtures — doar standings/leagues/
+    teams/form_stats. Future fixtures veneau pe rara cale prin api/today.js
+    (on-demand, 2 zile) sau scanner.js (doar live).
+  Soluție: am adăugat o funcție collectUpcomingFixtures(stats) care:
+    1. Iterează peste offsets [0, 1, 2, 3] (azi + 3 zile UTC)
+    2. dateOffsetUTC(off) → 'YYYY-MM-DD'
+    3. fetchAPI('/fixtures?date=DT&status=NS&timezone=UTC')
+    4. Filtrează prin ALLOWED_LEAGUE_IDS + isAllowedMatch (women/youth/Tier3+)
+    5. UPSERT în tabela fixtures (același pattern ca api/today.js):
+         (fixture_id PK, league_id, season, home_team_id, home_team_name,
+          away_team_id, away_team_name, status_short, status_long,
+          match_date, updated_at)
+         ON CONFLICT (fixture_id) DO UPDATE status/match_date/updated_at
+  Apelată ca PRIMUL pas în handler, înainte de standings loop.
+  Telemetrie: stats.upcoming_scanned / upcoming_upserted / upcoming_days
+  Cost API: 4 calls/rulare (negligibil pe planul de 300k).
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Comportament neschimbat pe standings/teams/form_stats (același loop)
+  De rulat manual pe VPS (sandbox cloud fără acces psql/curl la VPS):
+    curl -sf http://localhost:3000/api/cron/collect-daily | jq .
+    Verifică:
+    PGPASSWORD=Firenze225854 psql -U alohascan -d elefant -h 127.0.0.1 -c "
+    SELECT match_date::date, COUNT(*)
+      FROM fixtures
+     WHERE status_short='NS' AND match_date::date >= NOW()::date
+     GROUP BY 1 ORDER BY 1;"
