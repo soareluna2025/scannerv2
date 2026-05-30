@@ -4622,3 +4622,10 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
         274, // Liga 1 (Tier 1)
         460, // Liga 2
   Nu am adăugat ID-uri noi — doar mutate cu comentariile corecte.
+
+[29.05 ~16:45] - DOCS: regulă format răspuns obligatoriu în CLAUDE.md | Commit: c3cbdf0
+  Adăugat la începutul CLAUDE.md (înainte de secțiunea 1):
+    ## FORMAT RĂSPUNS OBLIGATORIU
+    Pune TOT răspunsul tău într-un singur bloc de cod (triple backticks)
+    astfel încât să apară butonul de copy în colțul dreapta-sus.
+    Nu scrie NIMIC în afara acelui bloc. Fără excepții.
