@@ -4861,3 +4861,23 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
     ✓ NU am modificat score2/3/6/7
     ✓ Doar matches-history.js (endpoint nou)
+
+[29.05 ~21:45] - FIX: auto-refresh suprascria data selectată în date picker | Commit: b64040d
+  Bug: în app-live.js liniile 946-961, setInterval(30s) fetchuia /api/today
+  și apela renderPM() ori de câte ori tab-ul PRE-MECI era activ și _pmMatches
+  nu era gol. Când userul naviga pe o zi istorică/viitoare prin date picker,
+  pm-body era suprascris cu meciurile de azi după 30 secunde.
+  Fix (app-live.js linia 946-961):
+    var todayLocal = (typeof pmTodayStr==='function')?pmTodayStr():null;
+    var onOtherDay = typeof PM_DATE==='string' && PM_DATE && todayLocal
+                   && PM_DATE !== todayLocal;
+    if(!onOtherDay && tabPre.active && _pmMatches.length){
+      … fetch /api/today + renderPM …
+    }
+  → dacă PM_DATE setat de pmLoadDate (date picker) ≠ today local, auto-refresh
+    sare peste fetch + render → view-ul istoric/viitor rămâne intact.
+  → comportament neschimbat când PM_DATE e null sau egal cu today (back-compat).
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Doar gate-ul setInterval — restul flow neschimbat
