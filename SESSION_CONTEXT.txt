@@ -4912,3 +4912,39 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
       FROM fixtures
      WHERE status_short='NS' AND match_date::date >= NOW()::date
      GROUP BY 1 ORDER BY 1;"
+
+[29.05 ~22:30] - FEATURE: calendar 4 îmbunătățiri | Commit: fc000a6
+  Aplicate în pmRenderHistory (public/js/app-ui.js) + CSS aux:
+  ── 1. Drapel național (emoji) înainte de țară ──
+     Funcția countryToFlag(country) — PM_FLAG_MAP cu:
+       a) Direct emoji pentru cazuri speciale (England 🏴󠁧󠁢󠁥󠁮󠁧󠁿, World 🌍, etc)
+       b) ISO 3166-1 alpha-2 → regional indicators offset (0x1F1E6)
+     Acoperă întregul whitelist (~90 țări) + variante de scriere
+     ('Czech-Republic' și 'Czech Republic', etc).
+  ── 2. Logo competiție după numele ligii ──
+     Folosește URL canonical API-Football:
+       https://media.api-sports.io/football/leagues/{league_id}.png
+     img class="pm-group-logo" (16×16) cu onerror display:none.
+  ── 3. Expand/collapse per competiție ──
+     pmIsCollapsed(leagueId)  → citește localStorage('pm_collapse_'+id)
+     pmToggleGroup(leagueId)  → toggle clasa .collapsed + chevron ▼/▲
+     Default: toate expanded. Click pe HEADER (nu doar pe chevron) → toggle.
+     Structura HTML schimbată: matches mutate în .pm-group-body, ascunse
+     prin CSS `.pm-group.collapsed .pm-group-body { display: none }`.
+     Stare per league_id persistă între sesiuni.
+  ── 4. Data + ora pe fiecare meci ──
+     pmFmtDateShort(d) → 'DU 31' (DAYS RO + zi luna)
+     pmFmtTime(d)       → '17:30'
+     NS:  '<date-prefix>DU 31</date-prefix>  17:30  NS'
+     FT:  '<date-prefix>VI 29</date-prefix>  2-1   FT'
+     LIVE:'<date-prefix>MA 31</date-prefix>  1-0   LIVE'
+  CSS aux (public/css/cards.css) — 9 reguli noi:
+     .pm-group-h{cursor:pointer; :hover background}
+     .pm-group-flag, .pm-group-logo, .pm-group-chev
+     .pm-group.collapsed .pm-group-body { display:none }
+     .pm-group.collapsed .pm-group-h    { opacity:.85 }
+     .hist-date-prefix                    { font-size:9px etc }
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Doar funcția pmRenderHistory + helpere noi
