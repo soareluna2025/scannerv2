@@ -5128,3 +5128,32 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     API daily budget: scanner ~37k → ~50k/zi (16% din 300k, sustenabil)
     Bandwidth UI: polling redundant eliminat → ~50% reducere traffic
     UX live final meci: responsiv în min 75+ (smoothing relax)
+
+[30.05 ~00:50] - PERF: max-speed live (sub-FlashScore) | Commit: f59416d
+  ── FIX 1: scanLive10s 3s → 2s ──
+     setInterval(scanLive10s, 3_000) → 2_000
+     Cost: 1 call/2s × 3600 = 1800/h = 43.2k/zi pentru /live=all.
+     Latență end-to-end: ~3-5s → ~2-3s (sub-FlashScore).
+  ── FIX 2: scanLiveStats 60s → 15s ──
+     setInterval(scanLiveStats, 60_000) → 15_000
+     xG, posesie, SOT actualizate la 15s în loc de 60s (4× mai rapid).
+     Cost estimat: 20 meciuri × 4 calls/min × 60 × 24 ≈ 115k/zi.
+     TOTAL scanner: 43k + 115k = 158k/zi din 300k (53%) — sustenabil.
+  ── FIX 3: priority buckets 3-tier ──
+     Nou: matchPriorityBucket(m, prevNg) → 'high' | 'medium' | 'low'
+       HIGH:   mn >= 60 OR scor egal (diff=0) OR NGP > 50
+                → procesat la fiecare scan (2s efectiv)
+       LOW:    mn < 30 ȘI diff > 2
+                → procesat la fiecare al 4-lea scan (8s efectiv)
+       MEDIUM: orice altceva (mn 30-59 cu diff>0 sau alte combinări)
+                → procesat la fiecare al 2-lea scan (4s efectiv)
+     Aplicat în loop-ul principal scanLive10s — skip prin continue.
+     Economisește calcule + DB I/O + WS broadcast pe meciuri unde
+     schimbarea NGP e improbabilă.
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Calcule per meci (calcFeatures/NGP/markets) neatinse
+    ✓ Schema DB neatinsă
+    ✓ WS broadcast neschimbat (LIVE_DELTA mai des = mai multe push-uri,
+      dar cu același payload pattern)
