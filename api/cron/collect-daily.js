@@ -1,9 +1,11 @@
 // api/cron/collect-daily.js
 // Rulează zilnic la 06:00
 // Colectează: standings, leagues, teams pentru toate ligile din whitelist
+// + upcoming fixtures pentru azi + următoarele 3 zile (date picker calendar)
 
 import { query } from '../db.js';
 import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
+import { isAllowedMatch } from '../utils/league-filter.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
 
 const PRIORITY_LEAGUES = [...ALLOWED_LEAGUE_IDS];
@@ -18,6 +20,72 @@ async function fetchAPI(endpoint) {
   const res = await fetchApiFootball(endpoint);
   const data = await res.json();
   return data.response || [];
+}
+
+function dateOffsetUTC(offsetDays) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+// Colectează meciurile NS pentru azi + următoarele 3 zile.
+// Filtrate prin ALLOWED_LEAGUE_IDS + isAllowedMatch (women/youth/Tier3+).
+// Upsertate în tabela fixtures (același pattern ca api/today.js).
+async function collectUpcomingFixtures(stats) {
+  const allowed = new Set([...ALLOWED_LEAGUE_IDS]);
+  const offsets = [0, 1, 2, 3];                  // azi + 3 zile înainte
+  let totalUpserted = 0;
+  let totalScanned  = 0;
+
+  for (const off of offsets) {
+    const dt = dateOffsetUTC(off);
+    let fxList = [];
+    try {
+      fxList = await fetchAPI(`/fixtures?date=${dt}&status=NS&timezone=UTC`);
+    } catch (e) {
+      stats.errors.push(`fixtures ${dt}: ${e.message}`);
+      continue;
+    }
+    totalScanned += fxList.length;
+
+    const filtered = fxList.filter(f =>
+      allowed.has(f.league?.id) && isAllowedMatch(f, ALLOWED_LEAGUE_IDS)
+    );
+
+    for (const m of filtered) {
+      try {
+        await query(
+          `INSERT INTO fixtures
+             (fixture_id, league_id, season, home_team_id, home_team_name,
+              away_team_id, away_team_name, status_short, status_long, match_date, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+           ON CONFLICT (fixture_id) DO UPDATE SET
+             status_short=EXCLUDED.status_short,
+             status_long=EXCLUDED.status_long,
+             match_date=EXCLUDED.match_date,
+             updated_at=NOW()`,
+          [
+            m.fixture?.id,
+            m.league?.id,
+            m.league?.season || new Date(m.fixture?.date || dt).getFullYear(),
+            m.teams?.home?.id,
+            m.teams?.home?.name,
+            m.teams?.away?.id,
+            m.teams?.away?.name,
+            m.fixture?.status?.short || 'NS',
+            m.fixture?.status?.long  || 'Not Started',
+            m.fixture?.date,
+          ]
+        );
+        totalUpserted++;
+      } catch (e) {
+        // continuă peste eșecuri punctuale (FK, etc) — log silent
+      }
+    }
+  }
+  stats.upcoming_scanned  = totalScanned;
+  stats.upcoming_upserted = totalUpserted;
+  stats.upcoming_days     = offsets.length;
 }
 
 async function logCron(stats, status, errorMsg) {
@@ -46,6 +114,13 @@ export default async function handler(req, res) {
   const stats = { leagues: 0, teams: 0, standings: 0, errors: [] };
 
   try {
+    // Pas 1 — upcoming fixtures (azi + 3 zile) → tab PRE-MECI / date picker
+    try {
+      await collectUpcomingFixtures(stats);
+    } catch (e) {
+      stats.errors.push(`upcoming: ${e.message}`);
+    }
+
     for (const leagueId of PRIORITY_LEAGUES) {
 
       try {
