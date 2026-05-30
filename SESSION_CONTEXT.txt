@@ -5382,3 +5382,21 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Constrânți respectate:
     ✓ NU am atins calcConfidence*/score2/3/6/7  ✓ calcScoringProbability neatins
     ✓ confidence/best_ev din predictions neclobberate
+
+[30.05 ~04:?? ] - FIX URGENT: tap pe meci NS din zile viitoare nu deschidea modalul
+  Fișier: public/js/app-ui.js (DOAR frontend).
+  CAUZA (pmRenderHistory, calendar /api/matches-history):
+    var clickable = isFT && m.fixture_id && m.home_team_id && m.away_team_id;
+    Guard-ul `isFT` făcea clickable DOAR meciurile finalizate → rândurile NS
+    (zile viitoare) și LIVE NU primeau onclick="mdOpen(...)" → tap = nimic.
+  Verificat că datele EXISTĂ: /api/matches-history întoarce fixture_id,
+    home_team_id, away_team_id și pentru NS (status IN NS/TBD/PST) — deci
+    blocajul era strict guard-ul frontend, nu lipsa ID-urilor.
+  FIX: scos `isFT` → clickable = fixture_id && home_team_id && away_team_id.
+    Acum NS/LIVE/FT deschid toate modalul (mdOpen funcționează pe orice status;
+    propriul guard intern e doar !fid||!hid||!aid).
+  Verificat că restul apelurilor mdOpen (carduri live/PM/today, app-live) erau
+    deja necondiționate — calendarul era singurul cu guard pe status.
+  Comentariu secțiune actualizat („Tap pe meci (NS/LIVE/FT) → mdOpen").
+  Verificare: node --check public/js/app-ui.js → OK.
+  Constrânți: ✓ NU am atins calcConfidence*/score2/3/6/7

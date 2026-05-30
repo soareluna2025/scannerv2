@@ -714,7 +714,7 @@ function renderPM(){
 
 // ── CALENDAR + ISTORIC MECIURI (FlashScore-like) ──────────────
 // Date picker (7 zile: 3 înapoi / azi / 3 înainte) + listă grupată pe
-// competiție din /api/matches-history. Tap pe meci FT → mdOpen existent.
+// competiție din /api/matches-history. Tap pe meci (NS/LIVE/FT) → mdOpen existent.
 var PM_DATE = null;            // YYYY-MM-DD curent selectat
 var _pmHistData = null;
 var _PM_DAYS_RO = ['DU','LU','MA','MI','JO','VI','SA'];
@@ -925,7 +925,10 @@ function pmRenderHistory(data){
             + '<span class="hist-time">' + htmlEsc(st) + '</span>';
       }
 
-      var clickable = isFT && m.fixture_id && m.home_team_id && m.away_team_id;
+      // Clickable pentru ORICE status (NS/LIVE/FT) cât timp avem ID-urile —
+      // modalul (mdOpen) funcționează pre-meci, live și final. Anterior gated pe
+      // isFT → meciurile NS din zile viitoare nu deschideau modalul.
+      var clickable = m.fixture_id && m.home_team_id && m.away_team_id;
       var rowAttrs = clickable
         ? 'class="hist-row clickable" onclick="mdOpen(' + m.fixture_id + ',' + m.home_team_id + ',' + m.away_team_id + ',this)"'
         : 'class="hist-row"';
