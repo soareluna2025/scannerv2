@@ -304,3 +304,26 @@
 .pm-group.collapsed .pm-group-h{opacity:1}
 
 .hist-date-prefix{font-size:9px;color:var(--mu);font-weight:700;letter-spacing:.5px}
+
+/* ── Modal STATISTICI tab — comparative bars (FlashScore-like) ── */
+.stat-header{display:flex;align-items:center;gap:10px;padding:10px 14px;
+  background:#111827;border:1px solid rgba(255,255,255,.06);border-radius:10px;
+  margin-bottom:12px;font-weight:700;font-size:12px}
+.stat-team{flex:1;color:var(--tx)}
+.stat-team.away{text-align:right}
+.stat-vs{color:var(--mu);font-size:10px;font-weight:600;letter-spacing:1px}
+
+.stat-section{margin-bottom:18px}
+.stat-section-title{font-size:11px;color:var(--mu2);font-weight:700;
+  text-transform:uppercase;letter-spacing:1px;padding:6px 0 8px;
+  border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:8px}
+
+.stat-row{display:flex;align-items:center;gap:10px;padding:4px 0;font-size:12px}
+.stat-val{font-weight:700;min-width:50px}
+.stat-val.home{text-align:right}
+.stat-val.away{text-align:left}
+.stat-label{flex:1;text-align:center;color:var(--mu);font-size:11px}
+.stat-bar{display:flex;height:4px;background:rgba(255,255,255,.05);
+  border-radius:2px;overflow:hidden;margin:2px 0 10px}
+.stat-bar-h{height:100%;border-radius:2px 0 0 2px;transition:width .3s}
+.stat-bar-a{height:100%;border-radius:0 2px 2px 0;transition:width .3s;opacity:.6}

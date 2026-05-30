@@ -1051,6 +1051,95 @@ function mdTab(idx){
 var _standingsCache={};
 var _venueWeatherCache={};
 
+// Stats helpers — bară comparativă home vs away (FlashScore-like)
+// home/away pot fi number sau null. Procentuale (possession, pass %) sunt
+// deja 0-100. Restul sunt count-uri brute (lățimea barei se normalizează
+// față de suma celor 2).
+function mdStatBar(label, hVal, aVal, fmt){
+  var hRaw = (typeof hVal === 'number' && !isNaN(hVal)) ? hVal : null;
+  var aRaw = (typeof aVal === 'number' && !isNaN(aVal)) ? aVal : null;
+  if (hRaw === null && aRaw === null) return '';     // ascunde rând complet gol
+  var h = hRaw !== null ? hRaw : 0;
+  var a = aRaw !== null ? aRaw : 0;
+  var total = h + a;
+  var hPct = total > 0 ? Math.round(h / total * 100) : 50;
+  var aPct = 100 - hPct;
+  // Verde = avantaj, roșu = dezavantaj. Egalitate sau ambele 0 → gri.
+  var hColor = (h > a) ? '#22c55e' : (h < a ? '#ef4444' : '#64748b');
+  var aColor = (a > h) ? '#22c55e' : (a < h ? '#ef4444' : '#64748b');
+  var hFmt = hRaw === null ? '—' : (fmt ? fmt(hRaw) : hRaw);
+  var aFmt = aRaw === null ? '—' : (fmt ? fmt(aRaw) : aRaw);
+  return '<div class="stat-row">'
+       +   '<div class="stat-val home" style="color:'+hColor+'">'+hFmt+'</div>'
+       +   '<div class="stat-label">'+htmlEsc(label)+'</div>'
+       +   '<div class="stat-val away" style="color:'+aColor+'">'+aFmt+'</div>'
+       + '</div>'
+       + '<div class="stat-bar">'
+       +   '<div class="stat-bar-h" style="width:'+hPct+'%;background:'+hColor+'"></div>'
+       +   '<div class="stat-bar-a" style="width:'+aPct+'%;background:'+aColor+'"></div>'
+       + '</div>';
+}
+
+function mdRenderStatistici(d){
+  var body = document.getElementById('md-body');
+  var ms = d && d.matchStats;
+  var H  = ms && ms.home;
+  var A  = ms && ms.away;
+  if (!H && !A) {
+    body.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>'
+      + '<div class="empty-t">Statistici indisponibile</div>'
+      + '<div class="empty-s">Datele match_stats nu au fost încă colectate pentru acest meci</div></div>';
+    return;
+  }
+  var n = function(o, k){ var v = o ? o[k] : null; return v == null ? null : Number(v); };
+  var f1 = function(v){ return Number(v).toFixed(2); };
+  var pct = function(v){ return Number(v) + '%'; };
+
+  var hName = H && H.team_name ? H.team_name : (d.fixture && d.fixture.teams && d.fixture.teams.home && d.fixture.teams.home.name) || 'Gazde';
+  var aName = A && A.team_name ? A.team_name : (d.fixture && d.fixture.teams && d.fixture.teams.away && d.fixture.teams.away.name) || 'Oaspeți';
+
+  var out = '';
+  out += '<div class="stat-header">'
+       +   '<div class="stat-team home">'+htmlEsc(hName)+'</div>'
+       +   '<div class="stat-vs">vs</div>'
+       +   '<div class="stat-team away">'+htmlEsc(aName)+'</div>'
+       + '</div>';
+
+  // ── ATAC ──
+  out += '<div class="stat-section"><div class="stat-section-title">⚽ ATAC</div>';
+  out += mdStatBar('xG (expected goals)', n(H,'expected_goals'), n(A,'expected_goals'), f1);
+  out += mdStatBar('Șuturi totale',       n(H,'shots_total'),    n(A,'shots_total'));
+  out += mdStatBar('Șuturi pe poartă',    n(H,'shots_on_goal'),  n(A,'shots_on_goal'));
+  out += mdStatBar('Șuturi interior',     n(H,'shots_insidebox'),n(A,'shots_insidebox'));
+  out += mdStatBar('Șuturi exterior',     n(H,'shots_outsidebox'),n(A,'shots_outsidebox'));
+  out += mdStatBar('Șuturi blocate',      n(H,'blocked_shots'),  n(A,'blocked_shots'));
+  out += mdStatBar('Cornere',             n(H,'corner_kicks'),   n(A,'corner_kicks'));
+  out += mdStatBar('Ofsaiduri',           n(H,'offsides'),       n(A,'offsides'));
+  out += '</div>';
+
+  // ── POSESIE & PASE ──
+  out += '<div class="stat-section"><div class="stat-section-title">🎯 POSESIE & PASE</div>';
+  out += mdStatBar('Posesie',             n(H,'ball_possession'), n(A,'ball_possession'), pct);
+  out += mdStatBar('Total pase',          n(H,'total_passes'),    n(A,'total_passes'));
+  out += mdStatBar('Pase precise',        n(H,'passes_accurate'), n(A,'passes_accurate'));
+  out += mdStatBar('Acuratețe pase',      n(H,'pass_percentage'), n(A,'pass_percentage'), pct);
+  out += '</div>';
+
+  // ── APĂRARE ──
+  out += '<div class="stat-section"><div class="stat-section-title">🛡️ APĂRARE</div>';
+  out += mdStatBar('Faulturi',            n(H,'fouls'),           n(A,'fouls'));
+  out += mdStatBar('Cartonașe galbene',   n(H,'yellow_cards'),    n(A,'yellow_cards'));
+  out += mdStatBar('Cartonașe roșii',     n(H,'red_cards'),       n(A,'red_cards'));
+  out += '</div>';
+
+  // ── PORTARI ──
+  out += '<div class="stat-section"><div class="stat-section-title">🧤 PORTARI</div>';
+  out += mdStatBar('Intervenții',         n(H,'goalkeeper_saves'),n(A,'goalkeeper_saves'));
+  out += '</div>';
+
+  body.innerHTML = out;
+}
+
 function mdRender(){
   if(!_md.data){return;}
   var d=_md.data;
@@ -1059,6 +1148,7 @@ function mdRender(){
   else if(_md.tabIdx===2)mdRenderJucatori(d);
   else if(_md.tabIdx===3)mdRenderForma(d);
   else if(_md.tabIdx===4)mdRenderClasament(d);
+  else if(_md.tabIdx===5)mdRenderStatistici(d);
 }
 
 function mdRenderSumar(d){

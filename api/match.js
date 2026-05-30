@@ -376,6 +376,30 @@ export default async function handler(req, res) {
     ).sort((a, b) => (b.rating || 0) - (a.rating || 0));
 
     const responseData = { fixture, lineups, players: flatPlayers, events, enrich };
+
+    // Stats per echipă (match_stats — populate de collect-finished + backfill).
+    // Răspund cu [home_row, away_row] sau [] dacă datele lipsesc.
+    try {
+      const { rows: msRows } = await query(
+        `SELECT team_id, team_name,
+                shots_on_goal, shots_total, blocked_shots,
+                shots_insidebox, shots_outsidebox,
+                fouls, corner_kicks, offsides,
+                ball_possession, yellow_cards, red_cards,
+                goalkeeper_saves,
+                total_passes, passes_accurate, pass_percentage,
+                expected_goals
+           FROM match_stats
+          WHERE fixture_id = $1`,
+        [Number(id)]
+      );
+      const hRow = msRows.find(r => Number(r.team_id) === Number(hId)) || null;
+      const aRow = msRows.find(r => Number(r.team_id) === Number(aId)) || null;
+      responseData.matchStats = { home: hRow, away: aRow };
+    } catch (e) {
+      responseData.matchStats = { home: null, away: null, error: e.message };
+    }
+
     matchCache.set(id, { data: responseData, ts: Date.now() });
     res.status(200).json(responseData);
   } catch (e) {
