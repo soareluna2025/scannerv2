@@ -4727,3 +4727,40 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   → deja în scale 0-100, deja rotunjit la integer, deja clampat.
   Înmulțirea cu 100 producea valori absurde (75 → 7500%).
   Fix: eliminat *100 din toate 4 valori. Folosim direct Math.round(value).
+
+[29.05 ~19:30] - FEATURE: Calendar + Istoric meciuri (FlashScore-like) | Commit: 37f2c81
+  Permite navigare pe orice zi (trecut/azi/viitor) cu liste grupate pe
+  competiție. Folosește datele istorice deja colectate (fixtures_history)
+  fără să afecteze pipeline-ul de predicție.
+  ── 1. BACKEND: api/matches-history.js (nou, 99 linii) ──
+     GET /api/matches-history?date=YYYY-MM-DD
+     Branching:
+       date < azi   → fixtures_history (status_short='FT')
+       date = azi   → fixtures (toate statusurile)
+       date > azi   → fixtures (status_short='NS')
+     JOIN leagues + teams (logos). Filtrat prin ALLOWED_LEAGUE_IDS.
+     Grupare în răspuns: groups[{country, league_name, league_id, matches[]}]
+     Ordine: country ASC, league_name ASC, match_date ASC.
+  ── 2. REGISTRARE: server.js apiFiles += 'matches-history' ──
+  ── 3. UI: index.html — pm-datebar nou peste pm-toolbar ──
+     <div id="pm-datebar"> (sticky, horizontal scroll)
+  ── 4. CSS: public/css/cards.css — 26 linii noi ──
+     .pm-datebtn (cu .active state verde)  .pm-group  .pm-group-h
+     .hist-row  .hist-team  .hist-logo  .hist-mid
+     .hist-score-ft/-live  .hist-ft-badge/-ns-badge  .live-dot pulse
+  ── 5. JS: public/js/app-ui.js — secțiune nouă după renderPM (118 linii) ──
+     Helpere date: pmTodayStr, pmDateAdd  (zero TZ bug — local time)
+     pmBuildDateBar()    : 7 butoane (LU/MA/MI/JO/VI/SA/DU + AZI), highlight verde
+     pmLoadDate(dateStr) : fetch + render, error catch cu htmlEsc
+     pmRenderHistory(data): listă grupată cu echipele, scor/oră/LIVE badge,
+                            câștigătorii FT cu bold, tap pe FT → mdOpen()
+     Auto-init la DOMContentLoaded → bar populat de la prima încărcare
+  Coexistă cu loadPM() / loadTopOpps() existente (nu le suprascrie):
+     - "Încarcă Pre-meci" rămâne flow-ul vechi cu enrich + Top Picks
+     - Date bar = vedere FlashScore (rapidă, fără enrich)
+  Tap pe meci FT din istoric → mdOpen(fid, hid, aid, el) — modal existent
+  /api/match deja gestionează statistici + lineups pentru FT.
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Endpoint nou — pipeline-ul de predicție neatins
