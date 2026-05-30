@@ -5,6 +5,13 @@
 
 ---
 
+## FORMAT RĂSPUNS OBLIGATORIU
+Pune TOT răspunsul tău într-un singur bloc de cod (triple backticks)
+astfel încât să apară butonul de copy în colțul dreapta-sus.
+Nu scrie NIMIC în afara acelui bloc. Fără excepții.
+
+---
+
 ## 1. REGULI GENERALE
 
 - **După ORICE task finalizat**, actualizează `SESSION_CONTEXT.txt` secțiunea 12 cu ce s-a făcut (format: `[ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash`) și push.
