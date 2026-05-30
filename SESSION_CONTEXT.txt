@@ -5442,3 +5442,35 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     aplică pe glif text — vizual ambele cerințe sunt îndeplinite.
   Verificare: brace-balance CSS OK (184/184). node --check N/A (doar CSS, 0 JS).
   Constrânți: ✓ niciun cod intangibil atins (modificare pur CSS)
+
+[30.05 ~06:?? ] - FEATURE: Acuratețe Model reală (înlocuiește Win Rate bar înșelător)
+  Motiv: vechea bară (over15_prob>=60 < base-rate ~77%) măsura statistica
+    fotbalului, nu performanța modelului. Înlocuită cu acuratețe pe 3 niveluri.
+  Fișiere: api/model-accuracy.js (NOU), server.js, index.html, public/js/app-state.js
+  BACKEND — GET /api/model-accuracy (NOU, înregistrat în apiFiles):
+    Sursă: prediction_log (single source of truth), module OVER15/GG/NGP/CONFIDENCE.
+    Params: days=30|60|90 (def 30), minConf=80|0 (def 80 „convinse" / 0 „toate").
+    Query: GROUP BY module, COUNT FILTER outcome WIN/LOSS/PENDING, predicted_value>=conf,
+      created_at în ultimele N zile. winRate=wins/(wins+losses) (exclude pending).
+    Răspuns: {overall, breakdown:{over15,gg,ngp,confidence}, total_resolved,
+      total_pending, period, minConf}. Cache 10 min per (days,conf).
+  FRONTEND NIVEL 1 — bara header (#wr-bar refolosit):
+    „🎯 Acuratețe model" + procent mare colorat (#ma-pct) + „N predicții rezolvate
+    · 30 zile" (#ma-sub). loadModelAccuracy() în app-state.js (init + interval 10min).
+  FRONTEND NIVEL 2/3 — modal nou #ma-overlay (separat de md-overlay):
+    Tap pe bară → maOpen(). Overall mare + 3 butoane perioadă (30/60/90) +
+    toggle „Toate / Doar ≥80%" + breakdown 4 bare animate (Over1.5/GG/NGP/Confidence)
+    cu wr% + (N). Progress bars: width 0→target via requestAnimationFrame + transition.
+    maOpen/maClose/maRender/maBuildHtml/maSetPeriod/maToggleAll + _maState{days,allMode}.
+  loadLearningLeagues() păstrat DOAR pentru badge-urile good/bad (scos blocul
+    care updata vechile wr-w/l/p/r — ID-uri eliminate din HTML). wrShowInfo() rămas
+    (dead code inofensiv).
+  Verificare:
+    • node --check model-accuracy.js / server.js / app-state.js → OK.
+    • Test logic agregare (/tmp/ma_test.mjs): overall 72% din breakdown, per-modul
+      82/65/60/82, modul gol → winRate null („—"). Shape corect.
+    • Niciun ID vechi (wr-w/l/p/r) rămas referit în JS.
+    ⚠ Endpoint NEtestat pe DB live (sandbox fără PG) — doar logica de agregare;
+      SQL-ul e standard GROUP BY/FILTER. Test rapid post-deploy:
+      curl '/api/model-accuracy?days=30&minConf=80'.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins

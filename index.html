@@ -54,17 +54,14 @@
 
 <!-- MAIN CONTENT -->
 <main class="page" id="page">
-<!-- WIN RATE — date din DB, sticky in interiorul page (zero gap) -->
-<div class="wr" id="wr-bar" style="display:flex;position:sticky;top:0;z-index:60" onclick="wrShowInfo()">
+<!-- ACURATEȚE MODEL — din prediction_log (server-side), sticky in interiorul page -->
+<div class="wr" id="wr-bar" style="display:flex;position:sticky;top:0;z-index:60" onclick="maOpen()">
   <div style="display:flex;flex-direction:column">
-    <span class="wr-lbl">Over 1.5 win rate &middot; 30 zile <span style="opacity:.5">ⓘ</span></span>
-    <span style="font-size:8px;color:var(--mu);font-weight:500;letter-spacing:.3px;margin-top:1px">predic&#539;ii confirmate din DB (server-side)</span>
+    <span class="wr-lbl">🎯 Acurate&#539;e model <span style="opacity:.5">ⓘ</span></span>
+    <span id="ma-sub" style="font-size:8px;color:var(--mu);font-weight:500;letter-spacing:.3px;margin-top:1px">&mdash; predic&#539;ii rezolvate &middot; 30 zile</span>
   </div>
   <div class="wr-items">
-    <span class="wr-w" id="wr-w">W: —</span>
-    <span class="wr-l" id="wr-l">L: —</span>
-    <span class="wr-p" id="wr-p">P: —</span>
-    <span class="wr-r" id="wr-r">—</span>
+    <span class="wr-r" id="ma-pct" style="font-size:17px;font-weight:800">&mdash;</span>
   </div>
 </div>
 
@@ -168,6 +165,17 @@
   </div>
   <div class="md-body" id="md-body">
     <div class="spinner"><div class="spin"></div></div>
+  </div>
+</div>
+
+<!-- ACURATEȚE MODEL — modal detalii (separat de md-overlay) -->
+<div id="ma-overlay" onclick="if(event.target===this)maClose()" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);align-items:flex-end;justify-content:center">
+  <div style="background:var(--bg2,#12151c);width:100%;max-width:520px;max-height:88vh;overflow-y:auto;border-radius:16px 16px 0 0;border:1px solid rgba(255,255,255,.1);padding:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div style="font-size:15px;font-weight:800">🎯 Acurate&#539;e model</div>
+      <button onclick="maClose()" style="background:none;border:none;color:var(--mu);font-size:20px;cursor:pointer;line-height:1">&#10005;</button>
+    </div>
+    <div id="ma-body"><div class="spinner"><div class="spin"></div></div></div>
   </div>
 </div>
 

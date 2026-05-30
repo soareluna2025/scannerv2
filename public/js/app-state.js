@@ -24,29 +24,88 @@ function loadLearningLeagues(){
       GOOD_LEAGUES={};BAD_LEAGUES={};
       (d.good||[]).forEach(function(lg){GOOD_LEAGUES[lg.id]={name:lg.name,wr:lg.wr,n:lg.n};});
       (d.bad||[]).forEach(function(lg){BAD_LEAGUES[lg.id] ={name:lg.name,wr:lg.wr,n:lg.n};});
-      // Update banner cu date DB
-      if(d.overall){
-        var ov=d.overall;
-        var wEl=document.getElementById('wr-w');
-        var lEl=document.getElementById('wr-l');
-        var pEl=document.getElementById('wr-p');
-        var rEl=document.getElementById('wr-r');
-        if(wEl)wEl.textContent='W: '+ov.wins;
-        if(lEl)lEl.textContent='L: '+ov.losses;
-        if(pEl)pEl.textContent='P: '+ov.pending;
-        if(rEl){
-          if(ov.winRate!==null){
-            rEl.textContent=ov.winRate+'%';
-            rEl.style.color=ov.winRate>=70?'#22c55e':ov.winRate>=55?'#f59e0b':'#ef4444';
-          }else{rEl.textContent='—';rEl.style.color='';}
-        }
-      }
+      // Bara header foloseste acum /api/model-accuracy (loadModelAccuracy);
+      // learning-leagues ramane DOAR pentru badge-urile good/bad pe carduri.
     }).catch(function(){});
   }catch(e){}
 }
 loadLearningLeagues();
 // Refresh la 5 min sa fie sincronizat cu cache-ul server-side
 setInterval(loadLearningLeagues, 5*60*1000);
+
+// ── ACURATEȚE MODEL (header bar + modal detalii) ─────────────────
+// Sursă: /api/model-accuracy (prediction_log). Înlocuiește vechea bară win-rate.
+var _maState={days:30,allMode:false};
+function loadModelAccuracy(){
+  try{
+    fetch('/api/model-accuracy?days=30&minConf=80&ts='+Date.now())
+      .then(function(r){return r.json();}).then(function(d){
+        if(!d||!d.ok)return;
+        var ov=d.overall||{};
+        var pe=document.getElementById('ma-pct');
+        var se=document.getElementById('ma-sub');
+        if(pe){
+          if(ov.winRate!=null){pe.textContent=ov.winRate+'%';pe.style.color=ov.winRate>=70?'#22c55e':ov.winRate>=55?'#f59e0b':'#ef4444';}
+          else{pe.textContent='—';pe.style.color='';}
+        }
+        if(se)se.textContent=(d.total_resolved||0)+' predicții rezolvate · 30 zile';
+      }).catch(function(){});
+  }catch(e){}
+}
+loadModelAccuracy();
+setInterval(loadModelAccuracy, 10*60*1000);
+
+function maColor(p){return p==null?'#888':p>=70?'#22c55e':p>=55?'#f59e0b':'#ef4444';}
+function maOpen(){var ov=document.getElementById('ma-overlay');if(ov){ov.style.display='flex';maRender();}}
+function maClose(){var ov=document.getElementById('ma-overlay');if(ov)ov.style.display='none';}
+function maSetPeriod(d){_maState.days=d;maRender();}
+function maToggleAll(){_maState.allMode=!_maState.allMode;maRender();}
+function maRender(){
+  var body=document.getElementById('ma-body');if(!body)return;
+  body.innerHTML='<div class="spinner"><div class="spin"></div></div>';
+  var minConf=_maState.allMode?0:80;
+  fetch('/api/model-accuracy?days='+_maState.days+'&minConf='+minConf+'&ts='+Date.now())
+    .then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok){body.innerHTML='<div class="empty"><div class="empty-t">Eroare</div></div>';return;}
+      body.innerHTML=maBuildHtml(d);
+      requestAnimationFrame(function(){
+        var bars=body.querySelectorAll('.ma-fill');
+        for(var i=0;i<bars.length;i++)bars[i].style.width=bars[i].getAttribute('data-w')+'%';
+      });
+    }).catch(function(){body.innerHTML='<div class="empty"><div class="empty-t">Eroare rețea</div></div>';});
+}
+function maBuildHtml(d){
+  var ov=d.overall||{};
+  var pct=ov.winRate==null?'—':ov.winRate+'%';
+  var h='';
+  h+='<div style="text-align:center;padding:8px 0 4px">';
+  h+='<div style="font-size:42px;font-weight:800;line-height:1;color:'+maColor(ov.winRate)+'">'+pct+'</div>';
+  h+='<div style="font-size:11px;color:var(--mu);margin-top:5px">'+(d.total_resolved||0)+' predicții rezolvate · '+d.period+' zile'+(d.minConf>=80?' · doar ≥80%':'')+'</div>';
+  h+='<div style="font-size:10px;color:var(--mu2,#888);margin-top:2px">'+(ov.wins||0)+' W · '+(ov.losses||0)+' L · '+(ov.pending||0)+' pending</div>';
+  h+='</div>';
+  h+='<div style="display:flex;gap:6px;margin:10px 0">';
+  [30,60,90].forEach(function(p){
+    var act=_maState.days===p;
+    h+='<button onclick="maSetPeriod('+p+')" style="flex:1;padding:7px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid '+(act?'#22c55e':'rgba(255,255,255,.12)')+';background:'+(act?'rgba(34,197,94,.15)':'transparent')+';color:'+(act?'#22c55e':'var(--mu)')+'">'+p+' zile</button>';
+  });
+  h+='</div>';
+  h+='<div onclick="maToggleAll()" style="display:flex;align-items:center;justify-content:space-between;padding:9px 11px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);cursor:pointer;margin-bottom:14px">';
+  h+='<span style="font-size:12px;font-weight:600">'+(_maState.allMode?'Toate predicțiile':'Doar confidence ≥80%')+'</span>';
+  h+='<span style="font-size:11px;color:#22c55e;font-weight:600">'+(_maState.allMode?'comută la ≥80% »':'comută la toate »')+'</span>';
+  h+='</div>';
+  var rows=[['Over 1.5',d.breakdown.over15],['GG',d.breakdown.gg],['NGP Live',d.breakdown.ngp],['Confidence',d.breakdown.confidence]];
+  rows.forEach(function(r){
+    var b=r[1]||{};var wr=b.winRate;
+    var pctTxt=wr==null?'—':wr+'%';
+    var w=wr==null?0:wr;
+    h+='<div style="margin-bottom:12px">';
+    h+='<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="font-weight:600">'+r[0]+'</span><span style="font-weight:700;color:'+maColor(wr)+'">'+pctTxt+' <span style="color:var(--mu);font-weight:400">('+(b.resolved||0)+')</span></span></div>';
+    h+='<div style="height:8px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden"><div class="ma-fill" data-w="'+w+'" style="height:100%;width:0;background:'+maColor(wr)+';transition:width .6s ease"></div></div>';
+    h+='</div>';
+  });
+  h+='<div style="font-size:9px;color:var(--mu2,#888);margin-top:8px;line-height:1.4">Sursă: prediction_log · acuratețe = câștigate / (câștigate + pierdute), exclude pending. Prag „convinse": predicted_value ≥ 80.</div>';
+  return h;
+}
 
 // ── CLOCK ────────────────────────────────────────────────────
 function tickClock(){
