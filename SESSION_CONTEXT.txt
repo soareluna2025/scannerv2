@@ -4654,3 +4654,13 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     4A shrinkage (96f70e7), 4B per-profil (7cee89c),
     4C g2Score predictions (14cef08), 4D clamp scoruri (4e0dc81),
     Sprint Live (4d81457), Whitelist cleanup (e429e9c + 51bdd78).
+
+[29.05 ~17:30] - FIX: 344 mutat din El Salvador la Bolivia (DB audit) | Commit: 446bc80
+  DB confirmat: 344 = Bolivia Primera División (Liga 2), NU El Salvador
+  Primera (era mislabeling în api/leagues.js).
+  Acțiuni aplicate:
+    - Eliminat 344 din secțiunea El Salvador (rămân 349 Liga 2 + 350 Cup).
+    - Adăugat 344 în secțiunea Bolivia ca "Primera División (Liga 2)"
+      (alături de 273 Primera și 276 Copa Bolivia).
+    - Ecuador LigaPro lipsește în DB → nu am adăugat niciun ID nou.
+    - 240 — verificare DB amânată (sandbox cloud nu poate rula psql).
