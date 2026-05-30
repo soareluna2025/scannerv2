@@ -946,7 +946,12 @@ updateFavBadge();
 setInterval(function(){
   var tabPre=document.getElementById('tab-pre');
   var tabFav=document.getElementById('tab-fav');
-  if(tabPre&&tabPre.classList.contains('active')&&_pmMatches.length){
+  // Bug fix: dacă userul a navigat pe altă zi în date picker (pmLoadDate
+  // setează PM_DATE), NU forțez reload-ul la /api/today — altfel view-ul
+  // istoric/viitor era suprascris cu meciurile de azi după 30s.
+  var todayLocal=(typeof pmTodayStr==='function')?pmTodayStr():null;
+  var onOtherDay=(typeof PM_DATE==='string')&&PM_DATE&&todayLocal&&PM_DATE!==todayLocal;
+  if(!onOtherDay&&tabPre&&tabPre.classList.contains('active')&&_pmMatches.length){
     fetch('/api/today').then(function(r){return r.json();}).then(function(d){
       var raw=Array.isArray(d.response)?d.response:Array.isArray(d)?d:[];
       if(!raw.length)return;
