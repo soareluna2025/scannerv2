@@ -5289,3 +5289,37 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Verificare: node --check pe toate 3 fișierele → OK.
   Constrânți respectate:
     ✓ Niciun cod intangibil atins  ✓ getLiveStatsFromDB neatins  ✓ xG omis
+
+[30.05 ~03:?? ] - FEATURE: Secțiune „Probabilitate marcare" în tab SUMAR
+  Fișier: public/js/app-ui.js (DOAR frontend; backend neatins).
+  Poziție: imediat sub Player Intelligence, înainte de md-score-block.
+  Funcție NOUĂ, complet independentă: calcScoringProbability(d, side).
+    ⚠ NU citește / NU modifică calcConfidenceLive / calcConfidencePreMatch /
+      NGP / score2/3/6/7. Folosește DOAR câmpuri deja prezente în `d`:
+      enrich (homeScoreRate/awayScoreRate, homeAvgScored/awayAvgScored,
+      lambdaHome/lambdaAway, h2hGG, h2hSample, liveElapsed, _topScorerFactor)
+      + fixture.statistics pentru live.
+    Factori ponderați (redistribuire proporțională când lipsesc):
+      1. Formă ofensivă 25% — scoreRate (% meciuri cu gol), fallback 1-e^(-avg)
+      2. H2H goluri marcate 20% — h2hGG, doar dacă h2hSample>0
+      3. Poisson λ 25% — P(marchează≥1) = 1 - e^(-λ_side)
+      4. Live 20% — Shots on Goal + Dangerous Attacks, DOAR dacă meci LIVE
+      5. Player Intelligence 10% — bonus/penalizare din _topScorerFactor (H/A)
+    Pre-meci (NS): doar 1+2+3. Live: + 4 (+5 dacă date). FT: 1+2+3+5 (fără live).
+    Redistribuire: p = Σ s_i·(w_i/Σw_disponibile). Dacă 0 factori → null.
+  Helperi noi: _msEnrich, _msParseHA, buildScoringExplain, mdToggleScoreExp.
+  UI — 2 carduri side-by-side (flex), stiluri inline (zero CSS nou în index.html):
+    logo (tLogo) + nume + procent mare colorat (verde≥60 / galben 40-59 / roșu<40).
+    Tap pe card → toggle explicație textuală dinamică (mdToggleScoreExp), generată
+    DOAR din factorii cu date (omite ce lipsește). Ex.: „formă ofensivă 80%;
+    H2H 60% (n=6); Poisson λ=1.70 → 82%; live: 5 șuturi pe poartă · 42 atacuri
+    în 67 min; atacant de top prezent (+6%)".
+  Validare:
+    • node --check public/js/app-ui.js → OK
+    • Test logic (funcțiile reale extrase + stub globals, /tmp/ms_test.mjs):
+      NS=75%/58% (form+h2h+poisson), LIVE=74%/40% (5 factori),
+      FT=87%/73% (form+poisson redistribuit, h2h sample0 exclus), empty→null.
+    • Test vizual browser: NU rulat (mediu fără browser); logica validată în node,
+      UI = string-concat HTML în tiparul modalului existent.
+  Constrânți respectate:
+    ✓ Funcție nouă izolată  ✓ Niciun cod intangibil atins  ✓ backend neatins

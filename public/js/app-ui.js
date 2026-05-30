@@ -1159,6 +1159,107 @@ function mdRender(){
   else if(_md.tabIdx===5)mdRenderStatistici(d);
 }
 
+// ── PROBABILITATE MARCARE — secțiune NOUĂ, complet independentă ──────────────
+// NU citește și NU modifică calcConfidenceLive / calcConfidencePreMatch / NGP /
+// score2/3/6/7. Combină DOAR câmpuri deja prezente în obiectul `d` (enrich +
+// cache pre-meci + live_stats din fixture.statistics). Greutăți redistribuite
+// proporțional când un factor lipsește.
+function _msEnrich(d){
+  var enrichBase=d.enrich||{};
+  var fid=_md&&_md.fixtureId;
+  var cached=(_pmEnrich&&_pmEnrich[fid])||(_genLiveEnrich&&_genLiveEnrich[fid])||{};
+  return Object.assign({},enrichBase,cached);
+}
+function _msParseHA(s){
+  if(!s||typeof s!=='string')return null;
+  var mm=s.match(/H:([0-9.]+)\|A:([0-9.]+)/);
+  return mm?{h:parseFloat(mm[1]),a:parseFloat(mm[2])}:null;
+}
+function calcScoringProbability(d,side){
+  var clamp=function(v,lo,hi){return Math.max(lo,Math.min(hi,v));};
+  var en=_msEnrich(d);
+  var fix=d.fixture||{};
+  var sh=(fix.fixture&&fix.fixture.status&&fix.fixture.status.short)||'NS';
+  var isLive=(['1H','2H','HT','ET','BT','P','LIVE','INT']).indexOf(sh)>=0;
+  var stats=(fix&&fix.statistics)||[];
+  var idx=side==='home'?0:1;
+  var getSt=function(type){
+    var t=stats[idx]&&stats[idx].statistics;
+    if(!Array.isArray(t))return null;
+    var e=t.find(function(s){return s.type===type;});
+    var v=e&&e.value;
+    if(v==null||v==='N/A'||v==='')return null;
+    var n=parseFloat(v);return isFinite(n)?n:null;
+  };
+  var factors=[];
+  // 1. Formă ofensivă (25%) — % meciuri în care a marcat (fallback medie goluri)
+  var rate=side==='home'?en.homeScoreRate:en.awayScoreRate;
+  var avg =side==='home'?en.homeAvgScored:en.awayAvgScored;
+  if(rate!=null&&isFinite(rate)){
+    factors.push({k:'form',w:0.25,s:clamp(rate,0,100),rate:rate,avg:avg});
+  } else if(avg!=null&&isFinite(avg)){
+    factors.push({k:'form',w:0.25,s:clamp((1-Math.exp(-avg))*100,0,100),rate:null,avg:avg});
+  }
+  // 2. H2H goluri marcate istoric (20%) — doar dacă H2H real (sample>0)
+  if(en.h2hSample>0&&en.h2hGG!=null&&isFinite(en.h2hGG)){
+    factors.push({k:'h2h',w:0.20,s:clamp(en.h2hGG,0,100),gg:en.h2hGG,n:en.h2hSample});
+  }
+  // 3. Poisson λ (25%) — P(marchează≥1) = 1 - e^(-λ)
+  var lam=side==='home'?en.lambdaHome:en.lambdaAway;
+  if(lam!=null&&isFinite(lam)){
+    factors.push({k:'poisson',w:0.25,s:clamp((1-Math.exp(-lam))*100,0,100),lam:lam});
+  }
+  // 4. Live stats (20%) — DOAR meci LIVE: șuturi pe poartă + atacuri periculoase
+  if(isLive){
+    var sot=getSt('Shots on Goal');
+    var da =getSt('Dangerous Attacks');
+    if(sot!=null||da!=null){
+      var liveS=Math.min(100,(sot||0)*15+(da||0)*0.4);
+      factors.push({k:'live',w:0.20,s:liveS,sot:sot,da:da,mn:en.liveElapsed||(fix.fixture&&fix.fixture.status&&fix.fixture.status.elapsed)||null});
+    }
+  }
+  // 5. Player Intelligence (10%) — penalizare/bonus din factorul atacant de top
+  var tsf=_msParseHA(en._topScorerFactor);
+  if(tsf){
+    var m=side==='home'?tsf.h:tsf.a;
+    if(m!=null&&isFinite(m)) factors.push({k:'pi',w:0.10,s:clamp(50+(m-1)*300,0,100),m:m});
+  }
+  if(!factors.length) return null;
+  var wsum=factors.reduce(function(a,f){return a+f.w;},0);
+  var p=factors.reduce(function(a,f){return a+f.s*(f.w/wsum);},0);
+  return {prob:Math.round(clamp(p,0,100)),factors:factors,isLive:isLive};
+}
+function buildScoringExplain(name,res){
+  var R=function(v){return Math.round(v);};
+  var parts=[];
+  res.factors.forEach(function(f){
+    if(f.k==='form'){
+      parts.push(f.rate!=null?('formă ofensivă: marchează în '+R(f.rate)+'% din meciurile recente')
+                             :('medie '+Number(f.avg).toFixed(2)+' goluri marcate/meci'));
+    } else if(f.k==='h2h'){
+      parts.push('H2H: '+R(f.gg)+'% meciuri directe cu goluri marcate (n='+f.n+')');
+    } else if(f.k==='poisson'){
+      parts.push('model Poisson λ='+Number(f.lam).toFixed(2)+' → '+R(f.s)+'% P(marchează)');
+    } else if(f.k==='live'){
+      var seg=[];
+      if(f.sot!=null) seg.push(f.sot+' șuturi pe poartă');
+      if(f.da!=null)  seg.push(f.da+' atacuri periculoase');
+      var txt=seg.join(' · ');
+      if(f.mn) txt+=' în '+f.mn+' min';
+      parts.push('live: '+txt);
+    } else if(f.k==='pi'){
+      var d=R((f.m-1)*100);
+      parts.push(f.m<1?('atacant de top absent/diminuat ('+d+'%)')
+                      :('atacant de top prezent (+'+d+'%)'));
+    }
+  });
+  return 'Sistemul estimează că <b>'+htmlEsc(name)+'</b> marchează pe baza: '+parts.join('; ')+'.';
+}
+function mdToggleScoreExp(id){
+  var el=document.getElementById(id);
+  if(el) el.style.display=(el.style.display==='none'?'block':'none');
+}
+
 function mdRenderSumar(d){
   var fix=d.fixture;
   var enrichBase=d.enrich||{};
@@ -1309,6 +1410,33 @@ function mdRenderSumar(d){
     }
     out+='</div>';
   }
+
+  // ── PROBABILITATE MARCARE (sub Player Intelligence) ──────────────────────
+  (function(){
+    var rH=calcScoringProbability(d,'home');
+    var rA=calcScoringProbability(d,'away');
+    if(rH||rA){
+      var scol=function(p){return p==null?'#888':p>=60?'#22c55e':p>=40?'#f59e0b':'#ef4444';};
+      var card=function(team,name,res,sideKey){
+        var p=res?res.prob:null;
+        var pv=p==null?'—':p+'%';
+        var expId='msx_'+fk+'_'+sideKey;
+        var expHtml=res?buildScoringExplain(name,res):'Date insuficiente pentru estimare.';
+        return '<div onclick="mdToggleScoreExp(\''+expId+'\')" style="flex:1;min-width:0;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:12px;text-align:center">'+
+          '<div style="display:flex;justify-content:center;margin-bottom:6px">'+tLogo(team,40)+'</div>'+
+          '<div style="font-size:13px;font-weight:600;margin-bottom:4px">'+htmlEsc(name)+'</div>'+
+          '<div style="font-size:30px;font-weight:800;line-height:1;color:'+scol(p)+'">'+pv+'</div>'+
+          '<div style="font-size:10px;color:var(--mu);margin-top:6px">👆 tap pentru explicație</div>'+
+          '<div id="'+expId+'" style="display:none;font-size:11px;line-height:1.5;color:var(--mu2,#aaa);margin-top:8px;text-align:left;border-top:1px solid rgba(255,255,255,.10);padding-top:8px">'+expHtml+'</div>'+
+        '</div>';
+      };
+      out+='<div class="md-section"><div class="md-section-title">Probabilitate marcare</div>';
+      out+='<div style="display:flex;gap:10px;align-items:flex-start">';
+      out+=card(fix&&fix.teams&&fix.teams.home,hn,rH,'h');
+      out+=card(fix&&fix.teams&&fix.teams.away,an,rA,'a');
+      out+='</div></div>';
+    }
+  })();
 
   out+='<div class="md-score-block">';
   out+='<div class="md-teams-row">';
