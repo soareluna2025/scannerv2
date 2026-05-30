@@ -4695,3 +4695,25 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat calcConfidencePreMatch(), calcConfidenceLive()
     ✓ NU am modificat score2, score3, score6, score7
     ✓ Doar UI/payload — pipeline-ul de calc neschimbat
+
+[29.05 ~18:30] - EXPOSE: secțiune Factori Influență în modal pre-meci | Commit: eb490c5
+  Adăugată secțiunea "Factori Influență" în modalul match-detail (după
+  breakdown confidence, înainte de Player Intelligence). 8 badge-uri
+  posibile, afișate doar când au valori reale:
+    ⚽ Top Scorer       — parsare _topScorerFactor "H:1.05|A:0.92" → "H+5% A-8%"
+    🤕 Accidentați     — parsare _injuryLambda (afișat doar dacă < 0.99)
+    🌧️ Stadion          — _venueMeteoImpact tradus (altitude_high → altitudine mare etc)
+    🏟️ Gazon artificial — _venueSurface === 'artificial' (skip dacă deja în meteo)
+    ⛰️ Altitudine       — _venueAltitude > 1500m (skip dacă deja în meteo)
+    👔 Coach impact    — _coachImpact prezent
+    ⚠️ Absențe          — breakdown.injuries.note ("Stars: Messi, Neymar")
+    ⚠️ Lot incomplet    — breakdown.squads.penalty < 0 (squad < 11)
+  Format: badge inline cu border + bg semi-transparent (verde/galben/roșu
+  după impact). Stiluri inline — fără CSS nou.
+  IIFE local — nu poluează scope global.
+  Zero recalcul în pipeline — toate datele veneau deja de la enrich,
+  doar erau ignorate de UI.
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Doar lectură din `en` + render
