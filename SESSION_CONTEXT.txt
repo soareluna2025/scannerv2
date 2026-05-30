@@ -4629,3 +4629,16 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     Pune TOT răspunsul tău într-un singur bloc de cod (triple backticks)
     astfel încât să apară butonul de copy în colțul dreapta-sus.
     Nu scrie NIMIC în afara acelui bloc. Fără excepții.
+
+[29.05 ~17:00] - FIX: H2H Stats afișa procente false când 0 meciuri | Commit: 537bd6f
+  Bug: tab-ul FORMĂ în Match Detail arăta "H2H Over 1.5: 82%" și "H2H GG: 63%"
+    chiar și când "Meciuri H2H: 0".
+  Root cause:
+    În api/enrich.js, h2hOver15 / h2hGG cad pe `?? matrix.over15Prob` /
+    `?? matrix.ggProb` când pct(h2h, ...) e null (h2h.length < 5).
+    Adică, fără h2h real, procentele afișate erau ale modelului Poisson —
+    nu H2H deloc. Etichetarea "H2H" inducea în eroare.
+  Fix (public/js/app-ui.js, modal match detail ~linia 1335):
+    Detectează h2hSample (0 sau number). Dacă > 0 → afișează procentele
+    h2hOver15 / h2hGG normal. Dacă === 0 → afișează "Date insuficiente"
+    în loc de procentele false. Contorul "Meciuri H2H" rămâne afișat (0).
