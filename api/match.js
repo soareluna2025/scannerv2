@@ -298,7 +298,7 @@ export default async function handler(req, res) {
       getFormFromDB(hId),
       getFormFromDB(aId),
       query('SELECT *, bet_name AS market, value_name AS label, value_odd AS odd_value FROM odds WHERE fixture_id=$1 AND bookmaker_id=8', [Number(id)]).catch(() => ({ rows: [] })),
-      query('SELECT team_id, logo FROM teams WHERE team_id = ANY($1)', [[hId, aId]]).catch(() => ({ rows: [] })),
+      query('SELECT team_id, name, logo FROM teams WHERE team_id = ANY($1)', [[hId, aId]]).catch(() => ({ rows: [] })),
       getTeamStatsFromDB(hId, null),
       getTeamStatsFromDB(aId, null),
       getLiveStatsFromDB(id),
@@ -338,13 +338,43 @@ export default async function handler(req, res) {
     const dH2H   = needH2H  ? await rH2H.json()   : null;
     const dOdds  = needOdds  ? await rOdds.json()  : null;
 
-    const logoMap = Object.fromEntries((dbLogos.rows || []).map(r => [Number(r.team_id), r.logo]));
+    const teamMap = Object.fromEntries((dbLogos.rows || []).map(r => [Number(r.team_id), { name: r.name, logo: r.logo }]));
 
-    const fixture = (dFix.response || [])[0] || null;
+    let fixture = (dFix.response || [])[0] || null;
+
+    // Fallback DB când API live întoarce gol (ex. 429 din scanner live) → fixture=null
+    // sau fără teams. Reconstruim un fixture minimal din `fixtures` + `teams` ca să nu
+    // mai apară „?" la nume/logo în modal. Marcat _degraded → NU se cache-uiește (jos).
+    if (!fixture || !fixture.teams || !fixture.teams.home || !fixture.teams.away) {
+      let dbRow = null;
+      try {
+        const fr = await query(
+          `SELECT home_team_name, away_team_name, match_date, status_short
+             FROM fixtures WHERE fixture_id = $1`,
+          [Number(id)]
+        );
+        dbRow = fr.rows[0] || null;
+      } catch (_) {}
+      console.warn('[match] fixture degraded → folosind fallback DB pentru', id);
+      fixture = {
+        fixture: {
+          id: Number(id),
+          date: dbRow?.match_date || null,
+          status: { short: dbRow?.status_short || 'NS', elapsed: null, extra: null },
+          referee: null,
+        },
+        teams: {
+          home: { id: hId, name: teamMap[hId]?.name || dbRow?.home_team_name || null, logo: teamMap[hId]?.logo || null },
+          away: { id: aId, name: teamMap[aId]?.name || dbRow?.away_team_name || null, logo: teamMap[aId]?.logo || null },
+        },
+        goals: { home: null, away: null },
+        _degraded: true,
+      };
+    }
 
     // Inject DB logos where API logo is missing
-    if (fixture?.teams?.home) fixture.teams.home.logo = fixture.teams.home.logo || logoMap[hId] || null;
-    if (fixture?.teams?.away) fixture.teams.away.logo = fixture.teams.away.logo || logoMap[aId] || null;
+    if (fixture?.teams?.home) fixture.teams.home.logo = fixture.teams.home.logo || teamMap[hId]?.logo || null;
+    if (fixture?.teams?.away) fixture.teams.away.logo = fixture.teams.away.logo || teamMap[aId]?.logo || null;
     // Fallback ARBITRU: când API live nu-l are, folosim valoarea persistată (PAS 1/2).
     if (fixture?.fixture && (!fixture.fixture.referee || fixture.fixture.referee === 'null') && dbReferee) {
       fixture.fixture.referee = dbReferee;
@@ -549,7 +579,8 @@ export default async function handler(req, res) {
       responseData.matchStats = { home: null, away: null, error: e.message };
     }
 
-    matchCache.set(id, { data: responseData, ts: Date.now() });
+    // NU cache-ui răspunsuri degradate (fixture din fallback DB) → reîncearcă API la următorul fetch.
+    if (!fixture._degraded) matchCache.set(id, { data: responseData, ts: Date.now() });
     res.status(200).json(responseData);
   } catch (e) {
     res.status(500).json({ error: e.message });
