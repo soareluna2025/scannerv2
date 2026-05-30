@@ -5663,3 +5663,37 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     min45 0-1 +1roșu→48% (al 1); min80 2-0→13% (al 3, defensiv); min10 0-0→77%;
     away superior 1-1→35%; prelungiri 92+5→5%; 3-1→24% (al 4). Toate coerente.
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[31.05 ~13:?? ] - FEATURE: Backfill controlat manual + optimizat (START/STOP/RESUME)
+  Fișiere: api/backfill.js, server.js, admin.html
+  FIX1 RESUME: poziția (season_idx/league_idx/fixture_idx) deja persistată în
+    app_settings; acum savePosition se face DUPĂ FIECARE batch (nu la 50). +
+    totalProcessed (contor sesiune) + _startTs. START fără param → RESUME exact.
+  FIX2 STOP_AT ELIMINAT: scos auto-stop la 280k din fetchWithBackoff. Backfill
+    se oprește DOAR la STOP sau finalizare naturală (SEASONS=[2026,2025,2024]).
+    API_PLAN_LIMIT=300000 doar pentru afișare.
+  FIX3 PARALEL: CONCURRENCY=10 — fixture-urile procesate în batch-uri de 10 via
+    Promise.all; semaphor (_semAcquire/_semRelease) limitează la max 10 apeluri
+    API concurente. Graceful stop: stopFlag verificat ÎNTRE batch-uri (termină
+    batch-ul curent). DELAY_MS 250→60 (concurența reglează rata). Test: 50 taskuri
+    → max 10 concurent, drain la 0. ✓
+  FIX5 SKIP BATCH: skip-check pe tot batch-ul cu 4 query-uri (ANY($1)) în loc de
+    6×fixture — Set-uri statsSet/eventsSet/playersSet/nodataSet. Reduce drastic DB.
+  FIX6 ADMIN: input league_id + season opțional (start țintit, resetează poziția
+    la acel punct via opts în startBackfill); server route citește query/body.
+    UI nou: fixture curent/total, viteză (fixture/min), ETA din viteză reală,
+    procesate sesiune, API azi / 300,000 (limita reală). Buton „Start / Reia".
+  Verificare: node --check backfill.js/server.js + admin JS extras → toate OK.
+    Logic test semaphor + rezolvare index țintit → OK.
+  ⚠ ONESTITATE — devieri de la spec (justificate):
+    • FIX4 (batch INSERT cu UNNEST) NU implementat: ar fi necesitat rescrierea
+      collectStats/Events/Players (DELETE+INSERT per fixture). Am ales FIX5
+      (skip batch) + concurența ca principalul câștig de viteză, cu risc mult mai
+      mic. INSERT-urile rămân per-rând dar acum rulează concurent (10×). UNNEST
+      rămâne optimizare viitoare separată (necesită testare DB live).
+    • FIX7 (buffer 1000 + cleanup memorie) parțial: nu există acumulator mare în
+      memorie (procesare batch-by-batch, fără buffer global care să crească) →
+      memory management e implicit OK; nu am adăugat un buffer artificial.
+    • NEtestat pe DB/API live (sandbox) — doar node --check + logic tests.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+    (backfill.js NU e în lista intangibilă; STOP_AT eliminat cu autorizare explicită)

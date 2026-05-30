@@ -11,8 +11,9 @@ import { isAllowedLeague } from './utils/league-filter.js';
 const SEASONS    = [2026, 2025, 2024];
 const LEAGUE_IDS = [...ALLOWED_LEAGUE_IDS];
 const BASE_URL   = 'https://v3.football.api-sports.io';
-const DELAY_MS   = 250;
-const STOP_AT    = 280_000; // Plan 300k/zi — buffer 20k pentru live scanner
+const DELAY_MS   = 60;              // FIX3: redus — concurența limitează rata, nu sleep-ul
+const CONCURRENCY = 10;             // FIX3: max fixture-uri procesate simultan
+const API_PLAN_LIMIT = 300_000;    // FIX2: doar pentru afișare; NU mai oprește backfill-ul
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function log(msg)  { console.log(`[backfill] ${new Date().toISOString()} ${msg}`); }
@@ -20,6 +21,21 @@ function apiKey()  {
   return process.env.API_FOOTBALL_KEY
       || process.env.FOOTBALL_API_KEY
       || process.env.APIFOOTBALL_KEY;
+}
+
+// FIX3 — Semaphor simplu: max CONCURRENCY apeluri API concurente.
+let _semActive = 0;
+const _semQueue = [];
+function _semAcquire() {
+  return new Promise(resolve => {
+    if (_semActive < CONCURRENCY) { _semActive++; resolve(); }
+    else _semQueue.push(resolve);
+  });
+}
+function _semRelease() {
+  _semActive--;
+  const next = _semQueue.shift();
+  if (next) { _semActive++; next(); }
 }
 
 // ── In-memory state ──────────────────────────────────────────────────────────────────────────────
@@ -34,6 +50,8 @@ let currentFixtureIdx = 0;
 let currentLeagueId   = null;
 let currentSeason     = null;
 let totalFixtures     = 0;
+let totalProcessed    = 0;   // FIX1: contor cumulativ fixture-uri procesate (sesiune)
+let _startTs          = 0;   // FIX6: pentru viteză (fixture/min)
 
 // ── App Settings ─────────────────────────────────────────────────────────────────────────────
 
@@ -117,21 +135,24 @@ async function fetchWithBackoff(endpoint, maxRetries = 4) {
     await getRealApiUsage();
   }
 
-  for (let i = 0; i < maxRetries; i++) {
-    const res = await fetchApiFootball(endpoint);
-    apiUsedToday++;
+  // FIX3: limitează concurența apelurilor API prin semaphor.
+  await _semAcquire();
+  try {
+    for (let i = 0; i < maxRetries; i++) {
+      const res = await fetchApiFootball(endpoint);
+      apiUsedToday++;
 
-    if (apiUsedToday % 20 === 0) {
-      await setSetting('backfill_api_used', String(apiUsedToday));
+      if (apiUsedToday % 20 === 0) {
+        await setSetting('backfill_api_used', String(apiUsedToday));
+      }
+      // FIX2: STOP_AT eliminat — backfill-ul se oprește DOAR la comanda STOP
+      // sau la finalizarea naturală a tuturor fixture-urilor.
+      return res;
     }
-    if (apiUsedToday >= STOP_AT) {
-      stopFlag = true;
-      log(`Daily limit ${STOP_AT} reached — auto-stopping`);
-    }
-
-    return res;
+    return null;
+  } finally {
+    _semRelease();
   }
-  return null;
 }
 
 async function apiFetch(endpoint) {
@@ -355,7 +376,10 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
     [season, startFi, fixtures.length, leagueId]
   ).catch(() => {});
 
-  for (let fi = startFi; fi < fixtures.length; fi++) {
+  // FIX3 — procesare în batch-uri concurente (CONCURRENCY fixture-uri/batch).
+  // Graceful stop: verifică stopFlag ÎNTRE batch-uri (termină batch-ul curent).
+  const cutoff = new Date('2024-05-30');
+  for (let fi = startFi; fi < fixtures.length; fi += CONCURRENCY) {
     if (stopFlag) {
       await savePosition(si, li, fi);
       await query(
@@ -365,38 +389,43 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
       return;
     }
 
-    const fx  = fixtures[fi];
-    const fid = fx?.fixture?.id;
-    if (!fid) continue;
-    // Retenție 2 ani: skip meciuri mai vechi de 2024-05-30 (nu le mai stocăm)
-    const _mDate = fx?.fixture?.date;
-    if (_mDate && new Date(_mDate) < new Date('2024-05-30')) continue;
-    const hid = fx?.teams?.home?.id;
-    const aid = fx?.teams?.away?.id;
-
+    const batch = fixtures.slice(fi, fi + CONCURRENCY);
     currentFixtureIdx = fi;
 
-    // Skip-check: deja colectate SAU marker no-data
-    const [hasStats, hasEvents, hasPlayers,
-           nodataStats, nodataEvents, nodataPlayers] = await Promise.all([
-      query('SELECT 1 FROM match_stats  WHERE fixture_id=$1 LIMIT 1', [fid]).then(r => r.rows.length > 0),
-      query('SELECT 1 FROM match_events WHERE fixture_id=$1 LIMIT 1', [fid]).then(r => r.rows.length > 0),
-      query('SELECT 1 FROM player_stats WHERE fixture_id=$1 LIMIT 1', [fid]).then(r => r.rows.length > 0),
-      query('SELECT 1 FROM app_settings WHERE key=$1 LIMIT 1', [`no_data:stats:${fid}`]).then(r => r.rows.length > 0),
-      query('SELECT 1 FROM app_settings WHERE key=$1 LIMIT 1', [`no_data:events:${fid}`]).then(r => r.rows.length > 0),
-      query('SELECT 1 FROM app_settings WHERE key=$1 LIMIT 1', [`no_data:players:${fid}`]).then(r => r.rows.length > 0),
+    // FIX5 — skip-check BATCH: un singur query per tip pentru toate fixture-urile
+    // din batch (în loc de 6 query-uri × fixture). Reduce drastic query-urile DB.
+    const fids = batch
+      .map(fx => fx?.fixture?.id)
+      .filter(Boolean);
+    const [statsSet, eventsSet, playersSet, nodataSet] = await Promise.all([
+      query('SELECT DISTINCT fixture_id FROM match_stats  WHERE fixture_id = ANY($1)', [fids]).then(r => new Set(r.rows.map(x => x.fixture_id))).catch(() => new Set()),
+      query('SELECT DISTINCT fixture_id FROM match_events WHERE fixture_id = ANY($1)', [fids]).then(r => new Set(r.rows.map(x => x.fixture_id))).catch(() => new Set()),
+      query('SELECT DISTINCT fixture_id FROM player_stats WHERE fixture_id = ANY($1)', [fids]).then(r => new Set(r.rows.map(x => x.fixture_id))).catch(() => new Set()),
+      query('SELECT key FROM app_settings WHERE key = ANY($1)',
+            [fids.flatMap(id => [`no_data:stats:${id}`, `no_data:events:${id}`, `no_data:players:${id}`])])
+        .then(r => new Set(r.rows.map(x => x.key))).catch(() => new Set()),
     ]);
 
-    if (!hasStats   && !nodataStats)   { try { await collectStats(fid);   } catch (e) { log(`stats   ${fid}: ${e.message}`); } }
-    if (!hasEvents  && !nodataEvents)  { try { await collectEvents(fid);  } catch (e) { log(`events  ${fid}: ${e.message}`); } }
-    if (!hasPlayers && !nodataPlayers) { try { await collectPlayers(fid); } catch (e) { log(`players ${fid}: ${e.message}`); } }
+    await Promise.all(batch.map(async (fx) => {
+      const fid = fx?.fixture?.id;
+      if (!fid) return;
+      // Retenție 2 ani: skip meciuri mai vechi de cutoff
+      const _mDate = fx?.fixture?.date;
+      if (_mDate && new Date(_mDate) < cutoff) return;
+      const hid = fx?.teams?.home?.id;
+      const aid = fx?.teams?.away?.id;
 
-    // FIX 3 — buildH2H din fixtures_history pentru perechea curentă
-    if (hid && aid && hid !== aid) {
-      try { await buildH2H(hid, aid); } catch (e) { log(`h2h ${hid}-${aid}: ${e.message}`); }
-    }
+      if (!statsSet.has(fid)   && !nodataSet.has(`no_data:stats:${fid}`))   { try { await collectStats(fid);   } catch (e) { log(`stats   ${fid}: ${e.message}`); } }
+      if (!eventsSet.has(fid)  && !nodataSet.has(`no_data:events:${fid}`))  { try { await collectEvents(fid);  } catch (e) { log(`events  ${fid}: ${e.message}`); } }
+      if (!playersSet.has(fid) && !nodataSet.has(`no_data:players:${fid}`)) { try { await collectPlayers(fid); } catch (e) { log(`players ${fid}: ${e.message}`); } }
 
-    if (fi % 50 === 0) await savePosition(si, li, fi);
+      if (hid && aid && hid !== aid) {
+        try { await buildH2H(hid, aid); } catch (e) { log(`h2h ${hid}-${aid}: ${e.message}`); }
+      }
+      totalProcessed++;
+    }));
+
+    await savePosition(si, li, Math.min(fi + CONCURRENCY, fixtures.length));
   }
 
   // League+season done — reset fixture index
@@ -486,7 +515,7 @@ export async function initBackfillProgress() {
   }
 }
 
-export async function startBackfill() {
+export async function startBackfill(opts = {}) {
   if (running) return { error: 'already running' };
 
   // Load / reset daily API counter
@@ -500,11 +529,26 @@ export async function startBackfill() {
     await setSetting('backfill_api_used', '0');
   }
   apiDateTracked = today;
+  totalProcessed = 0;
+  _startTs = Date.now();
 
-  // Load resume position
-  const si = Math.min(parseInt(await getSetting('backfill_season_idx')  || '0'), SEASONS.length - 1);
-  const li = Math.min(parseInt(await getSetting('backfill_league_idx')  || '0'), LEAGUE_IDS.length - 1);
-  const fi = parseInt(await getSetting('backfill_fixture_idx') || '0');
+  // FIX6 — START țintit pe ligă/sezon specific (resetează poziția la acel punct).
+  // opts: { leagueId, season }. Dacă lipsesc → RESUME din poziția salvată.
+  let si, li, fi;
+  const optLeague = opts.leagueId ? Number(opts.leagueId) : null;
+  const optSeason = opts.season ? Number(opts.season) : null;
+  if (optLeague || optSeason) {
+    si = optSeason != null ? Math.max(0, SEASONS.indexOf(optSeason)) : 0;
+    li = optLeague != null ? Math.max(0, LEAGUE_IDS.indexOf(optLeague)) : 0;
+    fi = 0;
+    await savePosition(si, li, fi);
+    log(`Targeted start: season=${SEASONS[si]} league=${LEAGUE_IDS[li]}`);
+  } else {
+    // Load resume position
+    si = Math.min(parseInt(await getSetting('backfill_season_idx')  || '0'), SEASONS.length - 1);
+    li = Math.min(parseInt(await getSetting('backfill_league_idx')  || '0'), LEAGUE_IDS.length - 1);
+    fi = parseInt(await getSetting('backfill_fixture_idx') || '0');
+  }
 
   running           = true;
   stopFlag          = false;
@@ -573,9 +617,24 @@ export async function getBackfillStatus() {
     ? Math.round(completedPairs / totalPairs * 1000) / 10
     : 0;
 
-  // Rough estimate: ~10 req per league (1 fixtures + avg 3 fixtures × 3 calls)
+  // FIX6 — viteză reală (fixture/min) din sesiunea curentă + ETA bazat pe ea.
+  let speedPerMin = null, estimatedMs;
+  if (running && _startTs && totalProcessed > 0) {
+    const elapsedMin = (Date.now() - _startTs) / 60000;
+    if (elapsedMin > 0.05) speedPerMin = Math.round(totalProcessed / elapsedMin);
+  }
   const remainingPairs = Math.max(0, totalPairs - completedPairs);
-  const estimatedMs    = remainingPairs * 10 * DELAY_MS;
+  if (speedPerMin && totalFixtures > 0) {
+    // estimare pe baza fixture-urilor rămase × viteză măsurată
+    const remFixturesInLeague = Math.max(0, totalFixtures - fi);
+    const remFixtures = remFixturesInLeague + remainingPairs * (totalFixtures || 30);
+    estimatedMs = (remFixtures / speedPerMin) * 60000;
+  } else {
+    estimatedMs = remainingPairs * 10 * DELAY_MS; // fallback brut
+  }
+
+  // FIX2 — afișează limita REALĂ a planului (300k), nu un STOP_AT artificial.
+  const planLimit = parseInt(await getSetting('backfill_api_limit') || String(API_PLAN_LIMIT));
 
   return {
     running,
@@ -583,11 +642,14 @@ export async function getBackfillStatus() {
     currentSeason:       season,
     currentFixtureIndex: fi,
     totalFixtures,
+    totalProcessedSession: totalProcessed,
+    speedPerMin,
     totalLeagues:        totalPairs,
     completedLeagues:    completedPairs,
     progressPct,
     apiUsedToday:        usedToday,
-    apiRemainingToday:   Math.max(0, parseInt(await getSetting('backfill_api_limit') || '150000') - usedToday),
+    apiPlanLimit:        planLimit,
+    apiRemainingToday:   Math.max(0, planLimit - usedToday),
     estimatedTimeRemaining: formatDuration(estimatedMs),
   };
 }

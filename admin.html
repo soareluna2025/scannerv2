@@ -1128,15 +1128,21 @@ body{
       <div class="bf-label" id="bf-current-info">Sezon — · Ligă —</div>
       <div class="bf-label">Progres: <span id="bf-pct">0</span>% (<span id="bf-done">0</span>/<span id="bf-total">0</span> perechi)</div>
       <div class="bf-bar"><div class="bf-bar-fill" id="bf-fill" style="width:0%"></div></div>
-      <div class="bf-label">API azi: <span id="bf-api-used">0</span> / 150,000 — rămase: <span id="bf-api-rem">150,000</span></div>
+      <div class="bf-label">Fixture curent: <span id="bf-fix-idx">0</span>/<span id="bf-fix-total">0</span> · viteză <span id="bf-speed">—</span> fix/min · ETA <span id="bf-eta">—</span></div>
+      <div class="bf-label">Procesate (sesiune): <span id="bf-processed">0</span></div>
+      <div class="bf-label">API azi: <span id="bf-api-used">0</span> / <span id="bf-api-limit">300,000</span> — rămase: <span id="bf-api-rem">300,000</span></div>
       <div class="bf-bar" style="height:4px;margin-bottom:0"><div class="bf-bar-fill api" id="bf-api-fill" style="width:0%"></div></div>
     </div>
     <div id="bf-stopped">
       <div class="bf-label" id="bf-stopped-info">Nicio rulare anterioară</div>
-      <div class="bf-label" id="bf-stopped-api" style="display:none">API azi: <span id="bf-api-used2">0</span> / 150,000</div>
+      <div class="bf-label" id="bf-stopped-api" style="display:none">API azi: <span id="bf-api-used2">0</span> / 300,000</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <input id="bf-league-input" type="number" placeholder="league_id (opțional)" style="flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:var(--tx);padding:8px;border-radius:8px;font-size:12px">
+      <input id="bf-season-input" type="number" placeholder="sezon (opțional)" style="flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:var(--tx);padding:8px;border-radius:8px;font-size:12px">
     </div>
     <div class="bf-buttons">
-      <button id="bf-start-btn" class="bf-start" onclick="startBF()">▶ Start</button>
+      <button id="bf-start-btn" class="bf-start" onclick="startBF()">▶ Start / Reia</button>
       <button id="bf-stop-btn" class="bf-stop" style="display:none" onclick="stopBF()">⏹ Stop</button>
     </div>
   </section>
@@ -1641,7 +1647,13 @@ async function clearErrors(scope) {
 
 async function startBF() {
   try {
-    var r = await fetch('/api/backfill/start', { method:'POST', headers:{'X-Api-Key':_key} });
+    var lg = (document.getElementById('bf-league-input')||{}).value || '';
+    var ss = (document.getElementById('bf-season-input')||{}).value || '';
+    var qs = [];
+    if (lg) qs.push('league_id=' + encodeURIComponent(lg));
+    if (ss) qs.push('season=' + encodeURIComponent(ss));
+    var url = '/api/backfill/start' + (qs.length ? '?' + qs.join('&') : '');
+    var r = await fetch(url, { method:'POST', headers:{'X-Api-Key':_key} });
     var d = await r.json();
     if (d.error) { toast('✗ ' + d.error, 'var(--red)'); return; }
     toast('▶ Backfill pornit');
@@ -1679,10 +1691,18 @@ async function refreshBFStatus() {
       document.getElementById('bf-done').textContent = (d.completedLeagues || 0).toLocaleString();
       document.getElementById('bf-total').textContent = (d.totalLeagues || 0).toLocaleString();
       document.getElementById('bf-fill').style.width = (d.progressPct || 0) + '%';
-      var used = d.apiUsedToday || 0; var rem = d.apiRemainingToday || 150000;
-      document.getElementById('bf-api-used').textContent = used.toLocaleString();
-      document.getElementById('bf-api-rem').textContent  = rem.toLocaleString();
-      document.getElementById('bf-api-fill').style.width = Math.min(100, used/1500) + '%';
+      var _set=function(id,v){var el=document.getElementById(id);if(el)el.textContent=v;};
+      _set('bf-fix-idx', (d.currentFixtureIndex||0).toLocaleString());
+      _set('bf-fix-total', (d.totalFixtures||0).toLocaleString());
+      _set('bf-speed', d.speedPerMin!=null ? d.speedPerMin : '—');
+      _set('bf-eta', d.estimatedTimeRemaining || '—');
+      _set('bf-processed', (d.totalProcessedSession||0).toLocaleString());
+      var planLimit = d.apiPlanLimit || 300000;
+      var used = d.apiUsedToday || 0; var rem = d.apiRemainingToday || planLimit;
+      _set('bf-api-used', used.toLocaleString());
+      _set('bf-api-limit', planLimit.toLocaleString());
+      _set('bf-api-rem', rem.toLocaleString());
+      document.getElementById('bf-api-fill').style.width = Math.min(100, used/planLimit*100) + '%';
       if (!_bfTimer) _bfTimer = setInterval(refreshBFStatus, 5000);
     } else {
       startBtn.style.display = 'block'; stopBtn.style.display = 'none';

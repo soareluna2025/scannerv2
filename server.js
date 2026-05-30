@@ -89,7 +89,10 @@ app.get('/health', (req, res) => {
 // Backfill routes
 app.post('/api/backfill/start', async (req, res) => {
   try {
-    const result = await startBackfill();
+    // FIX6 — param opțional league_id / season (query sau body) pentru start țintit.
+    const leagueId = req.query.league_id || req.body?.league_id || null;
+    const season   = req.query.season    || req.body?.season    || null;
+    const result = await startBackfill({ leagueId, season });
     res.json(result);
   } catch (e) {
     logError('backfill', e.message);
