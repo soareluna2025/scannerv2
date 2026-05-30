@@ -5640,3 +5640,26 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ⚠ NEtestat pe API live (sandbox); +1 call API /injuries per enrich necachat
       (acceptabil — cache 30min reduce dramatic).
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[31.05 ~12:?? ] - FEATURE: PROBABILITATE MARCARE live dinamică („cât mai marchează?")
+  Fișier: public/js/app-ui.js. Veche calcScoringProbability afișa date PRE-MECI
+    pe meciuri live (ignora scor/roșii/minute). Înlocuită pe live cu Poisson dinamic.
+  NOU calcScoringProbabilityLive(d, side): P(≥1 gol în timp rămas)=1-e^(-λ_ajustat):
+    λ_ajustat = λ_baza × timeFrac × gameState × redOwn × redOpp × formF
+    1. λ_baza = en.lambdaHome/Away (Poisson pre-meci existent).
+    2. timeFrac = minutesLeft/90; minutesLeft=(90+extra)-elapsed (include prelungiri).
+    3. gameState din lead: +2→0.75, +1→0.90, 0→1.00, -1→1.15, -2+→1.25.
+    4. roșii (din d.events Card/Red+SecondYellow): propriu 1→0.70/2→0.45;
+       advers 1→1.20/2→1.40 (superioritate numerică).
+    5. al X-lea gol = goluri proprii curente + 1 (Poisson memoryless → P(următor)
+       independent de câte a marcat; afișat ca etichetă „Al X-lea gol").
+    6. formF = scoreRate ±10% (clamp 0.90-1.10).
+  NOU calcScoringProb(d,side) = dispatcher: live → Live; NS/insuf → calcScoringProbability
+    veche (păstrată ca fallback). Card render folosește calcScoringProb.
+  buildScoringExplain extins pt. res.live: „λ, X min rămase, conduce/pierde,
+    roșii, șuturi → %". Card: sub-etichetă „Al X-lea gol" (live) / „Marchează în meci" (NS).
+  ⚠ NU am atins calcConfidence*/score2/3/6/7/getLiveStatsFromDB — funcție frontend nouă.
+  Verificare: node --check OK. Test logic (/tmp/scLive.mjs, funcțiile reale):
+    min45 0-1 +1roșu→48% (al 1); min80 2-0→13% (al 3, defensiv); min10 0-0→77%;
+    away superior 1-1→35%; prelungiri 92+5→5%; 3-1→24% (al 4). Toate coerente.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins

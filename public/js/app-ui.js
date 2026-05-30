@@ -1243,8 +1243,115 @@ function calcScoringProbability(d,side){
   var p=factors.reduce(function(a,f){return a+f.s*(f.w/wsum);},0);
   return {prob:Math.round(clamp(p,0,100)),factors:factors,isLive:isLive};
 }
+
+// Numără cartonașele roșii per echipă din evenimente (Red Card + Second Yellow).
+// d.events e singura sursă (calcFeatures/live_stats NU stochează roșii).
+function _msRedCards(d,teamId){
+  var evs=(d&&d.events)||[];var n=0;
+  for(var i=0;i<evs.length;i++){
+    var ev=evs[i];
+    if(ev.type==='Card' && (ev.detail==='Red Card'||ev.detail==='Second Yellow Card')
+       && ev.team && ev.team.id===teamId) n++;
+  }
+  return n;
+}
+
+// PROBABILITATE MARCARE LIVE — „cât de probabil MAI marchează echipa?".
+// Poisson dinamic: P(≥1 gol în timpul rămas) = 1 - e^(-λ_ajustat).
+// λ_ajustat = λ_baza × timp_rămas × game_state × roșii × formă.
+// Memoryless Poisson ⇒ P(următorul gol) e independent de câte a marcat deja;
+// „al X-lea gol" = (golurile proprii curente + 1).
+function calcScoringProbabilityLive(d,side){
+  var clamp=function(v,lo,hi){return Math.max(lo,Math.min(hi,v));};
+  var en=_msEnrich(d);
+  var fix=d.fixture||{};
+  var st=fix.fixture&&fix.fixture.status||{};
+  var elapsed=Number(st.elapsed)||0;
+  var extra=Number(st.extra)||0;
+  var hg=fix.goals?(fix.goals.home==null?0:fix.goals.home):0;
+  var ag=fix.goals?(fix.goals.away==null?0:fix.goals.away):0;
+  var lamBase=side==='home'?en.lambdaHome:en.lambdaAway;
+  if(lamBase==null||!isFinite(lamBase)) return null;
+  lamBase=Number(lamBase);
+
+  // 2. Timp rămas (fracție din 90). Include prelungirile dacă elapsed le-a depășit.
+  var totalMin=90+(extra>0?extra:0);
+  var minutesLeft=Math.max(1,totalMin-elapsed);
+  var timeFrac=clamp(minutesLeft/90,0.02,1);
+
+  // Scor din perspectiva echipei
+  var myGoals=side==='home'?hg:ag;
+  var oppGoals=side==='home'?ag:hg;
+  var lead=myGoals-oppGoals;
+
+  // 3. Game state
+  var gs;
+  if(lead>=2) gs=0.75; else if(lead===1) gs=0.90; else if(lead===0) gs=1.00;
+  else if(lead===-1) gs=1.15; else gs=1.25;
+
+  // 4. Cartonașe roșii (din evenimente)
+  var myId=side==='home'?(fix.teams&&fix.teams.home&&fix.teams.home.id):(fix.teams&&fix.teams.away&&fix.teams.away.id);
+  var oppId=side==='home'?(fix.teams&&fix.teams.away&&fix.teams.away.id):(fix.teams&&fix.teams.home&&fix.teams.home.id);
+  var myRed=_msRedCards(d,myId);
+  var oppRed=_msRedCards(d,oppId);
+  var redOwn=myRed>=2?0.45:myRed===1?0.70:1.0;
+  var redOpp=oppRed>=2?1.40:oppRed===1?1.20:1.0;
+
+  // 6. Formă ofensivă: scoreRate ±10% în jurul mediei (50%)
+  var rate=side==='home'?en.homeScoreRate:en.awayScoreRate;
+  var formF=1.0;
+  if(rate!=null&&isFinite(rate)) formF=clamp(1+(Number(rate)-50)/500,0.90,1.10);
+
+  var lamAdj=lamBase*timeFrac*gs*redOwn*redOpp*formF;
+  var prob=Math.round(clamp((1-Math.exp(-lamAdj))*100,0,100));
+
+  // Live intensity (informativ + boost ușor): SOT/DA din statistici
+  var stats=(fix&&fix.statistics)||[];var idx=side==='home'?0:1;
+  var getSt=function(type){
+    var t=stats[idx]&&stats[idx].statistics;if(!Array.isArray(t))return null;
+    var e=t.find(function(s){return s.type===type;});var v=e&&e.value;
+    if(v==null||v==='N/A'||v==='')return null;var n=parseFloat(v);return isFinite(n)?n:null;
+  };
+  var sot=getSt('Shots on Goal');
+
+  return {
+    prob:prob, live:true, nextGoalNum:myGoals+1,
+    lamBase:lamBase, lamAdj:lamAdj, minutesLeft:minutesLeft, lead:lead,
+    gs:gs, redOwn:redOwn, redOpp:redOpp, myRed:myRed, oppRed:oppRed,
+    formF:formF, sot:sot, elapsed:elapsed,
+  };
+}
+
+// Dispatcher: live → logică dinamică nouă; NS/altele → calcScoringProbability vechi.
+function calcScoringProb(d,side){
+  var fix=d&&d.fixture||{};
+  var sh=(fix.fixture&&fix.fixture.status&&fix.fixture.status.short)||'NS';
+  var isLive=(['1H','2H','HT','ET','BT','P','LIVE','INT']).indexOf(sh)>=0;
+  if(isLive){
+    var r=calcScoringProbabilityLive(d,side);
+    if(r) return r;
+  }
+  return calcScoringProbability(d,side); // fallback NS / date insuficiente
+}
+var _msOrdinal=['','1ul','2lea','3lea','4lea','5lea','6lea','7lea','8lea'];
+function _msOrd(n){return _msOrdinal[n]||(n+'lea');}
 function buildScoringExplain(name,res){
   var R=function(v){return Math.round(v);};
+  // Forma LIVE (calcScoringProbabilityLive) — explicație din factorii dinamici.
+  if(res.live){
+    var seg=[];
+    seg.push('λ='+Number(res.lamBase).toFixed(2));
+    seg.push(res.minutesLeft+' min rămase');
+    if(res.lead>=2) seg.push('conduce +'+res.lead+' (-25%)');
+    else if(res.lead===1) seg.push('conduce +1 (-10%)');
+    else if(res.lead===0) seg.push('egalitate');
+    else if(res.lead===-1) seg.push('pierde -1 (+15%)');
+    else seg.push('pierde '+res.lead+' (+25%)');
+    if(res.myRed>0) seg.push(res.myRed+' roșu propriu ('+(res.redOwn<0.5?'-55%':'-30%')+')');
+    if(res.oppRed>0) seg.push(res.oppRed+' roșu advers ('+(res.redOpp>1.3?'+40%':'+20%')+')');
+    if(res.sot!=null) seg.push(res.sot+' șuturi pe poartă');
+    return 'Sistemul estimează că <b>'+htmlEsc(name)+'</b> mai marchează (al '+_msOrd(res.nextGoalNum)+' gol): '+seg.join(', ')+' → '+res.prob+'%.';
+  }
   var parts=[];
   res.factors.forEach(function(f){
     if(f.k==='form'){
@@ -1437,8 +1544,8 @@ function mdRenderSumar(d){
 
   // ── PROBABILITATE MARCARE (sub Player Intelligence) ──────────────────────
   (function(){
-    var rH=calcScoringProbability(d,'home');
-    var rA=calcScoringProbability(d,'away');
+    var rH=calcScoringProb(d,'home');
+    var rA=calcScoringProb(d,'away');
     if(rH||rA){
       var scol=function(p){return p==null?'#888':p>=60?'#22c55e':p>=40?'#f59e0b':'#ef4444';};
       var card=function(team,name,res,sideKey){
@@ -1446,12 +1553,15 @@ function mdRenderSumar(d){
         var pv=p==null?'—':p+'%';
         var expId='msx_'+fk+'_'+sideKey;
         var expHtml=res?buildScoringExplain(name,res):'Date insuficiente pentru estimare.';
+        // Sub-etichetă „Al X-lea gol" doar pe meci live (res.live).
+        var subLbl=(res&&res.live)?('Al '+_msOrd(res.nextGoalNum)+' gol'):'Marchează în meci';
         // Starea expandată e citită din _scoringExpanded → persistă peste auto-refresh.
         var disp=(_scoringExpanded===sideKey)?'block':'none';
         return '<div onclick="mdToggleScoreExp(\''+sideKey+'\')" style="flex:1;min-width:0;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:12px;text-align:center">'+
           '<div style="display:flex;justify-content:center;margin-bottom:6px">'+tLogo(team,40)+'</div>'+
           '<div style="font-size:13px;font-weight:600;margin-bottom:4px">'+htmlEsc(name)+'</div>'+
           '<div style="font-size:30px;font-weight:800;line-height:1;color:'+scol(p)+'">'+pv+'</div>'+
+          '<div style="font-size:10px;color:var(--mu);margin-top:3px">'+subLbl+'</div>'+
           '<div style="font-size:10px;color:var(--mu);margin-top:6px">👆 tap pentru explicație</div>'+
           '<div class="ms-exp" data-side="'+sideKey+'" id="'+expId+'" style="display:'+disp+';font-size:11px;line-height:1.5;color:var(--mu2,#aaa);margin-top:8px;text-align:left;border-top:1px solid rgba(255,255,255,.10);padding-top:8px">'+expHtml+'</div>'+
         '</div>';
