@@ -400,22 +400,19 @@ async function scanLive10s() {
 
     const processedMatches = [];
 
-    // FIX 5: priority buckets. La 3s cadența scanLive10s, meciurile
-    // LOW_PRIORITY (min < 30, scor_diff > 2, NGP slab) sunt procesate
-    // doar la fiecare al 3-lea scan (~9s) pentru a economisi cicluri.
-    // HIGH_PRIORITY (min ≥ 75 || scor_diff ≤ 1 || NGP > 60) — fiecare scan.
-    const PRIORITY_SKIP_EVERY = 3;
-    function isLowPriority(m, prevNg) {
+    // FIX 3: priority buckets 3-tier (la 2s cadența scanLive10s):
+    //   HIGH   — mn≥60 OR scor egal OR NGP>50 → fiecare scan (2s)
+    //   MEDIUM — mn 30-59                     → fiecare al 2-lea scan (4s)
+    //   LOW    — mn<30 ȘI diff>2              → fiecare al 4-lea scan (8s)
+    function matchPriorityBucket(m, prevNg) {
       const mn = m.fixture?.status?.elapsed ?? 0;
       const hg = m.goals?.home ?? 0;
       const ag = m.goals?.away ?? 0;
       const diff = Math.abs(hg - ag);
-      const ngOK = (prevNg || 0) > 60;
-      if (mn >= 75) return false;       // final de meci → mereu high
-      if (diff <= 1) return false;       // scor close → mereu high
-      if (ngOK)     return false;       // NGP ridicat → mereu high
-      if (mn < 30 && diff > 2) return true;  // început + diferență mare → low
-      return false;
+      const ng = prevNg || 0;
+      if (mn >= 60 || ng > 50 || diff === 0) return 'high';
+      if (mn < 30 && diff > 2)                return 'low';
+      return 'medium';
     }
 
     for (const m of raw) {
@@ -423,12 +420,13 @@ async function scanLive10s() {
       const id = m.fixture?.id;
       if (!id) continue;
 
-      // Skip LOW_PRIORITY 2 din 3 scan-uri (păstrează tot al 3-lea)
+      // Skip pe bucket: high = mereu, medium = 1/2, low = 1/4
       if (LIVE_STATUS.has(sh)) {
         const prevNg = liveCache[id]?.ngLast || 0;
-        if (isLowPriority(m, prevNg) && (_scanCounter % PRIORITY_SKIP_EVERY) !== 0) {
-          continue;
-        }
+        const bucket = matchPriorityBucket(m, prevNg);
+        if (bucket === 'low'    && (_scanCounter % 4) !== 0) continue;
+        if (bucket === 'medium' && (_scanCounter % 2) !== 0) continue;
+        // high → fall through (procesare la fiecare scan)
       }
 
       // Meci terminat — rezolvă outcome dacă îl urmăream
@@ -801,10 +799,13 @@ export function startScanner() {
   runIfActive(scanLive10s, 'live10s')();
   runIfActive(scanPreMatch, 'preMatch')();
 
-  // FIX 2: scanLive10s la 3s în loc de 10s (paritate FlashScore ~5s).
-  // Cost API: 1 call/3s = 1200/h = 28.8k/zi pentru /live=all — în buget 300k.
-  setInterval(runIfActive(scanLive10s,    'live10s'),     3_000);
-  setInterval(runIfActive(scanLiveStats,  'liveStats'),  60_000);
+  // FIX 1: scanLive10s la 2s (paritate sub-FlashScore, ~5s la ei).
+  //        Cost: 1 call/2s = 1800/h = 43.2k/zi pentru /live=all.
+  // FIX 2: scanLiveStats la 15s (statistici xG/pose/SOT mai responsive).
+  //        Cost: ~20 meciuri × 4 calls/min × 60 min × 24h ≈ 115k/zi.
+  //        Total scanner ~158k/zi din 300k (53%) — sustenabil.
+  setInterval(runIfActive(scanLive10s,    'live10s'),     2_000);
+  setInterval(runIfActive(scanLiveStats,  'liveStats'),  15_000);
   setInterval(runIfActive(scanPreMatch,   'preMatch'),  3_600_000);
 
   console.log('[scanner] Started — live/10s, stats/60s, prematch/1h');
