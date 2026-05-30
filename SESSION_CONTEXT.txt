@@ -5525,3 +5525,22 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ⚠ NEtestat pe DB/API live (sandbox). Test post-deploy: deschide modal NS la ~1h
     → arbitru + antrenori prezenți; verifică UPDATE fixtures.referee după stage 6/7.
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[30.05 ~07:?? ] - FIX: „?" în loc de nume/logo echipă în modal (live) | Commit: 48cd84d
+  Fișier: api/match.js
+  ROOT CAUSE: scanner live (2s) → 429 pe /fixtures?id → fixture=null → modal „?"
+    (nume) + fără logo; răspunsul degradat se cache-uia 60s. match.js NU avea
+    fallback DB deși avea hId/aId + logo în DB.
+  FIX:
+   1. Query teams: SELECT team_id, name, logo (era doar logo). logoMap → teamMap
+      [id]={name,logo}. Injecția logo folosește teamMap[hId]?.logo.
+   2. fixture=null SAU teams incomplet → reconstrucție DB: SELECT home_team_name,
+      away_team_name, match_date, status_short FROM fixtures; nume/logo din teamMap
+      (fallback la fixtures.*_name). Obiect fixture minimal + status.short + _degraded.
+   3. Răspuns degradat NU se cache-uiește: if(!fixture._degraded) matchCache.set(...).
+   4. console.warn('[match] fixture degraded → folosind fallback DB pentru', id).
+  Verificare: node --check api/match.js → OK. logoMap=0 ref rămase, teamMap=5,
+    guard cache confirmat (cat -v). ⚠ NEtestat pe DB/API live (sandbox).
+  Notă proces: SESSION_CONTEXT pentru acest task a fost adăugat într-un commit
+    follow-up (Edit-ul inițial a ratat indentarea); codul e în 48cd84d.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
