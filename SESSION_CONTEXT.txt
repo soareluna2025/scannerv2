@@ -4841,3 +4841,23 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ Niciun endpoint API-Football nou (același set: statistics/events/players)
     ✓ Buton de start neschimbat (POST /api/backfill/start)
     ✓ Buget STOP_AT=280k neatins
+
+[29.05 ~21:30] - FIX: matches-history erori round + status viitor | Commit: 8df5905
+  EROARE 1 (confirmat): "column f.round does not exist" pe trecut.
+    Schema fixtures_history (create-tables.sql:104-120):
+      id, fixture_id, league_id, season, home_team_id, home_team_name,
+      away_team_id, away_team_name, home_goals, away_goals, home_ht,
+      away_ht, status_short, match_date  (+ referee adăugat ulterior)
+    Nu are 'round'. Doar fixtures (line 8-30) o are.
+    Fix: const roundExpr = isPast ? 'NULL::TEXT' : 'f.round';
+         SELECT … ${roundExpr} AS round …
+  EROARE 2 (defensiv): nu am putut reproduce o eroare SQL doar
+    prin inspecție pentru ramura viitor — fixtures table conține
+    toate coloanele referențiate (inclusiv round). Ipoteză cea mai
+    probabilă: filtrul status='NS' era prea îngust, lăsând în afară
+    meciuri în 'TBD' (oră confirmată ulterior) și 'PST' (postponed).
+    Fix defensiv: status_short IN ('NS','TBD','PST')
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Doar matches-history.js (endpoint nou)
