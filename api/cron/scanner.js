@@ -281,6 +281,24 @@ async function saveFormStats(m) {
 }
 
 async function saveLiveStats(m, f, status) {
+  // Bug fix: live_stats.ngp_home/ngp_away rămâneau NULL — INSERT-ul nu le
+  // includea. Calculează NGP total local (calcNextGoal + calibrare) și
+  // împărțit proporțional cu xG-ul per echipă. Fallback 50/50 dacă xG=0.
+  let ngpHome = null, ngpAway = null;
+  const ngTotal = f.mn < 10 ? 0 : calibrateNgp(calcNextGoal(f));
+  if (ngTotal > 0) {
+    const hxg = Math.max(0, f.hxg || 0);
+    const axg = Math.max(0, f.axg || 0);
+    const sum = hxg + axg;
+    if (sum > 0) {
+      ngpHome = +(ngTotal * (hxg / sum)).toFixed(2);
+      ngpAway = +(ngTotal * (axg / sum)).toFixed(2);
+    } else {
+      ngpHome = +(ngTotal / 2).toFixed(2);
+      ngpAway = +(ngTotal / 2).toFixed(2);
+    }
+  }
+
   await query(
     `INSERT INTO live_stats
        (fixture_id, elapsed, home_goals, away_goals,
@@ -288,8 +306,9 @@ async function saveLiveStats(m, f, status) {
         home_possession, away_possession,
         home_corners, away_corners,
         home_da, away_da,
-        home_xg, away_xg)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        home_xg, away_xg,
+        ngp_home, ngp_away)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
     [
       m.fixture.id,
       f.mn,
@@ -307,6 +326,8 @@ async function saveLiveStats(m, f, status) {
       f.aDA,
       f.hxg || null,
       f.axg || null,
+      ngpHome,
+      ngpAway,
     ]
   );
 }
