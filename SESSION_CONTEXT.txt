@@ -4642,3 +4642,15 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     Detectează h2hSample (0 sau number). Dacă > 0 → afișează procentele
     h2hOver15 / h2hGG normal. Dacă === 0 → afișează "Date insuficiente"
     în loc de procentele false. Contorul "Meciuri H2H" rămâne afișat (0).
+
+[29.05 ~17:15] - DOCS: CLAUDE.md COD INTANGIBIL + SPRINT-URI COMPLETATE | Commit: a0e24dc
+  Adăugate 2 secțiuni noi în CLAUDE.md (între FORMAT RĂSPUNS și 1. REGULI):
+  ── COD INTANGIBIL — NU MODIFICA NICIODATĂ ──
+    Listă cu funcțiile/scorurile interzise oricărui agent:
+    calcConfidencePreMatch, calcConfidenceLive (+ greutățile), score2/3/6/7.
+    Permis: DOAR score4 și getLiveStatsFromDB().
+  ── SPRINT-URI COMPLETATE (Mai 2026) ──
+    Rezumat în format flat pentru lookup rapid:
+    4A shrinkage (96f70e7), 4B per-profil (7cee89c),
+    4C g2Score predictions (14cef08), 4D clamp scoruri (4e0dc81),
+    Sprint Live (4d81457), Whitelist cleanup (e429e9c + 51bdd78).
