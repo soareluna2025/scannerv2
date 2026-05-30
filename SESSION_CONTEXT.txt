@@ -4797,3 +4797,47 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
     ✓ NU am modificat score2/3/6/7
     ✓ Modificări izolate în cron, zero impact asupra pipeline-ului calc
+
+[29.05 ~21:00] - BACKFILL: 3 fix-uri (DO UPDATE + no_data + h2h) | Commit: c6c467f
+  ── FIX 1: match_stats ON CONFLICT DO UPDATE ──
+     Înainte: DO NOTHING — datele greșite colectate prima dată rămâneau
+     pentru totdeauna. După: DO UPDATE pe toate cele 18 coloane (team_name,
+     shots_on_goal, expected_goals, possession, passes_*, fouls, cards,
+     corners, offsides, goalkeeper_saves). Re-rularea backfill-ului acum
+     corectează datele.
+     Plus: în collectStats, dacă teams.length===0 → marker no-data + return
+     (no risipă API la următoarea rulare).
+  ── FIX 2: marker no-data în app_settings ──
+     În collectStats / collectEvents / collectPlayers: dacă API returnează
+     răspuns gol, setSetting(`no_data:{kind}:{fid}`, timestamp).
+     În loop-ul principal, skip-check extins cu 3 query-uri suplimentare
+     pentru markeri:
+       no_data:stats:{fid}    no_data:events:{fid}    no_data:players:{fid}
+     Per-fixture înainte: 3 SELECT (hasStats/hasEvents/hasPlayers).
+     După: 6 SELECT (toate Promise.all, indexed PK lookup < 1ms fiecare).
+     Comportament: dacă marker există, skip endpoint-ul → zero API call.
+  ── FIX 3: buildH2H din fixtures_history ──
+     IMPORTANT: schema h2h e row-per-fixture (UNIQUE team1,team2,fixture).
+     Coloanele pct_over_15/total/avg_goals NU sunt pe tabel — sunt
+     computate query-side în api/generator.js (CTE cu COUNT, AVG, FILTER).
+     Spec-ul user-ului a mers pe ipoteza unei agregări de coloane, dar
+     pentru a păstra contractul existent al pipeline-ului calc, am
+     populat h2h cu row-per-fixture (același pattern ca scanner.js).
+     Logică:
+       - Pereche normalizată (team1=min, team2=max).
+       - Refresh marker în app_settings: h2h_refresh:{t1}:{t2} → rulează
+         cel mult o dată la 30 zile per pereche.
+       - SELECT din fixtures_history (status_short='FT', match_date >=
+         NOW() - 4 ani, LIMIT 10 ordered by match_date DESC).
+       - UPSERT pe (team1_id, team2_id, fixture_id) — actualizează
+         home/away_goals dacă au fost corectate ulterior.
+       - Dacă zero rows în fixtures_history → marker setat oricum
+         (evită query repetat pe perechi fără istoric).
+     Apelat la finalul fiecărui fixture în loop-ul backfill, după
+     match_stats/events/players, cu (hid, aid) din `fixtures[fi].teams`.
+  Constrânți respectate:
+    ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
+    ✓ NU am modificat score2/3/6/7
+    ✓ Niciun endpoint API-Football nou (același set: statistics/events/players)
+    ✓ Buton de start neschimbat (POST /api/backfill/start)
+    ✓ Buget STOP_AT=280k neatins
