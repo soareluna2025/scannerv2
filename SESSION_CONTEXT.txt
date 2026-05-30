@@ -4606,3 +4606,19 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Secțiunile devenite goale eliminate complet din fișier:
     Serbia, Bahrain  (singurele ID-uri erau cele șterse)
   Total: 408 → 365 linii (-3 ID + -24 metadata wrapper).
+
+[29.05 ~16:30] - FIX: mislabeling 274/286/287 în leagues.js | Commit: 51bdd78
+  DB confirmat:
+    274 = Indonesia Liga 1   (11 fixtures) — era „Bolivia Liga de Ascenso"
+    286 = Serbia Super Liga  (10 fixtures) — era „Ecuador LigaPro Serie A"
+    287 = Serbia Prva Liga   (14 fixtures) — era „Ecuador LigaPro Serie B"
+  Corecții aplicate (api/leagues.js):
+    • Eliminat 286, 287 din secțiunea Ecuador (rămân doar 735, 917 Copa Ecuador).
+    • Eliminat 274 din secțiunea Bolivia (rămân 273 Primera + 276 Copa).
+    • Adăugată secțiune nouă "Serbia" între Croatia și Romania:
+        286, // Super Liga (Tier 1)
+        287, // Prva Liga (Tier 2)
+    • Adăugat 274 în secțiunea Indonesia lângă 460 Liga 2:
+        274, // Liga 1 (Tier 1)
+        460, // Liga 2
+  Nu am adăugat ID-uri noi — doar mutate cu comentariile corecte.
