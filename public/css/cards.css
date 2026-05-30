@@ -257,3 +257,37 @@
 .g2spin-wrap{display:flex;align-items:center;justify-content:center;flex:1;flex-direction:column;gap:12px}
 .g2spin{width:30px;height:30px;border:3px solid var(--sur3);border-top-color:var(--ac);border-radius:50%;animation:spin .8s linear infinite}
 .g2spin-lbl{font-size:12px;color:var(--mu)}
+
+/* ── Calendar + Istoric meciuri (FlashScore-like) ─────────── */
+.pm-datebtn{flex:1;min-width:54px;background:rgba(255,255,255,.05);color:var(--tx);
+  border:1px solid var(--bor);padding:8px 4px;border-radius:8px;font-size:11px;
+  font-weight:700;cursor:pointer;line-height:1.2;text-align:center}
+.pm-datebtn.active{background:#22c55e;color:#000;border-color:#22c55e}
+.pm-datebtn-day{display:block;font-size:9px;opacity:.75;margin-bottom:2px}
+.pm-datebtn-num{display:block;font-size:14px;font-weight:800}
+
+.pm-group{margin-bottom:14px}
+.pm-group-h{display:flex;align-items:center;gap:6px;padding:8px 10px;
+  background:rgba(255,255,255,.04);border-radius:8px;margin-bottom:4px;font-size:11px}
+.pm-group-country{color:var(--mu2);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.pm-group-league{color:var(--tx);font-weight:700}
+.pm-group-cup{margin-left:auto;color:var(--mu);font-size:10px;font-weight:500}
+
+.hist-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;
+  padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.04);font-size:13px}
+.hist-row:last-child{border-bottom:none}
+.hist-row.clickable{cursor:pointer;transition:background .15s}
+.hist-row.clickable:hover{background:rgba(255,255,255,.03)}
+.hist-team{display:flex;align-items:center;gap:6px;color:var(--tx);min-width:0;overflow:hidden}
+.hist-team.away{justify-content:flex-end;text-align:right}
+.hist-team span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist-logo{width:20px;height:20px;border-radius:3px;object-fit:contain;flex-shrink:0}
+.hist-mid{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:60px}
+.hist-time{font-size:12px;color:var(--mu);font-weight:600}
+.hist-score-ft{font-size:14px;font-weight:800;color:var(--tx)}
+.hist-score-live{font-size:14px;font-weight:800;color:#ef4444;display:inline-flex;align-items:center;gap:4px}
+.hist-score-live .live-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:pulse 1.2s infinite}
+.hist-ft-badge{font-size:8px;color:var(--mu);font-weight:700;letter-spacing:1px}
+.hist-ns-badge{font-size:8px;color:var(--mu2);font-weight:700;letter-spacing:1px}
+.hist-live-badge{font-size:9px;color:#ef4444;font-weight:700}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}

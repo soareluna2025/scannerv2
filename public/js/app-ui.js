@@ -700,6 +700,143 @@ function renderPM(){
 }
 
 
+// ── CALENDAR + ISTORIC MECIURI (FlashScore-like) ──────────────
+// Date picker (7 zile: 3 înapoi / azi / 3 înainte) + listă grupată pe
+// competiție din /api/matches-history. Tap pe meci FT → mdOpen existent.
+var PM_DATE = null;            // YYYY-MM-DD curent selectat
+var _pmHistData = null;
+var _PM_DAYS_RO = ['DU','LU','MA','MI','JO','VI','SA'];
+
+function pmTodayStr(){
+  var t = new Date();
+  var y = t.getFullYear();
+  var m = String(t.getMonth() + 1).padStart(2,'0');
+  var d = String(t.getDate()).padStart(2,'0');
+  return y + '-' + m + '-' + d;
+}
+
+function pmDateAdd(base, off){
+  var t = new Date(base + 'T00:00:00');
+  t.setDate(t.getDate() + off);
+  var y = t.getFullYear();
+  var m = String(t.getMonth() + 1).padStart(2,'0');
+  var d = String(t.getDate()).padStart(2,'0');
+  return y + '-' + m + '-' + d;
+}
+
+function pmBuildDateBar(){
+  var bar = document.getElementById('pm-datebar');
+  if (!bar) return;
+  var todayStr = pmTodayStr();
+  if (!PM_DATE) PM_DATE = todayStr;
+  var html = '';
+  for (var off = -3; off <= 3; off++) {
+    var dStr = pmDateAdd(todayStr, off);
+    var d = new Date(dStr + 'T00:00:00');
+    var active = dStr === PM_DATE;
+    var dayLbl, numLbl;
+    if (off === 0) { dayLbl = 'AZI'; numLbl = String(d.getDate()).padStart(2,'0'); }
+    else            { dayLbl = _PM_DAYS_RO[d.getDay()]; numLbl = String(d.getDate()).padStart(2,'0'); }
+    html += '<button class="pm-datebtn' + (active ? ' active' : '') + '" '
+         +  'onclick="pmLoadDate(\'' + dStr + '\')">'
+         +  '<span class="pm-datebtn-day">' + dayLbl + '</span>'
+         +  '<span class="pm-datebtn-num">' + numLbl + '</span>'
+         +  '</button>';
+  }
+  bar.innerHTML = html;
+}
+
+async function pmLoadDate(dateStr){
+  PM_DATE = dateStr;
+  pmBuildDateBar();
+  var body = document.getElementById('pm-body');
+  body.innerHTML = '<div class="spinner"><div class="spin"></div></div>';
+  try {
+    var r = await fetch('/api/matches-history?date=' + encodeURIComponent(dateStr));
+    var d = await r.json();
+    if (!d.ok) {
+      body.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>'
+        + '<div class="empty-t">Eroare</div><div class="empty-s">'
+        + htmlEsc(d.error || 'unknown') + '</div></div>';
+      return;
+    }
+    _pmHistData = d;
+    pmRenderHistory(d);
+  } catch (e) {
+    body.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>'
+      + '<div class="empty-t">Eroare</div><div class="empty-s">' + htmlEsc(e.message) + '</div></div>';
+  }
+}
+
+function pmRenderHistory(data){
+  var body = document.getElementById('pm-body');
+  if (!data.groups || !data.groups.length) {
+    body.innerHTML = '<div class="empty"><div class="empty-icon">📅</div>'
+      + '<div class="empty-t">Niciun meci</div>'
+      + '<div class="empty-s">Pe ' + htmlEsc(data.date) + ' nu există meciuri în ligile urmărite</div></div>';
+    return;
+  }
+  var LIVE = {'1H':1,'2H':1,'HT':1,'ET':1,'BT':1,'P':1,'LIVE':1,'INT':1};
+  var FINAL = {'FT':1,'AET':1,'PEN':1,'AWD':1,'WO':1};
+  var html = '<div class="pm-summary"><span class="pm-summary-t">'
+    + data.count + ' meciuri · ' + data.groups.length + ' competiții · '
+    + htmlEsc(data.date) + '</span></div>';
+
+  data.groups.forEach(function(grp){
+    html += '<div class="pm-group">';
+    html += '<div class="pm-group-h">';
+    html += '<span class="pm-group-country">' + htmlEsc(grp.country || '?') + '</span>';
+    html += '<span style="color:var(--mu)">·</span>';
+    html += '<span class="pm-group-league">' + htmlEsc(grp.league_name || '?') + '</span>';
+    html += '</div>';
+    grp.matches.forEach(function(m){
+      var st = m.status_short || 'NS';
+      var isLive = LIVE[st] === 1;
+      var isFT   = FINAL[st] === 1;
+      var isNS   = st === 'NS' || st === 'TBD' || st === 'PST';
+      var hg = m.home_goals, ag = m.away_goals;
+      var hBold = (isFT && hg > ag) ? 'font-weight:800' : '';
+      var aBold = (isFT && ag > hg) ? 'font-weight:800' : '';
+      var mid = '';
+      if (isLive)      mid = '<span class="hist-score-live"><span class="live-dot"></span>' + (hg||0) + ' - ' + (ag||0) + '</span><span class="hist-live-badge">LIVE</span>';
+      else if (isFT)   mid = '<span class="hist-score-ft">' + (hg||0) + ' - ' + (ag||0) + '</span><span class="hist-ft-badge">' + st + '</span>';
+      else if (isNS)   mid = '<span class="hist-time">' + new Date(m.match_date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + '</span><span class="hist-ns-badge">NS</span>';
+      else             mid = '<span class="hist-time">' + htmlEsc(st) + '</span>';
+
+      var clickable = isFT && m.fixture_id && m.home_team_id && m.away_team_id;
+      var rowAttrs = clickable
+        ? 'class="hist-row clickable" onclick="mdOpen(' + m.fixture_id + ',' + m.home_team_id + ',' + m.away_team_id + ',this)"'
+        : 'class="hist-row"';
+
+      html += '<div ' + rowAttrs + '>';
+      html += '<div class="hist-team home" style="' + hBold + '">';
+      if (m.home_logo) html += '<img src="' + m.home_logo + '" class="hist-logo" onerror="this.style.display=\'none\'">';
+      html += '<span>' + htmlEsc(m.home_team || '?') + '</span></div>';
+      html += '<div class="hist-mid">' + mid + '</div>';
+      html += '<div class="hist-team away" style="' + aBold + '">';
+      html += '<span>' + htmlEsc(m.away_team || '?') + '</span>';
+      if (m.away_logo) html += '<img src="' + m.away_logo + '" class="hist-logo" onerror="this.style.display=\'none\'">';
+      html += '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+
+  var sy = body.scrollTop;
+  body.innerHTML = html;
+  body.scrollTop = sy;
+}
+
+// Auto-init date bar la load (idempotent — apare gol până când user-ul îl populează)
+if (typeof window !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', pmBuildDateBar);
+  } else {
+    setTimeout(pmBuildDateBar, 0);
+  }
+}
+
+
 // ── MATCH DETAIL ──────────────────────────────────────────────
 var _md={data:null,tabIdx:0,fixtureId:0,homeId:0,awayId:0};
 var _mdRefreshTimer=null;

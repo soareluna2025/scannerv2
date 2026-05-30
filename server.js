@@ -36,7 +36,7 @@ const apiFiles = [
   'agent', 'update-results', 'health-check', 'simulate',
   'elo', 'monte-carlo', 'match-momentum', 'db-stats', 'generator',
   'standings-data', 'venue-weather', 'backfill-stats', 'learning-leagues',
-  'calibration', 'bets', 'debug-live'
+  'calibration', 'bets', 'debug-live', 'matches-history'
 ];
 
 for (const name of apiFiles) {
