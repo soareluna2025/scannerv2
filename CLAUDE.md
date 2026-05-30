@@ -12,6 +12,50 @@ Nu scrie NIMIC în afara acelui bloc. Fără excepții.
 
 ---
 
+## COD INTANGIBIL — NU MODIFICA NICIODATĂ
+Acestea sunt interzise oricărui agent, indiferent de context:
+- calcConfidencePreMatch() — funcția și greutățile layerelor
+- calcConfidenceLive() — funcția și greutățile layerelor
+- score2 (formula cu apărare)
+- score3 (H2H combo cu h2hGG)
+- score6 (convergență stdDev)
+- score7 (match-up real)
+Modifică DOAR logica score4 și getLiveStatsFromDB().
+
+---
+
+## SPRINT-URI COMPLETATE (Mai 2026)
+
+### Sprint 4A — Shrinkage Bayesian în calcPoisson (commit 96f70e7)
+N_SHRINK = 5. Când echipa are puține meciuri, lambda se blendează
+cu media reală a ligii din league_stats. Zero valori hardcodate.
+
+### Sprint 4B — Calibrare per-profil ligă (commit 7cee89c)
+calibration_tables are acum PK compus (module, league_group).
+Grupuri: low (<2.3 goluri/meci), mid (2.3-3.0), high (>3.0).
+Minimum 500 predicții per grup pentru calibrare proprie.
+
+### Sprint 4C — g2Score folosește predictions ca rawScore (commit 14cef08)
+Frontend g2Score() folosește over15_prob/over25_prob/gg_prob
+din tabela predictions în loc să recalculeze din form data.
+Fallback la calculul vechi dacă predictions lipsesc.
+
+### Sprint 4D — Clamp scoruri extreme în calcPoisson (commit 4e0dc81)
+Meciuri cu total goluri > 5 sunt clampate proporțional la 5.
+Ex: 0-6 devine 0-5.0 în calcul. Elimină outlier inflation.
+
+### Sprint Live — getLiveStatsFromDB() real (commit 4d81457)
+Citește din live_stats: elapsed, xg, sot, da, ngp_home, ngp_away.
+score4 = intensity*0.6 + NGP*0.4, cu decay după minutul 75.
+Pre-meci neafectat (gated pe elapsedNum > 0).
+
+### Whitelist cleanup (commit e429e9c + 51bdd78)
+19 ID-uri greșite eliminate. Romania fixat: 283/284/285.
+Serbia: 286/287. Indonesia: 274.
+Regula: maxim Liga 1 + Liga 2 + Cupă per țară, zero tier 3+.
+
+---
+
 ## 1. REGULI GENERALE
 
 - **După ORICE task finalizat**, actualizează `SESSION_CONTEXT.txt` secțiunea 12 cu ce s-a făcut (format: `[ZZ.LL HH:MM] - CE S-A FĂCUT | Commit: hash`) și push.
