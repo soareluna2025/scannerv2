@@ -191,6 +191,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Bolivia
   273,   // Primera Division
+  344,   // Primera División (Liga 2)
   276,   // Copa Bolivia
 
   // Venezuela
@@ -224,7 +225,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   248,   // Copa Guatemala
 
   // El Salvador
-  344,   // Primera Division
   349,   // Segunda Division (Liga 2)
   350,   // Copa El Salvador
 
