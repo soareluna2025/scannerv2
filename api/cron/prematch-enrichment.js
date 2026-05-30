@@ -148,6 +148,23 @@ async function runStage(fixture, stageNum) {
     for (let i = 0; i < types.length; i++) await save(types[i], results[i]);
   }
 
+  // Re-captură ARBITRU aproape de kickoff (stage 6: 0.75-1.5h, stage 7: 0-0.5h).
+  // La stage 1 (23-25h) arbitrul de obicei nu e încă desemnat → re-fetch /fixtures?id
+  // și persistă fixtures.referee + prematch_data['referee_late'] pentru modal/enrich.
+  if (stageNum === 6 || stageNum === 7) {
+    try {
+      const fxData = await apiFetch(`/fixtures?id=${id}`);
+      const fxObj  = (fxData.response || [])[0];
+      const refRaw = fxObj?.fixture?.referee;
+      const ref    = (refRaw && String(refRaw).trim() && refRaw !== 'null') ? String(refRaw).trim() : null;
+      if (ref) {
+        await query(`UPDATE fixtures SET referee=$1, updated_at=NOW() WHERE fixture_id=$2`, [ref, id]).catch(() => {});
+        await savePayload(id, stageNum, 'referee_late', { response: [{ referee: ref, venue: fxObj?.fixture?.venue || null }] });
+      }
+      await sleep(200);
+    } catch (_) { /* non-critical */ }
+  }
+
   await markDone(id, stageNum);
 }
 

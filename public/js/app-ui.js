@@ -1888,7 +1888,19 @@ function mdRenderFormatii(d){
     } else {
       msg='<div class="empty-s">Formațiile nu sunt disponibile pentru această ligă sau meciul nu a început</div>';
     }
-    document.getElementById('md-body').innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-t">Formații indisponibile</div>'+msg+'</div>';
+    // Fallback ANTRENORI din prematch_data (PAS 3) — afișăm cel puțin antrenorii
+    // când lineup-urile încă nu sunt anunțate.
+    var co=d.coaches||{};
+    var hn=_md&&_md.data&&_md.data.fixture&&_md.data.fixture.teams&&_md.data.fixture.teams.home&&_md.data.fixture.teams.home.name||'Gazde';
+    var an=_md&&_md.data&&_md.data.fixture&&_md.data.fixture.teams&&_md.data.fixture.teams.away&&_md.data.fixture.teams.away.name||'Oaspeți';
+    var coachHtml='';
+    if((co.home&&co.home.name)||(co.away&&co.away.name)){
+      coachHtml='<div class="md-section"><div class="md-section-title">Antrenori</div>';
+      coachHtml+='<div class="lp-row"><span class="lp-label">'+htmlEsc(hn)+'</span><span class="lp-val">'+(co.home&&co.home.name?'👔 '+htmlEsc(co.home.name):'—')+'</span></div>';
+      coachHtml+='<div class="lp-row"><span class="lp-label">'+htmlEsc(an)+'</span><span class="lp-val">'+(co.away&&co.away.name?'👔 '+htmlEsc(co.away.name):'—')+'</span></div>';
+      coachHtml+='</div>';
+    }
+    document.getElementById('md-body').innerHTML=coachHtml+'<div class="empty"><div class="empty-icon">📋</div><div class="empty-t">Formații indisponibile</div>'+msg+'</div>';
     return;
   }
   var out='';

@@ -95,6 +95,51 @@ async function getPredictionFromDB(fixtureId) {
   } catch (_) { return null; }
 }
 
+// Fallback ARBITRU când /fixtures?id live nu-l are încă (frecvent la NS ~1h):
+// fixtures.referee (persistat de prematch-enrichment stage 6/7) → prematch_data
+// 'referee_late' → prematch_data 'fixture'. Returnează numele sau null.
+async function getRefereeFromDB(fixtureId) {
+  try {
+    const r = await query(`SELECT referee FROM fixtures WHERE fixture_id = $1`, [Number(fixtureId)]);
+    const col = r.rows[0]?.referee;
+    if (col && String(col).trim() && col !== 'null') return String(col).trim();
+    const p = await query(
+      `SELECT data_type, payload FROM prematch_data
+        WHERE fixture_id = $1 AND data_type IN ('referee_late','fixture')
+        ORDER BY data_type DESC`,
+      [Number(fixtureId)]
+    );
+    for (const row of p.rows) {
+      const arr = row.payload;
+      const rr = Array.isArray(arr) ? (arr[0]?.fixture?.referee ?? arr[0]?.referee) : null;
+      if (rr && String(rr).trim() && rr !== 'null') return String(rr).trim();
+    }
+    return null;
+  } catch (_) { return null; }
+}
+
+// Fallback ANTRENORI din prematch_data (coach_home/coach_away, stage 1) — folosit
+// în tab FORMAȚII când lineup-urile API încă nu sunt anunțate (~1h înainte).
+async function getCoachesFromDB(fixtureId) {
+  try {
+    const r = await query(
+      `SELECT data_type, payload FROM prematch_data
+        WHERE fixture_id = $1 AND data_type IN ('coach_home','coach_away')`,
+      [Number(fixtureId)]
+    );
+    const out = {};
+    for (const row of r.rows) {
+      const arr = row.payload;
+      const c = Array.isArray(arr) ? arr[0] : null;
+      if (c && c.name) {
+        const side = row.data_type === 'coach_home' ? 'home' : 'away';
+        out[side] = { name: c.name, photo: c.photo || null };
+      }
+    }
+    return out;
+  } catch (_) { return {}; }
+}
+
 async function getTeamStatsFromDB(teamId, leagueId) {
   try {
     const r = leagueId
@@ -248,7 +293,7 @@ export default async function handler(req, res) {
 
   try {
     // ── DB fallback: form_stats → teams_stats, plus h2h/odds/logos/live ─
-    const [dbH2H, sbHForm, sbAForm, dbOddsRows, dbLogos, tsH, tsA, liveStats, dbPlayers, dbPred] = await Promise.all([
+    const [dbH2H, sbHForm, sbAForm, dbOddsRows, dbLogos, tsH, tsA, liveStats, dbPlayers, dbPred, dbReferee, dbCoaches] = await Promise.all([
       query('SELECT home_team_id, away_team_id, home_goals, away_goals, match_date FROM h2h WHERE (home_team_id=$1 AND away_team_id=$2) OR (home_team_id=$2 AND away_team_id=$1) ORDER BY match_date DESC LIMIT 10', [hId, aId]).catch(() => ({ rows: [] })),
       getFormFromDB(hId),
       getFormFromDB(aId),
@@ -259,6 +304,8 @@ export default async function handler(req, res) {
       getLiveStatsFromDB(id),
       getPlayerStatsFromDB(id),
       getPredictionFromDB(id),
+      getRefereeFromDB(id),
+      getCoachesFromDB(id),
     ]);
 
     const needH2H   = dbH2H.rows.length   < 3;
@@ -298,6 +345,10 @@ export default async function handler(req, res) {
     // Inject DB logos where API logo is missing
     if (fixture?.teams?.home) fixture.teams.home.logo = fixture.teams.home.logo || logoMap[hId] || null;
     if (fixture?.teams?.away) fixture.teams.away.logo = fixture.teams.away.logo || logoMap[aId] || null;
+    // Fallback ARBITRU: când API live nu-l are, folosim valoarea persistată (PAS 1/2).
+    if (fixture?.fixture && (!fixture.fixture.referee || fixture.fixture.referee === 'null') && dbReferee) {
+      fixture.fixture.referee = dbReferee;
+    }
     const lineups = dLineups.response || [];
     const players = useDbPlayers ? [] : (dPlayers.response || []);
     const events  = dEvents.response  || [];
@@ -473,7 +524,7 @@ export default async function handler(req, res) {
       }))
     ).sort((a, b) => (b.rating || 0) - (a.rating || 0));
 
-    const responseData = { fixture, lineups, players: flatPlayers, events, enrich };
+    const responseData = { fixture, lineups, players: flatPlayers, events, enrich, coaches: dbCoaches || {} };
 
     // Stats per echipă (match_stats — populate de collect-finished + backfill).
     // Răspund cu [home_row, away_row] sau [] dacă datele lipsesc.

@@ -5501,3 +5501,27 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     post-deploy: GET /api/update-results → vezi prediction_log_resolved; apoi
     re-rulează query-ul de verificare (ar trebui ~0 PENDING cu FT).
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[30.05 ~07:?? ] - FEATURE: date pre-meci complete cu ~1h înainte (arbitru/antrenori/fallback)
+  Fișiere: api/cron/prematch-enrichment.js, api/match.js, public/js/app-ui.js
+  PAS 1 — prematch-enrichment stage 6 (0.75-1.5h) + 7 (0-0.5h): re-captură ARBITRU.
+    Re-fetch /fixtures?id; dacă fixture.referee != null → UPDATE fixtures.referee
+    + savePayload prematch_data['referee_late']. (Stage 1 la 23-25h prindea arbitrul
+    înainte de desemnare.) Cost: ~1 call/meci/stage doar aproape de kickoff.
+  PAS 2 — match.js fallback ARBITRU: getRefereeFromDB(id) în Promise.all (dbReferee)
+    — citește fixtures.referee → prematch_data 'referee_late' → 'fixture'. Când API
+    live nu are referee → fixture.fixture.referee = dbReferee (folosit de modal +
+    enrichUrl &ref → referee_stats).
+  PAS 3 — match.js fallback ANTRENORI: getCoachesFromDB(id) (dbCoaches) din
+    prematch_data coach_home/coach_away → responseData.coaches{home,away}.
+    Frontend mdRenderFormatii: când lineups gol dar coaches prezenți → secțiune
+    „Antrenori" cu numele (👔) + nota „formații cu ~1h înainte".
+    ⚠ calcConfidence*/score2/3/6/7/getLiveStatsFromDB NEATINSE.
+  PAS 4 — crontab (de adăugat MANUAL pe VPS; endpoints confirmate: există +
+    înregistrate în server.js cronFiles):
+      30 3 * * * curl -s --max-time 120 "http://localhost:3000/api/cron/collect-venues?limit=200" >> /var/log/alohascan-cron.log 2>&1
+      45 3 * * * curl -s --max-time 120 "http://localhost:3000/api/cron/collect-coaches" >> /var/log/alohascan-cron.log 2>&1
+  Verificare: node --check prematch-enrichment.js/match.js/app-ui.js → OK.
+    ⚠ NEtestat pe DB/API live (sandbox). Test post-deploy: deschide modal NS la ~1h
+    → arbitru + antrenori prezenți; verifică UPDATE fixtures.referee după stage 6/7.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
