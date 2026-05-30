@@ -970,6 +970,7 @@ function mdOpen(fid,hid,aid,srcEl){
   if(window.event&&window.event.target&&window.event.target.tagName==='BUTTON'&&window.event.target!==srcEl)return;
   if(_mdRefreshTimer){clearInterval(_mdRefreshTimer);_mdRefreshTimer=null;}
   _md.fixtureId=fid;_md.homeId=hid;_md.awayId=aid;_md.tabIdx=0;_md.data=null;
+  _scoringExpanded=null; // modal nou → explicație colapsată
   var ov=document.getElementById('md-overlay');
   ov.classList.add('open');
   document.getElementById('md-body').innerHTML='<div class="spinner"><div class="spin"></div></div>';
@@ -980,6 +981,7 @@ function mdOpen(fid,hid,aid,srcEl){
 function mdClose(){
   document.getElementById('md-overlay').classList.remove('open');
   if(_mdRefreshTimer){clearInterval(_mdRefreshTimer);_mdRefreshTimer=null;}
+  _scoringExpanded=null; // reset stare explicație la închidere
 }
 
 // Swipe-down to close
@@ -1255,9 +1257,19 @@ function buildScoringExplain(name,res){
   });
   return 'Sistemul estimează că <b>'+htmlEsc(name)+'</b> marchează pe baza: '+parts.join('; ')+'.';
 }
-function mdToggleScoreExp(id){
-  var el=document.getElementById(id);
-  if(el) el.style.display=(el.style.display==='none'?'block':'none');
+// Stare persistentă a explicației „Probabilitate marcare" — supraviețuiește
+// auto-refresh-ului live (modalul se re-renderează la 2-3s). null|'home'|'away'.
+var _scoringExpanded=null;
+function applyScoringExpanded(){
+  var els=document.querySelectorAll('.ms-exp');
+  for(var i=0;i<els.length;i++){
+    var s=els[i].getAttribute('data-side');
+    els[i].style.display=(_scoringExpanded===s)?'block':'none';
+  }
+}
+function mdToggleScoreExp(side){
+  _scoringExpanded=(_scoringExpanded===side)?null:side;
+  applyScoringExpanded();
 }
 
 function mdRenderSumar(d){
@@ -1422,18 +1434,20 @@ function mdRenderSumar(d){
         var pv=p==null?'—':p+'%';
         var expId='msx_'+fk+'_'+sideKey;
         var expHtml=res?buildScoringExplain(name,res):'Date insuficiente pentru estimare.';
-        return '<div onclick="mdToggleScoreExp(\''+expId+'\')" style="flex:1;min-width:0;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:12px;text-align:center">'+
+        // Starea expandată e citită din _scoringExpanded → persistă peste auto-refresh.
+        var disp=(_scoringExpanded===sideKey)?'block':'none';
+        return '<div onclick="mdToggleScoreExp(\''+sideKey+'\')" style="flex:1;min-width:0;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:12px;text-align:center">'+
           '<div style="display:flex;justify-content:center;margin-bottom:6px">'+tLogo(team,40)+'</div>'+
           '<div style="font-size:13px;font-weight:600;margin-bottom:4px">'+htmlEsc(name)+'</div>'+
           '<div style="font-size:30px;font-weight:800;line-height:1;color:'+scol(p)+'">'+pv+'</div>'+
           '<div style="font-size:10px;color:var(--mu);margin-top:6px">👆 tap pentru explicație</div>'+
-          '<div id="'+expId+'" style="display:none;font-size:11px;line-height:1.5;color:var(--mu2,#aaa);margin-top:8px;text-align:left;border-top:1px solid rgba(255,255,255,.10);padding-top:8px">'+expHtml+'</div>'+
+          '<div class="ms-exp" data-side="'+sideKey+'" id="'+expId+'" style="display:'+disp+';font-size:11px;line-height:1.5;color:var(--mu2,#aaa);margin-top:8px;text-align:left;border-top:1px solid rgba(255,255,255,.10);padding-top:8px">'+expHtml+'</div>'+
         '</div>';
       };
       out+='<div class="md-section"><div class="md-section-title">Probabilitate marcare</div>';
       out+='<div style="display:flex;gap:10px;align-items:flex-start">';
-      out+=card(fix&&fix.teams&&fix.teams.home,hn,rH,'h');
-      out+=card(fix&&fix.teams&&fix.teams.away,an,rA,'a');
+      out+=card(fix&&fix.teams&&fix.teams.home,hn,rH,'home');
+      out+=card(fix&&fix.teams&&fix.teams.away,an,rA,'away');
       out+='</div></div>';
     }
   })();

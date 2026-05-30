@@ -5323,3 +5323,26 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
       UI = string-concat HTML în tiparul modalului existent.
   Constrânți respectate:
     ✓ Funcție nouă izolată  ✓ Niciun cod intangibil atins  ✓ backend neatins
+
+[30.05 ~03:?? ] - FIX: explicația „Probabilitate marcare" se închidea la auto-refresh
+  Fișier: public/js/app-ui.js (DOAR frontend).
+  Bug: auto-refresh live (2-3s) re-renderează modalul → vechea mdToggleScoreExp
+    seta direct el.style.display pe DOM-ul curent; la următorul re-render
+    cardul se regenera cu display:none hardcodat → explicația se închidea.
+  Fix — stare persistentă globală:
+    • var _scoringExpanded = null; (null | 'home' | 'away') — supraviețuiește
+      re-render-ului (variabilă globală, nu stare în DOM).
+    • mdToggleScoreExp(side): _scoringExpanded = (egal ? null : side) +
+      applyScoringExpanded() (re-aplică display pe toate .ms-exp după data-side).
+    • Card render: id-ul onclick schimbat din expId în side ('home'/'away');
+      div explicație primește class="ms-exp" + data-side + display INIȚIAL
+      calculat din _scoringExpanded → la fiecare re-render starea se re-aplică
+      AUTOMAT, fără tap (rezolvă pierderea la refresh).
+    • mdClose() și mdOpen(): _scoringExpanded = null (reset la închidere și la
+      deschiderea altui meci → explicație colapsată pe modal nou).
+  Notă: `var` global hoisted ⇒ atribuirile din mdOpen/mdClose (textual deasupra
+    declarației) referă corect aceeași variabilă globală.
+  Verificare: node --check public/js/app-ui.js → OK.
+  Constrânți respectate:
+    ✓ NU am atins calcConfidence*/score2/3/6/7  ✓ calcScoringProbability neatins
+      (doar mecanismul de toggle/persistență a fost modificat)
