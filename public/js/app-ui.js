@@ -1801,6 +1801,8 @@ function mdRenderJucatori(d){
     if(p.assists)out+='<span class="md-pc-stat">Assist <span>'+p.assists+'</span></span>';
     if(p.passAcc)out+='<span class="md-pc-stat">Pase% <span>'+p.passAcc+'</span></span>';
     if(p.dribbles)out+='<span class="md-pc-stat">Drib <span>'+p.dribbles+'</span></span>';
+    var shTxt=(p.shots_total==null)?'-':(p.shots_total+'/'+(p.shots_on_target==null?0:p.shots_on_target));
+    out+='<span class="md-pc-stat">Șut/SOT <span>'+shTxt+'</span></span>';
     if(p.yellowCards)out+='<span class="md-pc-stat">🟨 <span>'+p.yellowCards+'</span></span>';
     if(p.redCards)out+='<span class="md-pc-stat">🟥 <span>'+p.redCards+'</span></span>';
     out+='<span class="md-pc-stat">Min <span>'+p.minutes+'</span></span>';

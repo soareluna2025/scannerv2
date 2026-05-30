@@ -5257,3 +5257,35 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ✓ NU am modificat calcConfidencePreMatch / calcConfidenceLive
     ✓ NU am modificat score2/3/6/7 / getLiveStatsFromDB
     ✓ Schema DB neatinsă
+
+[30.05 ~02:?? ] - FEATURE: Îmbogățire tab JUCĂTORI — Șut/SOT + FT din DB
+  Fișiere: api/match.js, api/cron/collect-finished.js, public/js/app-ui.js
+  PAS 1 — match.js flatPlayers (path API): mapate 2 câmpuri noi din payload:
+      shots_total:     p.statistics?.[0]?.shots?.total ?? null
+      shots_on_target: p.statistics?.[0]?.shots?.on    ?? null
+    (erau în payload-ul API dar nemapate → acum ajung în frontend).
+  PAS 2 — match.js: meciuri FT/AET/PEN citite din player_stats (DB), NU din API:
+    • Helper nou getPlayerStatsFromDB(fixtureId) → întoarce direct forma
+      flatPlayers (aceleași chei), sortat după rating desc.
+    • Adăugat în Promise.all-ul DB (al 9-lea: dbPlayers).
+    • Flag useDbPlayers = dbPlayers.length > 0. player_stats e populată DOAR
+      pentru meciuri finalizate (collect-finished nightly) ⇒ prezența rândurilor
+      = meci încheiat ⇒ proxy sigur pentru FT/AET/PEN fără a aștepta status-ul.
+    • /fixtures/players devine condiționat: useDbPlayers ? null : fetch(...).
+      → ECONOMIE 1 call API per modal FT (fallback automat la API când DB gol,
+        ex. meci nou înainte de cron 23:00).
+    • dPlayers / players / flatPlayers gated pe useDbPlayers.
+    ⚠ NU am atins calcConfidence* / score2/3/6/7 / getLiveStatsFromDB.
+  SUPORT — collect-finished.js: adăugat shots_total la colectare + INSERT
+    (col 11, $11..$17, ON CONFLICT extins). Înainte se salva DOAR shots_on_target
+    ⇒ shots_total rămânea 0 (DEFAULT). Acum rândurile NOI au valoarea reală.
+    Rândurile VECHI (pre-commit) au shots_total=0 → în getPlayerStatsFromDB
+    tratăm 0 ca null (→ frontend „-") ca să NU afișeze „0/2" inconsistent.
+    Se autocorectează pe măsură ce collect-finished re-rulează (DO UPDATE).
+  PAS 3 — app-ui.js mdRenderJucatori: coloană nouă „Șut/SOT" în card jucător.
+    Format: shots_total+'/'+shots_on_target (ex. „3/2"); „-" dacă shots_total null.
+    Afișată mereu (ca „Min"). Coloanele existente neatinse. xG OMIS complet
+    (indisponibil din API — nici „n/a", conform cerinței).
+  Verificare: node --check pe toate 3 fișierele → OK.
+  Constrânți respectate:
+    ✓ Niciun cod intangibil atins  ✓ getLiveStatsFromDB neatins  ✓ xG omis

@@ -22,6 +22,7 @@ async function collectFixture(fixtureId) {
       const assists = stat.goals?.assists  || 0;
       const passAcc = stat.passes?.accuracy != null ? parseFloat(stat.passes.accuracy) : null;
       const sot     = stat.shots?.on       || 0;
+      const shTotal = stat.shots?.total    || 0;
       const mins    = stat.games?.minutes  || 0;
       rows.push({
         player_id:         pl.id,
@@ -34,6 +35,7 @@ async function collectFixture(fixtureId) {
         goals,
         assists,
         pass_accuracy:     passAcc,
+        shots_total:       shTotal,
         shots_on_target:   sot,
         minutes_played:    mins,
         yellow_cards:      stat.cards?.yellow || 0,
@@ -51,22 +53,23 @@ async function collectFixture(fixtureId) {
     await query(
       `INSERT INTO player_stats
          (player_id, fixture_id, team_id, team_name, player_name, position, rating,
-          goals, assists, pass_accuracy, shots_on_target, minutes_played,
+          goals, assists, pass_accuracy, shots_total, shots_on_target, minutes_played,
           yellow_cards, red_cards, dribbles_success, player_score)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        ON CONFLICT (player_id, fixture_id) DO UPDATE SET
          team_id=EXCLUDED.team_id, team_name=EXCLUDED.team_name,
          player_name=EXCLUDED.player_name, position=EXCLUDED.position,
          rating=EXCLUDED.rating, goals=EXCLUDED.goals, assists=EXCLUDED.assists,
-         pass_accuracy=EXCLUDED.pass_accuracy, shots_on_target=EXCLUDED.shots_on_target,
+         pass_accuracy=EXCLUDED.pass_accuracy, shots_total=EXCLUDED.shots_total,
+         shots_on_target=EXCLUDED.shots_on_target,
          minutes_played=EXCLUDED.minutes_played, yellow_cards=EXCLUDED.yellow_cards,
          red_cards=EXCLUDED.red_cards, dribbles_success=EXCLUDED.dribbles_success,
          player_score=EXCLUDED.player_score`,
       [
         row.player_id, row.fixture_id, row.team_id, row.team_name, row.player_name,
         row.position, row.rating, row.goals, row.assists, row.pass_accuracy,
-        row.shots_on_target, row.minutes_played, row.yellow_cards, row.red_cards,
-        row.dribbles_success, row.player_score,
+        row.shots_total, row.shots_on_target, row.minutes_played, row.yellow_cards,
+        row.red_cards, row.dribbles_success, row.player_score,
       ]
     );
   }

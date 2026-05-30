@@ -43,6 +43,46 @@ async function getFormFromDB(teamId) {
   } catch (_) { return []; }
 }
 
+// ── getPlayerStatsFromDB — citește statistici jucători din player_stats ────────
+// Populată de cron collect-finished (nightly) pentru meciuri FT/AET/PEN.
+// Returnează direct forma flatPlayers (aceleași chei ca maparea din API) ca să
+// poată fi servită ca atare → economie 1 call /fixtures/players per modal FT.
+// Întoarce [] dacă nu există rânduri (meci live/viitor sau încă necolectat).
+async function getPlayerStatsFromDB(fixtureId) {
+  try {
+    const r = await query(
+      `SELECT player_id, team_id, team_name, player_name, position, rating,
+              goals, assists, pass_accuracy, dribbles_success,
+              shots_total, shots_on_target, minutes_played,
+              yellow_cards, red_cards
+         FROM player_stats
+        WHERE fixture_id = $1`,
+      [Number(fixtureId)]
+    );
+    return r.rows.map(row => ({
+      id:              row.player_id,
+      name:            row.player_name,
+      teamId:          row.team_id,
+      teamName:        row.team_name,
+      photo:           null,
+      rating:          row.rating != null ? Number(row.rating) : null,
+      minutes:         row.minutes_played || 0,
+      goals:           row.goals || 0,
+      assists:         row.assists || 0,
+      passAcc:         row.pass_accuracy != null ? Number(row.pass_accuracy) : null,
+      dribbles:        row.dribbles_success || 0,
+      yellowCards:     row.yellow_cards || 0,
+      redCards:        row.red_cards || 0,
+      position:        row.position || '',
+      // shots_total = 0 pe rândurile vechi (collect-finished nu îl colecta înainte
+      // de acest commit) → tratăm 0 ca „indisponibil" ⇒ frontend afișează „-",
+      // evitând „0/2" inconsistent. Rândurile noi (re-colectate) au valoarea reală.
+      shots_total:     row.shots_total ? Number(row.shots_total) : null,
+      shots_on_target: row.shots_on_target != null ? Number(row.shots_on_target) : null,
+    })).sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  } catch (_) { return []; }
+}
+
 async function getTeamStatsFromDB(teamId, leagueId) {
   try {
     const r = leagueId
@@ -196,7 +236,7 @@ export default async function handler(req, res) {
 
   try {
     // ── DB fallback: form_stats → teams_stats, plus h2h/odds/logos/live ─
-    const [dbH2H, sbHForm, sbAForm, dbOddsRows, dbLogos, tsH, tsA, liveStats] = await Promise.all([
+    const [dbH2H, sbHForm, sbAForm, dbOddsRows, dbLogos, tsH, tsA, liveStats, dbPlayers] = await Promise.all([
       query('SELECT home_team_id, away_team_id, home_goals, away_goals, match_date FROM h2h WHERE (home_team_id=$1 AND away_team_id=$2) OR (home_team_id=$2 AND away_team_id=$1) ORDER BY match_date DESC LIMIT 10', [hId, aId]).catch(() => ({ rows: [] })),
       getFormFromDB(hId),
       getFormFromDB(aId),
@@ -205,18 +245,23 @@ export default async function handler(req, res) {
       getTeamStatsFromDB(hId, null),
       getTeamStatsFromDB(aId, null),
       getLiveStatsFromDB(id),
+      getPlayerStatsFromDB(id),
     ]);
 
     const needH2H   = dbH2H.rows.length   < 3;
     const needHForm = sbHForm.length      < 3;
     const needAForm = sbAForm.length      < 3;
     const needOdds  = dbOddsRows.rows.length === 0;
+    // Meci FT/AET/PEN deja colectat de collect-finished → folosim DB, NU mai
+    // lovim /fixtures/players (economie call API). player_stats e populată doar
+    // pentru meciuri finalizate, deci prezența rândurilor = meci încheiat.
+    const useDbPlayers = dbPlayers.length > 0;
 
-    // ── Always fetch fixture details, lineups, players, events ─
+    // ── Always fetch fixture details, lineups, events (players doar dacă DB gol) ─
     const [rFix, rLineups, rPlayers, rEvents, rHForm, rAForm, rH2H, rOdds] = await Promise.all([
       fetchApiFootball(`/fixtures?id=${id}`),
       fetchApiFootball(`/fixtures/lineups?fixture=${id}`),
-      fetchApiFootball(`/fixtures/players?fixture=${id}`),
+      useDbPlayers ? null : fetchApiFootball(`/fixtures/players?fixture=${id}`),
       fetchApiFootball(`/fixtures/events?fixture=${id}`),
       needHForm ? fetchApiFootball(`/fixtures?team=${h}&last=20&status=FT`) : null,
       needAForm ? fetchApiFootball(`/fixtures?team=${a}&last=20&status=FT`) : null,
@@ -224,9 +269,10 @@ export default async function handler(req, res) {
       needOdds  ? fetchApiFootball(`/odds?fixture=${id}&bookmaker=8`) : null,
     ]);
 
-    const [dFix, dLineups, dPlayers, dEvents] = await Promise.all([
-      rFix.json(), rLineups.json(), rPlayers.json(), rEvents.json(),
+    const [dFix, dLineups, dEvents] = await Promise.all([
+      rFix.json(), rLineups.json(), rEvents.json(),
     ]);
+    const dPlayers = useDbPlayers ? null : await rPlayers.json();
     const dHForm = needHForm ? await rHForm.json() : null;
     const dAForm = needAForm ? await rAForm.json() : null;
     const dH2H   = needH2H  ? await rH2H.json()   : null;
@@ -240,7 +286,7 @@ export default async function handler(req, res) {
     if (fixture?.teams?.home) fixture.teams.home.logo = fixture.teams.home.logo || logoMap[hId] || null;
     if (fixture?.teams?.away) fixture.teams.away.logo = fixture.teams.away.logo || logoMap[aId] || null;
     const lineups = dLineups.response || [];
-    const players = dPlayers.response || [];
+    const players = useDbPlayers ? [] : (dPlayers.response || []);
     const events  = dEvents.response  || [];
 
     // Resolve h2h
@@ -372,7 +418,9 @@ export default async function handler(req, res) {
       ).catch(() => {});
     }
 
-    const flatPlayers = players.flatMap(team =>
+    // FT/AET/PEN → din DB (dbPlayers, deja în forma flatPlayers + sortat);
+    // altfel → din răspunsul API /fixtures/players.
+    const flatPlayers = useDbPlayers ? dbPlayers : players.flatMap(team =>
       (team.players || []).map(p => ({
         id:          p.player?.id,
         name:        p.player?.name,
@@ -387,6 +435,8 @@ export default async function handler(req, res) {
         dribbles:    p.statistics?.[0]?.dribbles?.success || 0,
         yellowCards: p.statistics?.[0]?.cards?.yellow   || 0,
         redCards:    p.statistics?.[0]?.cards?.red      || 0,
+        shots_total:     p.statistics?.[0]?.shots?.total ?? null,
+        shots_on_target: p.statistics?.[0]?.shots?.on ?? null,
         position:    p.statistics?.[0]?.games?.position || ''
       }))
     ).sort((a, b) => (b.rating || 0) - (a.rating || 0));
