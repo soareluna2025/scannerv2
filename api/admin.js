@@ -419,6 +419,7 @@ let _stabilize = { running: false, currentStep: 0, total: STABILIZE_STEPS.length
 
 async function runStabilize() {
   const port = process.env.PORT || 3000;
+  globalThis._stabilizeActive = true; // flag citit de backfill → reduce concurența DB
   _stabilize = { running: true, currentStep: 0, total: STABILIZE_STEPS.length,
     currentName: null, startedAt: Date.now(), finishedAt: null, steps: [] };
   for (let i = 0; i < STABILIZE_STEPS.length; i++) {
@@ -445,6 +446,7 @@ async function runStabilize() {
   _stabilize.running = false;
   _stabilize.finishedAt = Date.now();
   _stabilize.currentName = null;
+  globalThis._stabilizeActive = false;
 }
 
 router.post('/stabilize', async (req, res) => {

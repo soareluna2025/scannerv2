@@ -1,7 +1,10 @@
 import pkg from 'pg'
 const { Pool } = pkg
 const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL
+  connectionString: process.env.POSTGRES_URL,
+  max: 25,                        // era default 10 — epuizat sub backfill+stabilizare
+  idleTimeoutMillis: 30000,       // închide conexiuni inactive după 30s
+  connectionTimeoutMillis: 5000,  // eșuează rapid (5s) dacă pool-ul e plin, nu blochează
 })
 pool.on('error', (err) => {
   console.error('[db] Idle client error:', err.message);

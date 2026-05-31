@@ -12,8 +12,14 @@ const SEASONS    = [2026, 2025, 2024];
 const LEAGUE_IDS = [...ALLOWED_LEAGUE_IDS];
 const BASE_URL   = 'https://v3.football.api-sports.io';
 const DELAY_MS   = 60;              // FIX3: redus — concurența limitează rata, nu sleep-ul
-const CONCURRENCY = 10;             // FIX3: max fixture-uri procesate simultan
+const CONCURRENCY_FULL  = 10;       // max fixture-uri/batch în mod normal
+const CONCURRENCY_SAFE  = 5;        // redus când stabilizarea rulează (evită epuizare pool)
 const API_PLAN_LIMIT = 300_000;    // FIX2: doar pentru afișare; NU mai oprește backfill-ul
+
+// Concurență dinamică: dacă stabilizarea rulează → 5, altfel 10.
+function currentConcurrency() {
+  return globalThis._stabilizeActive ? CONCURRENCY_SAFE : CONCURRENCY_FULL;
+}
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function log(msg)  { console.log(`[backfill] ${new Date().toISOString()} ${msg}`); }
@@ -23,12 +29,36 @@ function apiKey()  {
       || process.env.APIFOOTBALL_KEY;
 }
 
-// FIX3 — Semaphor simplu: max CONCURRENCY apeluri API concurente.
+// Semaphor DB separat: max 8 conexiuni DB concurente din backfill (independent de
+// semaphorul API). Previne epuizarea pool-ului (max 25) când backfill+stabilizare
+// + scanner live rulează simultan.
+let _dbActive = 0;
+const _dbQueue = [];
+const DB_MAX = 8;
+function dbAcquire() {
+  return new Promise(resolve => {
+    if (_dbActive < DB_MAX) { _dbActive++; resolve(); }
+    else _dbQueue.push(resolve);
+  });
+}
+function dbRelease() {
+  _dbActive--;
+  const next = _dbQueue.shift();
+  if (next) { _dbActive++; next(); }
+}
+// Wrapper: orice query DB din backfill trece prin semaphor.
+async function dbQuery(text, params) {
+  await dbAcquire();
+  try { return await query(text, params); }
+  finally { dbRelease(); }
+}
+
+// FIX3 — Semaphor simplu: max apeluri API concurente (egal cu concurența curentă).
 let _semActive = 0;
 const _semQueue = [];
 function _semAcquire() {
   return new Promise(resolve => {
-    if (_semActive < CONCURRENCY) { _semActive++; resolve(); }
+    if (_semActive < CONCURRENCY_FULL) { _semActive++; resolve(); }
     else _semQueue.push(resolve);
   });
 }
@@ -174,7 +204,7 @@ async function collectStats(fixtureId) {
   for (const t of teams) {
     const s = {};
     for (const e of t.statistics) s[e.type] = e.value;
-    await query(
+    await dbQuery(
       `INSERT INTO match_stats
          (fixture_id, team_id, team_name,
           shots_on_goal, shots_total, blocked_shots,
@@ -231,9 +261,9 @@ async function collectEvents(fixtureId) {
     await setSetting(`no_data:events:${fixtureId}`, String(Date.now()));
     return;
   }
-  await query('DELETE FROM match_events WHERE fixture_id=$1', [fixtureId]);
+  await dbQuery('DELETE FROM match_events WHERE fixture_id=$1', [fixtureId]);
   for (const ev of events) {
-    await query(
+    await dbQuery(
       `INSERT INTO match_events
          (fixture_id, elapsed, elapsed_extra, team_id, player_id, player_name,
           assist_id, assist_name, type, detail, comments)
@@ -272,7 +302,7 @@ async function collectPlayers(fixtureId) {
       const assists  = stat.goals?.assists  || 0;
       const passAcc  = stat.passes?.accuracy != null ? parseFloat(stat.passes.accuracy) : null;
       const sot      = stat.shots?.on       || 0;
-      await query(
+      await dbQuery(
         `INSERT INTO player_stats
            (player_id, fixture_id, team_id, team_name, player_name, position, rating,
             goals, assists, pass_accuracy, shots_on_target, minutes_played,
@@ -302,7 +332,7 @@ async function saveFixtureHistory(fx, season) {
   const hg = fx?.goals?.home;
   const ag = fx?.goals?.away;
   if (hg == null || ag == null) return; // fără scor → nu e util ca istoric
-  await query(
+  await dbQuery(
     `INSERT INTO fixtures_history
        (fixture_id, league_id, season, home_team_id, home_team_name,
         away_team_id, away_team_name, match_date, status_short, home_goals, away_goals)
@@ -335,7 +365,7 @@ async function buildH2H(homeId, awayId) {
   const lastRefresh = await getSetting(refreshKey);
   if (lastRefresh && Date.now() - Number(lastRefresh) < 30 * 86400 * 1000) return;
 
-  const { rows } = await query(
+  const { rows } = await dbQuery(
     `SELECT fixture_id, home_team_id, away_team_id, home_goals, away_goals,
             match_date, league_id, season
        FROM fixtures_history
@@ -356,7 +386,7 @@ async function buildH2H(homeId, awayId) {
   }
 
   for (const r of rows) {
-    await query(
+    await dbQuery(
       `INSERT INTO h2h
          (team1_id, team2_id, fixture_id, home_team_id, away_team_id,
           match_date, home_goals, away_goals, league_id, season)
@@ -405,10 +435,12 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
     [season, startFi, fixtures.length, leagueId]
   ).catch(() => {});
 
-  // FIX3 — procesare în batch-uri concurente (CONCURRENCY fixture-uri/batch).
+  // FIX3 — procesare în batch-uri concurente. Mărimea batch-ului e DINAMICĂ:
+  // 5 când stabilizarea rulează (evită epuizarea pool-ului DB), altfel 10.
   // Graceful stop: verifică stopFlag ÎNTRE batch-uri (termină batch-ul curent).
   const cutoff = new Date('2024-05-30');
-  for (let fi = startFi; fi < fixtures.length; fi += CONCURRENCY) {
+  let fi = startFi;
+  while (fi < fixtures.length) {
     if (stopFlag) {
       await savePosition(si, li, fi);
       await query(
@@ -418,7 +450,8 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
       return;
     }
 
-    const batch = fixtures.slice(fi, fi + CONCURRENCY);
+    const conc  = currentConcurrency();
+    const batch = fixtures.slice(fi, fi + conc);
     currentFixtureIdx = fi;
 
     // FIX5 — skip-check BATCH: un singur query per tip pentru toate fixture-urile
@@ -427,10 +460,10 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
       .map(fx => fx?.fixture?.id)
       .filter(Boolean);
     const [statsSet, eventsSet, playersSet, nodataSet] = await Promise.all([
-      query('SELECT DISTINCT fixture_id FROM match_stats  WHERE fixture_id = ANY($1)', [fids]).then(r => new Set(r.rows.map(x => x.fixture_id))).catch(() => new Set()),
-      query('SELECT DISTINCT fixture_id FROM match_events WHERE fixture_id = ANY($1)', [fids]).then(r => new Set(r.rows.map(x => x.fixture_id))).catch(() => new Set()),
-      query('SELECT DISTINCT fixture_id FROM player_stats WHERE fixture_id = ANY($1)', [fids]).then(r => new Set(r.rows.map(x => x.fixture_id))).catch(() => new Set()),
-      query('SELECT key FROM app_settings WHERE key = ANY($1)',
+      dbQuery('SELECT DISTINCT fixture_id FROM match_stats  WHERE fixture_id = ANY($1)', [fids]).then(r => new Set(r.rows.map(x => x.fixture_id))).catch(() => new Set()),
+      dbQuery('SELECT DISTINCT fixture_id FROM match_events WHERE fixture_id = ANY($1)', [fids]).then(r => new Set(r.rows.map(x => x.fixture_id))).catch(() => new Set()),
+      dbQuery('SELECT DISTINCT fixture_id FROM player_stats WHERE fixture_id = ANY($1)', [fids]).then(r => new Set(r.rows.map(x => x.fixture_id))).catch(() => new Set()),
+      dbQuery('SELECT key FROM app_settings WHERE key = ANY($1)',
             [fids.flatMap(id => [`no_data:stats:${id}`, `no_data:events:${id}`, `no_data:players:${id}`])])
         .then(r => new Set(r.rows.map(x => x.key))).catch(() => new Set()),
     ]);
@@ -459,7 +492,8 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
       totalProcessed++;
     }));
 
-    await savePosition(si, li, Math.min(fi + CONCURRENCY, fixtures.length));
+    fi += conc;
+    await savePosition(si, li, Math.min(fi, fixtures.length));
   }
 
   // League+season done — reset fixture index

@@ -5769,3 +5769,23 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     13 endpoint-uri există ca fișiere + în cronFiles server.js.
     ⚠ NEtestat pe runtime (sandbox); flux HTTP intern localhost ca trigger-cron.
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[31.05 ~16:?? ] - FIX: pool PG mărit + concurență DB limitată (server cădea sub sarcină)
+  Fișiere: api/db.js, api/backfill.js, api/admin.js
+  Cauză: pool PG default max=10 → epuizat când backfill (10 fixture × 4-6 query)
+    + stabilizare + scanner live rulează simultan → conexiuni epuizate → crash.
+  1. db.js Pool: max 10→25, idleTimeoutMillis 30000, connectionTimeoutMillis 5000
+     (eșuează rapid în loc să blocheze când pool plin).
+  2. backfill.js — concurență DINAMICĂ: currentConcurrency() = 5 când stabilizarea
+     rulează (globalThis._stabilizeActive), altfel 10. Loop for→while cu conc/batch.
+  3. backfill.js — semaphor DB SEPARAT (dbAcquire/dbRelease, DB_MAX=8) + wrapper
+     dbQuery(). TOATE query-urile per-fixture (collectStats/Events/Players/
+     saveFixtureHistory/buildH2H + skip-check batch) trec prin dbQuery → max 8
+     conexiuni DB concurente din backfill, indiferent de batch size.
+  4. admin.js runStabilize(): setează globalThis._stabilizeActive=true la start,
+     false la final → backfill reduce automat concurența cât timp stabilizarea rulează.
+  Verificare: node --check db.js/backfill.js/admin.js → OK. Logic test: semaphor DB
+    cap=8 (60 query → max 8, drain 0); concurență dinamică 10↔5 corectă.
+    ⚠ NEtestat pe runtime; matematica conexiunilor: max 8 DB(backfill) + stabilizare
+      (1 cron secvențial) + scanner ≈ sub 25 (pool). Marjă confortabilă.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
