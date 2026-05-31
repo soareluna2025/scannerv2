@@ -117,8 +117,27 @@ jobs:
             # Asigură că portul 3000 e deschis în firewall
             ufw allow 3000/tcp 2>/dev/null || true
 
+            # ── Protecție OOM: swap 2G (idempotent — creează doar dacă nu există swap).
+            # Fără swap, un spike de RAM (ex. fereastra de cron 04:00 + backfill) duce la
+            # OOM-kill al procesului Node → 502. Swap-ul dă kernelului o supapă.
+            if [ -z "$(swapon --show 2>/dev/null)" ]; then
+              fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048
+              chmod 600 /swapfile
+              mkswap /swapfile >/dev/null 2>&1
+              swapon /swapfile
+              grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+              echo "SWAP: 2G creat + persistent în /etc/fstab"
+            else
+              echo "SWAP: deja activ — $(free -h | awk '/Swap/{print $2}')"
+            fi
+
             # Restart aplicație via PM2 (singurul process manager — SystemD eliminat)
-            pm2 restart alohascan || pm2 start /root/scannerv2/ecosystem.config.cjs && pm2 save
+            pm2 restart alohascan || pm2 start /root/scannerv2/ecosystem.config.cjs
+            # Persistență la reboot: instalează unitul systemd PM2 (idempotent) + salvează
+            # lista de procese. ÎNAINTE: `&& pm2 save` rula DOAR când restart-ul eșua
+            # (precedența ||/&&) → pe calea normală lista nu se salva → după reboot 502.
+            pm2 startup systemd -u root --hp /root >/dev/null 2>&1 || true
+            pm2 save
             sleep 4
 
             # Verificare că serverul răspunde
