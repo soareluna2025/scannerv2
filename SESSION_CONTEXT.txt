@@ -6154,3 +6154,42 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     deci 3a5ad72 avea DOAR comentariul header + cron */5, NU bucla/lock. Corectat
     in commit urmator (4d3df84): bucla while + _routerRunning lock + SAFETY_CAP 2000
     + delay 50ms + finally release sunt acum EFECTIV in cod (verificat grep liniile 160-217).
+
+[01.06 ~03:00] - DIAGNOSTIC admin panel (read-only, 0 modificari). Erori gasite:
+  METODA: analiza STATICA (sandbox fara DB/browser/retea) — cross-ref fetch-uri
+    admin.html vs rute api/admin.js + SQL vs schema create-tables.sql. Confirmari
+    runtime exacte se fac pe VPS (curl + pm2 logs).
+  RUTE: toate 19 path-uri din admin.html au ruta backend definita → ZERO 404 din rute lipsa.
+  --- ERORI SQL (cele mai probabile 500-uri) ---
+  🔴 CRITIC [E1] /api/admin/vs-api (admin.js ~1127-1169): foloseste coloanele
+     result_winner, api_home_pct, api_draw_pct, api_away_pct din `predictions`.
+     ACESTE 4 COLOANE NU EXISTA in create-tables.sql (schema predictions are
+     result_1x2, NU result_winner; nu are api_*_pct) SI NU sunt adaugate via
+     ALTER nicaieri. Totusi sunt SCRISE de update-results.js:89/163 (result_winner)
+     + enrich.js:1524 (api_*_pct). → Pe DB proaspat: SELECT/UPDATE arunca „column
+     does not exist" → /vs-api 500 + update-results/enrich save esueaza silent
+     (catch). Pe VPS-ul actual coloanele POATE exista dintr-o schema veche → de
+     confirmat: \d predictions. INCONSISTENTA REALA schema vs cod.
+  🟠 MEDIU [E2] /api/admin/calibration (admin.js ~740/746): SELECT din
+     calibration_tables + calibration_live — tabele create DINAMIC de cron-urile
+     recalibrate-tables/calibrate-live, NU in create-tables.sql. Daca cron-urile
+     n-au rulat → „relation does not exist". MASCAT de .catch(()=>({rows:[]})) →
+     returneaza gol, nu 500, dar sectiunea apare goala. Minor/medie.
+  --- ALTE OBSERVATII ---
+  🟡 MINOR [E3] /api/admin/api-usage: daca /status API nu raspunde → „API status
+     indisponibil" (deja gestionat in commit baed52e, fallback 300k). Nu e bug.
+  🟢 OK: db-stats (13 tabele toate exista), live-matches, cron-status, errors,
+     win-rate-patterns, learning-stats, bets-aggregate (coloane bets via ALTER in
+     bets.js), leagues-insights, api-trend, db-cleanup(-preview), scanner-state,
+     stabilize(-status), trigger-cron, status — verificate, fara tabele/coloane lipsa.
+  --- PLAN REPARARE (in ordine, cand se cere — NU acum) ---
+  P1 [E1]: ADD COLUMN IF NOT EXISTS in predictions: result_winner TEXT,
+     api_home_pct/draw_pct/away_pct NUMERIC(5,2) — in create-tables.sql + un ALTER
+     idempotent la startup (ca ensureIndexes) SAU in collect-daily (unde deja e
+     ALTER ADD source). Repara /vs-api + save-urile. (Nu atinge scoring.)
+  P2 [E2]: adauga calibration_tables + calibration_live in create-tables.sql
+     (CREATE IF NOT EXISTS) ca /calibration sa nu depinda de rularea cron-ului.
+  P3 [E3]: nimic — deja gestionat.
+  CONSTRANGERI respectate: NU am atins calcConfidence*/score2-7/Monte Carlo/chei API.
+  ⚠ NErulat live; E1 e cert in cod (4 coloane scrise+citite, absente din schema+ALTER).
+    Confirmare pe VPS: \d predictions; curl -s '.../api/admin/vs-api?days=30'.
