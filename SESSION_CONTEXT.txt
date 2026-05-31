@@ -6033,3 +6033,22 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     SELECT COUNT(*) FROM prematch_data WHERE data_type='lineups' AND fixture_id IN (1492288,1490324);
     SELECT season, COUNT(*) FROM players_season WHERE league_id IN (71,253) GROUP BY season;
   Constranti: niciun cod atins (diagnostic).
+
+[01.06 ~00:30] - DIAGNOSTIC (read-only): players_season doar 2025, zero 2026 — de ce
+  NU am modificat nimic. CAUZA: formula de sezon GLOBALA aug-mai aplicata tuturor ligilor:
+    const SEASON = new Date().getMonth() >= 6 ? getFullYear() : getFullYear()-1;
+  Azi (31.05.2026, luna<6) → SEASON=2025. collect-players-season.js cere
+  /players?...&season=2025 → stocheaza 2025, NICIODATA 2026. De aceea backfill-ul
+  „a rulat" dar n-a populat 2026 — a rulat pe sezonul gresit.
+  LOCURI (aceeasi linie copiata, 6 fisiere): collect-players-season.js:11,
+    collect-top-scorers.js:10, collect-squads.js:10, backfill-pass-shots.js:12,
+    cazarma-router.js:7, enrich.js:10. getLineupStrengthFactor (enrich.js:345)
+    citeste tot season=SEASON(2025) → coerent intern, dar GRESIT pt ligi calendaristice.
+  ZERO sezon dinamic per liga in pipeline (current==true nu e folosit nicaieri in
+    productie; doar scripturile de diagnostic audit_lineups.js/verify_score4.js il au).
+  IMPACT: ligi europene (aug-mai) OK pe 2025. Ligi pe AN CALENDARISTIC (Brazil 71,
+    MLS 253, Norway 103) au sezon real 2026 → players_season gol/vechi pe 2025 →
+    hasData=false desi lineups exista. Confirma cauza ② din diagnosticul anterior.
+  FIX corect (separat, cu confirmare — enrich e zona scoring): sezon DINAMIC per liga
+    din /leagues seasons[].current==true, cache per league_id (pattern deja in
+    audit_lineups.js). NU aplicat acum.
