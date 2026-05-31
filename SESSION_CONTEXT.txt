@@ -5914,3 +5914,34 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   ⚠ Noul config PM2 se aplică la `pm2 delete alohascan && pm2 start
     ecosystem.config.cjs && pm2 save` (pm2 restart NU reîncarcă ecosystem).
   Constrânți: ✓ niciun cod intangibil atins
+
+[31.05 ~22:?? ] - AUDIT (script): audit_lineups.js — pe ce ligi există REAL formații
+  Fișier NOU: audit_lineups.js (standalone, NU atinge logica de scoring).
+  Ce face: importă ALLOWED_LEAGUE_IDS (162 ligi unice) din api/leagues.js (sursa
+    reală); per ligă → /leagues?id (sezon CURRENT dinamic, fără hardcodare) →
+    /fixtures?league&season&last=3 → /fixtures/lineups?fixture (results>0, oprire
+    la primul cu date). Delay 200ms + backoff/retry la 429. Raport în consolă +
+    lineup_audit.csv (2 grupuri: CU_FORMATII / FARA_FORMATII).
+  Motiv: coverage lineups:true e nesigur (ex. V.League 1 id=340 → true dar 0 formații).
+  ⚠ NErulat în sandbox: (1) .env LIPSEȘTE local (gitignored, doar pe VPS) → fără
+    API_FOOTBALL_KEY; (2) rețeaua spre v3.football.api-sports.io = HTTP 000 (blocată).
+    NU am fabricat lineup_audit.csv — se generează la rulare pe VPS.
+  RULARE PE VPS: cd /root/scannerv2 && /snap/bin/node audit_lineups.js
+    (durează ~5-10 min pentru 162 ligi; produce lineup_audit.csv).
+  Verificare: node --check audit_lineups.js → OK; import listă → 162 ligi (incl. 340).
+  Constrânți: ✓ niciun cod de scoring atins
+
+[31.05 ~22:?? ] - AUDIT (script): audit_lineups.js — pe ce ligi exista REAL formatii
+  Fisier NOU: audit_lineups.js (standalone, NU atinge logica de scoring).
+  Ce face: importa ALLOWED_LEAGUE_IDS (162 ligi unice) din api/leagues.js (sursa
+    reala); per liga -> /leagues?id (sezon CURRENT dinamic, fara hardcodare) ->
+    /fixtures?league&season&last=3 -> /fixtures/lineups?fixture (results>0, oprire
+    la primul cu date). Delay 200ms + backoff/retry la 429. Raport consola +
+    lineup_audit.csv (2 grupuri: CU_FORMATII / FARA_FORMATII).
+  Motiv: coverage lineups:true e nesigur (ex. V.League 1 id=340 -> true dar 0 formatii).
+  ⚠ NErulat in sandbox: (1) .env LIPSESTE local (gitignored, doar pe VPS) -> fara
+    API_FOOTBALL_KEY; (2) reteaua spre v3.football.api-sports.io = HTTP 000 (blocata).
+    NU am fabricat lineup_audit.csv — se genereaza la rulare pe VPS.
+  RULARE PE VPS: cd /root/scannerv2 && /snap/bin/node audit_lineups.js
+  Verificare: node --check audit_lineups.js -> OK; import lista -> 162 ligi (incl. 340).
+  Constranti: niciun cod de scoring atins
