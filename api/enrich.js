@@ -309,6 +309,8 @@ async function getSquadCount(teamId) {
 const LINEUP_TEAM_AVG = 55; // scor mediu echipă din players_season
 
 async function getLineupStrengthFactor(fixtureId, homeId, awayId) {
+  // hasData (ADITIV): true DOAR când există formații reale cu ≥7/11 titulari
+  // matchuiți pe ambele echipe. NU schimbă contractul home/away (factor pe λ).
   try {
     const { rows } = await query(
       `SELECT payload FROM prematch_data
@@ -316,20 +318,21 @@ async function getLineupStrengthFactor(fixtureId, homeId, awayId) {
        ORDER BY stage DESC LIMIT 1`,
       [fixtureId]
     );
-    if (!rows.length) return { home: 1.0, away: 1.0 };
+    if (!rows.length) return { home: 1.0, away: 1.0, hasData: false };
     const lineups = rows[0].payload;
-    if (!Array.isArray(lineups) || lineups.length < 2) return { home: 1.0, away: 1.0 };
+    if (!Array.isArray(lineups) || lineups.length < 2) return { home: 1.0, away: 1.0, hasData: false };
 
     const findTeam = (id) => lineups.find(t => t.team?.id === id);
     const homeEntry = findTeam(homeId);
     const awayEntry = findTeam(awayId);
-    if (!homeEntry || !awayEntry) return { home: 1.0, away: 1.0 };
+    if (!homeEntry || !awayEntry) return { home: 1.0, away: 1.0, hasData: false };
 
     const extractIds = (entry) =>
       (entry.startXI || []).map(p => p.player?.id).filter(Boolean);
     const hIds = extractIds(homeEntry);
     const aIds = extractIds(awayEntry);
-    if (hIds.length < 7 || aIds.length < 7) return { home: 1.0, away: 1.0 };
+    // ≥7/11 titulari pe AMBELE echipe = formații reale prezente.
+    if (hIds.length < 7 || aIds.length < 7) return { home: 1.0, away: 1.0, hasData: false };
 
     const allIds = [...new Set([...hIds, ...aIds])];
     const { rows: ps } = await query(
@@ -352,13 +355,14 @@ async function getLineupStrengthFactor(fixtureId, homeId, awayId) {
 
     const hAvg = avgScore(hIds);
     const aAvg = avgScore(aIds);
-    if (hAvg == null && aAvg == null) return { home: 1.0, away: 1.0 };
+    if (hAvg == null && aAvg == null) return { home: 1.0, away: 1.0, hasData: false };
 
     const toFactor = (avg) =>
       avg != null ? Math.max(0.88, Math.min(1.12, avg / LINEUP_TEAM_AVG)) : 1.0;
 
-    return { home: toFactor(hAvg), away: toFactor(aAvg) };
-  } catch (_) { return { home: 1.0, away: 1.0 }; }
+    // hasData=true: formații reale (≥7/11 ambele) + cel puțin o echipă cu scoruri.
+    return { home: toFactor(hAvg), away: toFactor(aAvg), hasData: true };
+  } catch (_) { return { home: 1.0, away: 1.0, hasData: false }; }
 }
 
 async function getTeamStrengths(hId, aId) {
@@ -1397,7 +1401,20 @@ export default async function handler(req, res) {
     const cornersOver85 = _ppo(_refAvgCorners, 8);
     const cornersOver95 = _ppo(_refAvgCorners, 9);
 
+    // ── Tagging ADITIV (variant A) — NU atinge scoringul ────────────────────
+    // playerIntelActive = avem semnal real de jucători pentru ACEST meci:
+    //   score7 (Putere Echipe din player_stats) non-null PENTRU AMBELE echipe
+    //   ȘI formații reale prezente (lineupFactor.hasData = ≥7/11 titulari ambele).
+    // dataCompleteness = 'complete' când playerIntelActive, altfel 'partial'.
+    // Derivat DOAR din date deja aduse în pipeline (teamStrengths + lineupFactor),
+    // zero apeluri API noi, zero decizie hardcodată pe ligă.
+    const _strBoth = confData.teamStrengthHome != null && confData.teamStrengthAway != null;
+    const _lineupsReal = !!(lineupFactor && lineupFactor.hasData);
+    const playerIntelActive = _strBoth && _lineupsReal;
+    const dataCompleteness  = playerIntelActive ? 'complete' : 'partial';
+
     const payload = { ...result, ...confData,
+      playerIntelActive, dataCompleteness,
       cardsOver35, cardsOver45, cornersOver85, cornersOver95,
       leagueStats: leagueStats || null, refereeStats: refereeStats || null,
       // Sprint expune-date: h2hForm — ultimele 5 meciuri H2H pentru display.

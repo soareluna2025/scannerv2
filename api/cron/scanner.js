@@ -333,6 +333,48 @@ async function saveLiveStats(m, f, status) {
 }
 
 
+// Variant A — modul calibrare: meciurile fără date complete (lineups reale ≥7/11
+// ambele) NU intră în semnalul live de bani reali când LIVE_REQUIRE_FULL_DATA=true;
+// sunt salvate în signal_observations cu confidence-ul lor, pt. măsurat win-rate.
+// Decizia e DOAR în stratul de output/selecție — NU atinge calcConfidence/score-uri.
+const LIVE_REQUIRE_FULL_DATA = String(process.env.LIVE_REQUIRE_FULL_DATA || '').toLowerCase() === 'true';
+
+async function ensureObservationTable() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS signal_observations (
+        id            SERIAL PRIMARY KEY,
+        fixture_id    INTEGER,
+        alert_type    TEXT,
+        market        TEXT,
+        message       TEXT,
+        confidence    NUMERIC(6,3),
+        data_completeness TEXT,
+        minute        INTEGER,
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+      )`);
+  } catch (_) {}
+}
+
+// Date complete pentru ACEST meci (output-layer): formații reale ≥7/11 titulari
+// pe ambele echipe (prematch_data lineups). Citire DB, fără API. Refolosește
+// aceeași sursă ca getLineupStrengthFactor din enrich (consistență).
+async function matchHasFullData(fixtureId, hId, aId) {
+  try {
+    const { rows } = await query(
+      `SELECT payload FROM prematch_data WHERE fixture_id=$1 AND data_type='lineups'
+       ORDER BY stage DESC LIMIT 1`, [fixtureId]);
+    if (!rows.length) return false;
+    const lu = rows[0].payload;
+    if (!Array.isArray(lu) || lu.length < 2) return false;
+    const find = (id) => lu.find(t => t.team?.id === id);
+    const h = find(hId), a = find(aId);
+    if (!h || !a) return false;
+    const n = (e) => (e.startXI || []).map(p => p.player?.id).filter(Boolean).length;
+    return n(h) >= 7 && n(a) >= 7;
+  } catch (_) { return false; }
+}
+
 async function saveAlert(fixtureId, alertType, market, message, confidence) {
   await query(
     `INSERT INTO alerts (fixture_id, alert_type, message, ngp_value, telegram_ok)
@@ -545,7 +587,22 @@ async function scanLive10s() {
         const alertType = ng > 70 ? 'HIGH_NGP' : 'HIGH_OVER15';
         const conf      = ng > 70 ? ng / 100 : mk.over15 / 100;
         const msg       = `${m.teams?.home?.name} vs ${m.teams?.away?.name} — ${alertType} ${Math.round(conf * 100)}% min ${currMin}`;
-        saveAlert(id, alertType, ng > 70 ? 'ng' : 'over15', msg, conf).catch(() => {});
+
+        // Variant A — filtru de OUTPUT (NU calcConfidence): în modul calibrare,
+        // meciurile fără date complete merg în observație, nu în semnalul de bani.
+        let _full = true;
+        if (LIVE_REQUIRE_FULL_DATA) {
+          _full = await matchHasFullData(id, m.teams?.home?.id, m.teams?.away?.id);
+        }
+        if (!_full) {
+          await ensureObservationTable();
+          query(
+            `INSERT INTO signal_observations (fixture_id, alert_type, market, message, confidence, data_completeness, minute)
+             VALUES ($1,$2,$3,$4,$5,'partial',$6)`,
+            [id, alertType, ng > 70 ? 'ng' : 'over15', msg, conf, currMin]
+          ).catch(() => {});
+        } else {
+          saveAlert(id, alertType, ng > 70 ? 'ng' : 'over15', msg, conf).catch(() => {});
 
         // Track in predictions for header W/L/P counter
         if (ng > 70 && !liveCache[id]?.ngpAlertScore) {
@@ -583,6 +640,7 @@ async function scanLive10s() {
           lambda_home:     null,
           lambda_away:     null,
         }).catch(() => {});
+        } // end else (_full — semnal real de bani)
       }
     }
 

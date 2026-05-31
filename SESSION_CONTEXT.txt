@@ -5973,3 +5973,31 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     dataCompleteness + filtru in stratul de OUTPUT/selectie (NU in calcConfidence)
     pe baza prezentei reale de player_stats/lineups — fara a atinge niciun score;
     (B) daca tinta era score7, e INTANGIBIL -> nu se atinge.
+
+[31.05 ~23:30] - IMPLEMENTARE variant A: tagging aditiv + filtru output (calibrare)
+  Fisiere: api/enrich.js, api/cron/scanner.js, verify_score4.js (nou).
+  ⚠ ZERO atingere scoring: calcConfidence*/score2-7/score4/getLiveStatsFromDB NEATINSE.
+  PAS1 — enrich.js:
+    - getLineupStrengthFactor returneaza ADITIV hasData (true DOAR cand formatii
+      reale cu >=7/11 titulari pe AMBELE echipe; contractul home/away pe lambda neschimbat).
+    - payload primeste 2 campuri ADITIVE: playerIntelActive (bool), dataCompleteness.
+    REGULA EXACTA 'complete' vs 'partial':
+      playerIntelActive = (teamStrengthHome != null AND teamStrengthAway != null)  // score7 pe AMBELE
+                          AND lineupFactor.hasData === true                         // lineups reale >=7/11 ambele
+      dataCompleteness  = playerIntelActive ? 'complete' : 'partial'
+    Derivat DOAR din date deja in pipeline (teamStrengths + lineupFactor) — zero API nou,
+    zero hardcodare pe liga (decizia e per meci, pe date reale).
+  PAS2 — scanner.js (STRAT OUTPUT, nu calcConfidence):
+    - .env flag LIVE_REQUIRE_FULL_DATA (default false → comportament neschimbat).
+    - matchHasFullData(fid,h,a): citeste prematch_data lineups, >=7/11 ambele (DB, 0 API).
+    - Tabel nou signal_observations (ensureObservationTable, idempotent).
+    - La alerta NGP/over15 >70: daca flag=true SI meci 'partial' → NU saveAlert
+      (nu intra in semnal bani/predictions/prediction_log) ci INSERT in
+      signal_observations cu confidence+minute. Daca 'complete' → flux normal neatins.
+  PAS3 — verify_score4.js (rulat pe VPS): ia un fixture real per liga (sezon current
+    dinamic) → /api/enrich local → verifica dataCompleteness: id 340 V.League1='partial',
+    id 39 Premier='complete'.
+  Verificare: node --check enrich.js/scanner.js/verify_score4.js → OK; brace scanner balanced.
+    ⚠ NErulat pe DB/API live (sandbox fara .env/retea). verify_score4.js + alerta gated
+      se testeaza pe VPS. Flag OFF by default → fara impact pana il pornesti.
+  Constranti: niciun cod de scoring atins.
