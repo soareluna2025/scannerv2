@@ -1056,7 +1056,7 @@ CREATE INDEX IF NOT EXISTS idx_fixtures_match_date    ON fixtures(match_date);
 CREATE INDEX IF NOT EXISTS idx_fixtures_league_status ON fixtures(league_id, status_short);
 CREATE INDEX IF NOT EXISTS idx_fixtures_home_team     ON fixtures(home_team_id);
 CREATE INDEX IF NOT EXISTS idx_fixtures_away_team     ON fixtures(away_team_id);
-CREATE INDEX IF NOT EXISTS idx_fixtures_date_func     ON fixtures((match_date::date));
+-- (match_date::date) NEINDEXAT — cast timestamptz→date nu e IMMUTABLE.
 CREATE INDEX IF NOT EXISTS idx_fh_match_date          ON fixtures_history(match_date);
 CREATE INDEX IF NOT EXISTS idx_fh_league_status       ON fixtures_history(league_id, status_short);
 CREATE INDEX IF NOT EXISTS idx_fh_home_team           ON fixtures_history(home_team_id);

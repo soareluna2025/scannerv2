@@ -8,7 +8,10 @@ module.exports = {
     interpreter: '/snap/bin/node',   // runtime mandat (CLAUDE.md)
     cwd: '/root/scannerv2',
     instances: 1,
-    max_memory_restart: '800M',
+    max_memory_restart: '1200M',   // era 800M — atins repetat în fereastra de cron 04:00
+                                    // (league-stats/backup/referee-stats/backfill) → PM2 trimitea
+                                    // SIGINT/SIGTERM de mai multe ori/noapte. ⚠ verifică `free -m`:
+                                    // sigur pe VPS ≥2GB (PG local ~0.5G + OS); pe 4GB+ poate urca la 1800M.
     env_file: '/root/scannerv2/.env',
     error_file: '/root/.pm2/logs/alohascan-error.log',
     out_file: '/root/.pm2/logs/alohascan-out.log',

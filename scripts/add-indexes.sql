@@ -15,9 +15,9 @@ CREATE INDEX IF NOT EXISTS idx_fixtures_home_team
   ON fixtures(home_team_id);
 CREATE INDEX IF NOT EXISTS idx_fixtures_away_team
   ON fixtures(away_team_id);
--- index funcțional pe (match_date::date) — folosit de matches-history (WHERE match_date::date = $1)
-CREATE INDEX IF NOT EXISTS idx_fixtures_date_func
-  ON fixtures((match_date::date));
+-- NB: NU indexăm (match_date::date) — castul timestamptz→date NU e IMMUTABLE
+-- (depinde de timezone) → PostgreSQL îl respinge. Folosim idx_fixtures_match_date
+-- (plain) + interogări pe interval (match_date >= $1 AND < $1+1zi), nu ::date=$1.
 
 -- ── fixtures_history ─────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_fh_match_date

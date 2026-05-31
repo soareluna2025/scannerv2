@@ -5869,3 +5869,30 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ⚠ NEtestat runtime; SQL UPDATE..FROM standard. Test post-deploy: GET
     /api/update-results → vezi from_history/skipped; log auto-predict arată cauza erorii.
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[31.05 ~20:?? ] - FIX: index PG IMMUTABLE + SIGINT/SIGTERM repetat (memorie PM2)
+  Fișiere: scripts/add-indexes.sql, scripts/create-tables.sql, ecosystem.config.cjs
+  TASK1 — „functions in index expression must be marked IMMUTABLE" la fiecare boot:
+    cauza = idx_fixtures_date_func ON fixtures((match_date::date)). Castul
+    timestamptz→date depinde de timezone → NU e IMMUTABLE → PG respinge indexul.
+    FIX: eliminat indexul funcțional din add-indexes.sql + create-tables.sql.
+    idx_fixtures_match_date (plain pe match_date) rămâne — acoperă interogări pe
+    interval. ⇒ eroarea de la pornire dispare (ensureIndexes nu mai eșuează).
+    NOTĂ: matches-history încă folosește `match_date::date = $1` (nu va folosi
+    indexul); optimizare viitoare = range query — NU în scopul acestui task.
+  TASK2 — SIGINT/SIGTERM ×3 în 22 min (04:09/04:27/04:31):
+    Investigație: deploy.yml face DOAR pm2 restart (1×/deploy); crontab NU
+    restartează/omoară serverul; niciun watchdog. Cele 3 opriri cad EXACT în
+    fereastra crons grele 04:00-04:30 (league-stats 04:00, backup 04:15,
+    referee-stats 04:30 + backfill) → PM2 atinge max_memory_restart=800M și
+    trimite SIGINT (restart graceful) repetat. Handler-ele [FATAL] din 181bccd
+    DOAR dezvăluie cauza (corect), nu o provoacă.
+    FIX: max_memory_restart 800M → 1200M (fereastra de cron are spike-uri legitime).
+    ⚠ Verifică `free -m` pe VPS: 1200M sigur pe ≥2GB (PG local ~0.5G + OS); pe 4GB+
+      se poate urca la ~1800M. NEcrescut peste 1200M fără confirmarea RAM (risc OOM
+      al întregii mașini dacă PG+Node depășesc RAM fizic).
+  Verificare: node --check ecosystem.config.cjs → OK; grep confirmă 0 CREATE INDEX
+    cu ::date rămas; max_memory_restart=1200M.
+  ⚠ ACȚIUNE VPS: noul max_memory_restart se aplică la `pm2 delete alohascan &&
+    pm2 start ecosystem.config.cjs` (un simplu pm2 restart NU reîncarcă config-ul).
+  Constrânți: ✓ niciun cod intangibil atins
