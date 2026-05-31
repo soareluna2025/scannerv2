@@ -69,7 +69,7 @@ export default async function handler(req, res) {
 
         const r = await fetch(
           `http://localhost:${port}/api/enrich?${params}`,
-          { signal: AbortSignal.timeout(20000) }
+          { signal: AbortSignal.timeout(30000) }
         );
 
         if (r.ok) {
@@ -79,12 +79,12 @@ export default async function handler(req, res) {
           // Loghează cauza reală (status + corp răspuns) — înainte eroarea era mută.
           let body = '';
           try { body = (await r.text()).slice(0, 300); } catch (_) {}
-          console.error(`[auto-predict] fixture ${fx.fixture_id} HTTP ${r.status}: ${body}`);
+          console.error(`[auto-predict] fixture ${fx.fixture_id} (${fx.home_team_name||'?'} vs ${fx.away_team_name||'?'}) HTTP ${r.status}: ${body}`);
         }
       } catch (e) {
         errors++;
         // Stack complet — înainte `catch(_){}` ascundea total eroarea (timeout/network/etc).
-        console.error(`[auto-predict] fixture ${fx.fixture_id} exception:`, e && e.stack ? e.stack : e);
+        console.error(`[auto-predict] fixture ${fx.fixture_id} (${fx.home_team_name||'?'} vs ${fx.away_team_name||'?'}) exception:`, e && e.stack ? e.stack : e);
       }
       await sleep(300);
     }

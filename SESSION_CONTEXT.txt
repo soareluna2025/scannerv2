@@ -5843,3 +5843,29 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   ⚠ NOTĂ: .cjs e corect fiindcă package.json poate avea "type":"module" →
     PM2 config trebuie CommonJS explicit (.cjs) ca să nu fie tratat ca ESM.
   Constrânți: ✓ niciun cod intangibil atins
+
+[31.05 ~19:?? ] - FIX: update-results complet + cazarma audit + auto-predict log + cron stagger
+  Fișiere: api/update-results.js, api/cron/auto-predict.js, .github/workflows/deploy.yml
+  TASK1 — update-results „updated 7/22": cauza = rezolva predictions DOAR prin API
+    (1 call/fixture) → rate-limit / meci încă neterminat → sărit. NU era limită
+    hardcodată (procesează tot pending-ul), dar API-dependent.
+    FIX: resolvePredictionsFromHistory() — UPDATE predictions ... FROM fixtures_history
+    (set-based, 0 API) rulat PASUL 0.5 înainte de loop → meciurile deja FT rezolvate
+    instant; loop-ul API tratează doar restul. + log skip cu MOTIV (gol/status/scor null)
+    + contor skipped + from_history în răspuns/cron_logs.
+  TASK2 — cazarma-router: ARE utilitate. Citește cazarma_centrala (procesat=false)
+    și rutează în top_scorers/top_assists/players_season/squads (date colectate de
+    alte cron-uri și depozitate central). „procesat:100 sarit:0 total:100" = 100
+    intrări procesate cu succes, 0 sărite (handler lipsă/eroare), din batch 100.
+    Rulează orar ca să golească coada pe măsură ce se umple. PĂSTRAT (nu deprecated).
+  TASK3 — auto-predict: timeout 20s→30s (cauza probabilă a erorii 1/15 = timeout pe
+    /api/enrich la meci cu multe fallback-uri API) + log îmbogățit cu nume echipe
+    (home vs away) lângă fixture_id, la ambele ramuri (HTTP + excepție). 1 eroare NU
+    oprește restul (loop cu try/catch per fixture — deja existent).
+  TASK4 — coliziune 02:00: collect-squads 0 2→5 2 (02:05); cazarma-router 0 *→10 *
+    (min 10 al fiecărei ore). update-results rămâne 02:00. Eșalonate, fără spike.
+  Verificare: node --check update-results.js/auto-predict.js → OK. update-results
+    fără duplicări (217 linii, 1×PASUL 0.5).
+    ⚠ NEtestat runtime; SQL UPDATE..FROM standard. Test post-deploy: GET
+    /api/update-results → vezi from_history/skipped; log auto-predict arată cauza erorii.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins

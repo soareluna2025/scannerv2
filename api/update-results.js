@@ -76,6 +76,28 @@ async function resolvePredictionLogFromHistory() {
   return { counts, total };
 }
 
+// TASK1 — rezolvă tabela `predictions` DIRECT din fixtures_history (DB, 0 API).
+// Înainte: update-results rezolva predictions DOAR prin API (1 call/fixture) →
+// rate-limit / meciuri încă neterminate → „updated 7/22". Acum meciurile deja FT
+// în history se rezolvă set-based, fără API; loop-ul API tratează doar restul.
+async function resolvePredictionsFromHistory() {
+  const r = await query(`
+    UPDATE predictions p SET
+      result_over15 = (fh.home_goals + fh.away_goals) >= 2,
+      result_over25 = (fh.home_goals + fh.away_goals) >= 3,
+      result_gg     = (fh.home_goals > 0 AND fh.away_goals > 0),
+      result_winner = CASE WHEN fh.home_goals > fh.away_goals THEN 'home'
+                           WHEN fh.away_goals > fh.home_goals THEN 'away' ELSE 'draw' END,
+      updated_at = NOW()
+    FROM fixtures_history fh
+    WHERE p.fixture_id = fh.fixture_id
+      AND p.result_over15 IS NULL
+      AND fh.status_short IN ('FT','AET','PEN')
+      AND fh.home_goals IS NOT NULL AND fh.away_goals IS NOT NULL
+  `);
+  return r.rowCount || 0;
+}
+
 export default async function handler(req, res) {
   const afKey = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
@@ -93,6 +115,17 @@ export default async function handler(req, res) {
       console.error('[update-results] resolvePredictionLogFromHistory:', e.message);
     }
 
+    // ── PASUL 0.5: rezolvă predictions din fixtures_history (DB, 0 API) ÎNAINTE
+    // de loop-ul API → meciurile deja FT nu mai consumă call-uri / nu mai sunt
+    // „sărite" din cauza rate-limit. Loop-ul API tratează doar restul.
+    let predFromHistory = 0;
+    try {
+      predFromHistory = await resolvePredictionsFromHistory();
+      console.log(`[update-results] predictions rezolvate din history: ${predFromHistory}`);
+    } catch (e) {
+      console.error('[update-results] resolvePredictionsFromHistory:', e.message);
+    }
+
     // Select predictions without results where match_date has passed
     const pendingRes = await query(
       `SELECT id, fixture_id FROM predictions
@@ -101,25 +134,26 @@ export default async function handler(req, res) {
 
     const pending = pendingRes.rows;
     if (!pending.length) {
-      await logCron('success', `no pending predictions; prediction_log resolved ${plResolved.total}`);
-      return res.status(200).json({ updated: 0, total: 0, prediction_log_resolved: plResolved.total, prediction_log_by_module: plResolved.counts });
+      await logCron('success', `no pending; fromHistory ${predFromHistory}; prediction_log resolved ${plResolved.total}`);
+      return res.status(200).json({ updated: 0, from_history: predFromHistory, total: 0, prediction_log_resolved: plResolved.total, prediction_log_by_module: plResolved.counts });
     }
 
     let updated = 0;
+    let skipped = 0;
 
     for (const pred of pending) {
       try {
         const fr  = await fetchApiFootball(`/fixtures?id=${pred.fixture_id}`);
         const fd  = await fr.json();
         const fix = fd.response?.[0];
-        if (!fix) continue;
+        if (!fix) { skipped++; console.log(`[update-results] skip ${pred.fixture_id}: API răspuns gol (rate-limit?)`); continue; }
 
         const status = fix.fixture?.status?.short;
-        if (!['FT', 'AET', 'PEN'].includes(status)) continue;
+        if (!['FT', 'AET', 'PEN'].includes(status)) { skipped++; console.log(`[update-results] skip ${pred.fixture_id}: status=${status} (încă neterminat)`); continue; }
 
         const hg = fix.goals?.home;
         const ag = fix.goals?.away;
-        if (hg == null || ag == null) continue;
+        if (hg == null || ag == null) { skipped++; console.log(`[update-results] skip ${pred.fixture_id}: scor null`); continue; }
 
         const pr = await query(
           `UPDATE predictions SET
@@ -180,9 +214,11 @@ export default async function handler(req, res) {
       await sleep(500);
     }
 
-    await logCron('success', `updated ${updated}/${pending.length}; prediction_log resolved ${plResolved.total}`);
+    await logCron('success', `updated ${updated}/${pending.length} (api); fromHistory ${predFromHistory}; skipped ${skipped}; prediction_log resolved ${plResolved.total}`);
     return res.status(200).json({
       updated,
+      from_history: predFromHistory,
+      skipped,
       total: pending.length,
       prediction_log_resolved: plResolved.total,
       prediction_log_by_module: plResolved.counts,
