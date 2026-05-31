@@ -357,8 +357,12 @@ function enrichUrl(hid,aid,m){
       var aYC=aSt.find(function(s){return s.type==='Yellow Cards';});
       u+='&yc='+((hYC&&hYC.value!=null?parseFloat(hYC.value):0)+(aYC&&aYC.value!=null?parseFloat(aYC.value):0));
     }
+    // Guard typeof string: referee poate veni ca non-string/format neașteptat →
+    // .split() ar arunca; encodeURIComponent pe valoare ciudată putea declanșa
+    // "The string did not match the expected pattern" în WebKit.
     if(m.fixture.referee&&m.fixture.referee!=='null'){
-      u+='&ref='+encodeURIComponent(m.fixture.referee.split(',')[0].trim());
+      var _ref=String(m.fixture.referee).split(',')[0].trim();
+      if(_ref)u+='&ref='+encodeURIComponent(_ref);
     }
   }
   return u;
@@ -1165,12 +1169,20 @@ function mdRenderStatistici(d){
 function mdRender(){
   if(!_md.data){return;}
   var d=_md.data;
-  if(_md.tabIdx===0)mdRenderSumar(d);
-  else if(_md.tabIdx===1)mdRenderFormatii(d);
-  else if(_md.tabIdx===2)mdRenderJucatori(d);
-  else if(_md.tabIdx===3)mdRenderForma(d);
-  else if(_md.tabIdx===4)mdRenderClasament(d);
-  else if(_md.tabIdx===5)mdRenderStatistici(d);
+  // Guard global: o eroare de parsing într-un singur tab (ex. dată/regex pe format
+  // neașteptat) NU mai blochează tot modalul + loghează stack-ul real pentru debug.
+  try{
+    if(_md.tabIdx===0)mdRenderSumar(d);
+    else if(_md.tabIdx===1)mdRenderFormatii(d);
+    else if(_md.tabIdx===2)mdRenderJucatori(d);
+    else if(_md.tabIdx===3)mdRenderForma(d);
+    else if(_md.tabIdx===4)mdRenderClasament(d);
+    else if(_md.tabIdx===5)mdRenderStatistici(d);
+  }catch(e){
+    console.error('[mdRender] tab '+_md.tabIdx+' error:',e&&e.stack?e.stack:e);
+    var body=document.getElementById('md-body');
+    if(body)body.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare la afișare</div><div class="empty-s">'+htmlEsc(e&&e.message||String(e))+'</div></div>';
+  }
 }
 
 // ── PROBABILITATE MARCARE — secțiune NOUĂ, complet independentă ──────────────

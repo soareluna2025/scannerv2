@@ -5789,3 +5789,26 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ⚠ NEtestat pe runtime; matematica conexiunilor: max 8 DB(backfill) + stabilizare
       (1 cron secvențial) + scanner ≈ sub 25 (pool). Marjă confortabilă.
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[31.05 ~17:?? ] - FIX: modal live „The string did not match the expected pattern"
+  Fișier: public/js/app-ui.js
+  Eroare WebKit (SyntaxError la regex/Date/URI/selector parse pe format neașteptat),
+  raportată pe Santos vs Vitoria live. Investigație: cele 2 .match() (_msParseHA)
+  erau deja guarded (typeof string); calcScoringProbabilityLive — fără regex/Date.
+  SUSPECT principal: enrichUrl linia 361 — m.fixture.referee.split(',') guarded
+  pe truthy/'null' DAR nu pe TIP → dacă referee vine non-string/format ciudat,
+  .split aruncă + encodeURIComponent pe valoare ciudată poate da exact eroarea.
+  FIX-uri:
+   1. Linia 361: String(m.fixture.referee).split(...) + guard _ref gol înainte de
+      encodeURIComponent (cast defensiv + skip dacă rezultă gol).
+   2. mdRender(): try/catch global pe dispatcherul de tab-uri → o eroare de parsing
+      într-un tab NU mai blochează tot modalul; afișează „Eroare la afișare" +
+      console.error cu STACK COMPLET → la următoarea apariție vedem linia exactă.
+  Sweep: app-state parseFloat-uri guarded (||); app-live split-uri (generator/
+   simulate) nu sunt în calea modalului live.
+  Verificare: node --check public/js/app-ui.js → OK.
+   ⚠ ONESTITATE: NU am putut reproduce/capta stack-ul exact din sandbox (fără
+     browser). Am hardenat suspectul cel mai probabil (referee.split) + am adăugat
+     plasă de siguranță (try/catch cu stack) care GARANTEAZĂ că la următoarea
+     apariție cauza precisă apare în consolă, fără a mai sparge modalul.
+  Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
