@@ -144,43 +144,49 @@ function getHandler(endpoint) {
   return null;
 }
 
+// Lock simplu in-proces: previne 2 rulări concurente (cron */5 + trigger manual).
+let _routerRunning = false;
+
 export default async function handler(req, res) {
+  if (_routerRunning) {
+    return res.status(200).json({ skipped: true, reason: 'already running' });
+  }
+  _routerRunning = true;
+  const SAFETY_CAP = 2000;   // plafon iteme/rulare (anti-buclă infinită)
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let processed = 0, skipped = 0, batches = 0;
   try {
-    const { rows: entries } = await query(
-      `SELECT id, sursa, endpoint, entity_id, raw_data
-       FROM cazarma_centrala
-       WHERE procesat = FALSE
-       ORDER BY primit_la ASC
-       LIMIT $1`,
-      [BATCH_SIZE]
-    );
+    // Drenează coada în BUCLĂ (batch-uri de BATCH_SIZE) până e goală sau cap.
+    while (processed + skipped < SAFETY_CAP) {
+      const { rows: entries } = await query(
+        `SELECT id, sursa, endpoint, entity_id, raw_data
+         FROM cazarma_centrala
+         WHERE procesat = FALSE
+         ORDER BY primit_la ASC
+         LIMIT $1`,
+        [BATCH_SIZE]
+      );
+      if (!entries.length) break;   // coadă goală → stop
+      batches++;
 
-    if (!entries.length) {
-      // FIX log fals: 'nimic de procesat' era scris în error_msg, făcând admin/errors
-      // să raporteze cron-ul ca eroare deși status era 'success'.
-      // Acum logăm doar pe consolă (info), iar cron_logs primește error_msg=NULL.
-      console.log('[cazarma-router] nimic de procesat');
-      await logCron('success');
-      return res.status(200).json({ processed: 0, skipped: 0 });
-    }
-
-    let processed = 0, skipped = 0;
-
-    for (const entry of entries) {
-      const routeHandler = getHandler(entry.endpoint);
-      if (!routeHandler) {
-        await markProcessed(entry.id, 'handler lipsa');
-        skipped++;
-        continue;
+      for (const entry of entries) {
+        const routeHandler = getHandler(entry.endpoint);
+        if (!routeHandler) {
+          await markProcessed(entry.id, 'handler lipsa');
+          skipped++;
+          continue;
+        }
+        try {
+          await routeHandler(entry);
+          await markProcessed(entry.id);
+          processed++;
+        } catch (e) {
+          await markProcessed(entry.id, e.message);
+          skipped++;
+        }
       }
-      try {
-        await routeHandler(entry);
-        await markProcessed(entry.id);
-        processed++;
-      } catch (e) {
-        await markProcessed(entry.id, e.message);
-        skipped++;
-      }
+      // Delay mic între batch-uri — cedează event loop-ul (nu blochează serverul).
+      await sleep(50);
     }
 
     // Curata intrari procesate mai vechi de 7 zile
@@ -188,10 +194,13 @@ export default async function handler(req, res) {
       `DELETE FROM cazarma_centrala WHERE procesat=TRUE AND procesat_la < NOW() - INTERVAL '7 days'`
     );
 
-    await logCron('success', `procesat:${processed} sarit:${skipped} total:${entries.length}`);
-    return res.status(200).json({ processed, skipped, total: entries.length });
+    if (processed + skipped === 0) console.log('[cazarma-router] nimic de procesat');
+    await logCron('success', `procesat:${processed} sarit:${skipped} batches:${batches}`);
+    return res.status(200).json({ processed, skipped, batches });
   } catch (e) {
     await logCron('error', e.message);
-    return res.status(500).json({ error: e.message });
+    return res.status(200).json({ error: e.message, processed, skipped });
+  } finally {
+    _routerRunning = false;
   }
 }
