@@ -778,6 +778,26 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[31.05 ~19:40] - VPS 502 Bad Gateway: diagnostic + hardening durabil (FARA acces SSH la VPS)
+  CONSTRANGERE REALA: sandbox izolat, FARA ssh client, port 22 catre VPS blocat,
+  rulez pe host 'vm' (root) != VPS. NU am putut rula pm2 status/restart, free -h,
+  dmesg, df -h pe server si NU pot confirma DIRECT ca 502 a disparut. Zero output fake.
+  CANAL DISPONIBIL: pipeline deploy.yml (GitHub Actions -> SSH parola) face la fiecare
+  push pe main: pm2 restart + curl /health. Singura cale reala de repornire+protectie.
+  CAUZA PROBABILA (din configuri, NECONFIRMATA fara dmesg): OOM-kill. ecosystem.config.cjs
+  documenteaza istoric max_memory_restart 800M->1200M atins repetat in fereastra cron 04:00
+  (league-stats/backup/referee-stats/backfill) -> PM2 SIGTERM de mai multe ori/noapte.
+  HARDENING APLICAT in .github/workflows/deploy.yml (commit 03cd369, activ la urmatorul deploy):
+    1. Swap 2G idempotent (fallocate/dd+mkswap+swapon+persistent /etc/fstab) = supapa anti OOM.
+    2. pm2 startup systemd (revine la reboot) + pm2 save MEREU pe calea normala.
+       BUGFIX: era `pm2 restart X || pm2 start Y && pm2 save` => save rula DOAR cand restart
+       esua => pe calea normala lista NU se salva => dupa reboot 502. Acum separate.
+  NEATINS: scoring/functii imutabile, scan live, chei API/DB, max_memory_restart (nu stiu RAM
+  real VPS fara free -m), backfill concurrency (nu confirm ca el a cauzat crash-ul; fara
+  modificari speculative in prod). YAML validat (python yaml.safe_load = OK).
+  REPORNIRE IMEDIATA: necesita push pe main (deploy -> restart) SAU manual pe VPS:
+  pm2 restart all && pm2 save. Astept permisiune push main.
+
 [31.05 ~18:45] - Panou "Erori Recente" admin: colorare verde/rosu dupa tip (doar frontend)
   Problema: toate intrarile apareau rosu desi majoritatea sunt rezumate de succes
   (cron-urile loghaza in cron_logs cu status='success' dar pun rezumatul in error_msg,
