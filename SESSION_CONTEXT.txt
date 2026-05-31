@@ -778,6 +778,23 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[31.05 ~18:00] - APLICAT fix E1+E2 admin /vs-api (DDL pur, zero scoring atins)
+  E1 — coloane lipsa in predictions, auto-aplicate la boot:
+    * server.js: adaugat ensureColumns() (langa ensureIndexes) care ruleaza idempotent
+      scripts/migrations/add-prediction-api-columns.sql la startup (apelat in app.listen).
+      => cele 4 coloane (api_home_pct/draw_pct/away_pct NUMERIC(5,2), result_winner TEXT)
+      se aplica automat la urmatorul deploy/restart, fara psql manual pe VPS. Migrarea
+      ramane neschimbata, ca referinta.
+    * scripts/create-tables.sql: adaugat aceleasi 4 coloane in definitia tabelei predictions
+      (result_winner, api_home_pct, api_draw_pct, api_away_pct) — pt DB proaspat.
+  E2 — tabele calibrare adaugate in create-tables.sql (CREATE TABLE IF NOT EXISTS, IDENTIC cu cron):
+    * calibration_tables (PK compus module, league_group) — identic cu recalibrate-tables.js L46-54.
+    * calibration_live (UNIQUE minute_bucket,score_state,market) — identic cu calibrate-live.js L18-27.
+    * Cron-urile raman sursa de adevar la runtime; nicio divergenta de schema.
+  Constrangeri respectate: ZERO atingere calcConfidencePreMatch/Live, score2/3/6/7,
+    Monte Carlo (10.000), chei API. node --check server.js OK.
+  Fisiere: server.js, scripts/create-tables.sql. STATUS E1+E2: APLICAT.
+
 [31.05 ~17:30] - VERIFICARE READ-ONLY fix E1+E2 admin /vs-api (ZERO modificari cod, ZERO commit)
   VERDICT GLOBAL: fix-ul planificat (ADD COLUMN / CREATE TABLE idempotent) e CURAT si sigur.
   E1 — result_winner vs result_1x2: NU e duplicat redundant de reparat prin reutilizare.

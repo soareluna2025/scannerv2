@@ -139,12 +139,28 @@ async function ensureIndexes() {
   }
 }
 
+// [E1] Aplică idempotent coloanele lipsă din `predictions` (api_*_pct, result_winner)
+// la pornire, rulând migrarea existentă scripts/migrations/add-prediction-api-columns.sql.
+// ADD COLUMN IF NOT EXISTS → no-op la restart-urile ulterioare. Elimină nevoia de
+// `psql` manual pe VPS; fără asta /api/admin/vs-api dădea 500 (coloane inexistente).
+async function ensureColumns() {
+  try {
+    const { readFileSync } = await import('fs');
+    const sql = readFileSync(join(__dirname, 'scripts', 'migrations', 'add-prediction-api-columns.sql'), 'utf8');
+    await query(sql);
+    console.log('[columns] add-prediction-api-columns.sql aplicat (idempotent)');
+  } catch (e) {
+    console.error('[columns] ensureColumns:', e.message);
+  }
+}
+
 const httpServer = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`AlohaScan pornit pe http://0.0.0.0:${PORT}`);
   await initBackfillProgress();
   await resumeOnStartup();
   startScanner();
   ensureIndexes();
+  ensureColumns();
   loadModelWeights().catch(e => console.error('[weights] initial load failed:', e.message));
 });
 

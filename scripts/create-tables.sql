@@ -457,6 +457,10 @@ CREATE TABLE IF NOT EXISTS predictions (
     result_over25   BOOLEAN,
     result_gg       BOOLEAN,
     result_1x2      TEXT,
+    result_winner   TEXT,             -- 'home' | 'draw' | 'away' (scris de update-results.js, citit de /vs-api)
+    api_home_pct    NUMERIC(5,2),     -- predicție API-Football % (scris de enrich.js)
+    api_draw_pct    NUMERIC(5,2),
+    api_away_pct    NUMERIC(5,2),
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -1047,6 +1051,32 @@ CREATE TABLE IF NOT EXISTS league_patterns (
   over15_pct  NUMERIC(5,2),
   gg_pct      NUMERIC(5,2),
   updated_at  TIMESTAMP DEFAULT NOW()
+);
+
+-- ── 41. calibration_tables ───────────────────────────────────────
+-- IDENTIC cu api/cron/recalibrate-tables.js (L46-54). PK compus (module, league_group).
+-- Cronul rămâne sursa de adevăr la runtime; aici doar pentru DB proaspăt (idempotent).
+CREATE TABLE IF NOT EXISTS calibration_tables (
+  module       TEXT NOT NULL,
+  league_group TEXT NOT NULL DEFAULT 'global',
+  buckets      JSONB NOT NULL,
+  sample_size  INT,
+  brier_score  NUMERIC(5,3),
+  generated_at TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (module, league_group)
+);
+
+-- ── 42. calibration_live ─────────────────────────────────────────
+-- IDENTIC cu api/cron/calibrate-live.js (L18-27).
+CREATE TABLE IF NOT EXISTS calibration_live (
+  id              SERIAL PRIMARY KEY,
+  minute_bucket   TEXT NOT NULL,
+  score_state     TEXT NOT NULL,
+  market          TEXT NOT NULL,
+  n_samples       INT NOT NULL,
+  real_pct        NUMERIC(5,2) NOT NULL,
+  generated_at    TIMESTAMP DEFAULT NOW(),
+  UNIQUE(minute_bucket, score_state, market)
 );
 
 -- ================================================================
