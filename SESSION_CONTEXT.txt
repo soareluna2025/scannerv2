@@ -6014,3 +6014,22 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     Motiv: hasData nu e expus direct in payload, doar teamStrength* → inferenta onesta.
   - node --check verify_score4.js → OK. Rulare pe VPS: /snap/bin/node verify_score4.js
   Constranti: niciun cod de scoring atins; doar scriptul de verificare.
+
+[01.06 ~00:10] - DIAGNOSTIC (read-only): de ce lineupFactor.hasData=false desi API are formatii
+  NU am modificat nimic. Concluzie: 2 gauri REALE (in afara scoringului):
+  ① ACOPERIRE TEMPORALA (prematch-enrichment.js): lineups se trag DOAR la stage
+     5/6/7 (0-2.5h inainte), DOAR pe status NS, la tick de 5min. API publica
+     formatiile ~40-60min inainte → fereastra de prindere ingusta → multe meciuri
+     fara lineups in prematch_data. Meciurile TERMINATE (Brazil 1492288, MLS
+     1490324) nu mai sunt atinse → hasData=false (rows.length 0, return early).
+  ② NEPOTRIVIRE SEZON (enrich.js:344 getLineupStrengthFactor): cauta players_season
+     season=$2 cu SEASON=2025 (azi 31.05.2026, luna<6 → an-1). Ligile pe an
+     CALENDARISTIC (Brazil 71, MLS 253, Norway 103) au sezon curent 2026 → 0
+     jucatori matchuiti → avgScore=null → hasData=false CHIAR daca lineups exista.
+     Suspect principal pt ligile in-sezon pe an calendaristic.
+  NU e cauza: formatul stocat (savePayload->raw.response = array teams, corect) +
+     pragul 7/11 (rezonabil).
+  CONFIRMARE pe VPS (decisiv):
+    SELECT COUNT(*) FROM prematch_data WHERE data_type='lineups' AND fixture_id IN (1492288,1490324);
+    SELECT season, COUNT(*) FROM players_season WHERE league_id IN (71,253) GROUP BY season;
+  Constranti: niciun cod atins (diagnostic).
