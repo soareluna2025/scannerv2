@@ -784,7 +784,7 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
   Tot ce deriva (bucla principala, totalPairs = SEASONS.length * LEAGUE_IDS.length
   linia 682, resume idx clamp la SEASONS.length-1) se recalculeaza automat =>
   total perechi = 2 x LEAGUE_IDS.length, progres/ETA corecte pt noul scope.
-  Actualizat header comment (linii 1-3) sa reflecte scope-ul.
+  Actualizat header comment linia 1 sa reflecte scope-ul.
   Pastrate intacte: ON CONFLICT DO UPDATE, no_data markers, AET/PEN, retroactiv 3 zile,
   whitelist ligi (LEAGUE_IDS=ALLOWED_LEAGUE_IDS), cutoff M3 2024-05-30 (guard stats, nu sezon).
   Verificat clean: grep -c const SEASONS=1 (fara duplicat), [2025,2026]=1, 2023=0,

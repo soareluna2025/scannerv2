@@ -1,4 +1,4 @@
-// api/backfill.js — Season-first backfill (2026→2022)
+// api/backfill.js — Season-first backfill (DOAR sezoanele 2025 + 2026)
 // Per-fixture: statistics + events + players
 // Persistent state in app_settings (resume after VPS restart)
 
