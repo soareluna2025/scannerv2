@@ -6149,3 +6149,8 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     → vezi batches>1 si processed mare; SELECT COUNT(*) FROM cazarma_centrala
     WHERE procesat=FALSE → scade spre 0.
   Constranti: niciun cod de scoring atins (doar cron/infra).
+  ⚠ NOTA PROCES: prima incercare de rescriere handler (commit 3a5ad72) a esuat
+    silent (old_string nu se potrivea — lipsea blocul comentariu 'FIX log fals'),
+    deci 3a5ad72 avea DOAR comentariul header + cron */5, NU bucla/lock. Corectat
+    in commit urmator (4d3df84): bucla while + _routerRunning lock + SAFETY_CAP 2000
+    + delay 50ms + finally release sunt acum EFECTIV in cod (verificat grep liniile 160-217).
