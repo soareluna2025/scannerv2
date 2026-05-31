@@ -8,14 +8,14 @@ import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 import { isAllowedMatch } from '../utils/league-filter.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
 import { calcPoisson6x6 } from '../calc-utils.js';
+import { seasonForLeague, fallbackSeason } from '../utils/season.js';
 
 const PRIORITY_LEAGUES = [...ALLOWED_LEAGUE_IDS];
 
-// Ligile europene (aug-mai) folosesc sezonul anului precedent în mai-aug
-// Dacă suntem în ian-jul → season = anul precedent; aug-dec → anul curent
-const _y = new Date().getFullYear();
-const _m = new Date().getMonth(); // 0=ian
-const SEASON = _m < 7 ? _y - 1 : _y; // înainte de august → sezon precedent
+// SEASON = DOAR fallback (folosit la batch-ul form_stats, care lucrează pe sezonul
+// din fixtures_history). Standings se colectează acum pe sezon DINAMIC per ligă
+// (seasonForLeague) — fix pt ligile pe an calendaristic (Brazil 71, MLS 253...).
+const SEASON = fallbackSeason();
 
 async function fetchAPI(endpoint) {
   const res = await fetchApiFootball(endpoint);
@@ -218,7 +218,9 @@ export default async function handler(req, res) {
     for (const leagueId of PRIORITY_LEAGUES) {
 
       try {
-        const standings = await fetchAPI(`/standings?league=${leagueId}&season=${SEASON}`);
+        // Sezon DINAMIC per ligă (seasons.current) — corect pt ligi an-calendaristic.
+        const lgSeason = await seasonForLeague(leagueId);
+        const standings = await fetchAPI(`/standings?league=${leagueId}&season=${lgSeason}`);
         if (!standings.length) continue;
 
         const league = standings[0]?.league;
@@ -261,7 +263,7 @@ export default async function handler(req, res) {
                win=EXCLUDED.win, draw=EXCLUDED.draw, lose=EXCLUDED.lose,
                form=EXCLUDED.form, updated_at=EXCLUDED.updated_at`,
             [
-              leagueId, SEASON, row.team.id, row.team.name, row.rank, row.points,
+              leagueId, lgSeason, row.team.id, row.team.name, row.rank, row.points,
               row.all?.goals?.for     || 0,
               row.all?.goals?.against || 0,
               row.goalsDiff           || 0,

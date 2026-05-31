@@ -6091,3 +6091,39 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   QUERY VERIFICARE (rulate pe VPS):
     SELECT season, COUNT(*) FROM players_season GROUP BY season;
     SELECT season, COUNT(*) FROM players_season WHERE league_id IN (71,253) GROUP BY season;
+
+[01.06 ~02:00] - FIX sezon dinamic in DESCOPERIRE (collect-daily standings + players discovery)
+  PAS1 CONFIRMAT: fixtures se populeaza pe DATA (/fixtures?date=...&status=NS,
+    collect-daily azi+3 zile, today.js azi/maine) — NU season-gated; capteaza toate
+    ligile DAR fereastra mica (azi+3) → doar 8 echipe Brazil/MLS cu meci imediat.
+    standings se populeaza pe /standings?league&season=SEASON GLOBAL(2025) →
+    pt ligi calendaristice (71/253/103) cere 2025 → tabel vechi/gol → standings 2026
+    lipseste → discovery (top-scorers/backfill-pass-shots/players via standings) limitat.
+  PAS2 FIX (DOAR colectare/discovery; enrich/scoring NEATINSE):
+    - collect-daily.js: standings fetch + INSERT pe seasonForLeague(leagueId) dinamic
+      (era SEASON global 2025). SEASON pastrat doar ca fallbackSeason pt batch form_stats.
+    - collect-players-season.js: discovery extins — adaugat UNION cu
+      `SELECT team_id FROM standings` (acum pe sezon corect) la fixtures-30zile;
+      LIMIT 300→600. Acopera loturile complete, nu doar 8 echipe cu meci imediat.
+    - collect-top-scorers.js + backfill-pass-shots.js: deja pe sezon dinamic per
+      liga/echipa din task anterior (fetch+INSERT); descoperirea lor ramane pe
+      standings (acum populat corect de collect-daily pe sezon dinamic).
+    - cazarma-router.js: NEATINS (routeaza pe season din URL-ul stocat, corect).
+    - Zero formula globala (getMonth>=6 / _m<7) ramasa in colectoare (doar fallbackSeason).
+  Verificare: node --check pe toate 5 → OK.
+    ⚠ NErulat (sandbox fara DB/retea).
+  RE-RULARE PE VPS (ordine corecta, anti-429 prin delay intern + cache sezon/liga):
+    cd /root/scannerv2 && git pull origin main && pm2 restart alohascan
+    # 1) populeaza standings 2026 (+ leagues/teams) pe sezon dinamic:
+    curl -s -X POST http://localhost:3000/api/cron/collect-daily
+    # 2) descopera loturile (acum vede echipele din standings 2026) + scrie cazarma:
+    curl -s -X POST http://localhost:3000/api/cron/collect-players-season
+    curl -s -X POST http://localhost:3000/api/cron/backfill-pass-shots
+    curl -s -X POST http://localhost:3000/api/cron/collect-top-scorers
+    # 3) ruteaza cozile cazarma in tabele (ruleaza de mai multe ori — batch 100/run):
+    for i in 1 2 3 4 5; do curl -s -X POST http://localhost:3000/api/cron/cazarma-router; sleep 5; done
+  QUERY VERIFICARE:
+    SELECT season, COUNT(*) FROM players_season GROUP BY season;
+    SELECT season, COUNT(*) FROM players_season WHERE league_id IN (71,253) GROUP BY season;
+    SELECT season, COUNT(*) FROM standings WHERE league_id IN (71,253) GROUP BY season;
+  Constranti: niciun cod de scoring atins.

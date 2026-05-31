@@ -18,6 +18,9 @@ async function logCron(status, msg = '') {
 
 export default async function handler(req, res) {
   try {
+    // Descoperire ECHIPE: meciuri în 30 zile (fixtures) + TOATE echipele din
+    // standings (acum populat pe sezon dinamic per ligă). Astfel acoperim
+    // loturile complete ale ligilor calendaristice (nu doar cele 8 cu meci imediat).
     const { rows: teams } = await query(
       `SELECT DISTINCT team_id FROM (
          SELECT home_team_id AS team_id FROM fixtures
@@ -25,8 +28,10 @@ export default async function handler(req, res) {
          UNION
          SELECT away_team_id FROM fixtures
          WHERE match_date >= NOW() AND match_date <= NOW() + INTERVAL '30 days'
+         UNION
+         SELECT team_id FROM standings
        ) t WHERE team_id IS NOT NULL
-       LIMIT 300`
+       LIMIT 600`
     );
 
     if (!teams.length) {
