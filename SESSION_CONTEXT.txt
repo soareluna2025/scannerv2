@@ -6001,3 +6001,16 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     ⚠ NErulat pe DB/API live (sandbox fara .env/retea). verify_score4.js + alerta gated
       se testeaza pe VPS. Flag OFF by default → fara impact pana il pornesti.
   Constranti: niciun cod de scoring atins.
+
+[31.05 ~23:50] - UPDATE verify_score4.js: ligi in-sezon + defalcare conditii partial
+  Fisier: verify_score4.js DOAR (zero atingere scoring).
+  - Ligi testate (in sezon acum, evitat PL off-season): V.League1 (340)→'partial',
+    Brazil Serie A (71)→'complete', MLS (253)→'complete'. Per liga: cel mai recent
+    fixture TERMINAT (FT/AET/PEN), sezon current dinamic.
+  - La 'partial' afiseaza DEFALCAT care conditie a picat: teamStrengthHome prezent?,
+    teamStrengthAway prezent? (din payload), lineupFactor.hasData? (INFERAT: daca
+    ambele strength prezente dar partial → lineups au picat; daca o strength lipseste
+    → aceea e cauza, hasData ramane gated). + linie sinteza „gol de date la: ...".
+    Motiv: hasData nu e expus direct in payload, doar teamStrength* → inferenta onesta.
+  - node --check verify_score4.js → OK. Rulare pe VPS: /snap/bin/node verify_score4.js
+  Constranti: niciun cod de scoring atins; doar scriptul de verificare.
