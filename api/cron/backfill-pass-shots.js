@@ -7,9 +7,12 @@
 
 import { query } from '../db.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
+import { seasonForTeam, fallbackSeason } from '../utils/season.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const SEASON = new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+// Descoperirea echipelor din standings folosește sezonul sub care a fost colectat
+// standings (fallbackSeason). Colectarea efectivă per echipă = sezon dinamic (loop).
+const SEASON = fallbackSeason();
 
 export default async function handler(req, res) {
   try {
@@ -35,10 +38,11 @@ export default async function handler(req, res) {
 
     for (const { team_id } of teams) {
       try {
+        const tSeason = await seasonForTeam(team_id); // sezon dinamic per echipă
         let page = 1;
 
         while (true) {
-          const r = await fetchApiFootball(`/players?team=${team_id}&season=${SEASON}&page=${page}`);
+          const r = await fetchApiFootball(`/players?team=${team_id}&season=${tSeason}&page=${page}`);
           const d = await r.json();
           const totalPages = d.paging?.total || 1;
 
@@ -64,7 +68,7 @@ export default async function handler(req, res) {
                  shots_on_target=EXCLUDED.shots_on_target,
                  updated_at=NOW()`,
               [
-                p.id, s.team?.id || team_id, s.league.id, SEASON,
+                p.id, s.team?.id || team_id, s.league.id, tSeason,
                 p.name || null, p.nationality || null,
                 s.games?.position || null, p.age || null,
                 s.games?.appearences || 0,

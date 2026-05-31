@@ -5,9 +5,12 @@
 import { query } from '../db.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
 import { writeToCazarma } from '../utils/cazarma.js';
+import { seasonForLeague, fallbackSeason } from '../utils/season.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const SEASON = new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+// Descoperirea ligilor din standings folosește sezonul sub care au fost colectate
+// (fallbackSeason). Sezonul efectiv de COLECTARE e per-ligă dinamic (vezi loop).
+const SEASON = fallbackSeason();
 
 async function logCron(status, msg = '') {
   try {
@@ -30,11 +33,13 @@ export default async function handler(req, res) {
     let scorers = 0, assists = 0;
 
     for (const { league_id } of leagues) {
+      // Sezon DINAMIC per ligă (seasons.current) — corect pt ligi an-calendaristic.
+      const lgSeason = await seasonForLeague(league_id);
       // Top scorers
       try {
-        const r = await fetchApiFootball(`/players/topscorers?league=${league_id}&season=${SEASON}`);
+        const r = await fetchApiFootball(`/players/topscorers?league=${league_id}&season=${lgSeason}`);
         const d = await r.json();
-        await writeToCazarma('collect-top-scorers', `/players/topscorers?league=${league_id}&season=${SEASON}`, league_id, d);
+        await writeToCazarma('collect-top-scorers', `/players/topscorers?league=${league_id}&season=${lgSeason}`, league_id, d);
         for (const item of (d.response || [])) {
           const p = item.player;
           const s = item.statistics?.[0];
@@ -47,7 +52,7 @@ export default async function handler(req, res) {
                goals=EXCLUDED.goals, assists=EXCLUDED.assists,
                appearances=EXCLUDED.appearances, updated_at=NOW()`,
             [
-              league_id, SEASON, p.id, p.name || null,
+              league_id, lgSeason, p.id, p.name || null,
               s?.team?.id || null, s?.team?.name || null,
               s?.goals?.total || 0,
               s?.goals?.assists || 0,
@@ -62,9 +67,9 @@ export default async function handler(req, res) {
 
       // Top assists
       try {
-        const r = await fetchApiFootball(`/players/topassists?league=${league_id}&season=${SEASON}`);
+        const r = await fetchApiFootball(`/players/topassists?league=${league_id}&season=${lgSeason}`);
         const d = await r.json();
-        await writeToCazarma('collect-top-scorers', `/players/topassists?league=${league_id}&season=${SEASON}`, league_id, d);
+        await writeToCazarma('collect-top-scorers', `/players/topassists?league=${league_id}&season=${lgSeason}`, league_id, d);
         for (const item of (d.response || [])) {
           const p = item.player;
           const s = item.statistics?.[0];
@@ -77,7 +82,7 @@ export default async function handler(req, res) {
                assists=EXCLUDED.assists, goals=EXCLUDED.goals,
                appearances=EXCLUDED.appearances, updated_at=NOW()`,
             [
-              league_id, SEASON, p.id, p.name || null,
+              league_id, lgSeason, p.id, p.name || null,
               s?.team?.id || null, s?.team?.name || null,
               s?.goals?.assists || 0,
               s?.goals?.total || 0,

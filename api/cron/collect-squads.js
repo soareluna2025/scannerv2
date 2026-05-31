@@ -6,8 +6,9 @@ import { query } from '../db.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
 import { writeToCazarma } from '../utils/cazarma.js';
 
+import { seasonForTeam } from '../utils/season.js';
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const SEASON = new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1;
 
 async function logCron(status, msg = '') {
   try {
@@ -37,6 +38,7 @@ export default async function handler(req, res) {
 
     for (const { team_id } of teams) {
       try {
+        const SEASON = await seasonForTeam(team_id); // sezon dinamic per echipă
         const r = await fetchApiFootball(`/players/squads?team=${team_id}`);
         const d = await r.json();
         await writeToCazarma('collect-squads', `/players/squads?team=${team_id}`, team_id, d);

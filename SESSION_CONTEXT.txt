@@ -6052,3 +6052,42 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   FIX corect (separat, cu confirmare — enrich e zona scoring): sezon DINAMIC per liga
     din /leagues seasons[].current==true, cache per league_id (pattern deja in
     audit_lineups.js). NU aplicat acum.
+
+[01.06 ~01:00] - FIX colectare: sezon DINAMIC per ligă (players_season pe 2026)
+  Fisiere: api/utils/season.js (NOU) + collect-players-season.js, collect-squads.js,
+    collect-top-scorers.js, backfill-pass-shots.js. ⚠ ZERO atingere enrich/scoring.
+  HELPER NOU api/utils/season.js (partajat):
+    - seasonForLeague(id): /leagues?id → seasons[].current==true → year, cache/proces.
+    - seasonForTeam(id): rezolva liga echipei (standings→fixtures) apoi seasonForLeague.
+    - fallbackSeason(): formula veche aug-mai, DOAR fallback (cu console.warn) cand API pica.
+  MODIFICARI:
+    - collect-players-season.js: SEASON global eliminat → seasonForTeam(team_id) in loop
+      (API fetch + INSERT players_season).
+    - collect-squads.js: idem seasonForTeam (INSERT squads).
+    - collect-top-scorers.js: descoperire ligi din standings ramane pe fallbackSeason
+      (standings are doar 2025); fetch + INSERT top_scorers/top_assists pe lgSeason=
+      seasonForLeague(league_id) per ligă.
+    - backfill-pass-shots.js: descoperire echipe pe fallbackSeason (standings);
+      fetch + INSERT players_season pe tSeason=seasonForTeam per echipă.
+      ⚠ NOT EXISTS ramane pe season standings → o echipa deja pe 2026 dar listata in
+        standings 2025 poate fi re-fetchuita (ON CONFLICT DO UPDATE, idempotent — cost mic).
+  cazarma-router.js: NEMODIFICAT (vezi explicatie chat). Deriva sezonul prin
+    extractSeason(endpoint) = regex season=(\d{4}) din URL-ul stocat → fiindca acum
+    collect-* scriu URL cu sezonul corect, cazarma routeaza automat corect. Sigur,
+    nu necesita schimbare.
+  Verificare: node --check pe toate 5 → OK; formula globala eliminata din cei 4 colectori.
+    ⚠ NErulat (sandbox fara DB/retea). Comanda re-rulare VPS + query verificare jos.
+  Constranti: niciun cod de scoring atins (enrich/score2-7/score4/getLiveStatsFromDB).
+
+  RE-RULARE PE VPS (colecteaza jucatori pe sezonul curent per liga, anti-429 inclus):
+    cd /root/scannerv2 && git pull origin main && pm2 restart alohascan
+    # collect-players-season foloseste deja delay intre pagini; doar trigger:
+    curl -s -X POST http://localhost:3000/api/cron/collect-players-season
+    curl -s -X POST http://localhost:3000/api/cron/backfill-pass-shots
+    curl -s -X POST http://localhost:3000/api/cron/collect-top-scorers
+    curl -s -X POST http://localhost:3000/api/cron/collect-squads
+    # apoi routerul care scrie din cazarma in tabele:
+    curl -s -X POST http://localhost:3000/api/cron/cazarma-router
+  QUERY VERIFICARE (rulate pe VPS):
+    SELECT season, COUNT(*) FROM players_season GROUP BY season;
+    SELECT season, COUNT(*) FROM players_season WHERE league_id IN (71,253) GROUP BY season;
