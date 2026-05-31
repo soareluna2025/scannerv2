@@ -5947,3 +5947,29 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Constranti: niciun cod de scoring atins
   CORECTIE: numarul real de ligi whitelisted = 214 unice (nu 162). audit_lineups.js
     le parcurge pe toate 214. (corectat dupa rulare reala node import.)
+
+[31.05 ~23:?? ] - PASUL 0 STOP: score4 NU e "Player Intelligence pe formatii"
+  Task cerea sa dezactivez score4 cand lipsesc formatii reale. PASUL 0 (citire
+  contract) a gasit NEPOTRIVIRE -> OPRIT, ZERO modificari (conform instructiunii).
+  CE E DE FAPT score4 (enrich.js): exista DOAR in calcConfidenceLive (live xG/SOT/
+    DA/NGP din live_stats, w=0.35). In calcConfidencePreMatch NU exista score4
+    deloc (layerele pre-meci: score1 Poisson .30, score2 Forma .25, score3 H2H .15,
+    score7 PutereEchipe .25, score6 Convergenta .05). Deci nu exista "12% when
+    active" pt score4 si nici un mecanism score4 in pre-meci.
+  "Player Intelligence" / formatii reale alimenteaza ALTE doua canale:
+    - score7 (PutereEchipe) din getTeamStrengths -> player_stats. score7 = INTANGIBIL.
+    - lineupFactor (±12% pe LAMBDA, enrich.js:1154) din getLineupStrengthFactor
+      (prematch_data lineups). Ajusteaza λ, NU e un "score" din confidence.
+  MECANISM "contributie 0 fara a modifica calcConfidence": EXISTA deja generic in
+    _finalizeConfidence -> filtreaza layers cu score===null si REDISTRIBUIE
+    proportional. Deci un layer devine 0 punand scorul lui null (ex. score3/score7
+    sunt deja null cand lipsesc date). DAR: score4 e doar live; a-l face "inactive"
+    cand lipsesc formatii NU are sens (score4 nu depinde de formatii, ci de live_stats).
+  CONCLUZIE: cererea (dezactiveaza score4 pe lipsa formatii + 12% pre-meci) se
+    bazeaza pe un model gresit al codului. A implementa ar fi insemnat fie sa
+    modific score7/lineupFactor (interzis/risc), fie sa inventez un score4 pre-meci
+    (nu exista). Am OPRIT si raportat. Niciun fisier de scoring atins.
+  Optiuni corecte (necesita decizie user): (A) tagging ADITIV playerIntelActive/
+    dataCompleteness + filtru in stratul de OUTPUT/selectie (NU in calcConfidence)
+    pe baza prezentei reale de player_stats/lineups — fara a atinge niciun score;
+    (B) daca tinta era score7, e INTANGIBIL -> nu se atinge.
