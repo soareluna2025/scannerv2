@@ -118,7 +118,7 @@ jobs:
             ufw allow 3000/tcp 2>/dev/null || true
 
             # Restart aplicație via PM2 (singurul process manager — SystemD eliminat)
-            pm2 restart alohascan || pm2 start /root/scannerv2/ecosystem.config.js && pm2 save
+            pm2 restart alohascan || pm2 start /root/scannerv2/ecosystem.config.cjs && pm2 save
             sleep 4
 
             # Verificare că serverul răspunde

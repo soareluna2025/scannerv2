@@ -5829,3 +5829,17 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     `pm2 restart` la deploy eșuează dacă procesul pm2 nu există încă (deși `||
     pm2 start` îl prinde). Comenzile complete în răspuns chat.
   Constrânți: ✓ niciun cod intangibil atins (PM2 config + CI)
+
+[31.05 ~18:?? ] - FIX: ecosystem.config.js → .cjs (CommonJS explicit, ca pe VPS)
+  Fișiere: ecosystem.config.cjs (canonic), ecosystem.config.js (șters), deploy.yml
+  • deploy.yml: pm2 start .../ecosystem.config.js → .cjs.
+  • Repo avea DEJA un ecosystem.config.cjs (diferit: interpreter /snap/bin/node,
+    400M) PLUS .js-ul din task-ul anterior (800M, instances, max_restarts).
+    Reconciliat: .cjs canonic = combinație — păstrat interpreter '/snap/bin/node'
+    (mandat CLAUDE.md) + adoptat spec-ul mai bogat (800M, instances 1, max_restarts
+    10, restart_delay 3000, autorestart). .js ȘTERS din repo (git rm).
+  Verificare: node --check ecosystem.config.cjs → OK; grep deploy.yml → .cjs;
+    un singur fișier ecosystem rămas.
+  ⚠ NOTĂ: .cjs e corect fiindcă package.json poate avea "type":"module" →
+    PM2 config trebuie CommonJS explicit (.cjs) ca să nu fie tratat ca ESM.
+  Constrânți: ✓ niciun cod intangibil atins
