@@ -66,6 +66,14 @@ Regula: maxim Liga 1 + Liga 2 + Cupă per țară, zero tier 3+.
 - **Dacă userul cere „bump plan API" sau „abonament nou X k"** → ajustează `STOP_AT` în `api/backfill.js` la `(plan - 20k)` ca buffer pentru live scanner.
 - **`STOP_AT` curent în `api/backfill.js` = 280.000** — valoare corectă pentru planul 300k (300k - 20k buffer). NU modifica fără cerere explicită.
 
+## 1B. REGULI OPERAȚIONALE VPS
+
+### REGULĂ CRITICĂ — GESTIUNE PROCESE PE VPS
+- **NU rula NICIODATĂ** `killall node`, `pkill node`, `pkill -f node` sau `pm2 kill` pe VPS. Aceste comenzi omoară daemon-ul PM2 și lasă aplicația moartă fără supraveghere → 502 Bad Gateway.
+- Pentru repornirea aplicației folosește **DOAR**: `pm2 restart alohascan`.
+- Dacă e absolut necesar un clean restart complet, secvența se termină **OBLIGATORIU** cu `pm2 start ecosystem.config.cjs && pm2 save`, urmat de verificarea `pm2 status` care **TREBUIE** să arate procesul `online` înainte de a încheia sesiunea.
+- **Nu lăsa NICIODATĂ** daemon-ul PM2 oprit la finalul unei sesiuni.
+
 ## 2. STACK
 
 - **Runtime:** Node.js ESM (`/snap/bin/node`)
