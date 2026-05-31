@@ -6127,3 +6127,25 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     SELECT season, COUNT(*) FROM players_season WHERE league_id IN (71,253) GROUP BY season;
     SELECT season, COUNT(*) FROM standings WHERE league_id IN (71,253) GROUP BY season;
   Constranti: niciun cod de scoring atins.
+
+[01.06 ~02:30] - FIX cazarma-router: drenaj in bucla + lock + cron des
+  Fisiere: api/cron/cazarma-router.js, .github/workflows/deploy.yml.
+  1. SCHEDULER (deploy.yml crontab): collect-daily C4 (0 6 * * *), collect-players-season
+     C13 (30 1 * * *), cazarma-router C15 era (10 * * * *) ORAR.
+  2. cazarma-router: handler rescris — proceseaza in BUCLA batch-uri de 100 pana
+     coada (procesat=FALSE) e goala SAU plafon SAFETY_CAP=2000/rulare. Delay 50ms
+     intre batch-uri (cedeaza event loop). Lock in-proces _routerRunning → a 2-a
+     instanta returneaza {skipped:true, already running} (cron des + trigger manual
+     nu se suprapun). Raspuns: processed/skipped/batches.
+  3. CRON mai des: C15 (10 * * * *) → (*/5 * * * *), la fiecare 5 min. Cu drenajul
+     in bucla + lock, backlog-ul se goleste rapid fara rulari manuale.
+  4. NU am re-introdus formula globala de sezon. Linia 7 (SEASON fallback in
+     extractSeason) e PRE-EXISTENTA si NEATINSA (folosita doar cand URL n-are season).
+  Verificare: node --check cazarma-router.js → OK.
+  RESTART PM2: DA — codul cazarma-router ruleaza in proces (importat la trigger),
+    deci dupa deploy: pm2 restart alohascan. Crontab-ul nou (*/5) se aplica la
+    urmatorul deploy (deploy.yml rescrie crontab) — sau manual crontab -e pe VPS.
+  ⚠ NErulat (sandbox). Test pe VPS: curl -s -X POST .../api/cron/cazarma-router
+    → vezi batches>1 si processed mare; SELECT COUNT(*) FROM cazarma_centrala
+    WHERE procesat=FALSE → scade spre 0.
+  Constranti: niciun cod de scoring atins (doar cron/infra).

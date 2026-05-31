@@ -72,7 +72,7 @@ jobs:
             C12="0 1 * * * curl -sf http://localhost:3000/api/cron/collect-top-scorers >> $LOG 2>&1"
             C13="30 1 * * * curl -sf http://localhost:3000/api/cron/collect-players-season >> $LOG 2>&1"
             C14="5 2 * * * curl -sf http://localhost:3000/api/cron/collect-squads >> $LOG 2>&1"
-            C15="10 * * * * curl -sf http://localhost:3000/api/cron/cazarma-router >> $LOG 2>&1"
+            C15="*/5 * * * * curl -sf http://localhost:3000/api/cron/cazarma-router >> $LOG 2>&1"
             C16="30 0 * * * curl -sf http://localhost:3000/api/cron/auto-predict >> $LOG 2>&1"
 
             (

@@ -1,6 +1,7 @@
 // Cron: GET /api/cron/cazarma-router
 // Citeste din cazarma_centrala (procesat=false) si distribuie in tabelele specifice
-// Rulare: zilnic la fiecare ora (0 * * * *)
+// Rulare: la fiecare 5 min (*/5 * * * *). Drenează coada în buclă până e goală
+// (cap siguranță 2000/rulare) + lock anti-concurență.
 
 import { query } from '../db.js';
 
