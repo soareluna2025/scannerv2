@@ -5945,3 +5945,5 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   RULARE PE VPS: cd /root/scannerv2 && /snap/bin/node audit_lineups.js
   Verificare: node --check audit_lineups.js -> OK; import lista -> 162 ligi (incl. 340).
   Constranti: niciun cod de scoring atins
+  CORECTIE: numarul real de ligi whitelisted = 214 unice (nu 162). audit_lineups.js
+    le parcurge pe toate 214. (corectat dupa rulare reala node import.)
