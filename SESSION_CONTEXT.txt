@@ -5896,3 +5896,21 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   ⚠ ACȚIUNE VPS: noul max_memory_restart se aplică la `pm2 delete alohascan &&
     pm2 start ecosystem.config.cjs` (un simplu pm2 restart NU reîncarcă config-ul).
   Constrânți: ✓ niciun cod intangibil atins
+
+[31.05 ~21:?? ] - FIX: stabilitate PM2 (post-eliminare systemd) + docs
+  Fișiere: ecosystem.config.cjs, server.js, CLAUDE.md, ARHITECT.md
+  Context: systemd eliminat manual de pe VPS → DOAR PM2 acum (fără conflict port).
+  TASK1 — ecosystem.config.cjs: max_restarts 10→50 + min_uptime '30s'. Înainte,
+    10 restarturi tranzitorii → PM2 marca „errored" și renunța (pm2 status gol).
+    Cu min_uptime, doar restarturile <30s contează spre cap → nu mai abandonează.
+  TASK2 — server.js EADDRINUSE: înainte doar loga → proces zombie fără listener
+    → 502. Acum process.exit(1) (și pe orice altă eroare httpServer) → PM2
+    repornește curat în loc de zombie.
+  TASK3 — docs: CLAUDE.md (Deploy line 74, Process manager line 114-115) +
+    ARHITECT.md (line 32): „systemctl/alohascan.service" → „PM2/ecosystem.config.cjs
+    (max_memory 1200M)" / „pm2 restart alohascan". Zero referințe systemctl alohascan rămase.
+  Verificare: node --check ecosystem.config.cjs + server.js → OK; grep confirmă
+    max_restarts 50 / min_uptime 30s / process.exit(1) ×2 / 0 systemctl în docs.
+  ⚠ Noul config PM2 se aplică la `pm2 delete alohascan && pm2 start
+    ecosystem.config.cjs && pm2 save` (pm2 restart NU reîncarcă ecosystem).
+  Constrânți: ✓ niciun cod intangibil atins

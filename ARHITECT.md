@@ -29,7 +29,7 @@ SECȚIUNEA 2 — HARTA FIȘIERELOR (ce face fiecare, precis)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 server.js
-  Pornit de systemctl. Express pe port 3000. WebSocket pe același server HTTP.
+  Pornit de PM2 (ecosystem.config.cjs). Express pe port 3000. WebSocket pe același server HTTP.
   La startup: initBackfillProgress() → resumeOnStartup() → startScanner() → loadModelWeights()
   Rute: toate /api/* sunt lazy-loaded (import dinamic per request).
   WebSocket: wss pe același HTTP server; heartbeat ping/pong 30s;

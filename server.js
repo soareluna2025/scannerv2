@@ -152,9 +152,11 @@ const httpServer = app.listen(PORT, '0.0.0.0', async () => {
 // Fără acest handler, EADDRINUSE arunca o eroare care oprea procesul fără log util.
 httpServer.on('error', (err) => {
   if (err && err.code === 'EADDRINUSE') {
-    console.error(`[FATAL] Portul ${PORT} este deja ocupat (EADDRINUSE) — alt proces alohascan rulează deja? (verifică systemd + PM2)`);
+    console.error(`[FATAL] Portul ${PORT} este deja ocupat (EADDRINUSE) — ies cu cod 1 ca PM2 să repornească curat (evită proces zombie fără listener → 502).`);
+    process.exit(1);
   } else {
     console.error('[FATAL] httpServer error:', err && err.stack ? err.stack : err);
+    process.exit(1);
   }
 });
 

@@ -71,7 +71,7 @@ Regula: maxim Liga 1 + Liga 2 + Cupă per țară, zero tier 3+.
 - **Runtime:** Node.js ESM (`/snap/bin/node`)
 - **DB:** PostgreSQL local pe VPS (`db: elefant`, `user: alohascan`)
 - **NU Supabase** — ignoră orice referință veche în cod sau documentație
-- **Deploy:** `git push origin main` → GitHub Actions (`deploy.yml`) → SSH pe VPS → `git reset --hard + npm install + systemctl restart alohascan`
+- **Deploy:** `git push origin main` → GitHub Actions (`deploy.yml`) → SSH pe VPS → `git reset --hard + npm install + pm2 restart alohascan`
 
 ## 3. WORKFLOW STANDARD
 
@@ -111,8 +111,8 @@ AlohaScan este un scanner de pariuri sportive care:
 - **Runtime:** Node.js (ESM modules) via `/snap/bin/node`
 - **Server:** Express.js (`server.js`) — port 3000
 - **Baza de date:** PostgreSQL local pe VPS (`db: elefant`, `user: alohascan`)
-- **Process manager:** systemctl (`alohascan.service`)
-- **Deploy:** GitHub Actions → `deploy.yml` → SSH pe VPS → `git fetch + reset --hard + restart`
+- **Process manager:** PM2 (`ecosystem.config.cjs`, max_memory 1200M)
+- **Deploy:** GitHub Actions → `deploy.yml` → SSH pe VPS → `git fetch + reset --hard + pm2 restart alohascan`
 - **API date:** API-Football v3 (api-sports.io)
 - **AI:** Claude API (Anthropic) — `api/agent.js`
 - **Notificări:** Telegram Bot API — `api/telegram.js`

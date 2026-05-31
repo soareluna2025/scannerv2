@@ -17,7 +17,9 @@ module.exports = {
     out_file: '/root/.pm2/logs/alohascan-out.log',
     log_date_format: 'YYYY-MM-DD HH:mm:ss',
     restart_delay: 3000,
-    max_restarts: 10,
+    max_restarts: 50,          // era 10 — prea jos: la câteva restarturi tranzitorii
+    min_uptime: '30s',         // PM2 marca app-ul „errored" și renunța. Cu min_uptime,
+                               // doar restarturile sub 30s contează spre cap → nu mai abandonează.
     watch: false,
     autorestart: true,
   }],
