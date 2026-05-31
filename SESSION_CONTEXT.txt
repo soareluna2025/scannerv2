@@ -5812,3 +5812,20 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
      plasă de siguranță (try/catch cu stack) care GARANTEAZĂ că la următoarea
      apariție cauza precisă apare în consolă, fără a mai sparge modalul.
   Constrânți: ✓ calcConfidence*/score2/3/6/7 neatinse  ✓ getLiveStatsFromDB neatins
+
+[31.05 ~18:?? ] - CHORE: revenire la PM2 singur (elimină SystemD — cauza conflict port 3000)
+  Fișiere: ecosystem.config.js (nou), .github/workflows/deploy.yml
+  PAS1: ecosystem.config.js — app 'alohascan', server.js, cwd /root/scannerv2,
+    instances 1, max_memory_restart 800M, env_file .env, log-uri în /root/.pm2/logs,
+    restart_delay 3000, max_restarts 10, autorestart, watch false.
+  PAS2: deploy.yml restart: `systemctl restart alohascan` →
+    `pm2 restart alohascan || pm2 start /root/scannerv2/ecosystem.config.js && pm2 save`.
+    Health check: `pm2 describe alohascan` în loc de systemctl is-active; logs hint
+    `pm2 logs` în loc de journalctl. Zero referințe systemctl alohascan rămase.
+  PAS3: comenzi Termius furnizate userului (stop/disable systemd + pm2 start/save/startup).
+  Verificare: node --check ecosystem.config.js → OK; deploy.yml grep confirmă pm2.
+  ⚠ ACȚIUNE MANUALĂ NECESARĂ pe VPS ÎNAINTE de următorul deploy: oprește systemd
+    (systemctl stop+disable alohascan) ȘI pornește pm2 o dată manual — altfel
+    `pm2 restart` la deploy eșuează dacă procesul pm2 nu există încă (deși `||
+    pm2 start` îl prinde). Comenzile complete în răspuns chat.
+  Constrânți: ✓ niciun cod intangibil atins (PM2 config + CI)
