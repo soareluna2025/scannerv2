@@ -778,6 +778,21 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[31.05 ~18:45] - Panou "Erori Recente" admin: colorare verde/rosu dupa tip (doar frontend)
+  Problema: toate intrarile apareau rosu desi majoritatea sunt rezumate de succes
+  (cron-urile loghaza in cron_logs cu status='success' dar pun rezumatul in error_msg,
+  iar endpoint-ul /api/admin/errors filtreaza error_msg IS NOT NULL OR status='error').
+  METODA CLASIFICARE: dupa coloana de severitate EXISTENTA `cron_logs.status` (cea mai
+  curata cale). status='error'/'warn'/'fail' => rosu (eroare reala); orice altceva
+  ('success'/'ok') => verde (rezumat rulare). Zero schimbare de schema, zero atingere
+  a logicii de scriere a cron-urilor, zero modificare endpoint (status era deja in SELECT).
+  Modificat DOAR admin.html:
+    * +var CSS --green (#22C55E)
+    * +.err-row.ok-row (fundal+border verde) si .err-row.ok-row .err-job (text verde)
+    * loadErrors(): clasificare isErr dupa e.status -> adauga clasa 'ok-row' pe randurile non-error
+  node --check N/A (HTML); JS loadErrors() validat ca parseaza clean.
+  Scoring/Monte Carlo/chei API neatinse. Commit + merge main + push (auto-deploy).
+
 [31.05 ~18:15] - MERGE E1+E2 in main + push (auto-deploy GitHub Actions -> SSH)
   Branch claude/alohascan-e1e2-fix-review-uIPIc merge-uit fast-forward in main.
   node --check server.js OK, tree curat. Push pe origin/main => deploy.yml ruleaza

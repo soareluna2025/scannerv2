@@ -42,6 +42,7 @@ html,body{width:100%;overflow-x:hidden}
 
   --red:           #FF5C72;
   --red-soft:      rgba(255,92,114,0.10);
+  --green:         #22C55E;
   --yellow:        #FFCB47;
 
   --shadow-card:
@@ -730,6 +731,12 @@ body{
   color:var(--tx-2);font-size:11px;
   font-family:'JetBrains Mono',monospace;word-break:break-word;
 }
+/* Rând de succes/info (status != 'error') — verde în loc de roșu */
+.err-row.ok-row{
+  background:linear-gradient(180deg,rgba(20,40,28,0.55),rgba(15,30,20,0.3));
+  border:1px solid rgba(34,197,94,0.20);
+}
+.err-row.ok-row .err-job{color:var(--green);}
 
 .bf-dot{
   width:8px;height:8px;border-radius:50%;background:var(--red);
@@ -1624,7 +1631,12 @@ async function loadErrors() {
       list.innerHTML = '<div class="empty ok">✓ Nicio eroare în acest interval</div>';
     } else {
       list.innerHTML = d.errors.slice(0,30).map(function(e){
-        return '<div class="err-row">'
+        // Clasificare după coloana `status` din cron_logs: 'error'/'warn' = eroare reală (roșu),
+        // 'success'/'ok' = rezumat de rulare (verde). Câmpul de severitate există deja, deci
+        // colorăm după el — fără a atinge logica de scriere a cron-urilor.
+        var s = (e.status||'').toLowerCase();
+        var isErr = s === 'error' || s === 'err' || s === 'warn' || s === 'warning' || s === 'fail' || s === 'failed';
+        return '<div class="err-row' + (isErr ? '' : ' ok-row') + '">'
           + '<div class="err-job">' + (e.job_name||'unknown') + '</div>'
           + '<div class="err-time">' + fmtDate(e.ran_at) + '</div>'
           + '<div class="err-msg">' + (e.error_msg||'status: ' + e.status) + '</div>'
