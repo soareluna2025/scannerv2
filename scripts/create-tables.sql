@@ -731,6 +731,7 @@ INSERT INTO leagues (league_id, name, country, tier, timezone, active_hours_star
 (294, 'Korean FA Cup',              'South Korea', 2, 'Asia/Seoul',        9,  16),
 (18,  'AFC Cup',                    'Asia',        2, 'Asia/Riyadh',       15, 22),
 (20,  'CAF Confederation Cup',      'Africa',      2, 'Africa/Cairo',      17, 23),
+(714, 'Egypt Cup',                  'Egypt',       2, 'Africa/Cairo',      18, 23),
 -- ── TIER 3 — Liga 2 restante + ligi mid ──────────────────────────
 (172, 'First Professional League',  'Bulgaria',    3, 'Europe/Sofia',      17, 23),
 (173, 'Second Professional League', 'Bulgaria',    3, 'Europe/Sofia',      17, 23),

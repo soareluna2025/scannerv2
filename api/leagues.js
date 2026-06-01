@@ -331,6 +331,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Egypt
   233,   // Premier League
   234,   // Second Division (Liga 2)
+  714,   // Egypt Cup
 
   // Morocco
   200,   // Botola Pro

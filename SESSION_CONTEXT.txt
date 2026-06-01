@@ -778,6 +778,30 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~08:50] - Integrare Cupa Egiptului (league_id=714) in AlohaScan
+  MECANISM WHITELIST (sursa de adevar): Set HARDCODAT ALLOWED_LEAGUE_IDS din api/leagues.js.
+  Scanarea (football.js, today.js, scanner.js) filtreaza prin isAllowedMatch(m, ALLOWED_LEAGUE_IDS).
+  Coloana leagues.active NU e consultata pt decizia de scanare — e doar metadata (scrisa de
+  collect-daily). => NU exista ruta pur-DB care evita deploy; 714 TREBUIE adaugat in cod.
+  Backfill itereaza LEAGUE_IDS=[...ALLOWED_LEAGUE_IDS], deci 714 trebuie in Set inainte de backfill.
+  MODIFICARI (necesita DEPLOY pe main pt a fi active):
+    * api/leagues.js: +714 in sectiunea Egypt (dupa 233/234). node --check OK.
+    * scripts/create-tables.sql: +rand seed (714,'Egypt Cup','Egypt',tier 2,'Africa/Cairo',18,23)
+      langa cupele tier-2 (dupa CAF Confederation Cup). Convetie cupa nationala = tier 2.
+      timezone+active_hours copiate de la Egypt 233.
+    * scripts/migrations/add-egypt-cup-714.sql: migrare idempotenta (ON CONFLICT DO UPDATE) cu
+      logo=media.api-sports.io/football/leagues/714.png + flag eg.svg + active=true.
+  NU AM PUTUT (sandbox izolat): conecta la DB live (fara pg, POSTGRES_URL gol, DB pe VPS localhost)
+    => nu am rulat INSERT-ul si nu pot arata SELECT-ul real cu randul 714. Nu am pornit backfill
+    (endpoint pe app-ul VPS, inaccesibil din sandbox). Zero output fake.
+  PT ACTIVARE userul: (1) deploy pe main (push) -> 714 intra in ALLOWED_LEAGUE_IDS + seed la boot;
+    (2) ruleaza migrarea pe VPS pt metadata completa: psql -U alohascan -d elefant -f
+    scripts/migrations/add-egypt-cup-714.sql; (3) backfill 714 sezoanele 2025+2026:
+    curl -X POST "http://localhost:3000/api/backfill/start?league_id=714&season=2025"
+    apoi (dupa terminare) ...&season=2026. SELECT verificare:
+    SELECT league_id,name,country,tier,active FROM leagues WHERE league_id=714;
+  NEATINS: scoring/functii imutabile, scan live, chei API.
+
 [31.05 ~18:45] - Panou "Erori Recente" admin: colorare verde/rosu dupa tip (doar frontend)
   Problema: toate intrarile apareau rosu desi majoritatea sunt rezumate de succes
   (cron-urile loghaza in cron_logs cu status='success' dar pun rezumatul in error_msg,
