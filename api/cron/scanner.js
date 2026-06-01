@@ -33,8 +33,12 @@ function getMatchPriority(m) {
   const mn  = m.fixture?.status?.elapsed ?? 0;
   const hg  = m.goals?.home ?? 0;
   const ag  = m.goals?.away ?? 0;
+  const diff = Math.abs(hg - ag);
   if (DONE_STATUS.has(sh) || sh === 'HT') return 'low';
-  if (mn >= 75 || (hg + ag === 0 && mn >= 60)) return 'high';
+  // Aliniat cu matchPriorityBucket: mn≥50 OR diff≤1 → HIGH (un meci HIGH în bucket
+  // nu mai e throttle-uit la fetch-ul de detaliu). NGP nu e disponibil aici (fără
+  // input prevNg), deci folosim doar minut + diferența de scor.
+  if (mn >= 50 || diff <= 1) return 'high';
   return 'medium';
 }
 
@@ -464,16 +468,16 @@ async function scanLive10s() {
     const processedMatches = [];
 
     // FIX 3: priority buckets 3-tier (la 2s cadența scanLive10s):
-    //   HIGH   — mn≥60 OR scor egal OR NGP>50 → fiecare scan (2s)
-    //   MEDIUM — mn 30-59                     → fiecare al 2-lea scan (4s)
-    //   LOW    — mn<30 ȘI diff>2              → fiecare al 4-lea scan (8s)
+    //   HIGH   — mn≥50 OR NGP>40 OR diff≤1 → fiecare scan (2s)
+    //   MEDIUM — restul (mn 30-49, diff 2)  → fiecare al 2-lea scan (4s)
+    //   LOW    — mn<30 ȘI diff>2            → fiecare al 4-lea scan (8s)
     function matchPriorityBucket(m, prevNg) {
       const mn = m.fixture?.status?.elapsed ?? 0;
       const hg = m.goals?.home ?? 0;
       const ag = m.goals?.away ?? 0;
       const diff = Math.abs(hg - ag);
       const ng = prevNg || 0;
-      if (mn >= 60 || ng > 50 || diff === 0) return 'high';
+      if (mn >= 50 || ng > 40 || diff <= 1) return 'high';
       if (mn < 30 && diff > 2)                return 'low';
       return 'medium';
     }
@@ -880,11 +884,11 @@ export function startScanner() {
 
   // FIX 1: scanLive10s la 2s (paritate sub-FlashScore, ~5s la ei).
   //        Cost: 1 call/2s = 1800/h = 43.2k/zi pentru /live=all.
-  // FIX 2: scanLiveStats la 15s (statistici xG/pose/SOT mai responsive).
-  //        Cost: ~20 meciuri × 4 calls/min × 60 min × 24h ≈ 115k/zi.
-  //        Total scanner ~158k/zi din 300k (53%) — sustenabil.
+  // FIX 2: scanLiveStats la 10s (statistici xG/pose/SOT mai proaspete).
+  //        Cost: ~20 meciuri × 6 calls/min × 60 min × 24h ≈ 173k/zi.
+  //        Total scanner ~216k/zi din 300k (72%) — sustenabil.
   setInterval(runIfActive(scanLive10s,    'live10s'),     2_000);
-  setInterval(runIfActive(scanLiveStats,  'liveStats'),  15_000);
+  setInterval(runIfActive(scanLiveStats,  'liveStats'),  10_000);
   setInterval(runIfActive(scanPreMatch,   'preMatch'),  3_600_000);
 
   console.log('[scanner] Started — live/10s, stats/60s, prematch/1h');
