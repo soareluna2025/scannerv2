@@ -778,6 +778,23 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~11:35] - Backfill jucatori: descoperire pe GOLUL REAL (fixtures_history minus players_season)
+  api/cron/backfill-players.js — DOAR descoperirea+sezonul (endpoint/card neatinse):
+  ÎNAINTE: teamsForActiveLeagues(season) = standings JOIN leagues active, per sezon
+    [2025,2026] => tinta aproape doar echipe care AVEAU deja date (+130 noi). Gol ratat.
+  ACUM: teamsGap() = team_id distincte din fixtures_history (home UNION away) care NU
+    sunt in players_season, fiecare cu MAX(season) din fixtures_history (sezonul cel mai
+    recent JUCAT) => garantam sezon in care echipa chiar a jucat. O intrare/echipa.
+    Constanta SEASONS eliminata (nefolosita). work=teamsGap() direct; pre-count la fel.
+  teams_total ASTEPTAT ≈ 9.934 (golul masurat). Realist trecem mult peste 1.602, dar
+    NU atingem 9.934: echipe foarte mici pot sa n-aiba date la API-Football => multe
+    no_data (normal, marcate idempotent, sarite la reluare).
+  PASTRAT identic: idempotent/reluabil (backfill_players_idx), no_data markers,
+    fire-and-forget, retry 429+sleep, progres cron_logs la 50, collectTeamSeason +
+    ON CONFLICT DO UPDATE. Endpoint START/STATUS/STOP/RESET + card admin compatibile
+    (campuri teamsDone/teamsTotal/inserted/season/noData neschimbate). node --check OK.
+  NEATINS: scoring/functii imutabile/NGP. Un commit main + deploy.
+
 [01.06 ~11:10] - Scanner: praguri HIGH mai agresive + statistici live mai proaspete
   api/cron/scanner.js, DOAR constante de prag + 1 interval (NGP/scoring neatinse):
   MOD1 matchPriorityBucket (~L476): mn>=60||ng>50||diff===0 -> mn>=50||ng>40||diff<=1.

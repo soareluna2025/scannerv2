@@ -1,7 +1,8 @@
 // Cron/admin: POST|GET /api/cron/backfill-players
-// Populează players_season pentru TOATE echipele din ligile cu leagues.active=true,
-// pe sezoanele 2025 ȘI 2026. Refolosește EXACT logica de colectare din
-// collect-players-season.js (apel API-Football /players paginat + upsert).
+// Atacă GOLUL real: echipe care AU jucat meciuri (fixtures_history) dar NU au
+// jucători în players_season. Pentru fiecare, sezonul cel mai recent JUCAT.
+// Refolosește EXACT logica de colectare din collect-players-season.js
+// (apel API-Football /players paginat + upsert).
 //
 // - Idempotent + reluabil: poziția salvată în app_settings (backfill_players_idx).
 //   ON CONFLICT (player_id, league_id, season) DO UPDATE (cheia players_season).
@@ -17,7 +18,6 @@ import { query } from '../db.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
 import { writeToCazarma } from '../utils/cazarma.js';
 
-const SEASONS = [2025, 2026];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // State în memorie (per proces) — evită rulări concurente.
@@ -45,18 +45,26 @@ async function logCron(status, msg = '') {
   catch (_) {}
 }
 
-// Echipele tuturor ligilor active, pt un sezon: din standings (team_id, league_id, season)
-// restrâns la ligile cu leagues.active=true. Standings e populat de collect-daily pe
-// sezon dinamic per ligă → acoperă loturile complete, nu doar echipele cu meci imediat.
-async function teamsForActiveLeagues(season) {
+// GOLUL REAL: echipe care AU jucat meciuri (fixtures_history) dar NU au jucători
+// în players_season. Pentru fiecare, sezonul cel mai recent JUCAT (MAX(season) din
+// fixtures_history) → garantăm un sezon în care echipa chiar a jucat (max șansă de
+// date la /players). Sursa veche (standings JOIN leagues active) țintea aproape doar
+// echipe care AVEAU deja date → gol real ratat.
+async function teamsGap() {
   try {
     const r = await query(
-      `SELECT DISTINCT s.team_id, s.league_id
-         FROM standings s
-         JOIN leagues l ON l.league_id = s.league_id
-        WHERE l.active = TRUE AND s.season = $1 AND s.team_id IS NOT NULL
-        ORDER BY s.league_id, s.team_id`, [season]);
-    return r.rows;
+      `SELECT x.t AS team_id, MAX(fh.season) AS season
+         FROM (
+           SELECT home_team_id AS t FROM fixtures_history
+           UNION
+           SELECT away_team_id AS t FROM fixtures_history
+         ) x
+         JOIN fixtures_history fh ON (fh.home_team_id = x.t OR fh.away_team_id = x.t)
+        WHERE x.t IS NOT NULL
+          AND x.t NOT IN (SELECT team_id FROM players_season WHERE team_id IS NOT NULL)
+        GROUP BY x.t
+        ORDER BY x.t`);
+    return r.rows.map(row => ({ teamId: Number(row.team_id), season: Number(row.season) }));
   } catch (_) { return []; }
 }
 
@@ -121,12 +129,8 @@ async function runLoop() {
   state.inserted = 0; state.teamsDone = 0; state.noData = 0;
 
   try {
-    // Construiește lista (season, team) pe ambele sezoane.
-    const work = [];
-    for (const season of SEASONS) {
-      const teams = await teamsForActiveLeagues(season);
-      for (const t of teams) work.push({ season, teamId: t.team_id });
-    }
+    // Lista = GOLUL real: o intrare per echipă (team_id + sezonul ei cel mai recent jucat).
+    const work = await teamsGap();
     state.teamsTotal = work.length;
 
     // Resume: index salvat (continuă de unde a rămas).
@@ -191,15 +195,12 @@ export default async function handler(req, res) {
   if (running) {
     return res.status(200).json({ ok: true, already_running: true, ...state });
   }
-  // Pre-numără echipele pt feedback imediat (ETA).
-  let teamsTotal = 0;
-  for (const season of SEASONS) {
-    const t = await teamsForActiveLeagues(season);
-    teamsTotal += t.length;
-  }
+  // Pre-numără golul pt feedback imediat (ETA) = mărimea golului real.
+  const gap = await teamsGap();
+  const teamsTotal = gap.length;
   runLoop().catch(e => { console.error('[backfill-players] fatal:', e.message); });
   return res.status(200).json({
-    ok: true, started: true, seasons: SEASONS, teams_total: teamsTotal,
-    note: 'Rulează în fundal. Verifică ?action=status pentru progres.',
+    ok: true, started: true, teams_total: teamsTotal,
+    note: 'Rulează în fundal (gol players_season). Verifică ?action=status pentru progres.',
   });
 }
