@@ -778,6 +778,20 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~11:55] - Integrare 2 ligi Ecuador in whitelist + seed + migrare (242, 917)
+  api/leagues.js ALLOWED_LEAGUE_IDS (sectiunea Ecuador):
+    INAINTE: 735 (Copa Ecuador) + 917 (Copa Ecuador ID alternativ)
+    DUPA: 242 (LigaPro Primera A, lipsea) + 917 (Copa Ecuador, ID corect). 735 SCOS.
+  create-tables.sql seed: +242 tier 1, +917 tier 3; randul 735 ELIMINAT (fresh DB).
+  scripts/migrations/add-ecuador-leagues.sql (NOU, idempotent): INSERT 242/917
+    (ON CONFLICT DO UPDATE active=true, +logo/flag), UPDATE 735 SET active=false
+    (NU sters — doar dezactivat, ID vechi gresit).
+  VERIFICARE RUNTIME /leagues?id=242|917: NU am putut din sandbox (fara API key,
+    api-sports 403). TREBUIE rulata pe VPS INAINTE de backfill (vezi comenzi).
+  Backfill 242/917 (fixtures_history+standings+players, 2025+2026) — DOAR dupa ce
+    verificarea numelui trece. NEATINS: scoring/functii imutabile/NGP. node --check OK.
+  Necesita DEPLOY (whitelist hardcodat). Un commit main.
+
 [01.06 ~11:35] - Backfill jucatori: descoperire pe GOLUL REAL (fixtures_history minus players_season)
   api/cron/backfill-players.js — DOAR descoperirea+sezonul (endpoint/card neatinse):
   ÎNAINTE: teamsForActiveLeagues(season) = standings JOIN leagues active, per sezon

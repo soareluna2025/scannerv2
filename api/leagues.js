@@ -181,8 +181,8 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   282,   // Liga 2
 
   // Ecuador
-  735,   // Copa Ecuador
-  917,   // Copa Ecuador (ID alternativ)
+  242,   // LigaPro Primera A (Liga 1)
+  917,   // Copa Ecuador (ID corect; 735 era greșit → scos)
 
   // Paraguay
   278,   // Primera Division
