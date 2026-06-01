@@ -89,6 +89,64 @@ async function collectUpcomingFixtures(stats) {
   stats.upcoming_days     = offsets.length;
 }
 
+// CAZ SPECIAL Cupa Mondială (league_id=1): fetch TOT sezonul 2026 (toate cele ~72+
+// meciuri din grupe + knockout pe măsură ce se cunosc), nu doar fereastra de date.
+// Așa programul complet (11 iun–19 iul) e mereu în DB. Upsert în fixtures (status NS
+// pt viitoare) + salvează logo-ul/steagul fiecărei naționale în teams (pt drapele în
+// hub). DOAR pentru league 1 — nu atinge colectarea celorlalte ligi.
+async function collectWorldCupSchedule(stats) {
+  let fxList = [];
+  try {
+    fxList = await fetchAPI(`/fixtures?league=1&season=2026&timezone=UTC`);
+  } catch (e) {
+    stats.errors.push(`worldcup fixtures: ${e.message}`);
+    return;
+  }
+  let upserted = 0;
+  for (const m of fxList) {
+    try {
+      // Salvează echipele naționale cu logo (crest/steag) — sursa drapelelor.
+      for (const side of ['home', 'away']) {
+        const t = m.teams?.[side];
+        if (t?.id) {
+          await query(
+            `INSERT INTO teams (team_id, name, logo, national, country, updated_at)
+             VALUES ($1,$2,$3,TRUE,$4,NOW())
+             ON CONFLICT (team_id) DO UPDATE SET
+               name=EXCLUDED.name,
+               logo=COALESCE(EXCLUDED.logo, teams.logo),
+               national=TRUE, updated_at=NOW()`,
+            [t.id, t.name, t.logo || null, t.name || null]
+          ).catch(() => {});
+        }
+      }
+      await query(
+        `INSERT INTO fixtures
+           (fixture_id, league_id, season, round, home_team_id, home_team_name,
+            away_team_id, away_team_name, status_short, status_long, match_date, updated_at)
+         VALUES ($1,1,2026,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+         ON CONFLICT (fixture_id) DO UPDATE SET
+           round=EXCLUDED.round,
+           home_team_id=EXCLUDED.home_team_id, home_team_name=EXCLUDED.home_team_name,
+           away_team_id=EXCLUDED.away_team_id, away_team_name=EXCLUDED.away_team_name,
+           status_short=EXCLUDED.status_short, status_long=EXCLUDED.status_long,
+           match_date=EXCLUDED.match_date, updated_at=NOW()`,
+        [
+          m.fixture?.id,
+          m.league?.round || null,
+          m.teams?.home?.id, m.teams?.home?.name,
+          m.teams?.away?.id, m.teams?.away?.name,
+          m.fixture?.status?.short || 'NS',
+          m.fixture?.status?.long  || 'Not Started',
+          m.fixture?.date,
+        ]
+      );
+      upserted++;
+    } catch (_) { /* skip punctual */ }
+  }
+  stats.worldcup_fixtures = upserted;
+}
+
 // Pre-calculează predicții Poisson PURE pentru meciurile NS azi+3, din date
 // deja existente în DB (form_stats + standings) → ZERO calls API.
 // Scop: modalul afișează λ + probabilități instant, fără să aștepte enrich-ul
@@ -213,6 +271,13 @@ export default async function handler(req, res) {
       await collectUpcomingFixtures(stats);
     } catch (e) {
       stats.errors.push(`upcoming: ${e.message}`);
+    }
+
+    // Pas 1b — CAZ SPECIAL WC: programul complet league=1 season=2026 (toate meciurile).
+    try {
+      await collectWorldCupSchedule(stats);
+    } catch (e) {
+      stats.errors.push(`worldcup: ${e.message}`);
     }
 
     for (const leagueId of PRIORITY_LEAGUES) {

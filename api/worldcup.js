@@ -35,37 +35,40 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    // ── MATCHES: fixturile WC live + următoarele (azi înainte), cu predicții ──
+    // ── MATCHES: PROGRAMUL COMPLET al WC (tot sezonul), cu predicții + drapele ──
+    // th/ta = logo-ul (crest/steag) naționalei din teams, salvat la colectare.
     const matchesRes = await query(
       `SELECT f.fixture_id, f.home_team_name, f.away_team_name, f.home_team_id, f.away_team_id,
               f.status_short, f.match_date, f.home_goals, f.away_goals, f.round,
               p.over15_prob, p.over25_prob, p.gg_prob,
               p.home_win_prob, p.draw_prob, p.away_win_prob, p.confidence, p.best_bet, p.best_cota,
+              th.logo AS home_logo, ta.logo AS away_logo,
               ls.ngp_home, ls.ngp_away, ls.elapsed AS ls_elapsed
          FROM fixtures f
          LEFT JOIN predictions p ON p.fixture_id = f.fixture_id
+         LEFT JOIN teams th ON th.team_id = f.home_team_id
+         LEFT JOIN teams ta ON ta.team_id = f.away_team_id
          LEFT JOIN LATERAL (
            SELECT ngp_home, ngp_away, elapsed FROM live_stats
             WHERE fixture_id = f.fixture_id ORDER BY recorded_at DESC LIMIT 1
          ) ls ON TRUE
         WHERE f.league_id = $1 AND (f.season = $2 OR f.season IS NULL)
-          AND (f.status_short = ANY($3) OR f.match_date >= NOW() - INTERVAL '3 hours')
-          AND f.status_short <> ALL($4)
-        ORDER BY
-          CASE WHEN f.status_short = ANY($3) THEN 0 ELSE 1 END,
-          f.match_date ASC
-        LIMIT 60`,
-      [WC_LEAGUE, WC_SEASON, LIVE, DONE]
+        ORDER BY f.match_date ASC
+        LIMIT 200`,
+      [WC_LEAGUE, WC_SEASON]
     ).catch(() => ({ rows: [] }));
 
     const matches = matchesRes.rows.map(m => {
       const isLive = LIVE.includes(m.status_short);
       const ng = isLive ? Math.max(num(m.ngp_home) || 0, num(m.ngp_away) || 0) : null;
+      // Ziua locală a meciului (YYYY-MM-DD UTC) — pt calendarul pe zile.
+      const day = m.match_date ? new Date(m.match_date).toISOString().slice(0, 10) : null;
       return {
         fixtureId: m.fixture_id,
         home: m.home_team_name, away: m.away_team_name,
         homeId: m.home_team_id, awayId: m.away_team_id,
-        status: m.status_short, matchDate: m.match_date,
+        homeLogo: m.home_logo || null, awayLogo: m.away_logo || null,
+        status: m.status_short, matchDate: m.match_date, day,
         homeGoals: m.home_goals, awayGoals: m.away_goals,
         round: m.round, live: isLive,
         ng,                                  // NGP live (din live_stats, fără recalcul)
@@ -74,6 +77,9 @@ export default async function handler(req, res) {
         confidence: num(m.confidence),
       };
     });
+
+    // Lista zilelor cu meciuri (sortate) — pt navigarea calendar în tab-ul Meciuri.
+    const days = [...new Set(matches.map(m => m.day).filter(Boolean))].sort();
 
     // ── PONTUL: fixtura WC de AZI cu cea mai mare confidence (din predictions) ──
     const pontRes = await query(
@@ -128,17 +134,20 @@ export default async function handler(req, res) {
     }
     const groups = Object.keys(groupsMap).sort().map(name => ({ name, rows: groupsMap[name] }));
 
-    // ── BRACKET: fixturile fazelor eliminatorii (round conține knockout) ──
+    // ── BRACKET: fixturile fazelor eliminatorii (round conține knockout) + drapele ──
     const brRes = await query(
-      `SELECT fixture_id, home_team_name, away_team_name, home_goals, away_goals,
-              status_short, match_date, round
-         FROM fixtures
-        WHERE league_id = $1 AND (season = $2 OR season IS NULL)
-          AND round IS NOT NULL
-          AND (round ILIKE '%final%' OR round ILIKE '%16%' OR round ILIKE '%quarter%'
-               OR round ILIKE '%semi%' OR round ILIKE '%sfert%' OR round ILIKE '%optimi%'
-               OR round ILIKE '%knockout%' OR round ILIKE '%round of%')
-        ORDER BY match_date ASC NULLS LAST`,
+      `SELECT f.fixture_id, f.home_team_name, f.away_team_name, f.home_goals, f.away_goals,
+              f.status_short, f.match_date, f.round,
+              th.logo AS home_logo, ta.logo AS away_logo
+         FROM fixtures f
+         LEFT JOIN teams th ON th.team_id = f.home_team_id
+         LEFT JOIN teams ta ON ta.team_id = f.away_team_id
+        WHERE f.league_id = $1 AND (f.season = $2 OR f.season IS NULL)
+          AND f.round IS NOT NULL
+          AND (f.round ILIKE '%final%' OR f.round ILIKE '%16%' OR f.round ILIKE '%quarter%'
+               OR f.round ILIKE '%semi%' OR f.round ILIKE '%sfert%' OR f.round ILIKE '%optimi%'
+               OR f.round ILIKE '%knockout%' OR f.round ILIKE '%round of%')
+        ORDER BY f.match_date ASC NULLS LAST`,
       [WC_LEAGUE, WC_SEASON]
     ).catch(() => ({ rows: [] }));
 
@@ -150,6 +159,7 @@ export default async function handler(req, res) {
         fixtureId: r.fixture_id,
         home: r.home_team_name || 'TBD',
         away: r.away_team_name || 'TBD',
+        homeLogo: r.home_logo || null, awayLogo: r.away_logo || null,
         homeGoals: r.home_goals, awayGoals: r.away_goals,
         status: r.status_short, matchDate: r.match_date,
         tbd: !r.home_team_name || !r.away_team_name,
@@ -161,7 +171,7 @@ export default async function handler(req, res) {
       ok: true,
       league: WC_LEAGUE, season: WC_SEASON,
       liveCount: matches.filter(m => m.live).length,
-      pont, matches, groups, bracket,
+      pont, matches, days, groups, bracket,
       source: 'db',
     });
   } catch (e) {

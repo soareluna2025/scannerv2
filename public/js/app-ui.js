@@ -2518,7 +2518,20 @@ function tpRenderStatistici(d){
 var SPORTSBET_AFFILIATE_URL = 'https://sportsbet.io/';  // placeholder — completează tu
 var WC_START = new Date('2026-06-11T00:00:00');
 var WC_END   = new Date('2026-07-19T23:59:59');
-var _wc={data:null,tabIdx:0};
+var _wc={data:null,tabIdx:0,day:null};
+
+// Drapel echipă: logo-ul (crest/steag) din API-Football; fallback emoji-steag din
+// numele țării. Refolosit în meciuri, grupe ȘI bracket (consistent peste tot).
+function wcFlag(logoUrl, teamName, sz){
+  sz=sz||18;
+  if(logoUrl)return '<img src="'+logoUrl+'" width="'+sz+'" height="'+sz+'" style="border-radius:3px;object-fit:contain;vertical-align:middle;flex-shrink:0" onerror="this.outerHTML=wcFlagEmoji(\''+(teamName||'').replace(/\\\\/g,'').replace(/'/g,'')+'\')">';
+  return wcFlagEmoji(teamName);
+}
+function wcFlagEmoji(name){
+  // fallback: derivă steag emoji din numele țării (best-effort) sau glob neutru
+  var map={'Argentina':'🇦🇷','Brazil':'🇧🇷','France':'🇫🇷','Spain':'🇪🇸','England':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Germany':'🇩🇪','Portugal':'🇵🇹','Netherlands':'🇳🇱','Italy':'🇮🇹','Belgium':'🇧🇪','Croatia':'🇭🇷','USA':'🇺🇸','United States':'🇺🇸','Canada':'🇨🇦','Mexico':'🇲🇽','Uruguay':'🇺🇾','Colombia':'🇨🇴','Ecuador':'🇪🇨','Japan':'🇯🇵','South Korea':'🇰🇷','Morocco':'🇲🇦','Senegal':'🇸🇳','Ghana':'🇬🇭','Nigeria':'🇳🇬','Australia':'🇦🇺'};
+  return '<span style="vertical-align:middle">'+(map[name]||'🏳️')+'</span>';
+}
 
 // Card featured pe feed-ul LIVE — 3 stări după dată. Apelat din renderMatches/loadLive.
 function wcRenderFeatured(){
@@ -2605,25 +2618,51 @@ function wcRenderPont(d){
   body.innerHTML=out;
 }
 
+// Navigare pe zi (FlashScore-style) — schimbă ziua și re-randează.
+function wcSetDay(day){ _wc.day=day; wcRenderMatches(_wc.data); }
+
 function wcRenderMatches(d){
   var body=document.getElementById('wc-body');
   var ms=d.matches||[];
-  if(!ms.length){ body.innerHTML='<div class="empty"><div class="empty-icon">⚽</div><div class="empty-t">Niciun meci</div><div class="empty-s">Niciun meci WC live sau programat</div></div>'; return; }
-  var out='<div class="md-section">';
-  ms.forEach(function(m){
-    var when=m.live?('<span style="color:var(--red);font-weight:700">● LIVE '+(m.ng!=null?('· NGP '+m.ng+'%'):'')+'</span>')
-      :(m.matchDate?new Date(m.matchDate).toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'');
-    var score=(m.homeGoals!=null&&m.awayGoals!=null)?(m.homeGoals+'-'+m.awayGoals):'vs';
-    var sig=[];
-    if(m.over15!=null)sig.push('O1.5 '+Math.round(m.over15)+'%');
-    if(m.gg!=null)sig.push('GG '+Math.round(m.gg)+'%');
-    if(m.confidence!=null)sig.push('Conf '+Math.round(m.confidence)+'%');
-    out+='<div class="md-player-card" style="cursor:pointer" onclick="wcClose();mdOpen('+m.fixtureId+','+(m.homeId||0)+','+(m.awayId||0)+',this)">';
-    out+='<div class="md-pc-top"><div><div class="md-pc-name">'+htmlEsc(m.home||'?')+' '+score+' '+htmlEsc(m.away||'?')+'</div>';
-    out+='<div class="md-pc-team">'+when+'</div></div></div>';
-    if(sig.length)out+='<div class="md-pc-stats">'+sig.map(function(s){return '<span class="md-pc-stat">'+s+'</span>';}).join('')+'</div>';
-    out+='</div>';
+  var days=d.days||[];
+  if(!ms.length){ body.innerHTML='<div class="empty"><div class="empty-icon">⚽</div><div class="empty-t">Program indisponibil</div><div class="empty-s">Programul WC nu e încă în baza de date (se colectează din collect-daily)</div></div>'; return; }
+  // Ziua default: ziua selectată → azi (dacă are meciuri) → prima zi din program.
+  var todayStr=new Date().toISOString().slice(0,10);
+  if(!_wc.day || days.indexOf(_wc.day)<0){
+    _wc.day = (days.indexOf(todayStr)>=0) ? todayStr : days[0];
+  }
+  // Bara de zile (calendar)
+  var out='<div id="wc-datebar" style="display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:2px 0 10px">';
+  days.forEach(function(day){
+    var dt=new Date(day+'T00:00:00');
+    var lbl=dt.toLocaleDateString('ro-RO',{day:'2-digit',month:'short'});
+    var active=(day===_wc.day);
+    out+='<div onclick="wcSetDay(\''+day+'\')" style="flex:none;padding:7px 11px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;'+
+      (active?'background:linear-gradient(135deg,var(--gold),var(--gold2));color:#1a1500':'background:var(--sur2);color:var(--mu2)')+'">'+lbl+'</div>';
   });
+  out+='</div>';
+  // Meciurile zilei selectate
+  var dayMs=ms.filter(function(m){return m.day===_wc.day;});
+  out+='<div class="md-section">';
+  if(!dayMs.length){
+    out+='<div class="bf-label" style="color:var(--mu)">Niciun meci în această zi</div>';
+  } else {
+    dayMs.forEach(function(m){
+      var when=m.live?('<span style="color:var(--red);font-weight:700">● LIVE '+(m.ng!=null?('· NGP '+m.ng+'%'):'')+'</span>')
+        :(m.matchDate?new Date(m.matchDate).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}):'');
+      var score=(m.homeGoals!=null&&m.awayGoals!=null)?(m.homeGoals+'-'+m.awayGoals):'vs';
+      var sig=[];
+      if(m.over15!=null)sig.push('O1.5 '+Math.round(m.over15)+'%');
+      if(m.gg!=null)sig.push('GG '+Math.round(m.gg)+'%');
+      if(m.confidence!=null)sig.push('Conf '+Math.round(m.confidence)+'%');
+      out+='<div class="md-player-card" style="cursor:pointer" onclick="wcClose();mdOpen('+m.fixtureId+','+(m.homeId||0)+','+(m.awayId||0)+',this)">';
+      out+='<div class="md-pc-top"><div><div class="md-pc-name">'+
+        wcFlag(m.homeLogo,m.home,18)+' '+htmlEsc(m.home||'?')+' <b style="color:var(--gold)">'+score+'</b> '+htmlEsc(m.away||'?')+' '+wcFlag(m.awayLogo,m.away,18)+'</div>';
+      out+='<div class="md-pc-team">'+(m.round?htmlEsc(m.round)+' · ':'')+when+'</div></div></div>';
+      if(sig.length)out+='<div class="md-pc-stats">'+sig.map(function(s){return '<span class="md-pc-stat">'+s+'</span>';}).join('')+'</div>';
+      out+='</div>';
+    });
+  }
   out+='</div>';
   body.innerHTML=out;
 }
@@ -2638,7 +2677,7 @@ function wcRenderGroups(d){
     out+='<div style="overflow-x:auto"><table class="standings-tbl"><thead><tr><th>#</th><th class="tn">Echipă</th><th>J</th><th>V</th><th>E</th><th>Î</th><th>GD</th><th style="color:var(--ac)">Pct</th></tr></thead><tbody>';
     g.rows.forEach(function(r){
       var qual=(r.rank<=2)?'srow-home':'';
-      var logo=r.teamLogo?'<img src="'+r.teamLogo+'" width="16" height="16" style="vertical-align:middle;margin-right:4px;border-radius:2px" onerror="this.style.display=\'none\'">':'';
+      var logo=wcFlag(r.teamLogo,r.teamName,16)+' ';
       out+='<tr class="'+qual+'">';
       out+='<td style="color:var(--mu)">'+r.rank+'</td>';
       out+='<td class="tn" style="'+(r.rank<=2?'font-weight:800;':'')+'">'+logo+htmlEsc(r.teamName||'')+'</td>';
@@ -2662,10 +2701,12 @@ function wcRenderBracket(d){
     out+='<div class="wc-br-round"><div class="md-section-title" style="color:var(--gold)">'+htmlEsc(rnd.round)+'</div>';
     rnd.matches.forEach(function(m){
       var sc=(m.homeGoals!=null&&m.awayGoals!=null)?(m.homeGoals+'-'+m.awayGoals):'–';
+      var hf=m.tbd?'':wcFlag(m.homeLogo,m.home,16)+' ';
+      var af=m.tbd?'':' '+wcFlag(m.awayLogo,m.away,16);
       out+='<div class="wc-br-row'+(m.tbd?' tbd':'')+'">';
-      out+='<span class="wc-br-team">'+htmlEsc(m.home||'TBD')+'</span>';
+      out+='<span class="wc-br-team">'+hf+htmlEsc(m.home||'TBD')+'</span>';
       out+='<span class="wc-br-score">'+sc+'</span>';
-      out+='<span class="wc-br-team" style="text-align:right">'+htmlEsc(m.away||'TBD')+'</span>';
+      out+='<span class="wc-br-team" style="text-align:right">'+htmlEsc(m.away||'TBD')+af+'</span>';
       out+='</div>';
     });
     out+='</div>';

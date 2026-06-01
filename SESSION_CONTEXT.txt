@@ -778,6 +778,23 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~13:20] - WC hub: program complet pe zile + drapele peste tot
+  P1 COLECTARE (collect-daily.js): CAZ SPECIAL league_id=1 — collectWorldCupSchedule()
+    fetch /fixtures?league=1&season=2026 (TOT sezonul, ~72+ meciuri, nu fereastra azi+3),
+    upsert in fixtures (status NS pt viitoare, +round). Salveaza si logo-ul fiecarei
+    nationale in teams (national=true, COALESCE logo) = sursa drapelelor. DOAR league 1
+    (apelat dupa collectUpcomingFixtures, in try separat — nu strica restul ligilor).
+  P2 PROGRAM PE ZILE (worldcup.js + app-ui.js): /api/worldcup intoarce acum TOT
+    programul (200 limit) + days[] (zilele cu meciuri) + day per meci. Tab Meciuri =
+    calendar FlashScore-style: bara de zile auriu/sur (wcSetDay), default azi sau prima
+    zi; meciurile zilei cu ora + predictii (Poisson/NGP existente). Tap -> mdOpen.
+  P3 DRAPELE (peste tot): worldcup.js join teams pt home_logo/away_logo in matches+
+    bracket (grupe aveau deja team_logo). Frontend wcFlag(logo,nume,sz): img logo cu
+    onerror -> wcFlagEmoji (fallback steag emoji din numele tarii). Aplicat in MECIURI,
+    GRUPE si BRACKET (consistent in toate 3).
+  NEATINS: scoring/functii imutabile/NGP — doar colectez fixturi/logo si afisez.
+  node --check OK (3 fisiere). Un commit main + deploy.
+
 [01.06 ~12:40] - Hub CUPA MONDIALA 2026 (card featured LIVE + overlay) — READ-ONLY
   Date: league=1, season=2026 (liga deja in whitelist). Accent AURIU doar pt WC.
   COLOANA group: standings.group_name EXISTA deja in schema, dar collect-daily NU o
