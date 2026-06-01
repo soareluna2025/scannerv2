@@ -71,6 +71,7 @@
       <button class="btn-connect" id="btn-conn" onclick="toggleConn()">CONECTARE</button>
     </div>
     <div id="live-body" style="display:none">
+      <div id="wc-featured" style="display:none"></div>
       <div class="score-chips" id="score-chips"></div>
       <div id="match-list"></div>
       <button onclick="showHistoricModal()" style="width:100%;background:rgba(99,102,241,.1);color:#a5b4fc;border:1px solid rgba(99,102,241,.3);padding:12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin:16px 0 24px">📊 ISTORIC — Verifică calibrarea reală vs afișat</button>
@@ -182,6 +183,24 @@
     <button class="md-tab" onclick="tpTab(3)">STATISTICI</button>
   </div>
   <div class="md-body" id="tp-body">
+    <div class="spinner"><div class="spin"></div></div>
+  </div>
+</div>
+
+<!-- CUPA MONDIALĂ 2026 — hub overlay (refolosește md-overlay/md-tabs, accent auriu) -->
+<div class="md-overlay wc-hub" id="wc-overlay">
+  <div class="md-hdr">
+    <button class="md-close" onclick="wcClose()">←</button>
+    <div class="md-title wc-title">🏆 CUPA MONDIALĂ 2026</div>
+    <div style="width:36px"></div>
+  </div>
+  <div class="md-tabs">
+    <button class="md-tab active" onclick="wcTab(0)">PONTUL</button>
+    <button class="md-tab" onclick="wcTab(1)">MECIURI</button>
+    <button class="md-tab" onclick="wcTab(2)">GRUPE</button>
+    <button class="md-tab" onclick="wcTab(3)">BRACKET</button>
+  </div>
+  <div class="md-body" id="wc-body">
     <div class="spinner"><div class="spin"></div></div>
   </div>
 </div>

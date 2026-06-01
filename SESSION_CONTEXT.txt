@@ -778,6 +778,27 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~12:40] - Hub CUPA MONDIALA 2026 (card featured LIVE + overlay) — READ-ONLY
+  Date: league=1, season=2026 (liga deja in whitelist). Accent AURIU doar pt WC.
+  COLOANA group: standings.group_name EXISTA deja in schema, dar collect-daily NU o
+    popula si citea doar standings[0]. FIX collect-daily: itereaza TOATE sub-array-urile
+    (.flat() — WC are 12 grupe) + scrie group_name=row.group (1 param adaugat). Mic,
+    chirurgical, restul insert neatins.
+  BACKEND api/worldcup.js (NOU, inregistrat server.js): GET /api/worldcup, tot din DB:
+    pont (predictia WC azi cu max confidence, piata = cel mai puternic semnal din
+    predictie, NU recalc; cota din best_cota daca exista), matches (live+urmatoarele
+    cu predictii + NGP din live_stats), groups (standings grupate pe group_name),
+    bracket (fixtures runde knockout, TBD unde echipe lipsesc).
+  FRONTEND: index.html #wc-featured (sus pe LIVE) + #wc-overlay (refoloseste
+    md-overlay/md-tabs). app-ui.js: 10 functii wc* (featured 3 stari dupa data:
+    inainte 11.06 "incepe in X zile" auriu / 11.06-19.07 "N LIVE" rosu / dupa 19.07
+    ascuns), hub cu tab-uri Pont/Meciuri/Grupe/Bracket. wcRenderFeatured apelat in
+    renderMatches. cards.css: clase wc-* aurii (gradient gold->teal, --gold/--gold2),
+    restul refolosit (standings-tbl, md-section, md-player-card, srow-home, empty).
+    Pontul: buton SPORTSBET_AFFILIATE_URL (placeholder de completat de user).
+  NEATINS: calcConfidencePreMatch/Live, score2/3/6/7, NGP, Monte Carlo (doar CITESC).
+  node --check OK (5 fisiere). Un commit main + deploy.
+
 [01.06 ~11:55] - Integrare 2 ligi Ecuador in whitelist + seed + migrare (242, 917)
   api/leagues.js ALLOWED_LEAGUE_IDS (sectiunea Ecuador):
     INAINTE: 735 (Copa Ecuador) + 917 (Copa Ecuador ID alternativ)

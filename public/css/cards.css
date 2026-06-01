@@ -342,3 +342,41 @@
 .md-tl-assist{color:var(--mu);font-size:10px}
 .md-tl-in{color:#22c55e;font-weight:600}
 .md-tl-out{color:#ef4444;font-size:10px}
+
+/* ═══ CUPA MONDIALĂ 2026 — accent AURIU (doar WC; restul refolosit) ═══ */
+:root{ --gold:#ffd166; --gold2:#e0a93b; }
+/* Card featured pe feed-ul LIVE */
+.wc-card{position:relative;border-radius:14px;padding:14px 16px;margin:0 0 12px;cursor:pointer;
+  background:linear-gradient(135deg,rgba(255,209,102,.10),rgba(0,212,168,.06));
+  border:1px solid transparent;
+  background-clip:padding-box;overflow:hidden}
+.wc-card::before{content:'';position:absolute;inset:0;border-radius:14px;padding:1.5px;
+  background:linear-gradient(135deg,var(--gold),var(--ac));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.wc-card-top{display:flex;align-items:center;gap:10px}
+.wc-trophy{font-size:26px;line-height:1;filter:drop-shadow(0 0 6px rgba(255,209,102,.5))}
+.wc-card-title{font-size:15px;font-weight:900;letter-spacing:.4px;
+  background:linear-gradient(90deg,var(--gold),#fff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.wc-card-sub{font-size:11px;color:var(--mu2);margin-top:2px}
+.wc-pill{margin-left:auto;flex-shrink:0;font-size:11px;font-weight:800;padding:5px 10px;border-radius:999px;white-space:nowrap}
+.wc-pill.gold{background:rgba(255,209,102,.15);color:var(--gold);border:1px solid rgba(255,209,102,.4)}
+.wc-pill.livep{background:rgba(255,77,109,.15);color:var(--red);border:1px solid rgba(255,77,109,.4)}
+.wc-pill.livep .dotpulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);margin-right:5px;animation:livePulse 1s infinite;vertical-align:middle}
+/* Titlu hub auriu */
+.wc-title{background:linear-gradient(90deg,var(--gold),#fff);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:900}
+/* Pontul — card auriu */
+.wc-pont{border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;
+  background:linear-gradient(135deg,rgba(255,209,102,.12),rgba(0,212,168,.05));border:1px solid rgba(255,209,102,.35)}
+.wc-pont-match{font-size:16px;font-weight:800;color:var(--tx);margin-bottom:8px}
+.wc-pont-conf{font-size:30px;font-weight:900;color:var(--gold);line-height:1}
+.wc-pont-market{font-size:13px;color:var(--mu2);margin-top:6px}
+.wc-bet-btn{display:block;width:100%;margin-top:14px;text-align:center;text-decoration:none;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));color:#1a1500;font-weight:900;
+  padding:12px;border-radius:10px;font-size:13px;letter-spacing:.3px}
+/* Bracket */
+.wc-br-round{margin-bottom:18px}
+.wc-br-row{display:flex;align-items:center;gap:8px;background:var(--sur2);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:12px}
+.wc-br-row.tbd{opacity:.5;font-style:italic}
+.wc-br-team{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wc-br-score{font-weight:800;color:var(--gold)}

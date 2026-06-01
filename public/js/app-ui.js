@@ -243,6 +243,7 @@ function buildCardHtml(m,lgName){
 }
 
 function renderMatches(){
+  if(typeof wcRenderFeatured==='function')wcRenderFeatured();  // card featured WC sus pe LIVE
   var ms=ST.ms.filter(function(m){
     if(ST.score!=='all'){
       var hg=m.goals?m.goals.home||0:0;
@@ -2507,6 +2508,168 @@ function tpRenderStatistici(d){
     out+='<div style="font-size:10px;color:var(--mu);margin-top:6px">Calculată din rating/goluri/pase/șuturi jucători (sursa score7, citită).</div>';
     out+='</div>';
   }
+  body.innerHTML=out;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// CUPA MONDIALĂ 2026 — card featured pe LIVE + hub overlay (accent auriu).
+// READ-ONLY: citește /api/worldcup (predicții existente), zero recalcul scoring/NGP.
+// ══════════════════════════════════════════════════════════════════════════
+var SPORTSBET_AFFILIATE_URL = 'https://sportsbet.io/';  // placeholder — completează tu
+var WC_START = new Date('2026-06-11T00:00:00');
+var WC_END   = new Date('2026-07-19T23:59:59');
+var _wc={data:null,tabIdx:0};
+
+// Card featured pe feed-ul LIVE — 3 stări după dată. Apelat din renderMatches/loadLive.
+function wcRenderFeatured(){
+  var el=document.getElementById('wc-featured');
+  if(!el)return;
+  var now=new Date();
+  if(now>WC_END){ el.style.display='none'; el.innerHTML=''; return; }  // după turneu: ascuns
+  var pill='';
+  if(now<WC_START){
+    var days=Math.max(0,Math.ceil((WC_START-now)/86400000));
+    pill='<span class="wc-pill gold">⏳ ÎNCEPE ÎN '+days+' ZILE</span>';
+  } else {
+    // 11 iun–19 iul: pill roșu cu N live (din ST.ms, league id 1)
+    var n=0;
+    try{ n=(ST.ms||[]).filter(function(m){return m.league&&Number(m.league.id)===1;}).length; }catch(e){}
+    pill='<span class="wc-pill livep"><span class="dotpulse"></span>'+n+' LIVE</span>';
+  }
+  el.style.display='block';
+  el.innerHTML='<div class="wc-card" onclick="wcOpen()">'+
+    '<div class="wc-card-top">'+
+      '<span class="wc-trophy">🏆</span>'+
+      '<div style="min-width:0"><div class="wc-card-title">CUPA MONDIALĂ 2026</div>'+
+      '<div class="wc-card-sub">SUA · Canada · Mexic · 48 echipe</div></div>'+
+      pill+
+    '</div></div>';
+}
+
+function wcOpen(){
+  _wc.tabIdx=0;_wc.data=null;
+  var ov=document.getElementById('wc-overlay');ov.classList.add('open');
+  document.getElementById('wc-body').innerHTML='<div class="spinner"><div class="spin"></div></div>';
+  document.querySelectorAll('#wc-overlay .md-tab').forEach(function(t,i){t.classList.toggle('active',i===0);});
+  wcFetch();
+}
+function wcClose(){ document.getElementById('wc-overlay').classList.remove('open'); }
+function wcTab(idx){
+  _wc.tabIdx=idx;
+  document.querySelectorAll('#wc-overlay .md-tab').forEach(function(t,i){t.classList.toggle('active',i===idx);});
+  wcRender();
+}
+// Swipe-down close (același pattern ca md/tp)
+(function(){
+  var startY=0;var ov=document.getElementById('wc-overlay');if(!ov)return;
+  ov.addEventListener('touchstart',function(e){startY=e.touches[0].clientY;},{passive:true});
+  ov.addEventListener('touchend',function(e){
+    var dy=e.changedTouches[0].clientY-startY;
+    if(dy>80&&document.getElementById('wc-body').scrollTop<=0)wcClose();
+  },{passive:true});
+})();
+
+async function wcFetch(){
+  try{
+    var r=await fetch('/api/worldcup');var d=await r.json();
+    if(d.error)throw new Error(d.error);
+    _wc.data=d;wcRender();
+  }catch(e){
+    document.getElementById('wc-body').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+htmlEsc(e.message)+'</div></div>';
+  }
+}
+function wcRender(){
+  var d=_wc.data;if(!d)return;
+  try{
+    if(_wc.tabIdx===0)wcRenderPont(d);
+    else if(_wc.tabIdx===1)wcRenderMatches(d);
+    else if(_wc.tabIdx===2)wcRenderGroups(d);
+    else if(_wc.tabIdx===3)wcRenderBracket(d);
+  }catch(e){
+    document.getElementById('wc-body').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+htmlEsc(e.message)+'</div></div>';
+  }
+}
+
+function wcRenderPont(d){
+  var body=document.getElementById('wc-body');
+  var p=d.pont;
+  if(!p){ body.innerHTML='<div class="empty"><div class="empty-icon">🎯</div><div class="empty-t">Niciun pont azi</div><div class="empty-s">Nu există predicții WC pentru meciurile de azi</div></div>'; return; }
+  var cota=(p.cota!=null)?(' · cotă <b>'+Number(p.cota).toFixed(2)+'</b>'):'';
+  var mk=p.market?(p.market+(p.marketProb!=null?(' ('+p.marketProb+'%)'):'')):'—';
+  var out='<div class="wc-pont">';
+  out+='<div class="wc-pont-match">'+htmlEsc(p.home||'?')+' vs '+htmlEsc(p.away||'?')+'</div>';
+  out+='<div class="wc-pont-conf">'+(p.confidence!=null?Math.round(p.confidence)+'%':'—')+'</div>';
+  out+='<div class="wc-pont-market">Piață recomandată: <b style="color:var(--gold)">'+htmlEsc(mk)+'</b>'+cota+'</div>';
+  out+='<a class="wc-bet-btn" href="'+SPORTSBET_AFFILIATE_URL+'" target="_blank" rel="noopener">PARIAZĂ PE SPORTSBET.IO →</a>';
+  out+='</div>';
+  body.innerHTML=out;
+}
+
+function wcRenderMatches(d){
+  var body=document.getElementById('wc-body');
+  var ms=d.matches||[];
+  if(!ms.length){ body.innerHTML='<div class="empty"><div class="empty-icon">⚽</div><div class="empty-t">Niciun meci</div><div class="empty-s">Niciun meci WC live sau programat</div></div>'; return; }
+  var out='<div class="md-section">';
+  ms.forEach(function(m){
+    var when=m.live?('<span style="color:var(--red);font-weight:700">● LIVE '+(m.ng!=null?('· NGP '+m.ng+'%'):'')+'</span>')
+      :(m.matchDate?new Date(m.matchDate).toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'');
+    var score=(m.homeGoals!=null&&m.awayGoals!=null)?(m.homeGoals+'-'+m.awayGoals):'vs';
+    var sig=[];
+    if(m.over15!=null)sig.push('O1.5 '+Math.round(m.over15)+'%');
+    if(m.gg!=null)sig.push('GG '+Math.round(m.gg)+'%');
+    if(m.confidence!=null)sig.push('Conf '+Math.round(m.confidence)+'%');
+    out+='<div class="md-player-card" style="cursor:pointer" onclick="wcClose();mdOpen('+m.fixtureId+','+(m.homeId||0)+','+(m.awayId||0)+',this)">';
+    out+='<div class="md-pc-top"><div><div class="md-pc-name">'+htmlEsc(m.home||'?')+' '+score+' '+htmlEsc(m.away||'?')+'</div>';
+    out+='<div class="md-pc-team">'+when+'</div></div></div>';
+    if(sig.length)out+='<div class="md-pc-stats">'+sig.map(function(s){return '<span class="md-pc-stat">'+s+'</span>';}).join('')+'</div>';
+    out+='</div>';
+  });
+  out+='</div>';
+  body.innerHTML=out;
+}
+
+function wcRenderGroups(d){
+  var body=document.getElementById('wc-body');
+  var groups=d.groups||[];
+  if(!groups.length){ body.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-t">Grupe indisponibile</div><div class="empty-s">Clasamentul pe grupe nu e încă în baza de date</div></div>'; return; }
+  var out='';
+  groups.forEach(function(g){
+    out+='<div class="md-section"><div class="md-section-title" style="color:var(--gold)">'+htmlEsc(g.name)+'</div>';
+    out+='<div style="overflow-x:auto"><table class="standings-tbl"><thead><tr><th>#</th><th class="tn">Echipă</th><th>J</th><th>V</th><th>E</th><th>Î</th><th>GD</th><th style="color:var(--ac)">Pct</th></tr></thead><tbody>';
+    g.rows.forEach(function(r){
+      var qual=(r.rank<=2)?'srow-home':'';
+      var logo=r.teamLogo?'<img src="'+r.teamLogo+'" width="16" height="16" style="vertical-align:middle;margin-right:4px;border-radius:2px" onerror="this.style.display=\'none\'">':'';
+      out+='<tr class="'+qual+'">';
+      out+='<td style="color:var(--mu)">'+r.rank+'</td>';
+      out+='<td class="tn" style="'+(r.rank<=2?'font-weight:800;':'')+'">'+logo+htmlEsc(r.teamName||'')+'</td>';
+      out+='<td>'+r.played+'</td><td>'+r.win+'</td><td>'+r.draw+'</td><td>'+r.lose+'</td>';
+      out+='<td style="color:'+(Number(r.goalsDiff)>=0?'#22c55e':'#ef4444')+'">'+(Number(r.goalsDiff)>0?'+':'')+r.goalsDiff+'</td>';
+      out+='<td style="font-weight:800;color:var(--ac)">'+r.points+'</td></tr>';
+    });
+    out+='</tbody></table></div>';
+    out+='<div style="font-size:10px;color:var(--mu);margin-top:6px"><span style="display:inline-block;width:10px;height:10px;background:rgba(34,197,94,.3);border-radius:2px;margin-right:4px"></span>Primele 2 — calificare</div>';
+    out+='</div>';
+  });
+  body.innerHTML=out;
+}
+
+function wcRenderBracket(d){
+  var body=document.getElementById('wc-body');
+  var br=d.bracket||[];
+  if(!br.length){ body.innerHTML='<div class="empty"><div class="empty-icon">🏆</div><div class="empty-t">Bracket indisponibil</div><div class="empty-s">Fazele eliminatorii nu sunt încă programate (TBD)</div></div>'; return; }
+  var out='';
+  br.forEach(function(rnd){
+    out+='<div class="wc-br-round"><div class="md-section-title" style="color:var(--gold)">'+htmlEsc(rnd.round)+'</div>';
+    rnd.matches.forEach(function(m){
+      var sc=(m.homeGoals!=null&&m.awayGoals!=null)?(m.homeGoals+'-'+m.awayGoals):'–';
+      out+='<div class="wc-br-row'+(m.tbd?' tbd':'')+'">';
+      out+='<span class="wc-br-team">'+htmlEsc(m.home||'TBD')+'</span>';
+      out+='<span class="wc-br-score">'+sc+'</span>';
+      out+='<span class="wc-br-team" style="text-align:right">'+htmlEsc(m.away||'TBD')+'</span>';
+      out+='</div>';
+    });
+    out+='</div>';
+  });
   body.innerHTML=out;
 }
 

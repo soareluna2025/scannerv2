@@ -236,7 +236,10 @@ export default async function handler(req, res) {
           stats.leagues++;
         }
 
-        const rows = standings[0]?.league?.standings?.[0] || [];
+        // Standings poate avea mai multe sub-array-uri (câte unul per grupă, ex.
+        // Cupa Mondială: Group A..L). Iterăm TOATE, nu doar [0], și capturăm
+        // `row.group` în group_name (necesare pt hub-ul WC / orice ligă cu grupe).
+        const rows = (standings[0]?.league?.standings || []).flat().filter(Boolean);
 
         for (const row of rows) {
           if (!row?.team?.id) continue;
@@ -254,14 +257,14 @@ export default async function handler(req, res) {
           await query(
             `INSERT INTO standings
                (league_id, season, team_id, team_name, rank, points,
-                goals_for, goals_against, goals_diff, played, win, draw, lose, form, updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                goals_for, goals_against, goals_diff, played, win, draw, lose, form, group_name, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
              ON CONFLICT (league_id, season, team_id) DO UPDATE SET
                team_name=EXCLUDED.team_name, rank=EXCLUDED.rank, points=EXCLUDED.points,
                goals_for=EXCLUDED.goals_for, goals_against=EXCLUDED.goals_against,
                goals_diff=EXCLUDED.goals_diff, played=EXCLUDED.played,
                win=EXCLUDED.win, draw=EXCLUDED.draw, lose=EXCLUDED.lose,
-               form=EXCLUDED.form, updated_at=EXCLUDED.updated_at`,
+               form=EXCLUDED.form, group_name=EXCLUDED.group_name, updated_at=EXCLUDED.updated_at`,
             [
               leagueId, lgSeason, row.team.id, row.team.name, row.rank, row.points,
               row.all?.goals?.for     || 0,
@@ -272,6 +275,7 @@ export default async function handler(req, res) {
               row.all?.draw           || 0,
               row.all?.lose           || 0,
               row.form || null,
+              row.group || null,
               new Date().toISOString(),
             ]
           );
