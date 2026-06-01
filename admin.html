@@ -1170,6 +1170,27 @@ body{
     </div>
   </section>
 
+  <section class="card" id="cardBackfillPlayers">
+    <div class="card-h">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="3.2"/><path d="M5 20 a7 7 0 0 1 14 0"/></svg></span>
+      <h2>Backfill Jucători</h2>
+    </div>
+    <div id="bp-active" style="display:none">
+      <div style="display:flex;align-items:center;margin-bottom:10px"><span class="bf-dot"></span><span style="color:var(--red);font-size:11.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase">Activ — Colectez jucători...</span></div>
+      <div class="bf-label" id="bp-info">Sezon — · — / — echipe</div>
+      <div class="bf-bar"><div class="bf-bar-fill" id="bp-fill" style="width:0%"></div></div>
+      <div class="bf-label"><span id="bp-inserted">0</span> jucători inserați · fără date: <span id="bp-nodata">0</span></div>
+    </div>
+    <div id="bp-stopped">
+      <div class="bf-label" id="bp-stopped-info">Toate ligile active × sezoanele 2025 + 2026</div>
+    </div>
+    <div class="bf-buttons">
+      <button id="bp-start-btn" class="bf-start" onclick="startBP()">▶ Start / Reia</button>
+      <button id="bp-stop-btn" class="bf-stop" style="display:none" onclick="stopBP()">⏹ Stop</button>
+      <button id="bp-reset-btn" class="bf-stop" onclick="resetBP()" style="flex:0 0 auto;padding-left:14px;padding-right:14px">↺ Reset</button>
+    </div>
+  </section>
+
   <section class="card" id="cardHealth">
     <div class="card-h">
       <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12 H7 L9 8 L13 16 L15 12 H21"/></svg></span>
@@ -1749,7 +1770,70 @@ async function refreshBFStatus() {
   } catch(e) { console.error('refreshBFStatus:', e.message); }
 }
 
-var _stabTimer = null;
+// ── BACKFILL JUCĂTORI (players_season) — doar frontend, endpoint existent ──
+var _bpTimer = null;
+async function startBP() {
+  try {
+    var r = await fetch('/api/cron/backfill-players', { method:'POST', headers:{'X-Api-Key':_key} });
+    var d = await r.json();
+    if (d.error) { toast('✗ ' + d.error, 'var(--red)'); return; }
+    toast(d.already_running ? '▶ Backfill jucători deja rulează' : '▶ Backfill jucători pornit');
+    refreshBPStatus();
+    if (_bpTimer) clearInterval(_bpTimer);
+    _bpTimer = setInterval(refreshBPStatus, 5000);
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+}
+async function stopBP() {
+  try {
+    await fetch('/api/cron/backfill-players?action=stop', { method:'POST', headers:{'X-Api-Key':_key} });
+    toast('⏹ Backfill jucători oprit');
+    refreshBPStatus();
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+}
+async function resetBP() {
+  if (!confirm('Reia backfill-ul de jucători de la zero?')) return;
+  try {
+    await fetch('/api/cron/backfill-players?action=reset', { method:'POST', headers:{'X-Api-Key':_key} });
+    toast('↺ Backfill jucători resetat');
+    refreshBPStatus();
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+}
+async function refreshBPStatus() {
+  try {
+    var r = await fetch('/api/cron/backfill-players?action=status', { headers:{'X-Api-Key':_key} });
+    var d = await r.json();
+    var startBtn = document.getElementById('bp-start-btn');
+    var stopBtn  = document.getElementById('bp-stop-btn');
+    var activeDiv  = document.getElementById('bp-active');
+    var stoppedDiv = document.getElementById('bp-stopped');
+    if (!startBtn) return;
+    var done  = d.teamsDone  || 0;
+    var total = d.teamsTotal || 0;
+    var ins   = d.inserted   || 0;
+    var nd    = d.noData     || 0;
+    var pct   = total > 0 ? Math.round(done / total * 100) : 0;
+    if (d.running) {
+      startBtn.style.display = 'none'; stopBtn.style.display = 'block';
+      activeDiv.style.display = 'block'; stoppedDiv.style.display = 'none';
+      document.getElementById('bp-info').textContent =
+        done.toLocaleString() + ' / ' + total.toLocaleString() + ' echipe · '
+        + ins.toLocaleString() + ' jucători' + (d.season ? ' · sezon ' + d.season : '');
+      document.getElementById('bp-fill').style.width = pct + '%';
+      document.getElementById('bp-inserted').textContent = ins.toLocaleString();
+      document.getElementById('bp-nodata').textContent = nd.toLocaleString();
+      if (!_bpTimer) _bpTimer = setInterval(refreshBPStatus, 5000);
+    } else {
+      startBtn.style.display = 'block'; stopBtn.style.display = 'none';
+      activeDiv.style.display = 'none'; stoppedDiv.style.display = 'block';
+      document.getElementById('bp-stopped-info').textContent = (done > 0)
+        ? ('✓ Gata: ' + done.toLocaleString() + '/' + total.toLocaleString() + ' · ' + ins.toLocaleString() + ' jucători')
+        : 'Toate ligile active × sezoanele 2025 + 2026';
+      if (_bpTimer) { clearInterval(_bpTimer); _bpTimer = null; }
+    }
+  } catch(e) { console.error('refreshBPStatus:', e.message); }
+}
+
+
 function _stabDur(ms){var s=Math.floor((ms||0)/1000);var m=Math.floor(s/60);s=s%60;return m>0?(m+'m '+s+'s'):(s+'s');}
 async function startStabilize() {
   if (!confirm('Pornești stabilizarea completă (13 cron-uri, 20–40 min)?')) return;
@@ -1837,7 +1921,7 @@ async function refresh() {
   await Promise.allSettled([
     loadStatus(), loadDB(), loadAPI(),
     loadLive(), loadCron(), loadErrors(),
-    refreshBFStatus(), loadScannerState(),
+    refreshBFStatus(), refreshBPStatus(), loadScannerState(),
   ]);
   var now = new Date().toLocaleTimeString('ro-RO');
   document.getElementById('refreshInfo').textContent = '• Ultima actualizare: ' + now + ' (auto-refresh 30s)';
