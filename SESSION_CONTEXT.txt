@@ -778,6 +778,20 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~09:55] - FIX bug LOT gol in /api/team (tab Jucatori "Lot indisponibil")
+  CAUZA: query-ul getPlayers filtra ps.team_id + fh.league_id + fh.season. Dar
+  statisticile jucatorilor pot fi sub alt league_id decat campionatul afisat
+  (ex. Liverpool Montevideo: 24 jucatori sezon 2026 sub Copa Libertadores 13, nu
+  sub Primera Division) => filtrul strict pe league_id ii excludea => lot gol.
+  FIX: eliminat conditia fh.league_id din getPlayers. Lotul se aduna pe TOATE
+  competitiile sezonului: WHERE ps.team_id=$1 AND fh.season=$2 (GROUP BY player
+  pastrat). Semnatura getPlayers(teamId, season); guard call-site doar pe season.
+  STATISTICI: VERIFICAT — getStats NU filtreaza pe league_id (nici agregatul
+  fixtures_history, nici teamStrength din player_stats LIMIT 110) => deja pe tot
+  sezonul/competitiile, neatins. CLASAMENT neatins (league_id corect acolo).
+  Doar query read-only. Scoring/functii imutabile neatinse. node --check OK.
+  Un commit pe main + deploy.
+
 [01.06 ~09:30] - PAGINA DE ECHIPA reutilizabila (din pagina de meci) — READ-ONLY DB
   Endpoint NOU: api/team.js -> GET /api/team?id=&league_id=&season= (inregistrat in
   server.js apiFiles). ZERO API-Football, doar SELECT-uri:

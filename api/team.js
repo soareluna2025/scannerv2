@@ -57,9 +57,11 @@ function posGroup(position) {
 }
 
 // LOT pe poziții: agregat per jucător din player_stats pentru sezonul curent.
-// Sezonul player_stats nu e stocat direct → restrângem la fixture-urile ligii+sezon
-// din fixtures_history (join), ca să nu amestecăm sezoane.
-async function getPlayers(teamId, leagueId, season) {
+// Sezonul player_stats nu e stocat direct → join pe fixtures_history DOAR pe season
+// (NU pe league_id): lotul se adună pe TOATE competițiile sezonului. Filtrul pe
+// league_id excludea greșit jucătorii când statisticile sunt sub altă competiție
+// (ex. Liverpool Montevideo: stats pe Copa Libertadores 13, nu pe campionatul intern).
+async function getPlayers(teamId, season) {
   let rows = [];
   try {
     const r = await query(
@@ -73,10 +75,10 @@ async function getPlayers(teamId, leagueId, season) {
               COALESCE(SUM(ps.minutes_played),0)::int       AS minutes
          FROM player_stats ps
          JOIN fixtures_history fh ON fh.fixture_id = ps.fixture_id
-        WHERE ps.team_id = $1 AND fh.league_id = $2 AND fh.season = $3
+        WHERE ps.team_id = $1 AND fh.season = $2
         GROUP BY ps.player_id, ps.player_name, ps.position
         ORDER BY goals DESC, assists DESC, avg_rating DESC NULLS LAST`,
-      [teamId, leagueId, season]);
+      [teamId, season]);
     rows = r.rows;
   } catch (_) { rows = []; }
 
@@ -275,7 +277,7 @@ export default async function handler(req, res) {
     }
 
     const [players, form, standings, stats] = await Promise.all([
-      (leagueId && season) ? getPlayers(teamId, leagueId, season) : Promise.resolve({ G: [], D: [], M: [], F: [] }),
+      season ? getPlayers(teamId, season) : Promise.resolve({ G: [], D: [], M: [], F: [] }),
       getForm(teamId),
       (leagueId && season) ? getStandings(leagueId, season) : Promise.resolve([]),
       getStats(teamId),
