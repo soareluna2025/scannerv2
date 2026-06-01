@@ -1569,9 +1569,11 @@ function mdRenderSumar(d){
         var subLbl=(res&&res.live)?('Al '+_msOrd(res.nextGoalNum)+' gol'):'Marchează în meci';
         // Starea expandată e citită din _scoringExpanded → persistă peste auto-refresh.
         var disp=(_scoringExpanded===sideKey)?'block':'none';
+        var _tid=(team&&team.id)?team.id:0;
+        var _lg=(fix&&fix.league&&fix.league.id)?fix.league.id:0;
         return '<div onclick="mdToggleScoreExp(\''+sideKey+'\')" style="flex:1;min-width:0;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:12px;text-align:center">'+
-          '<div style="display:flex;justify-content:center;margin-bottom:6px">'+tLogo(team,40)+'</div>'+
-          '<div style="font-size:13px;font-weight:600;margin-bottom:4px">'+htmlEsc(name)+'</div>'+
+          '<div style="display:flex;justify-content:center;margin-bottom:6px" onclick="event.stopPropagation();tpOpen('+_tid+','+_lg+')">'+tLogo(team,40)+'</div>'+
+          '<div style="font-size:13px;font-weight:600;margin-bottom:4px;cursor:pointer" onclick="event.stopPropagation();tpOpen('+_tid+','+_lg+')">'+htmlEsc(name)+'</div>'+
           '<div style="font-size:30px;font-weight:800;line-height:1;color:'+scol(p)+'">'+pv+'</div>'+
           '<div style="font-size:10px;color:var(--mu);margin-top:3px">'+subLbl+'</div>'+
           '<div style="font-size:10px;color:var(--mu);margin-top:6px">👆 tap pentru explicație</div>'+
@@ -1586,11 +1588,14 @@ function mdRenderSumar(d){
     }
   })();
 
+  var _lgId=(fix&&fix.league&&fix.league.id)?fix.league.id:0;
+  var _hId=(fix&&fix.teams&&fix.teams.home&&fix.teams.home.id)?fix.teams.home.id:(_md.homeId||0);
+  var _aId=(fix&&fix.teams&&fix.teams.away&&fix.teams.away.id)?fix.teams.away.id:(_md.awayId||0);
   out+='<div class="md-score-block">';
   out+='<div class="md-teams-row">';
-  out+='<div class="md-team-name">'+tLogo(fix&&fix.teams&&fix.teams.home,48)+'<span>'+hn+'</span></div>';
+  out+='<div class="md-team-name" style="cursor:pointer" onclick="tpOpen('+_hId+','+_lgId+')">'+tLogo(fix&&fix.teams&&fix.teams.home,48)+'<span>'+hn+'</span></div>';
   out+='<div class="md-score">'+hg+' - '+ag+'</div>';
-  out+='<div class="md-team-name">'+tLogo(fix&&fix.teams&&fix.teams.away,48)+'<span>'+an+'</span></div>';
+  out+='<div class="md-team-name" style="cursor:pointer" onclick="tpOpen('+_aId+','+_lgId+')">'+tLogo(fix&&fix.teams&&fix.teams.away,48)+'<span>'+an+'</span></div>';
   out+='</div></div>';
   if(isLive){
     var _mdEx=fix&&fix.fixture&&fix.fixture.status?fix.fixture.status.extra:0;
@@ -2307,6 +2312,201 @@ async function mdRenderClasament(d) {
   out+='<span><span style="display:inline-block;width:10px;height:10px;background:rgba(245,158,11,.15);border-radius:2px;margin-right:4px"></span>Egal</span>';
   out+='</div>';
   out+='</div>';
+  body.innerHTML=out;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// PAGINA DE ECHIPĂ — refolosită din pagina de meci (tap pe logo/nume echipă).
+// Folosește EXCLUSIV clasele CSS existente (md-overlay, md-tabs, md-tab,
+// md-section, md-player-card, md-form-row, standings-tbl, srow-home, empty).
+// Backend: GET /api/team?id=&league_id=&season= (read-only DB).
+// ══════════════════════════════════════════════════════════════════════════
+var _tp={data:null,tabIdx:0,teamId:0,leagueId:0};
+
+// Deschide pagina echipei. leagueId opțional (din fixture) → join sezon corect.
+function tpOpen(teamId,leagueId){
+  if(!teamId)return;
+  _tp.teamId=Number(teamId);_tp.leagueId=Number(leagueId)||0;_tp.tabIdx=0;_tp.data=null;
+  var ov=document.getElementById('tp-overlay');
+  ov.classList.add('open');
+  document.getElementById('tp-body').innerHTML='<div class="spinner"><div class="spin"></div></div>';
+  document.getElementById('tp-title').textContent='Echipă';
+  document.querySelectorAll('#tp-overlay .md-tab').forEach(function(t,i){t.classList.toggle('active',i===0);});
+  tpFetch();
+}
+function tpClose(){
+  document.getElementById('tp-overlay').classList.remove('open');
+}
+function tpTab(idx){
+  _tp.tabIdx=idx;
+  document.querySelectorAll('#tp-overlay .md-tab').forEach(function(t,i){t.classList.toggle('active',i===idx);});
+  tpRender();
+}
+
+// Swipe-down to close (același pattern ca md-overlay)
+(function(){
+  var startY=0;
+  var ov=document.getElementById('tp-overlay');
+  if(!ov)return;
+  ov.addEventListener('touchstart',function(e){startY=e.touches[0].clientY;},{passive:true});
+  ov.addEventListener('touchend',function(e){
+    var dy=e.changedTouches[0].clientY-startY;
+    if(dy>80&&document.getElementById('tp-body').scrollTop<=0)tpClose();
+  },{passive:true});
+})();
+
+async function tpFetch(){
+  try{
+    var tid=_tp.teamId;
+    var url='/api/team?id='+tid+(_tp.leagueId?'&league_id='+_tp.leagueId:'');
+    var r=await fetch(url);
+    var d=await r.json();
+    if(d.error)throw new Error(d.error);
+    if(_tp.teamId!==tid)return;
+    _tp.data=d;
+    var m=d.meta||{};
+    document.getElementById('tp-title').textContent=m.teamName||'Echipă';
+    tpRender();
+  }catch(e){
+    document.getElementById('tp-body').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+htmlEsc(e.message)+'</div></div>';
+  }
+}
+
+function tpRender(){
+  var d=_tp.data;if(!d)return;
+  try{
+    if(_tp.tabIdx===0)tpRenderJucatori(d);
+    else if(_tp.tabIdx===1)tpRenderForma(d);
+    else if(_tp.tabIdx===2)tpRenderClasament(d);
+    else if(_tp.tabIdx===3)tpRenderStatistici(d);
+  }catch(e){
+    console.error('[tpRender] tab '+_tp.tabIdx+' error:',e&&e.stack?e.stack:e);
+    document.getElementById('tp-body').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+htmlEsc(e.message)+'</div></div>';
+  }
+}
+
+// Antet reutilizabil: logo + nume + ligă + loc (clasele md-section existente).
+function tpHeaderHtml(m){
+  var loc=m.rank?('Locul '+m.rank):'';
+  var sub=(m.leagueName||'')+(m.season?(' · '+m.season):'')+(loc?(' · '+loc):'');
+  var logo=m.logo?'<img src="'+m.logo+'" width="40" height="40" style="border-radius:6px;object-fit:contain;vertical-align:middle;margin-right:10px" onerror="this.style.display=\'none\'">':'';
+  return '<div class="md-section"><div style="display:flex;align-items:center">'+logo+
+    '<div><div style="font-size:16px;font-weight:800">'+htmlEsc(m.teamName||'Echipă')+'</div>'+
+    '<div style="font-size:11px;color:var(--mu);margin-top:2px">'+htmlEsc(sub)+'</div></div></div></div>';
+}
+
+function tpRenderJucatori(d){
+  var body=document.getElementById('tp-body');
+  var g=d.players||{G:[],D:[],M:[],F:[]};
+  var total=(g.G.length+g.D.length+g.M.length+g.F.length);
+  var out=tpHeaderHtml(d.meta||{});
+  if(!total){
+    out+='<div class="empty"><div class="empty-icon">👤</div><div class="empty-t">Lot indisponibil</div><div class="empty-s">Statisticile jucătorilor nu au fost colectate pentru sezonul curent al acestei echipe</div></div>';
+    body.innerHTML=out;return;
+  }
+  var groupTitles={G:'Portari',D:'Fundași',M:'Mijlocași',F:'Atacanți'};
+  ['G','D','M','F'].forEach(function(key){
+    var arr=g[key];if(!arr||!arr.length)return;
+    out+='<div class="md-section"><div class="md-section-title">'+groupTitles[key]+'</div>';
+    arr.forEach(function(p){
+      var rClass=p.rating?p.rating>=7.5?'high':p.rating>=6.5?'mid':'low':'';
+      out+='<div class="md-player-card">';
+      out+='<div class="md-pc-top">';
+      out+='<div><div class="md-pc-name">'+htmlEsc(p.name)+'</div><div class="md-pc-team">'+(p.position?htmlEsc(p.position)+' · ':'')+p.apps+' meciuri</div></div>';
+      if(p.rating)out+='<div class="md-player-rating '+rClass+'">'+Number(p.rating).toFixed(1)+'</div>';
+      out+='</div>';
+      out+='<div class="md-pc-stats">';
+      if(p.goals)out+='<span class="md-pc-stat">Goluri <span>'+p.goals+'</span></span>';
+      if(p.assists)out+='<span class="md-pc-stat">Assist <span>'+p.assists+'</span></span>';
+      if(p.yellows)out+='<span class="md-pc-stat">🟨 <span>'+p.yellows+'</span></span>';
+      if(p.reds)out+='<span class="md-pc-stat">🟥 <span>'+p.reds+'</span></span>';
+      out+='<span class="md-pc-stat">Min <span>'+p.minutes+'</span></span>';
+      out+='</div></div>';
+    });
+    out+='</div>';
+  });
+  body.innerHTML=out;
+}
+
+function tpRenderForma(d){
+  var body=document.getElementById('tp-body');
+  var form=d.form||[];
+  var out=tpHeaderHtml(d.meta||{});
+  if(!form.length){
+    out+='<div class="empty"><div class="empty-icon">📋</div><div class="empty-t">Fără formă</div><div class="empty-s">Niciun meci finalizat în istoricul acestei echipe</div></div>';
+    body.innerHTML=out;return;
+  }
+  // Rezumat V-E-I din meciurile afișate (result e W/D/L, ca badge-urile existente)
+  var w=0,dr=0,l=0;
+  form.forEach(function(f){if(f.result==='W')w++;else if(f.result==='D')dr++;else l++;});
+  out+='<div class="md-section"><div class="md-section-title">Ultimele '+form.length+' meciuri ('+w+'V '+dr+'E '+l+'I)</div>';
+  form.forEach(function(f){
+    var dt=f.date?new Date(f.date).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit'}):'';
+    out+='<div class="md-form-row">';
+    out+='<div class="md-form-badge '+f.result+'">'+f.result+'</div>';
+    out+='<div class="md-form-score">'+htmlEsc(f.score)+'</div>';
+    out+='<div class="md-form-opp">'+(f.home?'acasă':'deplasare')+' vs '+htmlEsc(f.opponent)+'</div>';
+    out+='<div class="md-form-date">'+dt+'</div>';
+    out+='</div>';
+  });
+  out+='</div>';
+  body.innerHTML=out;
+}
+
+function tpRenderClasament(d){
+  var body=document.getElementById('tp-body');
+  var rows=d.standings||[];
+  var out=tpHeaderHtml(d.meta||{});
+  if(!rows.length){
+    out+='<div class="empty"><div class="empty-icon">📊</div><div class="empty-t">Clasament indisponibil</div><div class="empty-s">Nu există meciuri finalizate în baza de date pentru această ligă/sezon</div></div>';
+    body.innerHTML=out;return;
+  }
+  var myId=Number(d.meta&&d.meta.teamId);
+  out+='<div style="overflow-x:auto"><table class="standings-tbl">';
+  out+='<thead><tr><th>#</th><th class="tn">Echipă</th><th>J</th><th>V</th><th>E</th><th>Î</th><th>GF</th><th>GA</th><th>GD</th><th style="color:var(--ac)">Pct</th></tr></thead><tbody>';
+  rows.forEach(function(row){
+    var isMe=Number(row.team_id)===myId;
+    var logoHtml=row.team_logo?'<img src="'+row.team_logo+'" width="16" height="16" style="vertical-align:middle;margin-right:4px;border-radius:2px" onerror="this.style.display=\'none\'">':'';
+    out+='<tr class="'+(isMe?'srow-home':'')+'">';
+    out+='<td style="color:var(--mu)">'+row.rank+'</td>';
+    out+='<td class="tn" style="'+(isMe?'font-weight:800;':'')+'">'+logoHtml+htmlEsc(row.team_name||'')+'</td>';
+    out+='<td>'+row.played+'</td><td>'+row.win+'</td><td>'+row.draw+'</td><td>'+row.lose+'</td>';
+    out+='<td>'+row.goals_for+'</td><td>'+row.goals_against+'</td>';
+    out+='<td style="color:'+(Number(row.goals_diff)>=0?'#22c55e':'#ef4444')+'">'+(Number(row.goals_diff)>0?'+':'')+row.goals_diff+'</td>';
+    out+='<td style="font-weight:800;color:var(--ac)">'+row.points+'</td>';
+    out+='</tr>';
+  });
+  out+='</tbody></table></div>';
+  out+='<div style="display:flex;gap:12px;font-size:10px;color:var(--mu);margin-top:8px"><span><span style="display:inline-block;width:10px;height:10px;background:rgba(34,197,94,.3);border-radius:2px;margin-right:4px"></span>Echipa curentă</span></div>';
+  body.innerHTML=out;
+}
+
+function tpRenderStatistici(d){
+  var body=document.getElementById('tp-body');
+  var s=d.stats||{};
+  var out=tpHeaderHtml(d.meta||{});
+  if(!s.played){
+    out+='<div class="empty"><div class="empty-icon">📊</div><div class="empty-t">Statistici indisponibile</div><div class="empty-s">Niciun meci finalizat în istoricul echipei</div></div>';
+    body.innerHTML=out;return;
+  }
+  out+='<div class="md-section"><div class="md-section-title">Statistici (toate meciurile finalizate)</div>';
+  out+='<div class="league-profile">';
+  function rowKV(label,val){return '<div class="lp-row"><span class="lp-label">'+label+'</span><span class="lp-val">'+val+'</span></div>';}
+  out+=rowKV('🎮 Meciuri jucate',s.played);
+  out+=rowKV('⚽ Goluri marcate',s.gf+(s.gfPerGame!=null?' ('+s.gfPerGame+'/meci)':''));
+  out+=rowKV('🥅 Goluri primite',s.ga+(s.gaPerGame!=null?' ('+s.gaPerGame+'/meci)':''));
+  out+=rowKV('🛡️ Clean sheets',s.cleanSheets);
+  out+=rowKV('🚫 Meciuri fără gol marcat',s.failedToScore);
+  out+='</div></div>';
+  if(s.teamStrength!=null){
+    var col=s.teamStrength>=70?'#22c55e':s.teamStrength>=50?'#f59e0b':'#ef4444';
+    out+='<div class="md-section"><div class="md-section-title">Putere Echipă</div>';
+    out+='<div class="pi-team"><div class="pi-team-name">'+htmlEsc((d.meta&&d.meta.teamName)||'Echipă')+'</div>';
+    out+='<div class="pi-str-val" style="color:'+col+'">'+s.teamStrength+'</div>';
+    out+='<div class="pi-str-bar"><div class="pi-str-fill" style="width:'+s.teamStrength+'%"></div></div></div>';
+    out+='<div style="font-size:10px;color:var(--mu);margin-top:6px">Calculată din rating/goluri/pase/șuturi jucători (sursa score7, citită).</div>';
+    out+='</div>';
+  }
   body.innerHTML=out;
 }
 

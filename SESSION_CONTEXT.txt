@@ -778,6 +778,32 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~09:30] - PAGINA DE ECHIPA reutilizabila (din pagina de meci) — READ-ONLY DB
+  Endpoint NOU: api/team.js -> GET /api/team?id=&league_id=&season= (inregistrat in
+  server.js apiFiles). ZERO API-Football, doar SELECT-uri:
+    * players: player_stats JOIN fixtures_history (league+season) GROUP BY player,
+      grupati pe pozitie (G/D/M/F via posGroup), apps/goluri/assist/cartonase/rating/min.
+    * form: fixtures_history (home OR away, status FT/AET/PEN) ORDER BY match_date DESC
+      LIMIT 18 (idx_fh_home_status_date/idx_fh_away_status_date). result W/D/L.
+    * standings: CALCULAT din fixtures_history (CTE UNION home/away, GROUP BY echipa,
+      V=3/E=1) pe league_id+season (idx_fh_league_status); logo din teams.
+    * stats: agregate fixtures_history (gf/ga per meci, clean sheets, failed-to-score)
+      + teamStrength CITITA cu aceeasi formula ca getTeamStrengths() din enrich.js
+      (NU recalculez score7, doar read pe player_stats).
+  SEZON PER LIGA din DB (zero API): MAX(season) standings -> fallback MAX(season)
+    fixtures_history; leagueForTeamDB la fel. Nu amesteca 2025/26 (EU) cu 2026 (calendar).
+  FRONTEND (refoloseste EXCLUSIV clasele existente, ZERO design nou):
+    * index.html: overlay #tp-overlay cu md-overlay/md-hdr/md-tabs/md-tab/md-body
+      (identic cu pagina de meci), 4 tab-uri Jucatori/Forma/Clasament/Statistici.
+    * app-ui.js: tpOpen/tpClose/tpTab/tpFetch/tpRender + 4 renderere folosind
+      md-section/md-player-card/md-form-row(.W/.D/.L)/standings-tbl/srow-home/
+      league-profile/lp-row/pi-team/pi-str-bar/empty. Swipe-down close ca md.
+    * TAP handlers: in mdRenderSumar -> nume/logo echipa (md-team-name) + cardurile
+      "Probabilitate marcare" (logo+nume, cu event.stopPropagation ca sa nu strice
+      toggle-ul de explicatie) -> tpOpen(teamId, leagueId).
+  NEATINS: calcConfidencePreMatch/Live, score2/3/6/7, scoring, Monte Carlo, chei API.
+  node --check OK pe team.js/server.js/app-ui.js. Un commit pe main + deploy.
+
 [31.05 ~18:45] - Panou "Erori Recente" admin: colorare verde/rosu dupa tip (doar frontend)
   Problema: toate intrarile apareau rosu desi majoritatea sunt rezumate de succes
   (cron-urile loghaza in cron_logs cu status='success' dar pun rezumatul in error_msg,
