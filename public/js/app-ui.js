@@ -2520,17 +2520,71 @@ var WC_START = new Date('2026-06-11T00:00:00');
 var WC_END   = new Date('2026-07-19T23:59:59');
 var _wc={data:null,tabIdx:0,day:null};
 
-// Drapel echipă: logo-ul (crest/steag) din API-Football; fallback emoji-steag din
-// numele țării. Refolosit în meciuri, grupe ȘI bracket (consistent peste tot).
+// Drapel echipă — GARANTAT pentru orice națională.
+// Strategie: nume țară → ISO2 (mapă completă). Din ISO2 derivăm:
+//   • imaginea reală: media.api-sports.io/flags/{iso2}.svg
+//   • emoji (regional indicators) ca fallback la onerror → ZERO drapele goale.
+// Dacă numele nu e în mapă, cădem pe logoUrl (crest din teams) apoi pe 🏳️.
+var WC_ISO2 = {
+  // CONMEBOL
+  'argentina':'ar','brazil':'br','uruguay':'uy','colombia':'co','ecuador':'ec',
+  'paraguay':'py','peru':'pe','chile':'cl','bolivia':'bo','venezuela':'ve',
+  // CONCACAF
+  'usa':'us','united states':'us','canada':'ca','mexico':'mx','costa rica':'cr',
+  'panama':'pa','jamaica':'jm','honduras':'hn','el salvador':'sv','guatemala':'gt',
+  'haiti':'ht','trinidad and tobago':'tt','curacao':'cw',
+  // UEFA
+  'france':'fr','spain':'es','england':'gb-eng','germany':'de','portugal':'pt',
+  'netherlands':'nl','italy':'it','belgium':'be','croatia':'hr','denmark':'dk',
+  'switzerland':'ch','poland':'pl','serbia':'rs','wales':'gb-wls','scotland':'gb-sct',
+  'austria':'at','ukraine':'ua','sweden':'se','turkey':'tr','norway':'no',
+  'czech republic':'cz','czechia':'cz','hungary':'hu','romania':'ro','greece':'gr',
+  'slovakia':'sk','slovenia':'si','republic of ireland':'ie','ireland':'ie','albania':'al',
+  // CAF
+  'morocco':'ma','senegal':'sn','tunisia':'tn','algeria':'dz','egypt':'eg',
+  'nigeria':'ng','ghana':'gh','cameroon':'cm','ivory coast':'ci',"cote d'ivoire":'ci',
+  'mali':'ml','south africa':'za','cape verde':'cv','dr congo':'cd','burkina faso':'bf',
+  // AFC
+  'japan':'jp','south korea':'kr','korea republic':'kr','iran':'ir','saudi arabia':'sa',
+  'australia':'au','qatar':'qa','iraq':'iq','uae':'ae','united arab emirates':'ae',
+  'uzbekistan':'uz','jordan':'jo','china':'cn','china pr':'cn','bahrain':'bh','oman':'om',
+  // OFC
+  'new zealand':'nz','new caledonia':'nc','fiji':'fj','solomon islands':'sb',
+};
+function _iso2ToEmoji(iso2){
+  if(!iso2)return null;
+  // coduri sub-naționale (Anglia/Scoția/Țara Galilor) — emoji dedicat
+  if(iso2==='gb-eng')return '🏴󠁧󠁢󠁥󠁮󠁧󠁿';
+  if(iso2==='gb-sct')return '🏴󠁧󠁢󠁳󠁣󠁴󠁿';
+  if(iso2==='gb-wls')return '🏴󠁧󠁢󠁷󠁬󠁳󠁿';
+  if(iso2.length!==2)return null;
+  var cc=iso2.toUpperCase();
+  return String.fromCodePoint(0x1F1E6+(cc.charCodeAt(0)-65), 0x1F1E6+(cc.charCodeAt(1)-65));
+}
+function wcCountryIso(name){ return WC_ISO2[String(name||'').trim().toLowerCase()] || null; }
+
 function wcFlag(logoUrl, teamName, sz){
   sz=sz||18;
-  if(logoUrl)return '<img src="'+logoUrl+'" width="'+sz+'" height="'+sz+'" style="border-radius:3px;object-fit:contain;vertical-align:middle;flex-shrink:0" onerror="this.outerHTML=wcFlagEmoji(\''+(teamName||'').replace(/\\\\/g,'').replace(/'/g,'')+'\')">';
-  return wcFlagEmoji(teamName);
+  var iso=wcCountryIso(teamName);
+  var emoji=_iso2ToEmoji(iso);
+  var emojiSpan='<span style="vertical-align:middle">'+(emoji||'🏳️')+'</span>';
+  // 1) avem ISO2 → drapel SVG real garantat, cu fallback la emoji ISO2 (nu gol)
+  if(iso){
+    var url='https://media.api-sports.io/flags/'+iso+'.svg';
+    return '<img src="'+url+'" width="'+sz+'" height="'+Math.round(sz*0.72)+'" style="border-radius:2px;object-fit:cover;vertical-align:middle;flex-shrink:0" '+
+      'onerror="this.outerHTML=decodeURIComponent(\''+encodeURIComponent(emojiSpan)+'\')">';
+  }
+  // 2) fără ISO2 dar avem crest din teams → folosește-l, fallback emoji/glob
+  if(logoUrl){
+    return '<img src="'+logoUrl+'" width="'+sz+'" height="'+sz+'" style="border-radius:3px;object-fit:contain;vertical-align:middle;flex-shrink:0" '+
+      'onerror="this.outerHTML=decodeURIComponent(\''+encodeURIComponent(emojiSpan)+'\')">';
+  }
+  // 3) nimic → emoji (sau glob neutru)
+  return emojiSpan;
 }
 function wcFlagEmoji(name){
-  // fallback: derivă steag emoji din numele țării (best-effort) sau glob neutru
-  var map={'Argentina':'🇦🇷','Brazil':'🇧🇷','France':'🇫🇷','Spain':'🇪🇸','England':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Germany':'🇩🇪','Portugal':'🇵🇹','Netherlands':'🇳🇱','Italy':'🇮🇹','Belgium':'🇧🇪','Croatia':'🇭🇷','USA':'🇺🇸','United States':'🇺🇸','Canada':'🇨🇦','Mexico':'🇲🇽','Uruguay':'🇺🇾','Colombia':'🇨🇴','Ecuador':'🇪🇨','Japan':'🇯🇵','South Korea':'🇰🇷','Morocco':'🇲🇦','Senegal':'🇸🇳','Ghana':'🇬🇭','Nigeria':'🇳🇬','Australia':'🇦🇺'};
-  return '<span style="vertical-align:middle">'+(map[name]||'🏳️')+'</span>';
+  var emoji=_iso2ToEmoji(wcCountryIso(name));
+  return '<span style="vertical-align:middle">'+(emoji||'🏳️')+'</span>';
 }
 
 // Card featured pe feed-ul LIVE — 3 stări după dată. Apelat din renderMatches/loadLive.
