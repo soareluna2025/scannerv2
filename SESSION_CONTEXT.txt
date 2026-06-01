@@ -778,6 +778,24 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~10:30] - Populare jucatori echipe: fallback players_season + backfill toate ligile active
+  PARTEA 1 (afisare, /api/team getPlayers): daca player_stats e gol pt echipa+sezon,
+    CADE pe players_season (WHERE team_id+season AND appearances>0), mapat pe aceleasi
+    campuri ca lotul (apps/goluri/assist/cartonase/rating/min), grupare pe pozitii
+    pastrata. => cele ~1.472 echipe cu players_season isi arata jucatorii imediat.
+    Aceeasi sursa ca getTeamStrengths/calcStrSeason (score7). ACTIV.
+  PARTEA 2 (backfill, api/cron/backfill-players.js NOU, inregistrat in server.js):
+    Refoloseste logica collect-players-season (/players paginat + upsert players_season).
+    Acopera TOATE echipele din leagues.active=true (descoperite din standings JOIN leagues)
+    pe sezoanele 2025 SI 2026. Idempotent: ON CONFLICT (player_id,league_id,season) DO
+    UPDATE; reluabil via app_settings backfill_players_idx; no_data markers
+    no_data:players:<team>:<season>. Ruleaza in FUNDAL (fire-and-forget).
+    Endpoint admin: POST /api/cron/backfill-players (start), ?action=status|stop|reset.
+  Pornire: curl -X POST "http://localhost:3000/api/cron/backfill-players"
+    Status:  curl "http://localhost:3000/api/cron/backfill-players?action=status"
+  NEATINS: scoring/functii imutabile (doar POPULEZ players_season). node --check OK.
+  Un commit pe main + deploy.
+
 [01.06 ~09:55] - FIX bug LOT gol in /api/team (tab Jucatori "Lot indisponibil")
   CAUZA: query-ul getPlayers filtra ps.team_id + fh.league_id + fh.season. Dar
   statisticile jucatorilor pot fi sub alt league_id decat campionatul afisat

@@ -82,6 +82,28 @@ async function getPlayers(teamId, season) {
     rows = r.rows;
   } catch (_) { rows = []; }
 
+  // FALLBACK players_season: dacă player_stats e gol pentru echipă+sezon (multe
+  // echipe nu au stats per-meci colectate, dar au sumarul sezonier — sursa care
+  // alimentează și score7/calcStrSeason). Mapăm pe aceleași câmpuri ca lotul.
+  if (!rows.length) {
+    try {
+      const r2 = await query(
+        `SELECT player_id, player_name, position,
+                COALESCE(appearances,0)::int   AS apps,
+                COALESCE(goals,0)::int          AS goals,
+                COALESCE(assists,0)::int        AS assists,
+                COALESCE(yellow_cards,0)::int   AS yellows,
+                COALESCE(red_cards,0)::int      AS reds,
+                rating                          AS avg_rating,
+                COALESCE(minutes,0)::int        AS minutes
+           FROM players_season
+          WHERE team_id = $1 AND season = $2 AND appearances > 0
+          ORDER BY goals DESC, assists DESC, rating DESC NULLS LAST`,
+        [teamId, season]);
+      rows = r2.rows;
+    } catch (_) { rows = []; }
+  }
+
   // Clean sheets per jucător de câmp nu există direct; calculăm clean sheets ECHIPĂ
   // (folosit la portari). Atașăm la grup-ul G mai jos.
   const groups = { G: [], D: [], M: [], F: [] };
