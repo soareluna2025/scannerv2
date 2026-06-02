@@ -53,6 +53,27 @@ async function collectUpcomingFixtures(stats) {
       allowed.has(f.league?.id) && isAllowedMatch(f, ALLOWED_LEAGUE_IDS)
     );
 
+    // UPSERT leagues din metadata fixturilor — ORICE ligă whitelisted cu fixturi
+    // capătă rând (inclusiv cupe knockout fără standings, ex. 130 Copa Argentina,
+    // pe care bucla de standings le sare). Dedup o dată per ligă (nu per meci).
+    // Aceleași coloane ca INSERT-ul din bucla de standings (:294).
+    const seenLeagues = new Set();
+    for (const m of filtered) {
+      const lg = m.league;
+      if (!lg?.id || seenLeagues.has(lg.id)) continue;
+      seenLeagues.add(lg.id);
+      try {
+        await query(
+          `INSERT INTO leagues (league_id, name, country, logo, active, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           ON CONFLICT (league_id) DO UPDATE SET
+             name=EXCLUDED.name, country=EXCLUDED.country,
+             logo=EXCLUDED.logo, active=EXCLUDED.active, updated_at=EXCLUDED.updated_at`,
+          [lg.id, lg.name, lg.country || null, lg.logo || null, true, new Date().toISOString()]
+        );
+      } catch (_) { /* continuă — non-fatal */ }
+    }
+
     for (const m of filtered) {
       try {
         await query(

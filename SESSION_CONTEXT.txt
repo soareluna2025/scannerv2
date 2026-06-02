@@ -778,6 +778,17 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~20:00] - collect-daily: upsert leagues din fixturi (cupe knockout fara standings)
+  PROBLEMA: randul in tabela leagues se crea DOAR in bucla de standings (collect-daily.js:294).
+  Cupele knockout (ex. 130 Copa Argentina) n-au clasament -> niciun rand leagues -> today.js
+  (afiseaza ligile prin tabela leagues) le sare -> meciuri exista dar liga invizibila in UI.
+  FIX (DOAR collect-daily.js, in collectUpcomingFixtures, dupa filtrare ~:56): UPSERT in
+  leagues din metadata fixturilor (f.league.{id,name,country,logo}), dedup o data per liga
+  (Set per batch de data), ACELEASI coloane si ON CONFLICT (league_id) DO UPDATE ca INSERT-ul
+  de la :294, active=true. Idempotent, non-fatal. => orice liga whitelisted cu fixturi capata rand.
+  NEATINS: scoring/imutabile, niciun alt fisier. node --check OK. Un commit main.
+  NOTA OWNER: dupa deploy ruleaza collect-daily -> 130 (si orice cupa knockout) capata rand si apare in UI.
+
 [01.06 ~19:45] - CLAUDE.md: regula PERMANENTA filtru ligi + FORCE_ALLOW (doar documentatie)
   Append (NU rescriere) sectiune noua la finalul CLAUDE.md: "FILTRU LIGI — REGULA
   PERMANENTA" cu 3 subsectiuni: (1) AND intre ID (ALLOWED_LEAGUE_IDS) si NUME curat
