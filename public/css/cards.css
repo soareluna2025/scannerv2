@@ -380,34 +380,3 @@
 .wc-br-row.tbd{opacity:.5;font-style:italic}
 .wc-br-team{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wc-br-score{font-weight:800;color:var(--gold)}
-
-/* ═══ CARD PRE-MECI bogat (accent AURIU = programat) — renderPrematchCard ═══ */
-/* Redefinit DUPĂ legacy .pm-card/.pm-teams (cascade: noile reguli câștigă). */
-:root{ --pm-gold:#f5c451; --pm-gold-d:#e0a82e; }
-.pm-card{border-radius:16px;overflow:hidden;background:linear-gradient(180deg,#0c131c,#0a1018);border:1px solid rgba(245,196,81,.16);box-shadow:0 10px 30px -18px rgba(245,196,81,.35);margin-bottom:10px}
-.pm-head{display:flex;align-items:center;gap:9px;padding:14px 15px 12px}
-.pm-comp{display:flex;align-items:center;gap:7px;font-weight:800;letter-spacing:1px;font-size:12.5px;color:var(--pm-gold);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pm-conf{display:inline-flex;align-items:center;gap:4px;background:rgba(245,196,81,.12);color:var(--pm-gold);border:1px solid rgba(245,196,81,.3);padding:4px 9px;border-radius:999px;font-size:12px;font-weight:800}
-.pm-status{margin-left:auto;display:flex;align-items:center;gap:6px;color:#6b7a89;font-size:12px;font-weight:700;letter-spacing:.5px;flex-shrink:0}
-.pm-status .dot{width:7px;height:7px;border-radius:50%;background:var(--pm-gold-d)}
-.pm-div{height:1px;background:rgba(255,255,255,.05);margin:0 15px}
-.pm-teams{display:block;padding:14px 15px}
-.pm-trow{display:flex;align-items:center;gap:12px;padding:7px 0}
-.pm-crest{width:30px;height:30px;border-radius:7px;object-fit:cover;flex:0 0 auto}
-.pm-name{font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pm-kick{margin-left:auto;text-align:right;padding-left:12px;flex-shrink:0}
-.pm-kick .kd{font-size:11px;color:#6b7a89;font-weight:700;letter-spacing:.6px}
-.pm-kick .kt{font-size:26px;font-weight:800;color:var(--pm-gold);line-height:1.1}
-.pm-pred{padding:4px 15px 14px}
-.pm-predtop{display:flex;align-items:center;margin-bottom:9px}
-.pm-predlbl{color:#6b7a89;font-size:12px;font-weight:800;letter-spacing:1px}
-.pm-pick{margin:0 auto;display:inline-flex;align-items:center;gap:5px;background:rgba(245,196,81,.12);color:var(--pm-gold);border:1px solid rgba(245,196,81,.3);padding:5px 12px;border-radius:999px;font-size:13px;font-weight:800}
-.pm-pct{color:var(--pm-gold);font-weight:800;font-size:18px}
-.pm-track{height:6px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden}
-.pm-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--pm-gold-d),var(--pm-gold))}
-.pm-chips{display:flex;align-items:center;gap:8px;padding:0 15px 15px;flex-wrap:wrap}
-.pm-chip{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:8px 11px;font-size:13px;color:#6b7a89;font-weight:600}
-.pm-chip b{color:#eef2f6;font-weight:800;margin-left:3px}
-.pm-grp{margin-left:auto;color:#3f4b57;font-size:12px;font-weight:700}
-.pm-card.soon{border-color:rgba(130,150,170,.10);box-shadow:none}
-.pm-soonnote{text-align:center;color:#3f4b57;font-size:12.5px;font-weight:600;padding:2px 15px 16px}

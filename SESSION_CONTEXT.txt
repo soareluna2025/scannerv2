@@ -778,6 +778,22 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~16:30] - Revert scope gresit 980681b: PRE-MECI restaurat + WC pe stil pre-meci
+  980681b introdusese cardurile aurii pm-* in AMBELE taburi (gresit). Corectat:
+  1. renderPM (PRE-MECI general): RESTAURAT BYTE-IDENTIC din b1cc724^ (git show
+     b1cc724:app-ui.js). Designul original (pm-card/pm-header/pm-meter-row/conf-bar/
+     badge-uri/STR/TOP PICK) neatins. Verificat cu diff = identic.
+  2. renderPrematchCard: STERS complet (functia aurie introdusa de 980681b).
+  3. wcRenderMatches: rescris sa foloseasca ACELASI stil de card ca PRE-MECI (clasele
+     pm-card/pm-header/pm-meter-row/conf-bar), NU auriu. Pastreaza calendarul pe zile.
+     Date WC: eticheta=numele grupei (round), crest=steag SVG (wcFlag existent), ora
+     start, Over1.5/GG/Over2.5/confidence; meci fara predictie -> "mai aproape de start".
+  4. CSS auriu pm-* (gold) ELIMINAT din cards.css -> fisier byte-identic cu b1cc724.
+     .pm-card original (linia 49) ramane = pre-meci redevine cum era.
+  app-ui.js: SINGURUL diff vs b1cc724 = interiorul wcRenderMatches. node --check OK.
+  NEATINS: freeze fix (cf5a455: freeze-state.js/scanner.js/football.js), scoring/NGP/
+  Monte Carlo/whitelist. Un commit main + deploy.
+
 [01.06 ~16:05] - Freeze-detection RESTART-PROOF: drift pe ceas real (freeze-state.js)
   PROBLEMA: fereastra _frozenSince (10min) se reseteaza la restart/deploy -> meciurile
   fantoma nu apuca sa fie marcate intre deploy-uri.
