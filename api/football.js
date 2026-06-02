@@ -118,7 +118,8 @@ export default async function handler(req, res) {
   // FILTRARE FROZEN-DEAD: ascunde meciurile cu minut înghețat (stare partajată
   // populată de scanner.js prin trackElapsed). Aceeași listă ca în WS broadcast.
   const filtered = allowedMatches.filter(m =>
-    !isFrozenDead(m.fixture?.id, m.fixture?.status?.short || ''));
+    !isFrozenDead(m.fixture?.id, m.fixture?.status?.short || '',
+                  Date.parse(m.fixture?.date), m.fixture?.status?.elapsed));
   log(`[Filter] ${passedStatus.length} → ${allowedMatches.length} whitelist → ${filtered.length} după freeze-filter`);
 
   // ── Injectie _ng per meci ────────────────────────────────────

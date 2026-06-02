@@ -14,7 +14,7 @@ import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 import { isAllowedMatch } from '../utils/league-filter.js';
 import { calcFeatures, calcNextGoal, calcNextGoalWindow, calcGG, calcMarkets } from '../utils/live-score.js';
 import { calibrateNgp } from '../utils/ngp-calibration.js';
-import { trackElapsed, isFrozenDead, maybeLogFrozen, clearFreeze } from '../utils/freeze-state.js';
+import { trackElapsed, freezeReason, maybeLogFrozen, clearFreeze } from '../utils/freeze-state.js';
 
 const FOOTBALL_KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
@@ -729,17 +729,18 @@ async function scanLive10s() {
     // a le șterge din cache → rămân ascunse permanent cât timp API le retrimite
     // blocate. Auto-unfreeze: dacă elapsed crește, trackElapsed resetează _frozenSince
     // → isFrozenDead devine false → meciul reapare singur.
-    for (const m of processedMatches) {
-      const fid = m.fixture?.id;
-      const st  = m.fixture?.status?.short || '';
-      if (fid && isFrozenDead(fid, st)) {
-        maybeLogFrozen(fid, m.teams?.home?.name, m.fixture?.status?.elapsed);
-      }
-    }
     const visibleMatches = processedMatches.filter(m => {
       const fid = m.fixture?.id;
       const st  = m.fixture?.status?.short || '';
-      return !(fid && isFrozenDead(fid, st));
+      if (!fid) return true;
+      const kickoffMs  = Date.parse(m.fixture?.date);
+      const elapsedMin = m.fixture?.status?.elapsed;
+      const reason = freezeReason(fid, st, kickoffMs, elapsedMin);
+      if (reason) {
+        maybeLogFrozen(fid, m.teams?.home?.name, elapsedMin, reason);
+        return false;   // frozen → ascuns din lista live
+      }
+      return true;
     });
 
     // ── Delta broadcast — full la fiecare 5min, delta când sunt schimbări ────

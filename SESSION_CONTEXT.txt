@@ -778,6 +778,27 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~16:05] - Freeze-detection RESTART-PROOF: drift pe ceas real (freeze-state.js)
+  PROBLEMA: fereastra _frozenSince (10min) se reseteaza la restart/deploy -> meciurile
+  fantoma nu apuca sa fie marcate intre deploy-uri.
+  FIX in api/utils/freeze-state.js: +STALE_DRIFT_MS=75min. isFrozenDead acum
+  (id,st,kickoffMs,elapsedMin) cu kickoff/elapsed OPTIONALI. Logica via freezeReason():
+    - !ACTIVE_PLAY -> null
+    - (a) observed: _frozenSince && now-_frozenSince > FREEZE_MS (10min, se pierde la restart)
+    - (c) drift (RESTART-PROOF, pe ceas real): since=now-kickoffMs, expected=elapsedMin*60000;
+      daca since-expected > STALE_DRIFT_MS (75min) -> 'drift' (minutul a ramas in urma >75min
+      fata de realitate = inghetat). NU depinde de _frozenSince -> imun la restart.
+    - altfel null. Fara kickoff/elapsed -> doar observatia (ca inainte).
+  maybeLogFrozen(id,home,el,reason): logheaza motivul (observed/drift), o singura data/id
+  (_frozenLogged Map id->reason).
+  Callers actualizati sa paseze kickoff+elapsed:
+    * scanner.js: freezeReason(fid,st,Date.parse(date),elapsed) in filtrarea visibleMatches
+      (+ log cu reason). isFrozenDead scos din import (folosesc freezeReason).
+    * football.js: isFrozenDead(id,st,Date.parse(date),elapsed).
+  Testat: 35' afisat dar 2h real -> 'drift'; normal -> null; HT -> null; fara kickoff -> null.
+  NEATINS: calcConfidence*/score*/NGP/Monte Carlo/whitelist. node --check OK (3 fisiere).
+  Un commit main + deploy.
+
 [01.06 ~15:45] - Carduri PRE-MECI bogate (accent AURIU) — functie comuna, 2 taburi
   CSS (cards.css): clase noi pm-* aurii (--pm-gold/--pm-gold-d) pt cardul bogat,
     redefinit DUPA legacy .pm-card/.pm-teams (cascade -> noile castiga; legacy markup
