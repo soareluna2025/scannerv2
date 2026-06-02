@@ -778,6 +778,26 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~19:30] - league-filter: FORCE_ALLOW_IDS (75/76/906 trec peste filtrul de NUME)
+  PROBLEMA: 75 Serie C BR / 76 Serie D BR (prinse de 'serie c'/'serie d' din LOWER_DIV) +
+  906 Reserve League AR (prinsa de 'reserve' din YOUTH) erau blocate desi le vrem.
+  AUDIT name-filters (api/utils/league-filter.js): isAllowedLeague verifica WOMEN(:63)+
+  YOUTH(:64)+LOWER_DIV(:65) pe numele LIGII. isAllowedMatch verifica pe numele ECHIPELOR
+  DOAR feminin (/\sW$/ :83 + WOMEN_TERMS :88) — NU exista verificari YOUTH/LOWER_DIV pe
+  echipe, deci pasul 3 nu cere nimic acolo (confirmat).
+  FIX (DOAR league-filter.js, central -> se propaga in football/today/generator/scanner/
+  collect-daily):
+  - +export FORCE_ALLOW_IDS = new Set([75,76,906]) cu comentariu.
+  - isAllowedLeague: WOMEN_TERMS ramane primul (mereu aplicat). Dupa el, daca
+    FORCE_ALLOW_IDS.has(id) -> return true (sare YOUTH+LOWER_DIV). Whitelist-ul de ID
+    (allowedIds.has) verificat ANTERIOR -> ramane respectat. Femininul ramane activ.
+  - isAllowedMatch: nimic de adaugat (singurele check-uri pe echipe sunt feminine, raman).
+  Verificat: 75/76/906 DEJA in ALLOWED_LEAGUE_IDS (leagues.js neatins). 9 teste comportament
+  PASS (force pass; non-force same name blocat; force fara whitelist blocat; women blocat;
+  ligi normale neafectate). node --check OK.
+  IMUTABILE neatinse: calcConfidence*/score2/3/6/7/Monte Carlo/NGP. Doar league-filter.js.
+  NOTA OWNER: dupa deploy ruleaza collect-daily ca sa traga fixturile pt 75/76/906 (acum 0 in DB).
+
 [01.06 ~19:05] - Whitelist: pachet SA + Algeria (48 tinta -> 26 NOI adaugate)
   Verificat INAINTE: 214 ID-uri curente in ALLOWED_LEAGUE_IDS. Din cele 48 tinta:
   DEJA prezente (22): 71,72,73,239,240,241,268,270,269,344,242,917,265,266,267,281,282,

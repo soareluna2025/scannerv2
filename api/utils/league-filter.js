@@ -2,6 +2,14 @@
 // Filtru centralizat: feminin / tineret / ligi inferioare
 // Folosit în football.js, today.js, generator.js, scanner.js
 
+// Ligi care trec PESTE filtrul de NUME (YOUTH/LOWER_DIV) deși numele conține termeni
+// din blocklist — la cererea owner-ului. NU ocolește whitelist-ul de ID
+// (ALLOWED_LEAGUE_IDS) și NU ocolește filtrul feminin (WOMEN_TERMS rămâne activ).
+//   75  — Serie C Brazilia (pro, prinsă de 'serie c')
+//   76  — Serie D Brazilia (pro, prinsă de 'serie d')
+//   906 — Reserve League Argentina (prinsă de 'reserve')
+export const FORCE_ALLOW_IDS = new Set([75, 76, 906]);
+
 export const WOMEN_TERMS = [
   'women', 'female', 'ladies', 'lady', 'girl',
   'féminin', 'feminin', 'femenino', 'femenina',
@@ -60,7 +68,13 @@ export function isAllowedLeague(leagueName, leagueId, allowedIds) {
 
   const name = leagueName.toLowerCase().trim();
 
+  // Filtrul feminin se aplică ÎNTOTDEAUNA (inclusiv force-allow).
   for (const term of WOMEN_TERMS)    { if (name.includes(term)) return false; }
+
+  // Force-allow: sare peste YOUTH_TERMS + LOWER_DIV_TERMS pe NUME (whitelist-ul de ID
+  // a fost deja verificat mai sus, deci rămâne respectat).
+  if (FORCE_ALLOW_IDS.has(Number(leagueId))) return true;
+
   for (const term of YOUTH_TERMS)    { if (name.includes(term)) return false; }
   for (const term of LOWER_DIV_TERMS){ if (name.includes(term)) return false; }
 
