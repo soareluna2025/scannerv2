@@ -19,6 +19,10 @@ const FOOTBALL_KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY
 
 const LIVE_STATUS = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'INT']);
 const DONE_STATUS = new Set(['FT', 'AET', 'PEN']);
+// Statusuri terminale EXTRA (meci ne-jucat/anulat/amânat) — scoatem cardul din live.
+// NU includem SUSP/INT (pot relua — prune-by-absence le acoperă dacă chiar dispar).
+const TERMINAL_EXTRA = new Set(['CANC', 'ABD', 'PST', 'WO', 'AWD']);
+const LIVE_PRUNE_MS = 90_000;  // prune-by-absence: șterge din liveCache dacă nu mai e văzut 90s
 
 // Stare în memorie
 const liveCache         = {}; // { [fixtureId]: { home_goals, away_goals, status, minute, lineupsFetched } }
@@ -448,6 +452,17 @@ async function scanLive10s() {
     const raw = rawAll.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
     log(`live10s: ${rawAll.length} din API → ${raw.length} după filtrare`);
 
+    // lastSeen: marchează FIECARE meci prezent în `raw` în ciclul curent — INDIFERENT
+    // de throttling (LOW/MEDIUM sunt în `raw`, deci „văzute" → NU vor fi pruned). Folosit
+    // la prune-by-absence: un meci care dispare din live=all fără FT prins se curăță.
+    const _nowSeen = Date.now();
+    for (const m of raw) {
+      const _id = m.fixture?.id;
+      if (!_id) continue;
+      if (!liveCache[_id]) liveCache[_id] = {};
+      liveCache[_id].lastSeen = _nowSeen;
+    }
+
     // Prefetch real form goals per team (cached 1h in formCache)
     const matchFd = {};
     await Promise.allSettled(raw.map(async m => {
@@ -506,6 +521,14 @@ async function scanLive10s() {
           saveFormStats(m).catch(e => log(`saveFormStats ${id}: ${e.message}`)); // M5
           delete liveCache[id];
         }
+        continue;
+      }
+
+      // Statusuri terminale extra (CANC/ABD/PST/WO/AWD) — scoatem cardul din live.
+      // NU rezolvăm outcome (scor incert) — collect-finished face rezolvarea reală.
+      if (TERMINAL_EXTRA.has(sh)) {
+        if (liveCache[id]) delete liveCache[id];
+        delete _lastBroadcastSnap[id];
         continue;
       }
 
@@ -645,6 +668,21 @@ async function scanLive10s() {
           lambda_away:     null,
         }).catch(() => {});
         } // end else (_full — semnal real de bani)
+      }
+    }
+
+    // ── PRUNE-BY-ABSENCE: meciuri „înghețate" ───────────────────────────────
+    // Când API scoate un meci terminat din live=all fără FT prins, nu mai e
+    // „văzut" → lastSeen se învechește. Le scoatem din liveCache + snap broadcast.
+    // Pragul 90s evită sclipiri din blip-uri tranzitorii (un meci real reapare în câteva s).
+    {
+      const nowPrune = Date.now();
+      for (const id of Object.keys(liveCache)) {
+        const seen = liveCache[id].lastSeen || 0;
+        if (nowPrune - seen > LIVE_PRUNE_MS) {
+          delete liveCache[id];
+          delete _lastBroadcastSnap[id];
+        }
       }
     }
 
