@@ -778,6 +778,24 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~14:25] - FIX complementar: freeze-detection minut inghetat (scanner.js)
+  CAUZA: API intoarce meciuri in live=all cu status de joc (1H/2H) dar `elapsed` blocat
+  (ex. 1H 35 de 10+ min) -> prune-by-absence NU le prinde (raman "vazute").
+  FIX (igiena liveCache, complementar lastSeen/prune existente):
+  1. Tracking minut in loop-ul lastSeen (pe TOT raw, inainte de throttle): lastMin +
+     minChangedAt. Prima aparitie -> init (lastMin=elapsed, minChangedAt=now). Altfel
+     update DOAR pe CRESTERE (elapsed>lastMin). In acelasi minut nu se reseteaza (normal).
+     Salvez si curStatus pt check-ul la prune.
+  2. Freeze-removal in blocul de prune: daca curStatus in ACTIVE_PLAY {1H,2H,ET} SI
+     now-minChangedAt > FREEZE_MS (600_000=10min) -> delete liveCache[id]+_lastBroadcastSnap[id].
+  3. EXCEPTIE: HT/BT/INT/SUSP/P NU sunt in ACTIVE_PLAY -> minutul sta pe loc normal,
+     NU declanseaza freeze. (confirmat: doar 1H/2H/ET checked).
+  4. Auto-corectare: meci scos gresit (pauza VAR/accidentare) reapare in raw ca nou
+     -> liveCache[id]={} recreat -> lastMin==null -> re-init curat, fara efecte secundare.
+  NU rezolv outcome la freeze (scor incert; collect-finished rezolva). prune-by-absence
+  + lastSeen PASTRATE. NEATINS: NGP/calcConfidenceLive/score*/Monte Carlo/throttling.
+  node --check OK. Un commit main + deploy.
+
 [01.06 ~14:05] - FIX meciuri "inghetate" in live — prune-by-absence cu lastSeen (scanner.js)
   CAUZA: liveCache se stergea DOAR la FT/AET/PEN vazut. Cand API scotea un meci terminat
   din live=all fara FT prins -> ramanea cu minut inghetat. Plus CANC/ABD/PST cadeau si ramaneau.
