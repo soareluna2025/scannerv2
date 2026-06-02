@@ -778,6 +778,15 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~14:40] - FIX ReferenceError _stabTimer nedeclarat (admin.html)
+  Bug: _stabTimer folosit in 3 locuri (start/stop card "STABILIZARE COMPLETA DB") dar
+  NICIODATA declarat -> ReferenceError pe iOS Safari (linia care CITESTE if(_stabTimer)
+  inainte de orice atribuire) -> rupea cronometrul "Timp scurs" (ramanea 0s).
+  Verificat: zero declaratii var/let/const _stabTimer in tot fisierul. Adaugat O singura
+  declaratie la top-level script (linga let _timer / let _bfTimer): let _stabTimer = null;
+  Aceleasi script scope ca cele 3 utilizari (fara boundary <script> intre ele). Liniile
+  de utilizare NEATINSE. Doar declaratia adaugata.
+
 [01.06 ~14:25] - FIX complementar: freeze-detection minut inghetat (scanner.js)
   CAUZA: API intoarce meciuri in live=all cu status de joc (1H/2H) dar `elapsed` blocat
   (ex. 1H 35 de 10+ min) -> prune-by-absence NU le prinde (raman "vazute").
