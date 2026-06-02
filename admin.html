@@ -1887,12 +1887,40 @@ function etSeasonHint() {
   var s = Number((document.getElementById('et-season')||{}).value) || _etCurrentSeason();
   hint.textContent = '→ trage ' + s + ' + ' + (s - 1);
 }
+// Curăță linia de rezultat anterioară (la schimbarea echipei/ID) — să nu rămână afișat
+// rezultatul echipei precedente.
+function etClearResult() {
+  var el = document.getElementById('et-stopped-info');
+  if (el) el.textContent = 'Selectează o echipă (nume sau ID) + sezon, apoi extrage & aplică.';
+}
+// Detectează sezonul-ancoră al echipei din API (per echipă, nu logica europeană).
+// Setează câmpul Sezon + hint dacă API întoarce un sezon; altfel lasă default-ul.
+var _etDetectToken = 0;
+async function etDetectSeason(teamId) {
+  if (!teamId) return;
+  var myToken = ++_etDetectToken;   // anti-race: doar ultima cerere câștigă
+  try {
+    var r = await fetch('/api/admin/team-season?team_id=' + teamId, { headers:{'X-Api-Key':_key} });
+    var d = await r.json();
+    if (myToken !== _etDetectToken) return;     // o selecție mai nouă a avut loc între timp
+    if (d && d.season != null) {
+      var sEl = document.getElementById('et-season');
+      if (sEl) sEl.value = d.season;            // sezon detectat
+    } else {
+      _etEnsureSeason();                         // fallback logica europeană
+    }
+    etSeasonHint();
+  } catch (e) { /* fallback: lăsăm valoarea curentă */ etSeasonHint(); }
+}
 function etOnIdInput() {
   // ID direct are prioritate — deselectează rândul ales.
-  if ((document.getElementById('et-id')||{}).value) {
+  var idVal = (document.getElementById('et-id')||{}).value || '';
+  if (idVal) {
     _etSelected = null;
     document.querySelectorAll('#et-results .et-row').forEach(function(r){ r.style.background=''; });
-    document.getElementById('et-selected').textContent = 'ID direct: ' + document.getElementById('et-id').value;
+    document.getElementById('et-selected').textContent = 'ID direct: ' + idVal;
+    etClearResult();                               // șterge rezultatul anterior
+    if (Number(idVal) > 0) etDetectSeason(Number(idVal));  // auto-prefill sezon din API
   }
   etUpdateBtn();
 }
@@ -1922,6 +1950,8 @@ function selectTeam(id, el) {
   el.style.background = 'rgba(99,102,241,.18)';
   (document.getElementById('et-id')||{}).value = '';   // ID direct golit — selecția câștigă
   document.getElementById('et-selected').textContent = 'Selectat: ' + _etSelected.name + ' (ID ' + id + ')';
+  etClearResult();                 // șterge rezultatul echipei precedente
+  etDetectSeason(id);              // auto-prefill sezon-ancoră din API
   etUpdateBtn();
 }
 async function extractTeam() {

@@ -312,6 +312,30 @@ router.get('/team-search', async (req, res) => {
   }
 });
 
+// ── GET /api/admin/team-season?team_id=<id> ──────────────────────────────────
+// Detectează sezonul-ancoră al echipei din API (NU ghicit cu logica europeană):
+//   1) max(year) dintre sezoanele cu current===true; 2) altfel max(year); 3) null.
+router.get('/team-season', async (req, res) => {
+  const teamId = Number(req.query?.team_id);
+  if (!teamId) return res.status(400).json({ ok: false, error: 'team_id required' });
+  try {
+    const r = await fetchApiFootball(`/leagues?team=${teamId}`);
+    const d = await r.json();
+    let curMax = null, anyMax = null;
+    for (const lg of (d.response || [])) {
+      for (const s of (lg.seasons || [])) {
+        const y = Number(s.year);
+        if (!Number.isFinite(y)) continue;
+        if (anyMax == null || y > anyMax) anyMax = y;
+        if (s.current === true && (curMax == null || y > curMax)) curMax = y;
+      }
+    }
+    res.json({ ok: true, season: curMax != null ? curMax : (anyMax != null ? anyMax : null) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message, season: null });
+  }
+});
+
 // ── GET /api/admin/errors ────────────────────────────────────────────────────
 // Default: ultimele 14 zile. Opt: ?days=N (1-90) | ?all=1 (toate)
 router.get('/errors', async (req, res) => {

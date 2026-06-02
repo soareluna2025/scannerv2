@@ -778,6 +778,22 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~18:20] - EXTRAGERE ECHIPA: sezon-ancora DETECTAT din API (per echipa)
+  PROBLEMA: default european (luna>=7?an:an-1) gresit pt ligi an-calendaristic (Suedia/
+  Norvegia/America de Sud) -> extragea 2025 cand curentul e 2026 -> "Lot indisponibil".
+  BACKEND api/admin.js: +GET /api/admin/team-season?team_id= -> /leagues?team= -> alege
+    ancora: 1) max(year) cu current===true; 2) altfel max(year); 3) null (esec/gol).
+  FRONTEND admin.html (cardul EXTRAGERE ECHIPA):
+    * etDetectSeason(teamId): apelat la selectTeam (lista) SI la etOnIdInput (ID valid)
+      -> daca season!=null seteaza campul Sezon + hint; daca null -> fallback _etEnsureSeason
+      (logica europeana). Anti-race cu _etDetectToken (doar ultima cerere castiga). Userul
+      poate edita manual oricand.
+    * etClearResult(): la selectare echipa noua / schimbare ID -> reseteaza done-info
+      (nu mai ramane rezultatul echipei precedente).
+  Restul neschimbat (extract 2 sezoane S+S-1, un buton EXTRAGE & APLICA, re-enrich final).
+  NEATINS: calcConfidence*/score*/NGP/Monte Carlo/whitelist/freeze/scanner/football/enrich/
+    extract-team.js/carduri. Doar admin.js + admin.html. node --check OK. Un commit main.
+
 [01.06 ~18:00] - EXTRAGERE ECHIPA: 1 buton = extragere ADANCA 2 sezoane + standings + aplicare
   BACKEND (api/cron/extract-team.js): runExtract ruleaza acum pe seasons=[S, S-1] (S=ancora
   din UI). Pasi idempotenti, prinsi separat, per sezon:
