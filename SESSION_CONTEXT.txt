@@ -778,6 +778,18 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~19:05] - Whitelist: pachet SA + Algeria (48 tinta -> 26 NOI adaugate)
+  Verificat INAINTE: 214 ID-uri curente in ALLOWED_LEAGUE_IDS. Din cele 48 tinta:
+  DEJA prezente (22): 71,72,73,239,240,241,268,270,269,344,242,917,265,266,267,281,282,
+    502,128,131,132,483 — NU re-adaugate (zero duplicate).
+  ADAUGATE NOU (26): 75,76,612,930,250,252,251,501,710,964,243,711,129,130,134,517,810,
+    906,1032,1067,1178,186,187,514,516,832 — bloc nou la finalul Set-ului, grupate pe tara.
+  TOTAL final: 240 unice (214+26), tokens==unique=240 -> zero duplicate (verificat).
+  Migrare scripts/migrations/add-leagues-sa-batch.sql: UPDATE leagues SET active=true
+    WHERE league_id IN (toate 48) — idempotent (no-op pe cele deja active), fara nume/tier.
+  NEATINS: calcConfidence*/score*/NGP/Monte Carlo/freeze/scanner/football/enrich/
+    extract-team/team.js/carduri. Doar api/leagues.js + migrare. node --check OK. Un commit main.
+
 [01.06 ~18:45] - Pagina echipa tab JUCATORI: fallback lot pe cel mai recent sezon cu jucatori
   PROBLEMA: lotul era blocat pe sezonul CURENT; stats jucatori pe sezonul curent adesea
   lipsesc la API (sezonul nou are clasament+meciuri, dar player stats vin de pe sezonul

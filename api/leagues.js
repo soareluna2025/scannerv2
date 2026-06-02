@@ -386,4 +386,40 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   9,     // Copa America
   10,    // CONCACAF Champions Cup
   26,    // CONCACAF Nations League
+
+  // ── BATCH SA + Algeria (ID-uri NOI; cele deja prezente NU sunt re-adăugate) ──
+  // Brazilia
+  75,    // Serie C
+  76,    // Serie D
+  612,   // Copa do Nordeste
+  // Uruguay
+  930,   // (competiție Uruguay)
+  // Paraguay
+  250,   // Primera Division
+  252,   // (Paraguay)
+  251,   // (Paraguay)
+  501,   // (Paraguay)
+  // Bolivia
+  710,   // (Bolivia)
+  964,   // (Bolivia)
+  // Ecuador
+  243,   // (Ecuador)
+  // Chile
+  711,   // (Chile)
+  // Argentina
+  129,   // Primera B Nacional
+  130,   // Primera B Metropolitana
+  134,   // (Argentina)
+  517,   // (Argentina)
+  810,   // (Argentina)
+  906,   // (Argentina)
+  1032,  // (Argentina)
+  1067,  // (Argentina)
+  1178,  // (Argentina)
+  // Algeria
+  186,   // Ligue 1
+  187,   // Ligue 2
+  514,   // (Algeria)
+  516,   // (Algeria)
+  832,   // (Algeria)
 ]);
