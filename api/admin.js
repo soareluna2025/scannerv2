@@ -4,6 +4,7 @@
 import express      from 'express';
 import { query }    from './db.js';
 import { getScannerPaused, setScannerPaused } from './cron/scanner.js';
+import { fetchApiFootball } from './utils/fetch-api.js';
 
 const router = express.Router();
 
@@ -286,6 +287,26 @@ router.get('/cron-status', async (req, res) => {
     }));
 
     res.json({ ok: true, jobs: result });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── GET /api/admin/team-search?q=<nume> ──────────────────────────────────────
+// Căutare echipă după nume (API-Football /teams?search=) — pt cardul EXTRAGERE ECHIPĂ.
+router.get('/team-search', async (req, res) => {
+  const q = (req.query?.q || '').trim();
+  if (q.length < 2) return res.status(200).json({ ok: true, results: [] });
+  try {
+    const r = await fetchApiFootball(`/teams?search=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    const results = (d.response || []).slice(0, 10).map(x => ({
+      id:      x.team?.id,
+      name:    x.team?.name,
+      country: x.team?.country || null,
+      logo:    x.team?.logo || null,
+    })).filter(t => t.id);
+    res.json({ ok: true, results });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

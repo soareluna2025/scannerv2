@@ -778,6 +778,28 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~17:00] - Card admin "EXTRAGERE ECHIPA" (extragere tintita pe o echipa)
+  BACKEND:
+  - api/admin.js: +GET /api/admin/team-search?q= -> fetchApiFootball /teams?search=,
+    intoarce [{id,name,country,logo}] max 10 (pt selectia dupa nume). +import fetch-api.
+  - api/cron/backfill-players.js: collectTeamSeason EXPORTAT (minimal) pt reutilizare.
+  - api/cron/extract-team.js (NOU, inregistrat server.js): GET ?team_id=&season= (POST),
+    pasi idempotenti ON CONFLICT DO UPDATE, fiecare prins separat (un pas esuat nu opreste):
+    (a) /teams?id -> upsert teams (nume/tara/logo/founded/venue).
+    (b) /players paginat -> REUTILIZEAZA collectTeamSeason (include fix player_id null).
+    (c) /fixtures?team -> fixtures_history (acelasi upsert ca backfill istoric).
+    (d) /leagues?team -> ligile sezonului -> /teams/statistics -> upsert teams_stats
+        (TABEL EXISTENT cu UNIQUE(team_id,league_id,season) — NU am inventat schema).
+    Status pollable app_settings 'extract_team_status' (JSON: running/step/team_name/
+    season/players/fixtures/stats_leagues/done/error) + GET ?status=1. Anti-concurenta.
+  FRONTEND admin.html: card #cardExtractTeam clonat dupa BACKFILL JUCATORI (status poll
+    la 1.5s, resume-on-load via refresh(), cai relative, X-Api-Key). MODUL A cautare nume
+    (lista logo+nume+tara+ID, click selecteaza+evidentiaza), MODUL B ID direct (prioritate),
+    Sezon prefill cu sezonul curent (m>=7?an:an-1, ca collect-daily). Buton EXTRAGE dezactivat
+    pana e selectie/ID. Status live: pas curent + counts jucatori/meciuri/ligi-stats + DONE/eroare.
+  NEATINS: scoring/score*/NGP/Monte Carlo/whitelist/freeze/carduri live-premeci-WC.
+  node --check OK (5 fisiere). Un commit main + deploy.
+
 [01.06 ~16:30] - Revert scope gresit 980681b: PRE-MECI restaurat + WC pe stil pre-meci
   980681b introdusese cardurile aurii pm-* in AMBELE taburi (gresit). Corectat:
   1. renderPM (PRE-MECI general): RESTAURAT BYTE-IDENTIC din b1cc724^ (git show

@@ -70,7 +70,7 @@ async function teamsGap() {
 
 // Colectare players_season pt o echipă+sezon (paginat) — logică identică cu
 // collect-players-season.js. Întoarce nr. de rânduri upsert-ate (-1 = no_data).
-async function collectTeamSeason(teamId, season) {
+export async function collectTeamSeason(teamId, season) {
   let inserted = 0;
   let any = false;
   let page = 1;
