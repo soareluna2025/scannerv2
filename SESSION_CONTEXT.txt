@@ -778,6 +778,26 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~17:30] - Re-enrich tintit pe echipa (meciuri viitoare) — legat de EXTRAGERE ECHIPA
+  BACKEND:
+  - api/enrich.js: +param force=1 care OCOLESTE DOAR cache-ul (3 linii, scoringul
+    calcConfidence*/score* NEATINS) -> re-enrich efectiv, ocolind filtrul stale.
+  - api/cron/extract-team.js: +reEnrichTeam(teamId) — selecteaza din `fixtures` meciurile
+    (home OR away = teamId) AND status_short='NS' AND match_date>=NOW() (DOAR viitoare),
+    si pt fiecare apeleaza REUTILIZAT handler-ul enrich (mock req/res, force=1) = exact
+    nucleul compute-and-save folosit de fluxul prematch; NU reimplementez scorurile.
+    Numara cate. Integrare: (a) PAS FINAL al extract-team (pas 'reenrich' + count
+    reenriched in extract_team_status, aplica datele imediat); (b) trigger de sine
+    statator ?reenrich_only=1&team_id= -> runReEnrichOnly (fara re-extragere API).
+  FRONTEND admin.html (cardul EXTRAGERE ECHIPA): status arata pasul "Re-enrich meciuri…"
+    + count re-enrich; buton secundar "↻ Doar re-enrich" (pe echipa selectata/ID) ->
+    reenrich_only=1, status in aceeasi zona, poll 1.5s. Done info: extract complet vs
+    reenrich-only.
+  NOTE: atinge DOAR meciuri NS viitoare (0 daca echipa n-are); nu inventeaza date
+    (Iran fara jucatori -> STR ramane "?"), doar recalculeaza cu ce e in DB.
+  NEATINS: calcConfidencePreMatch/Live, score2/3/6/7, NGP, Monte Carlo, whitelist,
+    freeze-state/scanner/football, carduri live-premeci-WC. node --check OK. Un commit main.
+
 [01.06 ~17:00] - Card admin "EXTRAGERE ECHIPA" (extragere tintita pe o echipa)
   BACKEND:
   - api/admin.js: +GET /api/admin/team-search?q= -> fetchApiFootball /teams?search=,

@@ -1001,10 +1001,12 @@ export default async function handler(req, res) {
   const aId = Number(a);
 
   // [C3] Cache lookup — live (elapsed>0 / status live) = TTL scurt, altfel lung.
+  // `force=1` ocolește DOAR cache-ul (re-enrich țintit) — NU schimbă scoringul.
+  const _force = req.query?.force === '1' || req.query?.force === 1;
   const _isLiveReq = (parseInt(elapsed) || 0) > 0 || LIVE_STATUSES.has(status_short);
   const cacheKey = `${hId}-${aId}-${fid || 0}`;
   const _cached = enrichCache.get(cacheKey);
-  if (_cached && Date.now() - _cached.ts < (_isLiveReq ? ENRICH_TTL_LIVE : ENRICH_TTL_STATIC)) {
+  if (!_force && _cached && Date.now() - _cached.ts < (_isLiveReq ? ENRICH_TTL_LIVE : ENRICH_TTL_STATIC)) {
     return res.status(200).json(_cached.data);
   }
 

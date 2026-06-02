@@ -1210,11 +1210,12 @@ body{
     <div class="bf-label" id="et-selected" style="margin-bottom:8px;color:var(--mu)">Nicio echipă selectată</div>
     <div id="et-active" style="display:none">
       <div style="display:flex;align-items:center;margin-bottom:10px"><span class="bf-dot"></span><span style="color:var(--red);font-size:11.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase" id="et-step">Extrag...</span></div>
-      <div class="bf-label"><span id="et-players">0</span> jucători · <span id="et-fixtures">0</span> meciuri · <span id="et-statslg">0</span> ligi-stats</div>
+      <div class="bf-label"><span id="et-players">0</span> jucători · <span id="et-fixtures">0</span> meciuri · <span id="et-statslg">0</span> ligi-stats · re-enrich <span id="et-reenrich">0</span></div>
     </div>
     <div id="et-stopped"><div class="bf-label" id="et-stopped-info">Selectează o echipă (nume sau ID) + sezon, apoi extrage.</div></div>
     <div class="bf-buttons">
       <button id="et-extract-btn" class="bf-start" onclick="extractTeam()" disabled style="opacity:.5">⬇ Extrage</button>
+      <button id="et-reenrich-btn" class="bf-stop" onclick="reenrichOnly()" disabled style="flex:0 0 auto;padding-left:12px;padding-right:12px;opacity:.5">↻ Doar re-enrich</button>
     </div>
   </section>
 
@@ -1873,11 +1874,31 @@ function _etEnsureSeason() {
   if (s && !s.value) s.value = _etCurrentSeason();
 }
 function etUpdateBtn() {
-  var btn = document.getElementById('et-extract-btn');
   var idVal = (document.getElementById('et-id')||{}).value || '';
   var ok = !!_etSelected || (idVal && Number(idVal) > 0);
-  btn.disabled = !ok;
-  btn.style.opacity = ok ? '1' : '.5';
+  ['et-extract-btn','et-reenrich-btn'].forEach(function(id){
+    var btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = !ok;
+    btn.style.opacity = ok ? '1' : '.5';
+  });
+}
+function _etTeamId() {
+  var idVal = (document.getElementById('et-id')||{}).value || '';
+  return _etSelected ? _etSelected.id : Number(idVal);
+}
+async function reenrichOnly() {
+  var teamId = _etTeamId();
+  if (!teamId) { toast('Selectează o echipă sau completează ID', 'var(--red)'); return; }
+  try {
+    var r = await fetch('/api/cron/extract-team?reenrich_only=1&team_id=' + teamId, { method:'POST', headers:{'X-Api-Key':_key} });
+    var d = await r.json();
+    if (d.error) { toast('✗ ' + d.error, 'var(--red)'); return; }
+    toast(d.already_running ? '▶ Deja rulează' : '↻ Re-enrich pornit');
+    refreshETStatus();
+    if (_etTimer) clearInterval(_etTimer);
+    _etTimer = setInterval(refreshETStatus, 1500);
+  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
 }
 function etOnIdInput() {
   // ID direct are prioritate — deselectează rândul ales.
@@ -1941,18 +1962,24 @@ async function refreshETStatus() {
     var stoppedDiv = document.getElementById('et-stopped');
     if (!activeDiv) return;
     if (!s) { if (_etTimer) { clearInterval(_etTimer); _etTimer=null; } return; }
-    var stepTxt = { teams:'Extrag info echipă…', players:'Extrag jucători…', fixtures:'Extrag meciuri…', stats:'Statistici…', start:'Pornesc…', done:'Gata' }[s.step] || s.step;
+    var stepTxt = { teams:'Extrag info echipă…', players:'Extrag jucători…', fixtures:'Extrag meciuri…', stats:'Statistici…', reenrich:'Re-enrich meciuri…', start:'Pornesc…', done:'Gata' }[s.step] || s.step;
     if (s.running) {
       activeDiv.style.display = 'block'; stoppedDiv.style.display = 'none';
       document.getElementById('et-step').textContent = stepTxt;
       document.getElementById('et-players').textContent = (s.players||0).toLocaleString();
       document.getElementById('et-fixtures').textContent = (s.fixtures||0).toLocaleString();
       document.getElementById('et-statslg').textContent = (s.stats_leagues||0).toLocaleString();
+      document.getElementById('et-reenrich').textContent = (s.reenriched||0).toLocaleString();
       if (!_etTimer) _etTimer = setInterval(refreshETStatus, 1500);
     } else {
       activeDiv.style.display = 'none'; stoppedDiv.style.display = 'block';
       if (s.done) {
-        var info = '✓ ' + (s.team_name||'echipă') + ' (s.' + s.season + '): ' + (s.players||0) + ' jucători · ' + (s.fixtures||0) + ' meciuri · ' + (s.stats_leagues||0) + ' ligi-stats';
+        var info;
+        if (s.reenrich_only) {
+          info = '✓ Re-enrich: ' + (s.reenriched||0) + ' meciuri';
+        } else {
+          info = '✓ ' + (s.team_name||'echipă') + ' (s.' + s.season + '): ' + (s.players||0) + ' jucători · ' + (s.fixtures||0) + ' meciuri · ' + (s.stats_leagues||0) + ' ligi-stats · re-enrich ' + (s.reenriched||0);
+        }
         if (s.error) info += ' · ⚠ ' + s.error;
         document.getElementById('et-stopped-info').textContent = info;
       }

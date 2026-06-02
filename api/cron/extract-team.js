@@ -11,6 +11,7 @@
 import { query } from '../db.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
 import { collectTeamSeason } from './backfill-players.js';
+import enrichHandler from '../enrich.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -147,6 +148,49 @@ async function extractTeamStats(teamId, season) {
   return { leagues: leagues.length, statsUpserted: done };
 }
 
+// RE-ENRICH ȚINTIT: recalculează predicțiile DOAR pt meciurile VIITOARE (NS) ale echipei.
+// Reutilizează EXACT nucleul de compute-and-save per fixture (enrich handler) — NU
+// reimplementează scorurile. Apelează FORȚAT (force=1) → ocolește cache-ul (filtrul
+// „are nevoie/nu e stale"). Atinge DOAR fixtures NS cu match_date >= now().
+export async function reEnrichTeam(teamId) {
+  let rows = [];
+  try {
+    const r = await query(
+      `SELECT fixture_id, league_id, home_team_id, home_team_name,
+              away_team_id, away_team_name, match_date, status_short
+         FROM fixtures
+        WHERE (home_team_id = $1 OR away_team_id = $1)
+          AND status_short = 'NS'
+          AND match_date >= NOW()
+        ORDER BY match_date ASC`, [teamId]);
+    rows = r.rows;
+  } catch (_) { return 0; }
+
+  let done = 0;
+  for (const f of rows) {
+    // Mock req/res — apel programatic al handler-ului de enrich (compute + save predictions).
+    const req = {
+      method: 'GET',
+      query: {
+        h: String(f.home_team_id), a: String(f.away_team_id),
+        fid: String(f.fixture_id),
+        hn: f.home_team_name || '', an: f.away_team_name || '',
+        lgid: f.league_id != null ? String(f.league_id) : '',
+        dt: f.match_date ? new Date(f.match_date).toISOString() : '',
+        status_short: f.status_short || 'NS',
+        force: '1',                 // ocolește cache → re-enrich efectiv
+      },
+    };
+    const res = {
+      setHeader() {}, status() { return this; }, json() { return this; }, end() { return this; },
+    };
+    try { await enrichHandler(req, res); done++; }
+    catch (e) { console.error(`[extract-team] reEnrich ${f.fixture_id}: ${e.message}`); }
+    await sleep(200);   // rate-limit tehnic (enrich poate atinge API)
+  }
+  return done;
+}
+
 async function runExtract(teamId, season) {
   running = true;
   const st = { running: true, step: 'start', team_name: null, season, team_id: teamId,
@@ -179,11 +223,32 @@ async function runExtract(teamId, season) {
     st.stats_upserted = r.statsUpserted;
     st.stats_table = 'teams_stats';
   } catch (e) { st.error = (st.error ? st.error + ' | ' : '') + `stats: ${e.message}`; }
+  await setStatus(st);
+
+  // e) RE-ENRICH meciuri viitoare (aplică datele imediat în predicții)
+  try {
+    st.step = 'reenrich'; await setStatus(st);
+    st.reenriched = await reEnrichTeam(teamId);
+  } catch (e) { st.error = (st.error ? st.error + ' | ' : '') + `reenrich: ${e.message}`; }
 
   st.step = 'done'; st.running = false; st.done = true;
   await setStatus(st);
   await logCron(st.error ? 'error' : 'success',
-    `team:${st.team_name || teamId} s:${season} players:${st.players} fixtures:${st.fixtures} statsLg:${st.stats_leagues}${st.error ? ' | ' + st.error : ''}`);
+    `team:${st.team_name || teamId} s:${season} players:${st.players} fixtures:${st.fixtures} statsLg:${st.stats_leagues} reenrich:${st.reenriched || 0}${st.error ? ' | ' + st.error : ''}`);
+  running = false;
+}
+
+// Rulează DOAR re-enrich (fără re-extragere date din API) — trigger de sine stătător.
+async function runReEnrichOnly(teamId) {
+  running = true;
+  const st = { running: true, step: 'reenrich', team_id: teamId, reenrich_only: true,
+               players: 0, fixtures: 0, stats_leagues: 0, reenriched: 0, done: false, error: null };
+  await setStatus(st);
+  try { st.reenriched = await reEnrichTeam(teamId); }
+  catch (e) { st.error = `reenrich: ${e.message}`; }
+  st.step = 'done'; st.running = false; st.done = true;
+  await setStatus(st);
+  await logCron(st.error ? 'error' : 'success', `reenrich-only team:${teamId} reenrich:${st.reenriched}${st.error ? ' | ' + st.error : ''}`);
   running = false;
 }
 
@@ -195,10 +260,19 @@ export default async function handler(req, res) {
   }
 
   const teamId = Number(req.query?.team_id);
-  const season = Number(req.query?.season);
-  if (!teamId || !season) return res.status(400).json({ error: 'team_id & season required' });
+  if (!teamId) return res.status(400).json({ error: 'team_id required' });
 
   if (running) return res.status(200).json({ ok: true, already_running: true, status: await getStatus() });
+
+  // Trigger de sine stătător: DOAR re-enrich, fără re-extragere date din API.
+  if (req.query?.reenrich_only === '1') {
+    runReEnrichOnly(teamId).catch(e => { console.error('[extract-team] reenrich fatal:', e.message); });
+    return res.status(200).json({ ok: true, started: true, reenrich_only: true, team_id: teamId,
+      note: 'Re-enrich în fundal. Verifică ?status=1 pentru progres.' });
+  }
+
+  const season = Number(req.query?.season);
+  if (!season) return res.status(400).json({ error: 'season required (sau folosește reenrich_only=1)' });
 
   runExtract(teamId, season).catch(e => { console.error('[extract-team] fatal:', e.message); });
   return res.status(200).json({ ok: true, started: true, team_id: teamId, season,
