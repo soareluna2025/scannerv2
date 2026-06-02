@@ -14,6 +14,7 @@ import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 import { isAllowedMatch } from '../utils/league-filter.js';
 import { calcFeatures, calcNextGoal, calcNextGoalWindow, calcGG, calcMarkets } from '../utils/live-score.js';
 import { calibrateNgp } from '../utils/ngp-calibration.js';
+import { trackElapsed, isFrozenDead, maybeLogFrozen, clearFreeze } from '../utils/freeze-state.js';
 
 const FOOTBALL_KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
@@ -23,12 +24,9 @@ const DONE_STATUS = new Set(['FT', 'AET', 'PEN']);
 // NU includem SUSP/INT (pot relua — prune-by-absence le acoperă dacă chiar dispar).
 const TERMINAL_EXTRA = new Set(['CANC', 'ABD', 'PST', 'WO', 'AWD']);
 const LIVE_PRUNE_MS = 90_000;  // prune-by-absence: șterge din liveCache dacă nu mai e văzut 90s
-// Freeze-detection: statusuri de JOC ACTIV (minutul TREBUIE să avanseze). Dacă elapsed
-// stă blocat > FREEZE_MS pe unul din astea → meci „înghețat" → scoatem cardul.
-const ACTIVE_PLAY = new Set(['1H', '2H', 'ET']);
-const FREEZE_MS = 600_000;     // 10 min fără avans de minut pe joc activ → frozen
-// NOTĂ: HT/BT/INT/SUSP/P (pauze legitime) NU sunt în ACTIVE_PLAY → minutul stă pe loc
-// normal, deci NU declanșează eliminarea pe motiv de freeze.
+// Freeze-detection (minut înghețat): stare PARTAJATĂ în utils/freeze-state.js
+// (_lastElapsed/_frozenSince persistă între re-add-uri). Aici DOAR tracking + filtrare
+// la ieșire — NU mai ștergem liveCache pe motiv de îngheț (evită bucla delete/re-add).
 
 // Stare în memorie
 const liveCache         = {}; // { [fixtureId]: { home_goals, away_goals, status, minute, lineupsFetched } }
@@ -461,24 +459,15 @@ async function scanLive10s() {
     // lastSeen: marchează FIECARE meci prezent în `raw` în ciclul curent — INDIFERENT
     // de throttling (LOW/MEDIUM sunt în `raw`, deci „văzute" → NU vor fi pruned). Folosit
     // la prune-by-absence: un meci care dispare din live=all fără FT prins se curăță.
-    // În același loop urmărim și MINUTUL (lastMin/minChangedAt) pt freeze-detection:
-    // unele meciuri vin cu status de joc dar `elapsed` blocat → prune-by-absence nu le prinde.
+    // În același loop urmărim și MINUTUL (trackElapsed, stare partajată freeze-state):
+    // unele meciuri vin cu status de joc dar `elapsed` blocat → le FILTRĂM la ieșire.
     const _nowSeen = Date.now();
     for (const m of raw) {
       const _id = m.fixture?.id;
       if (!_id) continue;
       if (!liveCache[_id]) liveCache[_id] = {};
       liveCache[_id].lastSeen = _nowSeen;
-      liveCache[_id].curStatus = m.fixture?.status?.short || '';  // pt freeze-check la prune
-      // Minut: la prima apariție inițializează; altfel actualizează DOAR pe creștere
-      // (în același minut e normal să nu se schimbe → nu resetăm minChangedAt).
-      const _el = m.fixture?.status?.elapsed ?? 0;
-      const _lc = liveCache[_id];
-      if (_lc.lastMin == null) {
-        _lc.lastMin = _el; _lc.minChangedAt = _nowSeen;
-      } else if (_el > _lc.lastMin) {
-        _lc.lastMin = _el; _lc.minChangedAt = _nowSeen;
-      }
+      trackElapsed(_id, m.fixture?.status?.elapsed ?? 0, m.fixture?.status?.short || '');
     }
 
     // Prefetch real form goals per team (cached 1h in formCache)
@@ -539,6 +528,7 @@ async function scanLive10s() {
           saveFormStats(m).catch(e => log(`saveFormStats ${id}: ${e.message}`)); // M5
           delete liveCache[id];
         }
+        clearFreeze(id);
         continue;
       }
 
@@ -547,6 +537,7 @@ async function scanLive10s() {
       if (TERMINAL_EXTRA.has(sh)) {
         if (liveCache[id]) delete liveCache[id];
         delete _lastBroadcastSnap[id];
+        clearFreeze(id);
         continue;
       }
 
@@ -689,30 +680,20 @@ async function scanLive10s() {
       }
     }
 
-    // ── PRUNE-BY-ABSENCE: meciuri „înghețate" ───────────────────────────────
-    // Când API scoate un meci terminat din live=all fără FT prins, nu mai e
-    // „văzut" → lastSeen se învechește. Le scoatem din liveCache + snap broadcast.
-    // Pragul 90s evită sclipiri din blip-uri tranzitorii (un meci real reapare în câteva s).
-    // Complementar: FREEZE-DETECTION — meci cu status de joc activ (1H/2H/ET) dar
-    // `elapsed` blocat > FREEZE_MS (10 min) → minut înghețat → scoatem cardul.
-    // HT/BT/INT/SUSP/P (pauze) NU sunt în ACTIVE_PLAY → exceptate (minutul stă normal).
-    // Auto-corectare: dacă API reia minutul, meciul reapare în `raw` ca nou (lastMin/
-    // minChangedAt resetate la următoarea inițializare) — fără efecte secundare.
+    // ── PRUNE-BY-ABSENCE: meci dispărut din live=all (nu mai e „văzut") ──────
+    // Când API scoate un meci din live=all fără FT prins, lastSeen se învechește.
+    // Îl scoatem din liveCache + snap + freeze-state. Pragul 90s evită blip-urile.
+    // NOTĂ: meciurile ÎNGHEȚATE (minut blocat dar încă trimise de API) NU se mai
+    // ȘTERG aici — sunt FILTRATE la ieșire (vezi mai jos + football.js), ca să nu
+    // intre în bucla delete/re-add. Starea _frozenSince persistă între scan-uri.
     {
       const nowPrune = Date.now();
       for (const id of Object.keys(liveCache)) {
         const lc = liveCache[id];
-        // prune-by-absence (existent)
         if (nowPrune - (lc.lastSeen || 0) > LIVE_PRUNE_MS) {
           delete liveCache[id];
           delete _lastBroadcastSnap[id];
-          continue;
-        }
-        // freeze-detection (nou) — doar pe joc activ
-        if (ACTIVE_PLAY.has(lc.curStatus) &&
-            nowPrune - (lc.minChangedAt || nowPrune) > FREEZE_MS) {
-          delete liveCache[id];
-          delete _lastBroadcastSnap[id];
+          clearFreeze(id);
         }
       }
     }
@@ -743,13 +724,31 @@ async function scanLive10s() {
       }).catch(() => {});
     }
 
+    // ── FILTRARE FROZEN-DEAD la IEȘIRE (cheia fix-ului) ─────────────────────
+    // Ascundem meciurile cu minut înghețat din lista trimisă către frontend, FĂRĂ
+    // a le șterge din cache → rămân ascunse permanent cât timp API le retrimite
+    // blocate. Auto-unfreeze: dacă elapsed crește, trackElapsed resetează _frozenSince
+    // → isFrozenDead devine false → meciul reapare singur.
+    for (const m of processedMatches) {
+      const fid = m.fixture?.id;
+      const st  = m.fixture?.status?.short || '';
+      if (fid && isFrozenDead(fid, st)) {
+        maybeLogFrozen(fid, m.teams?.home?.name, m.fixture?.status?.elapsed);
+      }
+    }
+    const visibleMatches = processedMatches.filter(m => {
+      const fid = m.fixture?.id;
+      const st  = m.fixture?.status?.short || '';
+      return !(fid && isFrozenDead(fid, st));
+    });
+
     // ── Delta broadcast — full la fiecare 5min, delta când sunt schimbări ────
     if (typeof global.wsBroadcast === 'function') {
       const now = Date.now();
       const isFullUpdate = !global._lastFullBroadcast ||
                            (now - global._lastFullBroadcast) > 5 * 60 * 1000;
 
-      const changedMatches = processedMatches.filter(m => {
+      const changedMatches = visibleMatches.filter(m => {
         const fid = m.fixture?.id;
         if (!fid) return false;
         const snap = [m.goals?.home, m.goals?.away,
@@ -759,13 +758,14 @@ async function scanLive10s() {
         return true;
       });
 
-      // Curăță snap-uri pentru meciuri terminate
-      const activeIds = new Set(processedMatches.map(m => m.fixture?.id));
+      // Curăță snap-uri pentru meciuri terminate / ascunse (frozen) → la unfreeze
+      // reapar ca „changed" și se rebroadcast.
+      const activeIds = new Set(visibleMatches.map(m => m.fixture?.id));
       Object.keys(_lastBroadcastSnap).forEach(id => {
         if (!activeIds.has(Number(id))) delete _lastBroadcastSnap[id];
       });
 
-      const liveData = { matches: processedMatches, ts: now };
+      const liveData = { matches: visibleMatches, ts: now };
       global.lastLiveData = liveData;
 
       if (isFullUpdate) {

@@ -4,6 +4,7 @@ import { calcNextGoal } from './utils/live-score.js';
 import { calibrateNgp } from './utils/ngp-calibration.js';
 import { query } from './db.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
+import { isFrozenDead } from './utils/freeze-state.js';
 
 function log(msg) {
   console.log(`[football] ${new Date().toISOString()} ${msg}`);
@@ -113,8 +114,12 @@ export default async function handler(req, res) {
   log(`af status-filter: ${passedStatus.length}/${raw.length}`);
 
   // ── Filters — sistem centralizat din utils/league-filter.js ────
-  const filtered = passedStatus.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
-  log(`[Filter] ${passedStatus.length} meciuri → ${filtered.length} după filtrare`);
+  const allowedMatches = passedStatus.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
+  // FILTRARE FROZEN-DEAD: ascunde meciurile cu minut înghețat (stare partajată
+  // populată de scanner.js prin trackElapsed). Aceeași listă ca în WS broadcast.
+  const filtered = allowedMatches.filter(m =>
+    !isFrozenDead(m.fixture?.id, m.fixture?.status?.short || ''));
+  log(`[Filter] ${passedStatus.length} → ${allowedMatches.length} whitelist → ${filtered.length} după freeze-filter`);
 
   // ── Injectie _ng per meci ────────────────────────────────────
   // Sursa primara: match_snapshots.ng (calibrat + smoothed de scanner.js).

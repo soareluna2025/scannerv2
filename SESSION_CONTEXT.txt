@@ -778,6 +778,27 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~15:10] - FIX meciuri fantoma frozen: FILTRARE la iesire (nu stergere din cache)
+  PROBLEMA cu d33a466: stergea liveCache pe inghet -> scanLive10s re-adauga din raw cu
+  ceas proaspat -> bucla delete/re-add, pragul 10min nu se atinge; +restart reseta totul.
+  SOLUTIE: stare PARTAJATA persistenta + FILTRARE la output (NU stergere).
+  api/utils/freeze-state.js (NOU): _lastElapsed{}, _frozenSince{} (module-level, persista
+    intre re-add-uri si nu se reseteaza la logica obisnuita), ACTIVE_PLAY{1H,2H,ET},
+    PAUSED{HT,BT,INT,SUSP,P}, FREEZE_MS=600000. Functii: trackElapsed(id,el,st) (init/
+    progres pe crestere -> reset frozenSince; PAUSED -> reset; activ+static -> lasa sa
+    imbatraneasca), isFrozenDead(id,st)=ACTIVE_PLAY && frozenSince && now-frozenSince>10min,
+    maybeLogFrozen (log o singura data via _frozenLogged Set), clearFreeze.
+  scanner.js: trackElapsed in loop-ul lastSeen (pe tot raw); FILTREZ processedMatches ->
+    visibleMatches (exclude isFrozenDead) pt WS broadcast + global.lastLiveData; clearFreeze
+    la DONE_STATUS/TERMINAL_EXTRA/prune-by-absence. ELIMINAT delete-pe-inghet din d33a466
+    (prune-by-absence lastSeen pastrat pt disparitie reala).
+  football.js (REST live): import isFrozenDead, filtreaza meciurile frozen din lista
+    (aceeasi stare partajata populata de scanner). Ambele cai de iesire filtrate.
+  AUTO-UNFREEZE: elapsed creste -> trackElapsed reseteaza frozenSince -> isFrozenDead
+    false -> meciul reapare automat (+ snap curatat -> rebroadcast).
+  NEATINS: calcConfidencePreMatch/Live, score2/3/6/7, NGP, Monte Carlo, whitelist.
+  node --check OK (3 fisiere). Un commit main + deploy.
+
 [01.06 ~14:40] - FIX ReferenceError _stabTimer nedeclarat (admin.html)
   Bug: _stabTimer folosit in 3 locuri (start/stop card "STABILIZARE COMPLETA DB") dar
   NICIODATA declarat -> ReferenceError pe iOS Safari (linia care CITESTE if(_stabTimer)
