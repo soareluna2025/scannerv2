@@ -629,6 +629,77 @@ async function analyzeMatch(fid,hid,aid){
     else{if(btn){btn.textContent='ANALIZEAZA';btn.disabled=false;}}
   }catch(e){if(btn){btn.textContent='ANALIZEAZA';btn.disabled=false;}}
 }
+// ══════════════════════════════════════════════════════════════════════════
+// CARD PRE-MECI bogat (accent AURIU = programat). Funcție COMUNĂ folosită de
+// tab-ul PRE-MECI general ȘI de tab-ul MECIURI din hub-ul WC.
+// `n` = obiect normalizat:
+//   { fid,hid,aid, home,away, homeCrest,awayCrest, compLabel, grpLabel,
+//     kickoffISO, conf, over05,over15,over25,gg, pick,pickPct, starHtml, onclick }
+// `opts.crestClass` opțional (clasa pt crest — default .pm-crest).
+// Citește DOAR valori deja calculate (confidence/over/gg) — zero recalcul scoring.
+function renderPrematchCard(n){
+  var pct=function(v){return v==null?null:Math.max(0,Math.min(100,Math.round(v)));};
+  var crest=function(url,name){
+    if(typeof wcFlag==='function' && n.useFlag) return wcFlag(url,name,30);
+    if(url) return '<img class="pm-crest" src="'+url+'" onerror="this.style.visibility=\'hidden\'">';
+    return '<span class="pm-crest" style="display:inline-block"></span>';
+  };
+  var kd=(typeof pmFmtDateShort==='function')?pmFmtDateShort(n.kickoffISO):'';
+  var kt=(typeof pmFmtTime==='function')?pmFmtTime(n.kickoffISO):'';
+  var conf=pct(n.conf);
+  var hasPred = (conf!=null) || (n.over15!=null) || (n.gg!=null) || (n.pick!=null);
+  var click=n.onclick||'';
+  var star=n.starHtml||'';
+
+  var h='<div class="pm-card'+(hasPred?'':' soon')+'"'+(click?(' onclick="'+click+'" style="cursor:pointer"'):'')+'>';
+  // Header
+  h+='<div class="pm-head">';
+  if(star)h+=star;
+  h+='<div class="pm-comp">'+(n.compLabel||'')+'</div>';
+  if(hasPred&&conf!=null)h+='<span class="pm-conf">⚡ '+conf+'%</span>';
+  h+='<div class="pm-status"><span class="dot"></span>PROGRAMAT</div>';
+  h+='</div>';
+  h+='<div class="pm-div"></div>';
+  // Echipe + bloc start
+  h+='<div class="pm-teams">';
+  h+='<div class="pm-trow">'+crest(n.homeCrest,n.home)+'<div class="pm-name">'+htmlEsc(n.home||'?')+'</div>'+
+     '<div class="pm-kick"><div class="kd">'+(kd||'')+'</div><div class="kt">'+(kt||'—')+'</div></div></div>';
+  h+='<div class="pm-trow">'+crest(n.awayCrest,n.away)+'<div class="pm-name">'+htmlEsc(n.away||'?')+'</div></div>';
+  h+='</div>';
+
+  if(!hasPred){
+    h+='<div class="pm-soonnote">Predicția apare mai aproape de start</div>';
+    h+='</div>';
+    return h;
+  }
+
+  // Pont principal (sau fallback ÎNCREDERE)
+  var pickLbl, pickVal;
+  if(n.pick){ pickLbl='PONT PRINCIPAL'; pickVal=pct(n.pickPct!=null?n.pickPct:n.conf); }
+  else { pickLbl='ÎNCREDERE'; pickVal=conf; }
+  var pickTxt=n.pick||('⚡ '+(pickVal!=null?pickVal+'%':''));
+  h+='<div class="pm-pred">';
+  h+='<div class="pm-predtop"><span class="pm-predlbl">'+pickLbl+'</span>';
+  if(n.pick)h+='<span class="pm-pick">'+htmlEsc(pickTxt)+'</span>';
+  h+='<span class="pm-pct" style="margin-left:auto">'+(pickVal!=null?pickVal+'%':'—')+'</span></div>';
+  h+='<div class="pm-track"><div class="pm-fill" style="width:'+(pickVal||0)+'%"></div></div>';
+  h+='</div>';
+
+  // Chips: Over 0.5 / 1.5 / 2.5 + GG (doar cele existente) + grupă/cod dreapta
+  var chips=[];
+  if(n.over05!=null)chips.push('<span class="pm-chip">O0.5<b>'+pct(n.over05)+'%</b></span>');
+  if(n.over15!=null)chips.push('<span class="pm-chip">O1.5<b>'+pct(n.over15)+'%</b></span>');
+  if(n.over25!=null)chips.push('<span class="pm-chip">O2.5<b>'+pct(n.over25)+'%</b></span>');
+  if(n.gg!=null)chips.push('<span class="pm-chip">GG<b>'+pct(n.gg)+'%</b></span>');
+  if(chips.length||n.grpLabel){
+    h+='<div class="pm-chips">'+chips.join('');
+    if(n.grpLabel)h+='<span class="pm-grp">'+htmlEsc(n.grpLabel)+'</span>';
+    h+='</div>';
+  }
+  h+='</div>';
+  return h;
+}
+
 function renderPM(){
   // Defense in depth: dacă userul e pe altă zi în date picker, NU suprascrie
   // pm-body cu view-ul de azi (analyzeMatch, setInterval, callbacks externe etc).
@@ -655,67 +726,36 @@ function renderPM(){
     var hn=m.teams&&m.teams.home&&m.teams.home.name||'—';
     var an=m.teams&&m.teams.away&&m.teams.away.name||'—';
     var lg=m.league&&m.league.name||'';
-    var flag=m.league&&m.league.flag?'<img src="'+m.league.flag+'" style="width:12px;height:9px;object-fit:cover;border-radius:2px;margin-right:4px;">':'';
-    var kickoff=m.fixture&&m.fixture.date?new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
+    var flag=m.league&&m.league.flag?'<img src="'+m.league.flag+'" style="width:12px;height:9px;object-fit:cover;border-radius:2px;margin-right:4px;vertical-align:middle">':'';
     var enr=_pmEnrich[fid];
-    var isTop=enr&&probs.length&&(enr.over15Prob||0)>=topThresh&&topThresh<999;
-    var _pmcc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
-    html+='<div class="pm-card" onclick="mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer;position:relative">';
-    html+='<div class="pm-header">';
-    html+='<div class="pm-kickoff"><button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>'+flag+lg+' · 🕐 '+kickoff+'</div>';
-    html+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu);font-size:13px;font-weight:600">vs</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div>';
-    html+='</div>';
+    var _cc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
+    var star='<button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>';
+    // Pick = cel mai puternic semnal din predicția existentă (CITESC, nu recalc).
+    var pick=null, pickPct=null;
     if(enr){
-      html+='<div class="pm-body">';
-      html+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(enr.over15Prob||0,100)+'%;background:'+ec(enr.over15Prob)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(enr.over15Prob)+'">'+Math.round(enr.over15Prob||0)+'%</div></div>';
-      html+='<div class="pm-meter-row"><div class="pm-meter-label">GG</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(enr.ggProb||0,100)+'%;background:'+ec(enr.ggProb)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(enr.ggProb)+'">'+Math.round(enr.ggProb||0)+'%</div></div>';
-      html+='<div class="pm-stats">';
-      html+='<span class="pm-stat">λ <span>'+Number(enr.lambdaTotal||0).toFixed(2)+'</span></span>';
-      html+='<span class="pm-stat">Gazde <span style="color:'+ec(enr.homeScoreRate)+'">'+( enr.homeScoreRate!=null?enr.homeScoreRate+'%':'—')+'</span></span>';
-      html+='<span class="pm-stat">Oaspeti <span style="color:'+ec(enr.awayScoreRate)+'">'+( enr.awayScoreRate!=null?enr.awayScoreRate+'%':'—')+'</span></span>';
-      // Badge LOW/MED/HIGH derivat din confidenceScore (pragurile noi 70/55)
-      if(enr.confidenceScore!=null){
-        var _csPm=enr.confidenceScore;
-        var _cbPm=_csPm>=70?'HIGH':_csPm>=55?'MED':'LOW';
-        html+='<span class="badge-conf '+_cbPm+'">'+_cbPm+'</span>';
-      }
-      html+='</div>';
-      if(enr.homeWin!=null)html+='<div class="enrich-row hda-row"><span style="color:'+ec(enr.homeWin)+'">H:'+enr.homeWin+'%</span><span style="color:'+ec(enr.draw)+'">D:'+enr.draw+'%</span><span style="color:'+ec(enr.awayWin)+'">A:'+enr.awayWin+'%</span></div>';
-      if(enr.confidenceScore!=null){
-        var cs=enr.confidenceScore;
-        var confColor=cs>=70?'#22c55e':cs>=55?'#f59e0b':'#ef4444';
-        var safeBadge='';
-        html+='<div class="conf-bar-wrap">'+
-          '<div class="conf-bar-bg"><div class="conf-bar-fill" style="width:'+cs+'%;background:'+confColor+'"></div></div>'+
-          '<div class="conf-score-row">'+
-            '<span class="conf-pct" style="color:'+confColor+'">'+cs+'%</span>'+
-            '<span class="conf-label">ÎNCREDERE</span>'+
-          '</div>'+safeBadge+'</div>';
-      }
-      var _hasStr=enr.teamStrengthHome!=null||enr.teamStrengthAway!=null;
-      if(_hasStr||isTop||_pmcc){
-        html+='<div class="enrich-row" style="margin-top:6px;align-items:center">';
-        if(_hasStr){
-          var sh=enr.teamStrengthHome!=null?enr.teamStrengthHome:'?';
-          var sa=enr.teamStrengthAway!=null?enr.teamStrengthAway:'?';
-          html+='<span class="str-badge">STR: '+sh+' vs '+sa+'</span>';
-        }
-        if(isTop||_pmcc){
-          html+='<span style="margin-left:auto;display:flex;align-items:center;gap:6px">';
-          if(_pmcc)html+='<span style="font-size:9px;color:var(--mu);font-weight:700">('+_pmcc+')</span>';
-          if(isTop)html+='<span class="badge-top">TOP PICK</span>';
-          html+='</span>';
-        }
-        html+='</div>';
-      }
-      html+='</div>';
-    }else{
-      html+='<div class="pm-body" style="display:flex;align-items:center;justify-content:space-between">';
-      html+='<span style="font-size:11px;color:var(--mu)">Neanalizat</span>';
-      if(hid&&aid)html+='<button class="analyze-btn" id="abtn-'+fid+'" onclick="analyzeMatch('+fid+','+hid+','+aid+')">ANALIZEAZA</button>';
-      html+='</div>';
+      var cands=[];
+      if(enr.over15Prob!=null)cands.push(['⚡ PESTE 1.5',enr.over15Prob]);
+      if(enr.over25Prob!=null)cands.push(['⚡ PESTE 2.5',enr.over25Prob]);
+      if(enr.ggProb!=null)cands.push(['⚡ GG',enr.ggProb]);
+      cands.sort(function(a,b){return b[1]-a[1];});
+      if(cands.length){pick=cands[0][0];pickPct=cands[0][1];}
     }
-    html+='</div>';
+    html+=renderPrematchCard({
+      fid:fid, hid:hid, aid:aid, home:hn, away:an,
+      homeCrest:(m.teams&&m.teams.home&&m.teams.home.logo)||null,
+      awayCrest:(m.teams&&m.teams.away&&m.teams.away.logo)||null,
+      useFlag:false,
+      compLabel:flag+htmlEsc(lg||'—'),
+      grpLabel:_cc||null,
+      kickoffISO:m.fixture&&m.fixture.date,
+      conf:enr?enr.confidenceScore:null,
+      over15:enr?enr.over15Prob:null,
+      over25:enr?enr.over25Prob:null,
+      gg:enr?enr.ggProb:null,
+      pick:pick, pickPct:pickPct,
+      starHtml:star,
+      onclick:'mdOpen('+fid+','+(hid||0)+','+(aid||0)+',this)',
+    });
   });
   var sy=body.scrollTop;
   body.innerHTML=html;
@@ -2702,19 +2742,47 @@ function wcRenderMatches(d){
     out+='<div class="bf-label" style="color:var(--mu)">Niciun meci în această zi</div>';
   } else {
     dayMs.forEach(function(m){
-      var when=m.live?('<span style="color:var(--red);font-weight:700">● LIVE '+(m.ng!=null?('· NGP '+m.ng+'%'):'')+'</span>')
-        :(m.matchDate?new Date(m.matchDate).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}):'');
-      var score=(m.homeGoals!=null&&m.awayGoals!=null)?(m.homeGoals+'-'+m.awayGoals):'vs';
-      var sig=[];
-      if(m.over15!=null)sig.push('O1.5 '+Math.round(m.over15)+'%');
-      if(m.gg!=null)sig.push('GG '+Math.round(m.gg)+'%');
-      if(m.confidence!=null)sig.push('Conf '+Math.round(m.confidence)+'%');
-      out+='<div class="md-player-card" style="cursor:pointer" onclick="wcClose();mdOpen('+m.fixtureId+','+(m.homeId||0)+','+(m.awayId||0)+',this)">';
-      out+='<div class="md-pc-top"><div><div class="md-pc-name">'+
-        wcFlag(m.homeLogo,m.home,18)+' '+htmlEsc(m.home||'?')+' <b style="color:var(--gold)">'+score+'</b> '+htmlEsc(m.away||'?')+' '+wcFlag(m.awayLogo,m.away,18)+'</div>';
-      out+='<div class="md-pc-team">'+(m.round?htmlEsc(m.round)+' · ':'')+when+'</div></div></div>';
-      if(sig.length)out+='<div class="md-pc-stats">'+sig.map(function(s){return '<span class="md-pc-stat">'+s+'</span>';}).join('')+'</div>';
-      out+='</div>';
+      // Etichetă competiție/grupă din round (ex "Group A" → "GRUPA A" / "GR. A").
+      var grpFull='', grpShort='';
+      if(m.round){
+        var mg=/group\s+([a-l])/i.exec(m.round);
+        if(mg){ grpFull='GRUPA '+mg[1].toUpperCase(); grpShort='GR. '+mg[1].toUpperCase(); }
+        else { grpFull=m.round.toUpperCase(); grpShort=m.round.toUpperCase(); }
+      }
+      if(m.live){
+        // LIVE = verde (NU gold) — păstrăm cardul existent, nu-l facem pre-meci.
+        var when='<span style="color:var(--red);font-weight:700">● LIVE '+(m.ng!=null?('· NGP '+m.ng+'%'):'')+'</span>';
+        var score=(m.homeGoals!=null&&m.awayGoals!=null)?(m.homeGoals+'-'+m.awayGoals):'vs';
+        var sig=[];
+        if(m.over15!=null)sig.push('O1.5 '+Math.round(m.over15)+'%');
+        if(m.gg!=null)sig.push('GG '+Math.round(m.gg)+'%');
+        if(m.confidence!=null)sig.push('Conf '+Math.round(m.confidence)+'%');
+        out+='<div class="md-player-card" style="cursor:pointer" onclick="wcClose();mdOpen('+m.fixtureId+','+(m.homeId||0)+','+(m.awayId||0)+',this)">';
+        out+='<div class="md-pc-top"><div><div class="md-pc-name">'+
+          wcFlag(m.homeLogo,m.home,18)+' '+htmlEsc(m.home||'?')+' <b style="color:#22c55e">'+score+'</b> '+htmlEsc(m.away||'?')+' '+wcFlag(m.awayLogo,m.away,18)+'</div>';
+        out+='<div class="md-pc-team">'+(grpFull?htmlEsc(grpFull)+' · ':'')+when+'</div></div></div>';
+        if(sig.length)out+='<div class="md-pc-stats">'+sig.map(function(s){return '<span class="md-pc-stat">'+s+'</span>';}).join('')+'</div>';
+        out+='</div>';
+      } else {
+        // PROGRAMAT = gold pre-meci card (anatomie bogată).
+        var pick=null,pickPct=null;
+        var cands=[];
+        if(m.over15!=null)cands.push(['⚡ PESTE 1.5',m.over15]);
+        if(m.over25!=null)cands.push(['⚡ PESTE 2.5',m.over25]);
+        if(m.gg!=null)cands.push(['⚡ GG',m.gg]);
+        cands.sort(function(a,b){return b[1]-a[1];});
+        if(cands.length){pick=cands[0][0];pickPct=cands[0][1];}
+        out+=renderPrematchCard({
+          fid:m.fixtureId, hid:m.homeId, aid:m.awayId, home:m.home, away:m.away,
+          homeCrest:m.homeLogo, awayCrest:m.awayLogo, useFlag:true,
+          compLabel:grpFull||'CUPA MONDIALĂ',
+          grpLabel:grpShort||null,
+          kickoffISO:m.matchDate,
+          conf:m.confidence, over15:m.over15, over25:m.over25, gg:m.gg,
+          pick:pick, pickPct:pickPct,
+          onclick:'wcClose();mdOpen('+m.fixtureId+','+(m.homeId||0)+','+(m.awayId||0)+',this)',
+        });
+      }
     });
   }
   out+='</div>';

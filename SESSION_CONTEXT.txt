@@ -778,6 +778,24 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~15:45] - Carduri PRE-MECI bogate (accent AURIU) — functie comuna, 2 taburi
+  CSS (cards.css): clase noi pm-* aurii (--pm-gold/--pm-gold-d) pt cardul bogat,
+    redefinit DUPA legacy .pm-card/.pm-teams (cascade -> noile castiga; legacy markup
+    inlocuit complet). Regula: auriu=programat, verde=live (cardurile live neatinse).
+  FUNCTIE COMUNA renderPrematchCard(n) in app-ui.js: header (stea+competitie+pastila
+    "⚡ conf%"+"● PROGRAMAT" auriu), divider, 2 randuri echipe (crest+nume + bloc start
+    auriu data/ora din pmFmtDateShort/pmFmtTime existente), rand PONT PRINCIPAL (pick
+    desemnat -> pastila + %; fallback ÎNCREDERE + bara la confidence), chips O0.5/1.5/
+    2.5/GG (doar cele existente) + grupa/cod dreapta. Stare SOON (fara predictie) =
+    card estompat .soon + nota "Predictia apare mai aproape de start".
+  Folosita in AMBELE taburi (markup vechi inlocuit, navigarea/fetch/structura neatinse):
+    * PRE-MECI general (renderPM): normalizez din _pmEnrich (over15/25/gg/confidenceScore),
+      crest=teams.logo, eticheta=liga+flag, pick=cel mai puternic semnal. Stea favorite pastrata.
+    * WC Meciuri (wcRenderMatches): DOAR meciurile PROGRAMATE -> gold card (crest=steag SVG
+      wcFlag, eticheta=GRUPA X din round); meciurile LIVE raman card verde existent.
+  CITESC doar valori deja calculate. NEATINS: calcConfidencePreMatch/Live, score*, NGP,
+    Monte Carlo, cardurile live, whitelist. node --check OK. Un commit main + deploy.
+
 [01.06 ~15:10] - FIX meciuri fantoma frozen: FILTRARE la iesire (nu stergere din cache)
   PROBLEMA cu d33a466: stergea liveCache pe inghet -> scanLive10s re-adauga din raw cu
   ceas proaspat -> bucla delete/re-add, pragul 10min nu se atinge; +restart reseta totul.
