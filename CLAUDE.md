@@ -346,3 +346,36 @@ Schema completă: `scripts/create-tables.sql` (36 tabele)
 | `ADMIN_API_KEY` | Cheie acces admin dashboard (generat automat la deploy) |
 
 Fișierul `.env` se rescrie la fiecare deploy via `deploy.yml`. Nu se commitază niciodată în repo.
+
+---
+
+# FILTRU LIGI — REGULĂ PERMANENTĂ (citește înainte de a adăuga/depana ligi)
+
+## FILTRU LIGI — AND între ID și NUME (regulă critică)
+O ligă/meci e colectat ȘI afișat DOAR dacă trece DOUĂ porți, în **AND**:
+1. **ID** în `ALLOWED_LEAGUE_IDS` (`api/leagues.js`), **ȘI**
+2. **NUME curat** — fără termeni din blocklist-ul din `api/utils/league-filter.js`
+   (`WOMEN_TERMS`, `YOUTH_TERMS`, `LOWER_DIV_TERMS`), verificat de
+   `isAllowedLeague()` / `isAllowedMatch()`.
+
+⚠ A adăuga o ligă în `ALLOWED_LEAGUE_IDS` e **NECESAR dar NU suficient**: dacă NUMELE
+ligii conține un keyword interzis (ex. `'reserve'`, `'serie c'`, `'serie d'`,
+`'amateur'`, `'women'`, `'u20'`, `'sub-20'`, `'tercera'`, `'division 3'`, `'futsal'`,
+`'friendly'` etc.), liga e filtrată **TĂCUT** — atât la colectare (`collect-daily`) cât
+și la afișare (`football.js`, `today.js`, `generator.js`, `scanner.js`).
+
+## FORCE_ALLOW_IDS — bypass țintit al filtrului de NUME
+Set în `api/utils/league-filter.js`: ID-urile de aici trec PESTE verificările
+`YOUTH_TERMS` și `LOWER_DIV_TERMS`, DAR:
+- **NU** ocolesc whitelist-ul de ID (tot trebuie să fie în `ALLOWED_LEAGUE_IDS`);
+- **NU** ocolesc filtrul FEMININ (`WOMEN_TERMS` rămâne activ, verificat ÎNAINTEA bypass-ului).
+
+Curent: `FORCE_ALLOW_IDS = { 75 Serie C Brazilia, 76 Serie D Brazilia, 906 Reserve
+League Argentina }` — adăugate fiindcă termenii generici `'serie c'`/`'serie d'`/
+`'reserve'` le prindeau deși-s ligi dorite. Commit `5e1c146`.
+
+## PROCEDURĂ la adăugarea de ligi noi (de urmat MEREU)
+1. Adaugă ID-ul în `ALLOWED_LEAGUE_IDS`.
+2. VERIFICĂ numele ligii contra blocklist-ului (`WOMEN`/`YOUTH`/`LOWER_DIV`).
+3. Dacă numele conține un keyword dar vrei liga → adaugă ID-ul în `FORCE_ALLOW_IDS`.
+4. Rulează `collect-daily` ca să se populeze fixturile (altfel rămân 0 în DB).
