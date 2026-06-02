@@ -145,7 +145,45 @@ async function extractTeamStats(teamId, season) {
     } catch (_) {}
     await sleep(200);
   }
-  return { leagues: leagues.length, statsUpserted: done };
+  return { leagues, leaguesCount: leagues.length, statsUpserted: done };
+}
+
+// (e) STANDINGS — pt fiecare ligă a echipei în sezon, /standings → upsert rândul echipei
+// în tabelul `standings` existent (NU inventez schemă; aceleași coloane ca collect-daily).
+async function extractStandings(teamId, season, leagues) {
+  // asigură coloana goals_diff (ca în collect-daily, schema veche)
+  await query(`ALTER TABLE standings ADD COLUMN IF NOT EXISTS goals_diff INTEGER DEFAULT 0`).catch(() => {});
+  let done = 0;
+  for (const L of (leagues || [])) {
+    try {
+      const r = await fetchApiFootball(`/standings?league=${L}&season=${season}`);
+      const d = await r.json();
+      const groups = (d.response?.[0]?.league?.standings || []).flat().filter(Boolean);
+      const row = groups.find(x => Number(x.team?.id) === Number(teamId));
+      if (!row?.team?.id) continue;
+      await query(
+        `INSERT INTO standings
+           (league_id, season, team_id, team_name, rank, points,
+            goals_for, goals_against, goals_diff, played, win, draw, lose, form, group_name, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())
+         ON CONFLICT (league_id, season, team_id) DO UPDATE SET
+           team_name=EXCLUDED.team_name, rank=EXCLUDED.rank, points=EXCLUDED.points,
+           goals_for=EXCLUDED.goals_for, goals_against=EXCLUDED.goals_against,
+           goals_diff=EXCLUDED.goals_diff, played=EXCLUDED.played,
+           win=EXCLUDED.win, draw=EXCLUDED.draw, lose=EXCLUDED.lose,
+           form=EXCLUDED.form, group_name=EXCLUDED.group_name, updated_at=NOW()`,
+        [
+          L, season, row.team.id, row.team.name, row.rank, row.points,
+          row.all?.goals?.for || 0, row.all?.goals?.against || 0, row.goalsDiff || 0,
+          row.all?.played || 0, row.all?.win || 0, row.all?.draw || 0, row.all?.lose || 0,
+          row.form || null, row.group || null,
+        ]
+      ).catch(() => {});
+      done++;
+    } catch (_) {}
+    await sleep(200);
+  }
+  return done;
 }
 
 // RE-ENRICH ȚINTIT: recalculează predicțiile DOAR pt meciurile VIITOARE (NS) ale echipei.
@@ -193,48 +231,68 @@ export async function reEnrichTeam(teamId) {
 
 async function runExtract(teamId, season) {
   running = true;
-  const st = { running: true, step: 'start', team_name: null, season, team_id: teamId,
-               players: 0, fixtures: 0, stats_leagues: 0, done: false, error: null };
+  const seasons = [season, season - 1];   // ancoră S + S-1 (extragere adâncă pe 2 sezoane)
+  const st = {
+    running: true, step: 'start', team_name: null, season, seasons, team_id: teamId,
+    players_S: 0, players_S1: 0, fixtures_S: 0, fixtures_S1: 0,
+    standings: 0, stats_leagues: 0, reenriched: 0, done: false, error: null,
+  };
   await setStatus(st);
+  const addErr = (m) => { st.error = (st.error ? st.error + ' | ' : '') + m; };
 
-  // a) teams
+  // a) teams (o singură dată)
   try { st.step = 'teams'; await setStatus(st); st.team_name = await extractTeamInfo(teamId); }
-  catch (e) { st.error = `teams: ${e.message}`; }
+  catch (e) { addErr(`teams: ${e.message}`); }
   await setStatus(st);
 
-  // b) jucători (REUTILIZEAZĂ collectTeamSeason — include tratarea player_id null reparată)
-  try {
-    st.step = 'players'; await setStatus(st);
-    const n = await collectTeamSeason(teamId, season);
-    st.players = n === -1 ? 0 : n;
-  } catch (e) { st.error = (st.error ? st.error + ' | ' : '') + `players: ${e.message}`; }
-  await setStatus(st);
+  for (const sN of seasons) {
+    const tag = sN === season ? 'S' : 'S1';
 
-  // c) meciuri
-  try { st.step = 'fixtures'; await setStatus(st); st.fixtures = await extractFixtures(teamId, season); }
-  catch (e) { st.error = (st.error ? st.error + ' | ' : '') + `fixtures: ${e.message}`; }
-  await setStatus(st);
+    // b) jucători (REUTILIZEAZĂ collectTeamSeason — include tratarea player_id null reparată)
+    try {
+      st.step = `players ${sN}`; await setStatus(st);
+      const n = await collectTeamSeason(teamId, sN);
+      st['players_' + tag] = n === -1 ? 0 : n;
+    } catch (e) { addErr(`players ${sN}: ${e.message}`); }
+    await setStatus(st);
 
-  // d) statistici echipă
-  try {
-    st.step = 'stats'; await setStatus(st);
-    const r = await extractTeamStats(teamId, season);
-    st.stats_leagues = r.leagues;
-    st.stats_upserted = r.statsUpserted;
-    st.stats_table = 'teams_stats';
-  } catch (e) { st.error = (st.error ? st.error + ' | ' : '') + `stats: ${e.message}`; }
-  await setStatus(st);
+    // c) meciuri → fixtures_history
+    try {
+      st.step = `fixtures ${sN}`; await setStatus(st);
+      st['fixtures_' + tag] = await extractFixtures(teamId, sN);
+    } catch (e) { addErr(`fixtures ${sN}: ${e.message}`); }
+    await setStatus(st);
 
-  // e) RE-ENRICH meciuri viitoare (aplică datele imediat în predicții)
+    // d) statistici echipă (→ și lista ligilor, refolosită la standings)
+    let leagues = [];
+    try {
+      st.step = `stats ${sN}`; await setStatus(st);
+      const r = await extractTeamStats(teamId, sN);
+      leagues = r.leagues || [];
+      st.stats_leagues += r.leaguesCount;
+      st.stats_table = 'teams_stats';
+    } catch (e) { addErr(`stats ${sN}: ${e.message}`); }
+    await setStatus(st);
+
+    // e) STANDINGS — rândul echipei în fiecare ligă a sezonului
+    try {
+      st.step = `standings ${sN}`; await setStatus(st);
+      st.standings += await extractStandings(teamId, sN, leagues);
+    } catch (e) { addErr(`standings ${sN}: ${e.message}`); }
+    await setStatus(st);
+  }
+  // f) H2H — derivat la calcul din fixtures_history (acoperit de pasul c pe 2 sezoane).
+
+  // APLICARE — RE-ENRICH meciuri viitoare (recompute forțat prin enrich handler)
   try {
     st.step = 'reenrich'; await setStatus(st);
     st.reenriched = await reEnrichTeam(teamId);
-  } catch (e) { st.error = (st.error ? st.error + ' | ' : '') + `reenrich: ${e.message}`; }
+  } catch (e) { addErr(`reenrich: ${e.message}`); }
 
   st.step = 'done'; st.running = false; st.done = true;
   await setStatus(st);
   await logCron(st.error ? 'error' : 'success',
-    `team:${st.team_name || teamId} s:${season} players:${st.players} fixtures:${st.fixtures} statsLg:${st.stats_leagues} reenrich:${st.reenriched || 0}${st.error ? ' | ' + st.error : ''}`);
+    `team:${st.team_name || teamId} s:${seasons.join('+')} playersS:${st.players_S}/${st.players_S1} fixturesS:${st.fixtures_S}/${st.fixtures_S1} standings:${st.standings} statsLg:${st.stats_leagues} reenrich:${st.reenriched}${st.error ? ' | ' + st.error : ''}`);
   running = false;
 }
 

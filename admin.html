@@ -1203,19 +1203,19 @@ body{
     </div>
     <div id="et-results" style="display:none;margin-bottom:8px;max-height:220px;overflow-y:auto"></div>
     <!-- MODUL B: ID direct -->
-    <div style="display:flex;gap:8px;margin-bottom:8px">
+    <div style="display:flex;gap:8px;margin-bottom:4px">
       <input id="et-id" type="number" placeholder="SAU ID echipă direct" style="flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:var(--tx);padding:8px;border-radius:8px;font-size:12px" oninput="etOnIdInput()">
-      <input id="et-season" type="number" placeholder="Sezon" style="width:90px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:var(--tx);padding:8px;border-radius:8px;font-size:12px">
+      <input id="et-season" type="number" placeholder="Sezon" style="width:90px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:var(--tx);padding:8px;border-radius:8px;font-size:12px" oninput="etSeasonHint()">
     </div>
+    <div class="bf-label" id="et-season-hint" style="margin-bottom:8px;color:var(--mu)">→ trage 2 sezoane</div>
     <div class="bf-label" id="et-selected" style="margin-bottom:8px;color:var(--mu)">Nicio echipă selectată</div>
     <div id="et-active" style="display:none">
       <div style="display:flex;align-items:center;margin-bottom:10px"><span class="bf-dot"></span><span style="color:var(--red);font-size:11.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase" id="et-step">Extrag...</span></div>
-      <div class="bf-label"><span id="et-players">0</span> jucători · <span id="et-fixtures">0</span> meciuri · <span id="et-statslg">0</span> ligi-stats · re-enrich <span id="et-reenrich">0</span></div>
+      <div class="bf-label"><span id="et-players">0</span> jucători · <span id="et-fixtures">0</span> meciuri · <span id="et-standings">0</span> standings · <span id="et-statslg">0</span> ligi-stats · re-enrich <span id="et-reenrich">0</span></div>
     </div>
-    <div id="et-stopped"><div class="bf-label" id="et-stopped-info">Selectează o echipă (nume sau ID) + sezon, apoi extrage.</div></div>
+    <div id="et-stopped"><div class="bf-label" id="et-stopped-info">Selectează o echipă (nume sau ID) + sezon, apoi extrage & aplică.</div></div>
     <div class="bf-buttons">
-      <button id="et-extract-btn" class="bf-start" onclick="extractTeam()" disabled style="opacity:.5">⬇ Extrage</button>
-      <button id="et-reenrich-btn" class="bf-stop" onclick="reenrichOnly()" disabled style="flex:0 0 auto;padding-left:12px;padding-right:12px;opacity:.5">↻ Doar re-enrich</button>
+      <button id="et-extract-btn" class="bf-start" onclick="extractTeam()" disabled style="opacity:.5">⬇ EXTRAGE &amp; APLICĂ</button>
     </div>
   </section>
 
@@ -1872,33 +1872,20 @@ function _etCurrentSeason() {            // aceeași logică ca collect-daily/st
 function _etEnsureSeason() {
   var s = document.getElementById('et-season');
   if (s && !s.value) s.value = _etCurrentSeason();
+  if (typeof etSeasonHint === 'function') etSeasonHint();
 }
 function etUpdateBtn() {
   var idVal = (document.getElementById('et-id')||{}).value || '';
   var ok = !!_etSelected || (idVal && Number(idVal) > 0);
-  ['et-extract-btn','et-reenrich-btn'].forEach(function(id){
-    var btn = document.getElementById(id);
-    if (!btn) return;
-    btn.disabled = !ok;
-    btn.style.opacity = ok ? '1' : '.5';
-  });
+  var btn = document.getElementById('et-extract-btn');
+  if (btn) { btn.disabled = !ok; btn.style.opacity = ok ? '1' : '.5'; }
 }
-function _etTeamId() {
-  var idVal = (document.getElementById('et-id')||{}).value || '';
-  return _etSelected ? _etSelected.id : Number(idVal);
-}
-async function reenrichOnly() {
-  var teamId = _etTeamId();
-  if (!teamId) { toast('Selectează o echipă sau completează ID', 'var(--red)'); return; }
-  try {
-    var r = await fetch('/api/cron/extract-team?reenrich_only=1&team_id=' + teamId, { method:'POST', headers:{'X-Api-Key':_key} });
-    var d = await r.json();
-    if (d.error) { toast('✗ ' + d.error, 'var(--red)'); return; }
-    toast(d.already_running ? '▶ Deja rulează' : '↻ Re-enrich pornit');
-    refreshETStatus();
-    if (_etTimer) clearInterval(_etTimer);
-    _etTimer = setInterval(refreshETStatus, 1500);
-  } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
+// Hint live sub câmpul Sezon: ce 2 sezoane se vor trage (S + S-1).
+function etSeasonHint() {
+  var hint = document.getElementById('et-season-hint');
+  if (!hint) return;
+  var s = Number((document.getElementById('et-season')||{}).value) || _etCurrentSeason();
+  hint.textContent = '→ trage ' + s + ' + ' + (s - 1);
 }
 function etOnIdInput() {
   // ID direct are prioritate — deselectează rândul ales.
@@ -1947,7 +1934,7 @@ async function extractTeam() {
     var r = await fetch('/api/cron/extract-team?team_id=' + teamId + '&season=' + season, { method:'POST', headers:{'X-Api-Key':_key} });
     var d = await r.json();
     if (d.error) { toast('✗ ' + d.error, 'var(--red)'); return; }
-    toast(d.already_running ? '▶ Extragere deja rulează' : '▶ Extragere pornită');
+    toast(d.already_running ? '▶ Deja rulează' : '▶ Extragere & aplicare pornită (' + season + '+' + (season-1) + ')');
     refreshETStatus();
     if (_etTimer) clearInterval(_etTimer);
     _etTimer = setInterval(refreshETStatus, 1500);
@@ -1962,12 +1949,19 @@ async function refreshETStatus() {
     var stoppedDiv = document.getElementById('et-stopped');
     if (!activeDiv) return;
     if (!s) { if (_etTimer) { clearInterval(_etTimer); _etTimer=null; } return; }
-    var stepTxt = { teams:'Extrag info echipă…', players:'Extrag jucători…', fixtures:'Extrag meciuri…', stats:'Statistici…', reenrich:'Re-enrich meciuri…', start:'Pornesc…', done:'Gata' }[s.step] || s.step;
+    // step poate fi "players 2025" etc → prefix tradus + sufix sezon.
+    var base = String(s.step||'').split(' ')[0];
+    var suf  = String(s.step||'').split(' ')[1] || '';
+    var lbl  = { teams:'Extrag info echipă', players:'Extrag jucători', fixtures:'Extrag meciuri', stats:'Statistici echipă', standings:'Clasamente', reenrich:'Re-enrich meciuri', start:'Pornesc', done:'Gata' }[base] || base;
+    var stepTxt = lbl + (suf ? ' ' + suf : '') + '…';
+    var players = (s.players_S||0) + (s.players_S1||0);
+    var fixtures = (s.fixtures_S||0) + (s.fixtures_S1||0);
     if (s.running) {
       activeDiv.style.display = 'block'; stoppedDiv.style.display = 'none';
       document.getElementById('et-step').textContent = stepTxt;
-      document.getElementById('et-players').textContent = (s.players||0).toLocaleString();
-      document.getElementById('et-fixtures').textContent = (s.fixtures||0).toLocaleString();
+      document.getElementById('et-players').textContent = players.toLocaleString();
+      document.getElementById('et-fixtures').textContent = fixtures.toLocaleString();
+      document.getElementById('et-standings').textContent = (s.standings||0).toLocaleString();
       document.getElementById('et-statslg').textContent = (s.stats_leagues||0).toLocaleString();
       document.getElementById('et-reenrich').textContent = (s.reenriched||0).toLocaleString();
       if (!_etTimer) _etTimer = setInterval(refreshETStatus, 1500);
@@ -1978,7 +1972,8 @@ async function refreshETStatus() {
         if (s.reenrich_only) {
           info = '✓ Re-enrich: ' + (s.reenriched||0) + ' meciuri';
         } else {
-          info = '✓ ' + (s.team_name||'echipă') + ' (s.' + s.season + '): ' + (s.players||0) + ' jucători · ' + (s.fixtures||0) + ' meciuri · ' + (s.stats_leagues||0) + ' ligi-stats · re-enrich ' + (s.reenriched||0);
+          var ss = (s.seasons && s.seasons.length) ? s.seasons.join('+') : s.season;
+          info = '✓ ' + (s.team_name||'echipă') + ' (' + ss + '): ' + players + ' jucători · ' + fixtures + ' meciuri · ' + (s.standings||0) + ' standings · ' + (s.stats_leagues||0) + ' ligi-stats · re-enrich ' + (s.reenriched||0);
         }
         if (s.error) info += ' · ⚠ ' + s.error;
         document.getElementById('et-stopped-info').textContent = info;

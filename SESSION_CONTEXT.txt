@@ -778,6 +778,26 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~18:00] - EXTRAGERE ECHIPA: 1 buton = extragere ADANCA 2 sezoane + standings + aplicare
+  BACKEND (api/cron/extract-team.js): runExtract ruleaza acum pe seasons=[S, S-1] (S=ancora
+  din UI). Pasi idempotenti, prinsi separat, per sezon:
+    a) teams (o data) b) players (collectTeamSeason) c) fixtures_history d) teams_stats
+    +e) STANDINGS NOU: extractStandings(teamId,season,leagues) — pt fiecare liga a echipei,
+       /standings -> upsert randul echipei in tabelul `standings` existent (aceleasi coloane
+       ca collect-daily, +ALTER goals_diff guard; NU schema noua). f) H2H = derivat la calcul
+       din fixtures_history (acoperit de c pe 2 sezoane).
+    Reutilizeaza lista de ligi din extractTeamStats (returneaza acum {leagues,...}).
+    Status: counts pe sezon (players_S/S1, fixtures_S/S1), standings, stats_leagues, reenriched.
+  APLICARE: pas final reEnrichTeam(team_id) (din a7999f1) — recompute fortat meciuri NS viitoare.
+  endpoint reenrich_only=1 RAMANE in backend (scos doar din UI).
+  FRONTEND (admin.html): UN SINGUR buton "⬇ EXTRAGE & APLICA" ruleaza tot pipeline-ul.
+    Buton "↻ Doar re-enrich" + functia reenrichOnly/_etTeamId ELIMINATE din UI. Hint live
+    sub Sezon "→ trage S + S-1" (etSeasonHint, update la input+init). Status: counts agregate
+    2 sezoane (players/fixtures), +standings; step label cu sufix sezon (ex "Extrag jucatori 2024…").
+    Poll 1.5s, resume-on-load pastrate.
+  NEATINS: calcConfidence*/score*/NGP/Monte Carlo/whitelist/freeze-state/scanner/football/
+    enrich.js/carduri. Doar extract-team.js + admin.html. node --check OK. Un commit main.
+
 [01.06 ~17:30] - Re-enrich tintit pe echipa (meciuri viitoare) — legat de EXTRAGERE ECHIPA
   BACKEND:
   - api/enrich.js: +param force=1 care OCOLESTE DOAR cache-ul (3 linii, scoringul
