@@ -2402,8 +2402,14 @@ function tpRenderJucatori(d){
   var total=(g.G.length+g.D.length+g.M.length+g.F.length);
   var out=tpHeaderHtml(d.meta||{});
   if(!total){
-    out+='<div class="empty"><div class="empty-icon">👤</div><div class="empty-t">Lot indisponibil</div><div class="empty-s">Statisticile jucătorilor nu au fost colectate pentru sezonul curent al acestei echipe</div></div>';
+    out+='<div class="empty"><div class="empty-icon">👤</div><div class="empty-t">Lot indisponibil</div><div class="empty-s">Statisticile jucătorilor nu au fost colectate pentru această echipă</div></div>';
     body.innerHTML=out;return;
+  }
+  // Etichetă transparentă: dacă lotul afișat e dintr-un sezon diferit de cel curent.
+  var meta=d.meta||{};
+  var ps=meta.playersSeason, cs=meta.season;
+  if(ps!=null && cs!=null && Number(ps)!==Number(cs)){
+    out+='<div class="md-section-title" style="color:var(--mu);margin-bottom:8px">Lot · '+ps+' <span style="opacity:.7;text-transform:none;font-weight:600">(sezonul curent '+cs+' nu are încă jucători)</span></div>';
   }
   var groupTitles={G:'Portari',D:'Fundași',M:'Mijlocași',F:'Atacanți'};
   ['G','D','M','F'].forEach(function(key){

@@ -778,6 +778,23 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~18:45] - Pagina echipa tab JUCATORI: fallback lot pe cel mai recent sezon cu jucatori
+  PROBLEMA: lotul era blocat pe sezonul CURENT; stats jucatori pe sezonul curent adesea
+  lipsesc la API (sezonul nou are clasament+meciuri, dar player stats vin de pe sezonul
+  terminat) -> "Lot indisponibil" desi echipa are jucatori sub sezon anterior (ex.
+  Deportivo Laferrere: 53 jucatori sub 2025, tab cauta 2026).
+  FIX (DOAR tab JUCATORI, api/team.js getPlayers + frontend eticheta):
+  - playersForSeason(teamId,season) extras (player_stats via fixtures_history -> fallback
+    players_season). getPlayers: incearca sezonul cerut; daca gol -> latestSeasonWithPlayers
+    (MAX(season) cu randuri pt team_id, din player_stats apoi players_season) si afiseaza
+    lotul din acel sezon. Intoarce {groups, seasonUsed}.
+  - handler: meta.playersSeason = seasonUsed (sezonul efectiv afisat).
+  - frontend tpRenderJucatori: eticheta "Lot · <sezon>" cand playersSeason != season curent.
+  NEATINS: getTeamStrengths (citea deja corect), taburile FORMA/CLASAMENT/STATISTICI
+    (getForm/getStandings/getStats neatinse), calcConfidence*/score*/NGP/Monte Carlo/
+    whitelist/freeze/scanner/football/extract-team/enrich. Doar team.js + app-ui.js.
+  node --check OK. Un commit main.
+
 [01.06 ~18:20] - EXTRAGERE ECHIPA: sezon-ancora DETECTAT din API (per echipa)
   PROBLEMA: default european (luna>=7?an:an-1) gresit pt ligi an-calendaristic (Suedia/
   Norvegia/America de Sud) -> extragea 2025 cand curentul e 2026 -> "Lot indisponibil".

@@ -56,12 +56,12 @@ function posGroup(position) {
   return 'M'; // necunoscut → mijloc (neutru)
 }
 
-// LOT pe poziții: agregat per jucător din player_stats pentru sezonul curent.
+// LOT pe poziții: agregat per jucător din player_stats. Caută sezonul cerut; dacă e
+// gol (statisticile pe sezonul curent adesea încă nu există la API), cade automat pe
+// CEL MAI RECENT sezon cu jucători pt acel team_id. Întoarce { groups, seasonUsed }.
 // Sezonul player_stats nu e stocat direct → join pe fixtures_history DOAR pe season
-// (NU pe league_id): lotul se adună pe TOATE competițiile sezonului. Filtrul pe
-// league_id excludea greșit jucătorii când statisticile sunt sub altă competiție
-// (ex. Liverpool Montevideo: stats pe Copa Libertadores 13, nu pe campionatul intern).
-async function getPlayers(teamId, season) {
+// (NU pe league_id): lotul se adună pe TOATE competițiile sezonului.
+async function playersForSeason(teamId, season) {
   let rows = [];
   try {
     const r = await query(
@@ -82,9 +82,7 @@ async function getPlayers(teamId, season) {
     rows = r.rows;
   } catch (_) { rows = []; }
 
-  // FALLBACK players_season: dacă player_stats e gol pentru echipă+sezon (multe
-  // echipe nu au stats per-meci colectate, dar au sumarul sezonier — sursa care
-  // alimentează și score7/calcStrSeason). Mapăm pe aceleași câmpuri ca lotul.
+  // FALLBACK players_season (sumar sezonier) pt același sezon dacă player_stats e gol.
   if (!rows.length) {
     try {
       const r2 = await query(
@@ -102,6 +100,39 @@ async function getPlayers(teamId, season) {
         [teamId, season]);
       rows = r2.rows;
     } catch (_) { rows = []; }
+  }
+  return rows;
+}
+
+// Cel mai recent sezon care ARE jucători pt echipă (player_stats via fixtures_history,
+// apoi players_season). Folosit ca fallback când sezonul curent n-are încă jucători.
+async function latestSeasonWithPlayers(teamId) {
+  try {
+    const r = await query(
+      `SELECT MAX(fh.season) AS s
+         FROM player_stats ps
+         JOIN fixtures_history fh ON fh.fixture_id = ps.fixture_id
+        WHERE ps.team_id = $1`, [teamId]);
+    if (r.rows[0]?.s != null) return Number(r.rows[0].s);
+  } catch (_) {}
+  try {
+    const r = await query(
+      `SELECT MAX(season) AS s FROM players_season WHERE team_id=$1 AND appearances > 0`, [teamId]);
+    if (r.rows[0]?.s != null) return Number(r.rows[0].s);
+  } catch (_) {}
+  return null;
+}
+
+async function getPlayers(teamId, season) {
+  let rows = await playersForSeason(teamId, season);
+  let seasonUsed = season;
+  // Sezonul curent e gol → cade pe cel mai recent sezon cu jucători.
+  if (!rows.length) {
+    const fb = await latestSeasonWithPlayers(teamId);
+    if (fb != null && fb !== season) {
+      const fbRows = await playersForSeason(teamId, fb);
+      if (fbRows.length) { rows = fbRows; seasonUsed = fb; }
+    }
   }
 
   // Clean sheets per jucător de câmp nu există direct; calculăm clean sheets ECHIPĂ
@@ -121,7 +152,7 @@ async function getPlayers(teamId, season) {
       minutes:   Number(p.minutes) || 0,
     });
   }
-  return groups;
+  return { groups, seasonUsed };
 }
 
 // FORMĂ: ultimele ~18 meciuri finalizate (team ca home SAU away). Folosește
@@ -298,12 +329,16 @@ export default async function handler(req, res) {
       } catch (_) {}
     }
 
-    const [players, form, standings, stats] = await Promise.all([
-      season ? getPlayers(teamId, season) : Promise.resolve({ G: [], D: [], M: [], F: [] }),
+    const [playersRes, form, standings, stats] = await Promise.all([
+      season ? getPlayers(teamId, season) : Promise.resolve({ groups: { G: [], D: [], M: [], F: [] }, seasonUsed: season }),
       getForm(teamId),
       (leagueId && season) ? getStandings(leagueId, season) : Promise.resolve([]),
       getStats(teamId),
     ]);
+    const players = playersRes.groups;
+    // Sezonul efectiv din care s-a afișat lotul (poate diferi de cel curent dacă
+    // sezonul curent n-are încă jucători) — pt etichetă transparentă în UI.
+    meta.playersSeason = playersRes.seasonUsed != null ? playersRes.seasonUsed : season;
 
     // Rank curent al echipei în clasamentul calculat
     const myRow = standings.find(r => Number(r.team_id) === teamId) || null;
