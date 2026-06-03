@@ -778,6 +778,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~22:45] - matches-history: zile trecute+azi-terminat citesc din fixtures_history
+  PROBLEMA: meciurile din 03.06 apareau NS desi in fixtures_history sunt FT cu scor —
+  endpoint citea din `fixtures` (NS fara scor) pt date<=azi.
+  FIX (DOAR api/matches-history.js): buildSql(source) parametrizat. Branching nou:
+    isPast -> fixtures_history (FT/AET/PEN). isToday -> incearca INTAI fixtures_history
+    (FT/AET/PEN); daca 0 randuri -> fallback fixtures (NS de azi). isFuture -> fixtures
+    (NS/TBD/PST). source din raspuns reflecta tabela efectiv folosita. Extins filtrul
+    istoric FT->FT/AET/PEN (consistent cu restul codebase).
+  NEATINS: scoring. node --check OK. Un commit main.
+
 [01.06 ~22:30] - 2 fix-uri UI grupare (app-ui.js)
   FIX1: scos <img class=league-group-logo> din buildLeagueHeader -> header = drapel +
   TARA·Nume + indicator + X meciuri + chevron. Clasa CSS .league-group-logo lasata

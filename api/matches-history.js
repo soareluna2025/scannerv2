@@ -3,8 +3,9 @@
 //
 // Branching:
 //   date < azi → fixtures_history (status_short='FT')
-//   date = azi → fixtures (toate statusurile)
-//   date > azi → fixtures (status_short='NS')
+//   date = azi → fixtures_history (FT) dacă există meciuri terminate azi;
+//                altfel fallback fixtures (meciurile NS de azi)
+//   date > azi → fixtures (status_short NS/TBD/PST)
 //
 // Filtru: doar ligile din ALLOWED_LEAGUE_IDS.
 // Grupare în răspuns: { groups: [{country, league_name, league_id, matches:[]}] }
@@ -28,19 +29,14 @@ export default async function handler(req, res) {
   const isPast  = dateParam < today;
   const isToday = dateParam === today;
 
-  const sourceTable = isPast ? 'fixtures_history' : 'fixtures';
-  // FIX 1 — fixtures_history NU are coloana `round` (vezi scripts/create-tables.sql:104-120).
-  // Doar fixtures o are. Folosesc NULL ca placeholder pe ramura istorică.
-  const roundExpr = isPast ? 'NULL::TEXT' : 'f.round';
-  let extraWhere   = '';
-  if (isPast)        extraWhere = "AND f.status_short = 'FT'";
-  // FIX 2 (defensiv) — pentru zile viitoare nu doar 'NS', dar și 'TBD' (To Be
-  // Decided, oră confirmată ulterior) și 'PST' (postponed re-programat) —
-  // 'NS' singur lăsa în afară meciuri programate corect dar cu alt status.
-  else if (!isToday) extraWhere = "AND f.status_short IN ('NS','TBD','PST')";
-
-  try {
-    const sql = `
+  // Construiește query-ul pentru o sursă dată. fixtures_history NU are coloana `round`
+  // (scripts/create-tables.sql) → NULL placeholder pe ramura istorică.
+  const buildSql = (source) => {
+    const roundExpr = source === 'fixtures_history' ? 'NULL::TEXT' : 'f.round';
+    let extraWhere = '';
+    if (source === 'fixtures_history') extraWhere = "AND f.status_short IN ('FT','AET','PEN')";
+    else if (!isToday)                 extraWhere = "AND f.status_short IN ('NS','TBD','PST')";
+    return `
       SELECT f.fixture_id,
              f.home_team_name, f.away_team_name,
              f.home_team_id,   f.away_team_id,
@@ -51,7 +47,7 @@ export default async function handler(req, res) {
              l.country AS country,
              th.logo   AS home_logo,
              ta.logo   AS away_logo
-        FROM ${sourceTable} f
+        FROM ${source} f
         JOIN leagues l ON l.league_id = f.league_id
         LEFT JOIN teams th ON th.team_id = f.home_team_id
         LEFT JOIN teams ta ON ta.team_id = f.away_team_id
@@ -60,7 +56,28 @@ export default async function handler(req, res) {
          ${extraWhere}
        ORDER BY l.country, l.name, f.match_date
     `;
-    const { rows } = await query(sql, [dateParam, allowedIds]);
+  };
+
+  try {
+    let sourceTable, rows;
+    if (isPast) {
+      // Trecut → fixtures_history (FT/AET/PEN).
+      sourceTable = 'fixtures_history';
+      ({ rows } = await query(buildSql(sourceTable), [dateParam, allowedIds]));
+    } else if (isToday) {
+      // Azi → întâi fixtures_history (meciuri deja terminate cu scor real);
+      // dacă 0 → fallback la fixtures (meciurile NS de azi).
+      sourceTable = 'fixtures_history';
+      ({ rows } = await query(buildSql(sourceTable), [dateParam, allowedIds]));
+      if (!rows.length) {
+        sourceTable = 'fixtures';
+        ({ rows } = await query(buildSql(sourceTable), [dateParam, allowedIds]));
+      }
+    } else {
+      // Viitor → fixtures (NS/TBD/PST).
+      sourceTable = 'fixtures';
+      ({ rows } = await query(buildSql(sourceTable), [dateParam, allowedIds]));
+    }
 
     const groups = new Map();
     for (const r of rows) {
