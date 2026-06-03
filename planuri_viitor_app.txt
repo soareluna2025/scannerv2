@@ -1,0 +1,215 @@
+================================================================================
+PLAN VIITOR — OPȚIUNEA 2: MACHINE LEARNING PE PREDICȚII ISTORICE
+AlohaScan Scanner V2
+Data documentare: Iunie 2026
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. CE ESTE ȘI DE CE O VREM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Acum, greutățile score1-score7 din calcConfidencePreMatch() sunt fixe și
+calibrate manual. Nu se adaptează la realitate.
+
+Exemplu problemă reală:
+ - În Bundesliga, forma recentă (score2) contează mai mult decât H2H
+ - În Copa Libertadores, H2H (score3) domină față de forma recentă
+ - Modelul actual tratează TOATE ligile la fel → predicții sub-optime
+
+Soluția: folosim predicțiile istorice cu rezultate verificate din DB pentru
+a antrena un model simplu (Logistic Regression) care găsește greutățile OPTIME
+per ligă și tip de meci în mod automat.
+
+Modelul învață singur din date reale în loc să fie calibrat manual.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. CE AVEM DEJA (infrastructura existentă)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DATE DISPONIBILE ÎN DB:
+ ✅ predictions             — 1.256 predicții, 622 cu rezultat verificat
+ ✅ prediction_log          — module OVER15/GG/NGP/CONFIDENCE cu outcome WIN/LOSS
+ ✅ fixtures_history        — 77.225 meciuri FT cu scoruri reale
+ ✅ league_stats            — 606 ligi cu medii reale
+ ✅ model_weights           — 23 valori default în 8 module (infrastructura există!)
+ ✅ calibration_tables      — per modul + league_group (low/mid/high)
+
+COD EXISTENT CARE AJUTĂ:
+ ✅ api/weights.js                  — citește greutăți cu TTL 1h, fallback specific→global
+ ✅ api/cron/learning-analysis.js   — 6 pași de auto-calibrare (cron săptămânal)
+ ✅ api/cron/recalibrate-tables.js  — recalibrare per profil ligă
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. CE LIPSEȘTE (problemele de rezolvat)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PROBLEME DE DATE:
+ ❌ 622 predicții verificate = sample MIC (minim 5.000-10.000 pentru ML serios)
+ ❌ score1-score7 individuale NU sunt salvate în tabela predictions
+    (doar confidence final și over15_prob sunt stocate)
+ ❌ Nu avem features per predicție stocate la momentul predicției
+    (forma echipei, H2H sample size, etc.)
+
+PROBLEME DE COD:
+ ❌ Niciun model Python/ML pe VPS
+ ❌ Nu există pipeline antrenament → evaluare → deployment
+ ❌ breakdown per layer există în răspunsul /api/enrich dar NU este salvat în DB
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. PLAN DE IMPLEMENTARE — 4 PAȘI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+────────────────────────────────────────────────────────────────────────────────
+PASUL 1 — Colectare features (durată: 1 săptămână de cod)
+────────────────────────────────────────────────────────────────────────────────
+
+Ce facem:
+ Modificăm api/enrich.js să salveze breakdown-ul complet (score1-score7
+ individuale) în tabela predictions la fiecare calcul.
+
+ ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score1 NUMERIC(5,2);
+ ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score2 NUMERIC(5,2);
+ ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score3 NUMERIC(5,2);
+ ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score4 NUMERIC(5,2);
+ ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score6 NUMERIC(5,2);
+ ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score7 NUMERIC(5,2);
+ ALTER TABLE predictions ADD COLUMN IF NOT EXISTS h2h_sample INT;
+ ALTER TABLE predictions ADD COLUMN IF NOT EXISTS league_group TEXT;
+
+De ce:
+ Fără aceste coloane nu avem features pentru antrenamentul modelului ML.
+ Sunt exact variabilele pe care modelul trebuie să le învețe să pondereze.
+
+Fișiere de modificat: api/enrich.js (DOAR INSERT în predictions, NU scoring)
+ATENȚIE: calcConfidencePreMatch() și score2/3/6/7 NU se ating.
+
+────────────────────────────────────────────────────────────────────────────────
+PASUL 2 — Acumulare sample (durată: 4-8 săptămâni de așteptare)
+────────────────────────────────────────────────────────────────────────────────
+
+Ce facem:
+ Lăsăm sistemul să ruleze și să acumuleze predicții verificate.
+ auto-predict (cron 00:30) generează ~50-100 predicții/zi.
+ update-results (cron 02:00) verifică rezultatele meciurilor FT.
+
+Ținta: minimum 2.000 predicții verificate, ideal 5.000+.
+Timeline: 30-60 zile de funcționare normală.
+
+Nu necesită intervenție manuală. Sistemul colectează automat.
+
+────────────────────────────────────────────────────────────────────────────────
+PASUL 3 — Antrenament model (durată: 1 săptămână de cod)
+────────────────────────────────────────────────────────────────────────────────
+
+Ce facem:
+ Scriem un script Python simplu pe VPS (api/cron/train-model.py sau
+ direct în Node.js) care:
+
+ 1) Citește din predictions WHERE result_over15 IS NOT NULL
+ 2) Features: [score1, score2, score3, score4, score6, score7,
+               lambda_total, h2h_sample, league_group]
+ 3) Target: result_over15 (1 sau 0)
+ 4) Antrenează Logistic Regression (simplu, interpretabil, fără overfitting)
+ 5) Găsește greutățile optime per ligă (low/mid/high scoring)
+ 6) Scrie rezultatele în model_weights (infrastructura există deja!)
+
+Exemplu output în model_weights:
+ module='OVER15', weight_name='score1_weight', value=0.28, league_group='high'
+ module='OVER15', weight_name='score2_weight', value=0.31, league_group='high'
+ module='OVER15', weight_name='score3_weight', value=0.12, league_group='high'
+
+api/weights.js citește automat din model_weights → enrich.js le aplică.
+Infrastructura de citire EXISTĂ DEJA. Doar antrenamentul lipsește.
+
+────────────────────────────────────────────────────────────────────────────────
+PASUL 4 — Validare și deployment (durată: 1 săptămână)
+────────────────────────────────────────────────────────────────────────────────
+
+Ce facem:
+ 1) Calculăm Brier Score ÎNAINTE cu greutățile manuale actuale
+ 2) Calculăm Brier Score DUPĂ cu greutățile ML
+ 3) Dacă îmbunătățire > 10% → scriem în model_weights → deployment automat
+ 4) Dacă nu → rămânem pe greutățile manuale (rollback simplu)
+
+Validare pe set de test separat (ultimele 20% din predicții, netrecute
+prin antrenament) pentru a evita overfitting.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. ESTIMARE IMPACT PROBABILISTIC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ Brier Score actual: 0.195 (măsurat pe 622 predicții, audit 25.05.2026)
+ Target realist post-ML: 0.145-0.175
+
+ Scenariu 1 — Implementare completă cu 5k+ predicții:
+   Probabilitate: 35%
+   Îmbunătățire Brier: -25% până la -35%
+
+ Scenariu 2 — Implementare parțială cu ~2k predicții:
+   Probabilitate: 55%
+   Îmbunătățire Brier: -10% până la -20%
+
+ Scenariu 3 — Fără impact semnificativ (sample prea mic):
+   Probabilitate: 10%
+   Îmbunătățire Brier: 0% până la -5%
+
+ Concluzie: 90% șanse să vedem o îmbunătățire măsurabilă.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. FEZABILITATE GENERALĂ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ SCOR FEZABILITATE: 75/100
+
+ Motive pentru care E FEZABIL:
+   + Infrastructura model_weights există deja și funcționează
+   + learning-analysis.js și recalibrate-tables.js sunt deja în producție
+   + Rollback simplu (greutățile manuale sunt fallback automat)
+   + Nu necesită biblioteci externe complexe pentru Logistic Regression
+   + Logistic Regression se poate implementa chiar în Node.js pur
+
+ Motive de risc:
+   - Sample size e principala problemă (622 predicții sunt puține acum)
+   - Risc de overfitting pe ligi cu puține date
+   - Timp de așteptare 4-8 săptămâni pentru date suficiente
+   - Necesită validare riguroasă înainte de deployment
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. REGULI ABSOLUTE DE RESPECTAT LA IMPLEMENTARE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ NU SE ATINGE NICIODATĂ:
+   - calcConfidencePreMatch() și greutățile ei
+   - calcConfidenceLive() și greutățile ei
+   - score2 (formula cu apărare)
+   - score3 (H2H combo cu h2hGG)
+   - score6 (convergență stdDev)
+   - score7 (match-up real)
+   - Monte Carlo nSims = 10.000
+
+ SE POATE MODIFICA:
+   - score4 (live xG/SOT/DA+NGP)
+   - getLiveStatsFromDB()
+   - INSERT în tabela predictions (adăugare coloane noi)
+   - model_weights (scriere greutăți noi din ML)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. TIMELINE ESTIMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ Săptămâna 1:   Pasul 1 — salvare features în DB
+ Săptămânile 2-8: Pasul 2 — acumulare automată date
+ Săptămâna 9:   Pasul 3 — antrenament model
+ Săptămâna 10:  Pasul 4 — validare și deployment
+
+ Total: aproximativ 10 săptămâni de la start până la deployment complet.
+ Efort de cod real: 2-3 săptămâni. Restul e așteptare pentru date.
+
+================================================================================
+NOTĂ FINALĂ
+================================================================================
+Acest plan a fost documentat în Iunie 2026 după analiza completă a
+arhitecturii AlohaScan Scanner V2. Infrastructura de bază există deja.
+Principalul blocaj este acumularea de date suficiente pentru antrenament.
+Începe cu Pasul 1 și lasă sistemul să colecteze. Nu grăbi Pasul 3.
+================================================================================
