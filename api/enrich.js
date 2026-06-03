@@ -1519,12 +1519,22 @@ export default async function handler(req, res) {
         const apiHomePct = apiPred ? (parseFloat(apiPred.predictions?.percent?.home) || null) : null;
         const apiDrawPct = apiPred ? (parseFloat(apiPred.predictions?.percent?.draw) || null) : null;
         const apiAwayPct = apiPred ? (parseFloat(apiPred.predictions?.percent?.away) || null) : null;
+        // [ML features] breakdown DEJA calculat (payload.breakdown) — doar persistat.
+        const _bd = payload.breakdown || {};
+        // league_group din league_stats.avg_goals_per_match (aceleași praguri ca recalibrate-tables).
+        const _avgGoals = parseFloat(leagueStats?.avg_goals_per_match);
+        const _leagueGroup = !Number.isFinite(_avgGoals) ? 'global'
+          : _avgGoals < 2.3 ? 'low'
+          : _avgGoals < 3.0 ? 'mid'
+          : 'high';
         query(
           `INSERT INTO predictions (fixture_id, home_team, away_team, league_name, league_id, match_date,
             lambda_home, lambda_away, lambda_total, over15_prob, over25_prob, gg_prob,
             home_score_rate, away_score_rate, h2h_over15, confidence,
-            api_home_pct, api_draw_pct, api_away_pct)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+            api_home_pct, api_draw_pct, api_away_pct,
+            score1, score2, score3, score4, score6, score7, h2h_sample, league_group)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
+            $20,$21,$22,$23,$24,$25,$26,$27)
           ON CONFLICT (fixture_id) DO UPDATE SET
             lambda_home=EXCLUDED.lambda_home, lambda_away=EXCLUDED.lambda_away,
             lambda_total=EXCLUDED.lambda_total,
@@ -1535,6 +1545,9 @@ export default async function handler(req, res) {
             api_home_pct=COALESCE(EXCLUDED.api_home_pct, predictions.api_home_pct),
             api_draw_pct=COALESCE(EXCLUDED.api_draw_pct, predictions.api_draw_pct),
             api_away_pct=COALESCE(EXCLUDED.api_away_pct, predictions.api_away_pct),
+            score1=EXCLUDED.score1, score2=EXCLUDED.score2, score3=EXCLUDED.score3,
+            score4=EXCLUDED.score4, score6=EXCLUDED.score6, score7=EXCLUDED.score7,
+            h2h_sample=EXCLUDED.h2h_sample, league_group=EXCLUDED.league_group,
             updated_at=NOW()
           WHERE predictions.result_over15 IS NULL`,
           [
@@ -1544,6 +1557,10 @@ export default async function handler(req, res) {
             payload.homeScoreRate, payload.awayScoreRate, payload.h2hOver15,
             payload.confidenceScore || null,
             apiHomePct, apiDrawPct, apiAwayPct,
+            // [ML features] $20-$27 — breakdown persistat (score3/4/7 pot fi null = OK).
+            _bd.poisson ?? null, _bd.forma ?? null, _bd.h2h ?? null,
+            _bd.live ?? null, _bd.consistenta ?? null, _bd.putereEchipe ?? null,
+            payload.h2hSample ?? null, _leagueGroup,
           ]
         ).catch(() => {});
       }

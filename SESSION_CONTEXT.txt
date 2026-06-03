@@ -778,6 +778,22 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~20:30] - ML features in predictions: score1-7 + h2h_sample + league_group persistate
+  PAS1 migrare scripts/migrations/add-prediction-features.sql (NOU, idempotent ADD COLUMN
+  IF NOT EXISTS): score1/2/3/4/6/7 NUMERIC(5,2), h2h_sample INT, league_group TEXT.
+  PAS2 server.js ensureColumns(): +citire/rulare add-prediction-features.sql la startup
+  (langa migrarea api-columns existenta) -> auto-aplicat la deploy.
+  PAS3 api/enrich.js INSERT INTO predictions: extins de la 19 -> 27 coloane/placeholdere/
+  param (verificat 27/27/27 aliniat) cu breakdown DEJA calculat (payload.breakdown):
+    score1=poisson, score2=forma, score3=h2h(null OK), score4=live(null pre-meci OK),
+    score6=consistenta, score7=putereEchipe(null OK), h2h_sample=payload.h2hSample.
+    league_group derivat din leagueStats.avg_goals_per_match (<2.3 low / <3.0 mid / else
+    high / fara date global) — aceleasi praguri ca recalibrate-tables. DO UPDATE extins
+    cu noile coloane. Datele vechi (15.675) raman NULL (normal).
+  NEATINS: calcConfidencePreMatch/Live, score2/3/6/7 (formule), Monte Carlo, niciun calcul
+  — DOAR INSERT/UPDATE extins + derivare league_group. node --check enrich.js+server.js OK.
+  Un commit main + deploy.
+
 [01.06 ~20:00] - collect-daily: upsert leagues din fixturi (cupe knockout fara standings)
   PROBLEMA: randul in tabela leagues se crea DOAR in bucla de standings (collect-daily.js:294).
   Cupele knockout (ex. 130 Copa Argentina) n-au clasament -> niciun rand leagues -> today.js

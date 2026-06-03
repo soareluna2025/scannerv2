@@ -152,6 +152,15 @@ async function ensureColumns() {
   } catch (e) {
     console.error('[columns] ensureColumns:', e.message);
   }
+  // [ML] Features per predicție (score1-7 + h2h_sample + league_group) — idempotent.
+  try {
+    const { readFileSync } = await import('fs');
+    const sql = readFileSync(join(__dirname, 'scripts', 'migrations', 'add-prediction-features.sql'), 'utf8');
+    await query(sql);
+    console.log('[columns] add-prediction-features.sql aplicat (idempotent)');
+  } catch (e) {
+    console.error('[columns] ensureColumns (features):', e.message);
+  }
 }
 
 const httpServer = app.listen(PORT, '0.0.0.0', async () => {

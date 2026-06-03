@@ -1,0 +1,13 @@
+-- Migration: features per predicție pentru ML viitor (score1-7 + h2h_sample + league_group).
+-- breakdown-ul e DEJA calculat în api/enrich.js; de acum se persistă la fiecare predicție nouă.
+-- Datele vechi rămân NULL (normal). Idempotent (ADD COLUMN IF NOT EXISTS).
+-- Aplicat automat la startup (server.js ensureColumns). Manual pe VPS:
+--   psql -U alohascan -d elefant -f scripts/migrations/add-prediction-features.sql
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score1 NUMERIC(5,2);
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score2 NUMERIC(5,2);
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score3 NUMERIC(5,2);
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score4 NUMERIC(5,2);
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score6 NUMERIC(5,2);
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score7 NUMERIC(5,2);
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS h2h_sample INTEGER;
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS league_group TEXT;
