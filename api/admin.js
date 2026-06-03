@@ -456,6 +456,10 @@ const STABILIZE_STEPS = [
   { name: 'learning-analysis',  path: '/api/cron/learning-analysis' },
   { name: 'recalibrate-tables', path: '/api/cron/recalibrate-tables' },
   { name: 'calibrate-live',     path: '/api/cron/calibrate-live' },
+  // Pasul 14 — auto-predict: după ce datele sunt proaspete, generează predicții.
+  // Apelat via GET (cron-ul e GET /api/cron/auto-predict). Timeout 15 min (poate dura
+  // mai mult — predicții pt toate meciurile NS).
+  { name: 'auto-predict',       path: '/api/cron/auto-predict', method: 'GET' },
 ];
 
 // Stare partajată (un singur run global) — citită de /stabilize-status.
@@ -475,8 +479,8 @@ async function runStabilize() {
     let ok = false, errMsg = null;
     try {
       const r = await fetch(`http://localhost:${port}${step.path}`, {
-        method: 'POST',
-        signal: AbortSignal.timeout(15 * 60 * 1000), // 15 min/pas
+        method: step.method || 'POST',                 // default POST; auto-predict = GET
+        signal: AbortSignal.timeout(15 * 60 * 1000), // 15 min/pas (auto-predict inclus)
       });
       ok = r.ok;
       if (!r.ok) errMsg = `HTTP ${r.status}`;
