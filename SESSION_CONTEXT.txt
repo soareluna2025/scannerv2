@@ -778,6 +778,17 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~22:30] - 2 fix-uri UI grupare (app-ui.js)
+  FIX1: scos <img class=league-group-logo> din buildLeagueHeader -> header = drapel +
+  TARA·Nume + indicator + X meciuri + chevron. Clasa CSS .league-group-logo lasata
+  definita (nefolosita, nu strica).
+  FIX2: +matchStatusLabel(m) (helper nou) — FT/AET/PEN: "scor · FT" (verde castigator/
+  rosu perdant/alb egal); 1H/2H/HT/ET/BT/P: punct rosu pulsant + scor · minut' (HT->HT);
+  NS/TBD: "🕐 ora · NS". Folosit in buildPmCard (rand pm-card PRE-MECI, istorice+viitoare).
+  LIVE (renderMatches) foloseste buildCardHtml (cardurile mari, NEATINSE) care afiseaza
+  deja scor+minut live -> nu necesita schimbare. node --check OK. Testat 5 stari.
+  NEATINS: buildCardHtml, calcConfidence*/score2/3/6/7. DOAR app-ui.js. Un commit main.
+
 [01.06 ~22:10] - Acuratete model: sursa predictions (nu prediction_log) — fix 93% fals
   PROBLEMA: model-accuracy citea din prediction_log (sute de mii randuri, scanner la 2s)
   -> 93% din 386.749 "predictii" fals (1 meci 90min ~2700 randuri). CORECT: tabela

@@ -278,8 +278,6 @@ function groupMatchesByLeague(matches, confOf){
 function buildLeagueHeader(group, storageKey){
   var collapsed = localStorage.getItem(storageKey+group.leagueId)!=='0'; // default colasat
   var flag=(typeof countryToFlag==='function'?countryToFlag(group.country):'')||'🏳️';
-  var logo=group.leagueLogo
-    ? '<img class="league-group-logo" src="'+group.leagueLogo+'" onerror="this.style.display=\'none\'">' : '';
   var ind = group.hasTopPick ? '<span class="league-group-indicator">🟢</span>'
           : group.maxConfidence>=60 ? '<span class="league-group-indicator">🟡</span>' : '';
   var country=(group.country==='OTHER'?'OTHER':group.country).toUpperCase();
@@ -288,7 +286,7 @@ function buildLeagueHeader(group, storageKey){
   h+='<span class="league-group-flag">'+flag+'</span>';
   h+='<span class="league-group-country">'+htmlEsc(country)+'</span>';
   h+='<span class="league-group-name">'+htmlEsc(group.leagueName)+'</span>';
-  h+=logo+ind;
+  h+=ind;
   h+='<span class="league-group-count">'+group.matches.length+' meciuri</span>';
   h+='<span class="league-group-chevron">▼</span>';
   h+='</div>';
@@ -304,6 +302,31 @@ function toggleLeagueGroup(headerEl, storageKey, leagueId){
     body.classList.toggle('collapsed', !willExpand);
   }
   localStorage.setItem(storageKey+leagueId, willExpand?'0':'1');
+}
+
+// Eticheta de status pt rândul simplu de meci în grup (FT scor / NS oră / live scor+minut).
+// Întoarce HTML string. Folosit în buildPmCard (PRE-MECI) — cardurile mari (buildCardHtml)
+// au deja propria afișare, NEATINSE.
+function matchStatusLabel(m){
+  var sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'NS';
+  var hg=m.goals?(m.goals.home==null?null:m.goals.home):null;
+  var ag=m.goals?(m.goals.away==null?null:m.goals.away):null;
+  var FT=['FT','AET','PEN'], LIVE=['1H','2H','HT','ET','BT','P'];
+  if(FT.indexOf(sh)>=0 && hg!=null && ag!=null){
+    var hc=hg>ag?'#22c55e':hg<ag?'#ef4444':'var(--tx)';
+    var ac=ag>hg?'#22c55e':ag<hg?'#ef4444':'var(--tx)';
+    return '<span style="font-weight:700"><span style="color:'+hc+'">'+hg+'</span> - <span style="color:'+ac+'">'+ag+'</span></span> · FT';
+  }
+  if(LIVE.indexOf(sh)>=0){
+    var mn=m.fixture&&m.fixture.status?m.fixture.status.elapsed||0:0;
+    var sc=(hg!=null&&ag!=null)?(hg+' - '+ag):'0 - 0';
+    var lbl=(sh==='HT')?"HT":(mn+"'");
+    return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#ef4444;margin-right:5px;animation:livePulse 1s infinite;vertical-align:middle"></span>'+
+      '<span style="font-weight:700;color:#ef4444">'+sc+'</span> · '+lbl;
+  }
+  // NS / TBD / altele → oră (cum era)
+  var t=m.fixture&&m.fixture.date?new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
+  return '🕐 '+t+(sh==='NS'?' · NS':'');
 }
 
 function renderMatches(){
@@ -710,7 +733,7 @@ function renderPM(){
     var o='';
     o+='<div class="pm-card" onclick="mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer;position:relative">';
     o+='<div class="pm-header">';
-    o+='<div class="pm-kickoff"><button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>'+flag+lg+' · 🕐 '+kickoff+'</div>';
+    o+='<div class="pm-kickoff"><button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>'+flag+lg+' · '+matchStatusLabel(m)+'</div>';
     o+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu);font-size:13px;font-weight:600">vs</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div>';
     o+='</div>';
     if(enr){
