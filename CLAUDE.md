@@ -379,3 +379,211 @@ League Argentina }` — adăugate fiindcă termenii generici `'serie c'`/`'serie
 2. VERIFICĂ numele ligii contra blocklist-ului (`WOMEN`/`YOUTH`/`LOWER_DIV`).
 3. Dacă numele conține un keyword dar vrei liga → adaugă ID-ul în `FORCE_ALLOW_IDS`.
 4. Rulează `collect-daily` ca să se populeze fixturile (altfel rămân 0 în DB).
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SESIUNE 04.06.2026 — AUDIT SISTEM PREDICȚII + PLAN ML
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> NOTĂ SECURITATE: parola DB a fost REDACTATĂ (`***`) în comenzile de mai jos —
+> conform regulii „NU committa niciodată chei/parole". Folosește parola reală local.
+
+## 1. CE AM DISCUTAT
+
+Am analizat 3 opțiuni de dezvoltare a aplicației la nivel superior:
+
+OPȚIUNEA 1 — Expected Goals (xG) real din date istorice
+  Calcul xG real din match_stats (poziție șut, tip acțiune)
+  Impact estimat: -15-25% Brier
+
+OPȚIUNEA 2 — Machine Learning pe predicții istorice (ALEASĂ)
+  Logistic Regression pe score1-score7 pentru greutăți optime per ligă
+  Impact estimat: -10-35% Brier
+
+OPȚIUNEA 3 — Momentum Engine Real-Time
+  Urmărire dinamică presiune ultimele 10 minute
+  Impact estimat: NGP mai precis
+
+DECIZIE: Am ales Opțiunea 2 (ML pe predicții istorice).
+Documentată complet în planuri_viitor_app.txt (commit e131ac9).
+
+## 2. AUDIT COD — CE A GĂSIT CLAUDE CODE (sandbox, read-only)
+
+UNDE SE SCRIU PREDICȚIILE:
+  api/enrich.js:1523       → INSERT principal (confidence + probabilități)
+                              ON CONFLICT DO UPDATE WHERE result_over15 IS NULL
+  api/match.js:510         → INSERT secundar (fără confidence, fără api_*_pct)
+                              ON CONFLICT DO UPDATE fără guard pe result
+  api/cron/auto-predict.js → NU scrie direct, cheamă /api/enrich per fixture NS
+                              Cron 00:30 zilnic, LIMIT 500, sleep 300ms/fixture
+  api/update-results.js    → UPDATE (nu INSERT), populează result_over15/25/gg/winner
+                              Cron 02:00 zilnic, set-based din fixtures_history
+
+CE NU SE SALVEAZĂ (problemă identificată):
+  breakdown per layer (score1-score7) — calculat în enrich.js:553 dar ARUNCAT
+  h2h_sample — nu e persistat
+  league_group — nu e persistat
+  Aceste coloane NU existau în tabela predictions.
+
+UNDE SE CITESC PREDICȚIILE:
+  learning-analysis.js  → citește prediction_log (win-rate, threshold, lambda_multiplier)
+                          CALIBRARE STATISTICĂ, nu ML real
+  recalibrate-tables.js → bucketizează per module/league_group, calculează Brier
+  weights.js            → cache model_weights TTL 1h, fallback specific→global
+  enrich.js:1203        → folosește DOAR lambda_multiplier din model_weights
+                          greutățile score1-7 sunt FIXE în cod, NU din DB
+
+CONCLUZIE COD: sistem de calibrare statistică funcțional, dar fără ML real.
+  Infrastructura există (model_weights, learning-analysis, calibration_tables).
+  Lipsesc features per predicție (score1-7 în DB).
+
+## 3. AUDIT VPS — COMENZI RULATE + REZULTATE
+
+### 3A. Starea predicțiilor
+COMANDĂ:
+  PGPASSWORD=*** psql -U alohascan -d elefant -h 127.0.0.1 -c \
+  "SELECT COUNT(*) as total, COUNT(result_over15) as cu_rezultat, \
+  COUNT(*) FILTER (WHERE result_over15 IS NULL) as pending, \
+  COUNT(*) FILTER (WHERE result_over15 = TRUE) as castigat, \
+  COUNT(*) FILTER (WHERE result_over15 = FALSE) as pierdut FROM predictions;"
+
+REZULTAT:
+  total=15675 | cu_rezultat=15522 | pending=153 | castigat=11891 | pierdut=3631
+  Rata Over 1.5 reală: 76.6%
+
+### 3B. Brier Score real
+COMANDĂ:
+  PGPASSWORD=*** psql -U alohascan -d elefant -h 127.0.0.1 -c \
+  "SELECT COUNT(*) as sample, ROUND(AVG(POWER((over15_prob/100.0) - \
+  CASE WHEN result_over15 THEN 1 ELSE 0 END, 2))::numeric, 4) as brier_score \
+  FROM predictions WHERE result_over15 IS NOT NULL;"
+
+REZULTAT:
+  sample=15522 | brier_score=0.1511
+  NOTE: La auditul 25.05.2026 era 0.195 pe 622 predicții.
+        Acum pe 15.522 predicții = 0.1511 → îmbunătățire 22% față de audit anterior.
+        Model BUN (industria: sub 0.20 = bun, sub 0.15 = foarte bun).
+
+### 3C. Coloane existente în predictions
+COMANDĂ:
+  PGPASSWORD=*** psql -U alohascan -d elefant -h 127.0.0.1 -c \
+  "SELECT column_name, data_type FROM information_schema.columns \
+  WHERE table_name = 'predictions' ORDER BY ordinal_position;"
+
+REZULTAT (coloane confirmate):
+  EXISTĂ: id, fixture_id, home_team, away_team, league_name, league_id,
+          match_date, lambda_home, lambda_away, lambda_total,
+          over15_prob, over25_prob, gg_prob, home_win_prob, draw_prob,
+          away_win_prob, home_score_rate, away_score_rate, h2h_over15,
+          confidence, best_ev, best_cota, best_bet,
+          result_over15, result_over25, result_gg, result_1x2, result_winner,
+          score_at_alert, outcome_ngp,
+          api_home_pct, api_draw_pct, api_away_pct,
+          created_at, updated_at
+
+  NU EXISTĂ: score1, score2, score3, score4, score6, score7,
+             breakdown, h2h_sample, league_group, source
+
+### 3D. Predicții per zi (ultimele 14 zile)
+COMANDĂ:
+  PGPASSWORD=*** psql -U alohascan -d elefant -h 127.0.0.1 -c \
+  "SELECT DATE(updated_at) as zi, COUNT(*) as predictii FROM predictions \
+  WHERE updated_at >= NOW() - INTERVAL '14 days' GROUP BY 1 ORDER BY 1 DESC;"
+
+REZULTAT:
+  2026-06-03: 153  | 2026-06-02: 25   | 2026-06-01: 36
+  2026-05-31: 156  | 2026-05-30: 170  | 2026-05-29: 26
+  2026-05-28: 59   | 2026-05-27: 2    | 2026-05-26: 13815 (backfill bulk)
+  2026-05-25: 657  | 2026-05-24: 49   | 2026-05-23: 50
+  NOTE: 26.05 = backfill masiv 13.815 predicții. Zilele normale: 25-170/zi.
+
+### 3E. prediction_log pe module
+COMANDĂ:
+  PGPASSWORD=*** psql -U alohascan -d elefant -h 127.0.0.1 -c \
+  "SELECT module, outcome, COUNT(*) as total FROM prediction_log \
+  GROUP BY module, outcome ORDER BY module, outcome;"
+
+REZULTAT:
+  CONFIDENCE: WIN=6150  | LOSS=3490  | PENDING=447   → win rate 63.8%
+  GG:         WIN=5055  | LOSS=4584  | PENDING=447   → win rate 52.5%
+  NGP:        WIN=192889 | LOSS=33062 | PENDING=18295 → win rate 85.3%
+  OVER15:     WIN=195992 | LOSS=10528 | PENDING=18192 → win rate 94.9%
+
+### 3F. model_weights (structură reală)
+COMANDĂ structură:
+  PGPASSWORD=*** psql -U alohascan -d elefant -h 127.0.0.1 -c \
+  "SELECT column_name, data_type FROM information_schema.columns \
+  WHERE table_name = 'model_weights' ORDER BY ordinal_position;"
+
+COLOANE REALE: id, module, context_key, weight_name, weight_value,
+               default_value, sample_size, win_rate, confidence_level, last_updated
+NOTE: coloana se numește weight_value (NU value cum era în documentație veche)
+
+COMANDĂ date:
+  PGPASSWORD=*** psql -U alohascan -d elefant -h 127.0.0.1 -c \
+  "SELECT module, weight_name, weight_value, context_key, win_rate, \
+  sample_size, last_updated FROM model_weights ORDER BY module, weight_name;"
+
+REZULTAT (extras relevant):
+  CONFIDENCE layer weights (actualizate 03.06 la 03:43 — learning engine ACTIV):
+    layer1_weight: 0.2212 | layer2_weight: 0.2010 | layer3_weight: 0.1594
+    layer4_weight: 0.2214 | layer5_weight: 0.0671 | layer6_weight: 0.1100
+    layer7_weight: 0.0199
+
+  CONFIDENCE threshold per ligă (exemple):
+    league_113: threshold=50, win_rate=89.70, sample=165
+    league_116: threshold=50, win_rate=79.80, sample=163
+    league_79:  threshold=50, win_rate=100.00, sample=27
+    league_276: threshold=95, win_rate=24.40, sample=316
+    league_61:  threshold=95, win_rate=9.60, sample=52
+
+  CARDS: referee_multiplier=1.0, threshold=65 (global)
+
+### 3G. calibration_tables
+COMANDĂ:
+  PGPASSWORD=*** psql -U alohascan -d elefant -h 127.0.0.1 -c \
+  "SELECT module, league_group, sample_size, brier_score, generated_at \
+  FROM calibration_tables ORDER BY module, league_group;"
+
+REZULTAT:
+  GG global:           sample=15502 | brier=0.218 | generat 03.06 06:29
+  GG high:             sample=6474  | brier=0.210
+  GG low:              sample=1737  | brier=0.221
+  GG mid:              sample=7017  | brier=0.222
+  goals_total_0.5 global: sample=15502 | brier=0.151
+  goals_total_0.5 high:   sample=6474  | brier=0.125 ← EXCELENT
+  goals_total_0.5 low:    sample=1737  | brier=0.201
+  goals_total_0.5 mid:    sample=7017  | brier=0.162
+  goals_total_1.5 global: sample=15502 | brier=0.151
+  goals_total_1.5 high:   sample=6474  | brier=0.125 ← EXCELENT
+  goals_total_1.5 low:    sample=1737  | brier=0.201
+  goals_total_1.5 mid:    sample=7017  | brier=0.162
+  goals_total_2.5 global: sample=14306 | brier=0.183
+  goals_total_2.5 high:   sample=6183  | brier=0.178
+  goals_total_2.5 low:    sample=1545  | brier=0.177
+  goals_total_2.5 mid:    sample=6304  | brier=0.189
+
+## 4. CONCLUZII SESIUNE
+
+STARE SISTEM LA 04.06.2026:
+  ✅ 15.522 predicții verificate (suficient pentru ML)
+  ✅ Brier Score 0.1511 — model BUN, îmbunătățit 22% față de audit 25.05
+  ✅ Learning engine activ — actualizat zilnic la 03:43
+  ✅ Calibrare per ligă funcțională (high/mid/low)
+  ✅ model_weights populat și folosit (lambda_multiplier per ligă)
+  ❌ score1-score7 NU sunt salvate în predictions (features ML lipsesc)
+  ❌ breakdown calculat dar aruncat după fiecare predicție
+
+ACȚIUNI FĂCUTE ÎN ACEASTĂ SESIUNE:
+  1. Creat planuri_viitor_app.txt (commit e131ac9) — plan complet ML
+  2. Audit complet sistem predicții (cod + DB live)
+  3. Prompt trimis la Claude Code pentru:
+     - Migrare DB: add-prediction-features.sql (score1-7 + h2h_sample + league_group)
+     - Extindere INSERT în api/enrich.js să salveze breakdown-ul complet
+
+NEXT STEPS (când revii):
+  1. Verifică că migrarea add-prediction-features.sql s-a aplicat pe VPS
+  2. Verifică că predicțiile noi au score1-7 populate (query: SELECT score1,score2,score3 FROM predictions ORDER BY updated_at DESC LIMIT 5)
+  3. Lasă sistemul să acumuleze predicții cu features complete (2-4 săptămâni)
+  4. Când ai 2000+ predicții cu score1-7 → implementează Logistic Regression
