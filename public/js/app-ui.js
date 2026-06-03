@@ -914,19 +914,37 @@ var PM_FLAG_MAP = {
   'Ukraine':'UA','United-States':'US','USA':'US','United States':'US',
   'Uruguay':'UY','Uzbekistan':'UZ','Venezuela':'VE',
   'Vietnam':'VN','Viet Nam':'VN',
+  // Completare acoperire 96 țări DB (lipsă anterior)
+  'Algeria':'DZ','Andorra':'AD','Armenia':'AM','Azerbaijan':'AZ','Benin':'BJ',
+  'Cyprus':'CY','Guadeloupe':'GP',
+  'CONCACAF':'🌎','Concacaf':'🌎',
 };
 
+// Cache pt lookup case-insensitive (cheile mapei lowercased o singură dată).
+var _PM_FLAG_LC = null;
 function countryToFlag(country){
   if (!country) return '';
+  // 1) exact
   var v = PM_FLAG_MAP[country];
-  if (!v) return '';
-  // Direct emoji (England/World/etc) — return ca atare
-  if (v.length > 2) return v;
-  // ISO 2-letter code → regional indicators (A=0x1F1E6)
+  // 2) case-insensitive
+  if (!v){
+    if (!_PM_FLAG_LC){
+      _PM_FLAG_LC = {};
+      for (var k in PM_FLAG_MAP) _PM_FLAG_LC[k.toLowerCase()] = PM_FLAG_MAP[k];
+    }
+    v = _PM_FLAG_LC[String(country).toLowerCase()];
+  }
+  // 5) fallback → drapel alb
+  if (!v) return '🏳️';
+  // 3) emoji direct (England/World/Asia/CONCACAF etc) — orice NU e cod ISO2 (2 litere
+  //    ASCII). NOTĂ: emoji glob 🌍/🌏/🌎 au .length===2 (surrogate pair), deci NU mă
+  //    pot baza pe length — folosesc regex pe 2 litere A-Z.
+  if (!/^[A-Za-z]{2}$/.test(v)) return v;
+  // 4) ISO 2-letter code → regional indicators (A=0x1F1E6)
   var A = 0x1F1E6;
-  var c0 = v.charCodeAt(0) - 65;
-  var c1 = v.charCodeAt(1) - 65;
-  if (c0 < 0 || c0 > 25 || c1 < 0 || c1 > 25) return '';
+  var c0 = v.toUpperCase().charCodeAt(0) - 65;
+  var c1 = v.toUpperCase().charCodeAt(1) - 65;
+  if (c0 < 0 || c0 > 25 || c1 < 0 || c1 > 25) return '🏳️';
   return String.fromCodePoint(A + c0) + String.fromCodePoint(A + c1);
 }
 

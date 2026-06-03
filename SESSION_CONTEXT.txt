@@ -778,6 +778,17 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~23:00] - countryToFlag: acoperire completa 96 tari + fix emoji glob (app-ui.js)
+  PM_FLAG_MAP +Algeria DZ, Andorra AD, Armenia AM, Azerbaijan AZ, Benin BJ, Cyprus CY,
+  Guadeloupe GP, CONCACAF 🌎 (restul cerute erau deja, inclusiv variante cu cratima).
+  countryToFlag rescris: 1)exact 2)case-insensitive (_PM_FLAG_LC cache lowercased)
+  3)emoji direct 4)ISO2->regional indicators 5)fallback 🏳️ (era '' inainte).
+  FIX latent: detectia emoji-direct folosea v.length>2 — dar 🌍/🌏/🌎 au length===2
+  (surrogate) -> erau tratate ca ISO2 -> esuau. Acum: /^[A-Za-z]{2}$/ = ISO2, orice
+  altceva = emoji direct. Asia/World/CONCACAF/Europe/Africa acum corecte.
+  Callerii (header grup L280, pmRenderHistory L998) beneficiaza — zero drapele albe
+  pt tarile cunoscute. NEATINS: buildCardHtml, scoring. node --check OK. Testat. Un commit main.
+
 [01.06 ~22:45] - matches-history: zile trecute+azi-terminat citesc din fixtures_history
   PROBLEMA: meciurile din 03.06 apareau NS desi in fixtures_history sunt FT cu scor —
   endpoint citea din `fixtures` (NS fara scor) pt date<=azi.
