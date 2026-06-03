@@ -439,7 +439,7 @@ router.post('/trigger-cron', async (req, res) => {
   }
 });
 
-// ── POST /api/admin/stabilize — rulează cele 13 cron-uri SECVENȚIAL ──────────
+// ── POST /api/admin/stabilize — rulează cele STABILIZE_STEPS.length cron-uri SECVENȚIAL ──
 // Ordine: brut → agregat → predicții → calibrare. Fiecare AȘTEAPTĂ finalizarea
 // celui anterior. Un pas eșuat NU oprește lanțul (continuă). Progres în memorie.
 const STABILIZE_STEPS = [

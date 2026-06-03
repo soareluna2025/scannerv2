@@ -1101,11 +1101,11 @@ body{
       <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg></span>
       <h2>Stabilizare completă DB</h2>
     </div>
-    <div style="font-size:12px;color:var(--tx-2);margin-bottom:4px">Rulează toate 13 cron-uri în ordine (brut → agregat → predicții → calibrare).</div>
+    <div style="font-size:12px;color:var(--tx-2);margin-bottom:4px">Rulează toate <span id="stab-count">14</span> cron-uri în ordine (brut → agregat → predicții → calibrare).</div>
     <div style="font-size:11px;color:var(--mu,#888);margin-bottom:10px">Timp estimat: 20–40 minute · rulare secvențială (un pas eșuat nu oprește restul)</div>
     <button id="stab-btn" class="bf-start" onclick="startStabilize()" style="width:100%">🔄 PORNEȘTE STABILIZARE</button>
     <div id="stab-progress" style="display:none;margin-top:12px">
-      <div class="bf-label">Progres: <span id="stab-step">0</span>/<span id="stab-total">13</span> · Curent: <span id="stab-current">—</span></div>
+      <div class="bf-label">Progres: <span id="stab-step">0</span>/<span id="stab-total">14</span> · Curent: <span id="stab-current">—</span></div>
       <div class="bf-bar"><div class="bf-bar-fill" id="stab-fill" style="width:0%"></div></div>
       <div class="bf-label">Timp scurs: <span id="stab-elapsed">0s</span></div>
       <div id="stab-steps" style="font-size:11px;color:var(--tx-2);margin-top:8px"></div>
@@ -2016,7 +2016,8 @@ async function refreshETStatus() {
 
 function _stabDur(ms){var s=Math.floor((ms||0)/1000);var m=Math.floor(s/60);s=s%60;return m>0?(m+'m '+s+'s'):(s+'s');}
 async function startStabilize() {
-  if (!confirm('Pornești stabilizarea completă (13 cron-uri, 20–40 min)?')) return;
+  var _n = (document.getElementById('stab-count')||{}).textContent || '14';
+  if (!confirm('Pornești stabilizarea completă (' + _n + ' cron-uri, 20–40 min)?')) return;
   try {
     var r = await fetch('/api/admin/stabilize', { method:'POST', headers:{'X-Api-Key':_key} });
     var d = await r.json();
@@ -2036,7 +2037,8 @@ async function refreshStabilize() {
     var d = await r.json();
     var _set=function(id,v){var el=document.getElementById(id);if(el)el.textContent=v;};
     _set('stab-step', d.currentStep||0);
-    _set('stab-total', d.total||13);
+    _set('stab-total', d.total||14);
+    if (d.total) _set('stab-count', d.total);   // sincronizează descrierea cu nr. real de pași
     _set('stab-current', d.currentName || (d.running?'—':'finalizat'));
     _set('stab-elapsed', _stabDur(d.totalMs));
     var pct = d.total ? Math.round((d.currentStep||0)/d.total*100) : 0;

@@ -778,6 +778,14 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~21:00] - UI Stabilizare: "13" -> "14" cron-uri (+ dinamic din STABILIZE_STEPS.length)
+  admin.html: descrierea "Rulează toate 13 cron-uri" -> 14 (span #stab-count), stab-total
+  default 13->14, confirm dialog citeste #stab-count (nu hardcodat). refreshStabilize
+  sincronizeaza #stab-count + #stab-total din d.total (server STABILIZE_STEPS.length) =>
+  se actualizeaza automat cand se adauga pasi noi. api/admin.js: comentariul "cele 13
+  cron-uri" -> "cele STABILIZE_STEPS.length cron-uri". DOAR admin.html+admin.js. Scoring
+  neatins. node --check OK. Un commit main.
+
 [01.06 ~20:50] - STABILIZE: +pas 14 auto-predict (genereaza predictii dupa date proaspete)
   api/admin.js DOAR: STABILIZE_STEPS +{ name:'auto-predict', path:'/api/cron/auto-predict',
   method:'GET' } la final (pas 14). runStabilize: fetch foloseste acum step.method||'POST'
