@@ -242,6 +242,70 @@ function buildCardHtml(m,lgName){
   return o;
 }
 
+// ── GRUPARE PE COMPETIȚII (LIVE + PRE-MECI) ───────────────────────────────
+// Grupează meciuri după league_id+name+country, sortat alfabetic country→leagueName.
+// `confOf(m)` = funcție care întoarce confidence-ul meciului (sursă diferită LIVE/PM).
+function groupMatchesByLeague(matches, confOf){
+  var groups={};
+  matches.forEach(function(m){
+    var lg=m.league||{};
+    var lid=lg.id||0;
+    var country=(lg.country||'').trim()||'OTHER';
+    var key=lid+'|'+country;
+    if(!groups[key]){
+      groups[key]={
+        country:country, leagueName:lg.name||'—', leagueId:lid,
+        leagueLogo:lg.logo||(lid?('https://media.api-sports.io/football/leagues/'+lid+'.png'):''),
+        matches:[], hasTopPick:false, maxConfidence:0,
+      };
+    }
+    var g=groups[key];
+    g.matches.push(m);
+    var c=(typeof confOf==='function')?(confOf(m)||0):0;
+    if(c>g.maxConfidence)g.maxConfidence=c;
+    if(m._topPick||c>=75)g.hasTopPick=true;
+  });
+  return Object.keys(groups).map(function(k){return groups[k];}).sort(function(a,b){
+    // 'OTHER' mereu ultimul
+    var ao=a.country==='OTHER',bo=b.country==='OTHER';
+    if(ao&&!bo)return 1; if(bo&&!ao)return -1;
+    if(a.country!==b.country)return a.country.localeCompare(b.country);
+    return a.leagueName.localeCompare(b.leagueName);
+  });
+}
+
+// Construiește headerul unei competiții. storageKey = 'live_collapse_' | 'pm_collapse_'.
+function buildLeagueHeader(group, storageKey){
+  var collapsed = localStorage.getItem(storageKey+group.leagueId)!=='0'; // default colasat
+  var flag=(typeof countryToFlag==='function'?countryToFlag(group.country):'')||'🏳️';
+  var logo=group.leagueLogo
+    ? '<img class="league-group-logo" src="'+group.leagueLogo+'" onerror="this.style.display=\'none\'">' : '';
+  var ind = group.hasTopPick ? '<span class="league-group-indicator">🟢</span>'
+          : group.maxConfidence>=60 ? '<span class="league-group-indicator">🟡</span>' : '';
+  var country=(group.country==='OTHER'?'OTHER':group.country).toUpperCase();
+  var h='<div class="league-group-header'+(collapsed?'':' expanded')+'" data-lid="'+group.leagueId+'" '+
+    'onclick="toggleLeagueGroup(this,\''+storageKey+'\','+group.leagueId+')">';
+  h+='<span class="league-group-flag">'+flag+'</span>';
+  h+='<span class="league-group-country">'+htmlEsc(country)+'</span>';
+  h+='<span class="league-group-name">'+htmlEsc(group.leagueName)+'</span>';
+  h+=logo+ind;
+  h+='<span class="league-group-count">'+group.matches.length+' meciuri</span>';
+  h+='<span class="league-group-chevron">▼</span>';
+  h+='</div>';
+  return { html:h, collapsed:collapsed };
+}
+
+// Toggle expand/collapse + persistă în localStorage ('0'=expanded, altfel colasat).
+function toggleLeagueGroup(headerEl, storageKey, leagueId){
+  var body=headerEl.nextElementSibling;
+  var willExpand=headerEl.classList.contains('expanded')?false:true;
+  headerEl.classList.toggle('expanded', willExpand);
+  if(body&&body.classList.contains('league-group-body')){
+    body.classList.toggle('collapsed', !willExpand);
+  }
+  localStorage.setItem(storageKey+leagueId, willExpand?'0':'1');
+}
+
 function renderMatches(){
   if(typeof wcRenderFeatured==='function')wcRenderFeatured();  // card featured WC sus pe LIVE
   var ms=ST.ms.filter(function(m){
@@ -276,47 +340,29 @@ function renderMatches(){
     return;
   }
 
-  // Flat sort: cel mai recent început sus, indiferent de campionat
-  ms.sort(function(a,b){
-    return new Date(b.fixture?.date || 0) -
-           new Date(a.fixture?.date || 0);
-  });
-
-  // Map existing card elements by fixture id for reuse
-  var existing={};
-  list.querySelectorAll('.card[data-fid]').forEach(function(el){
-    existing[el.dataset.fid]=el;
-  });
-
-  // Build ordered node list — reuse unchanged cards, rebuild only changed ones
-  var newNodes=[];
-  ms.forEach(function(m){
-    var s=m._s||{};
-    var fid=String(m.fixture&&m.fixture.id||0);
-    var sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
-    var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.home&&m.teams.home.id);});
-    var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.away&&m.teams.away.id);});
-    // Include lg+team names în snap pentru a forta rebuild cand datele se populeaza
-    // dupa primul render (cauza bug-ului 'card fara header J2/J3 LEAGUE').
-    var lgName=m.league&&m.league.name||'';
-    var hName=m.teams&&m.teams.home&&m.teams.home.name||'';
-    var aName=m.teams&&m.teams.away&&m.teams.away.name||'';
-    var snap=[s.hg||0,s.ag||0,s.mn||0,Math.round(s.ng||0),sh,s.forte?1:0,hRed?1:0,aRed?1:0,lgName,hName,aName].join('|');
-    var cur=existing[fid];
-    if(cur&&cur.dataset.snap===snap){
-      newNodes.push(cur);
-    } else {
-      var tmp=document.createElement('div');
-      tmp.innerHTML=buildCardHtml(m,m.league&&m.league.name||'');
-      var newEl=tmp.firstElementChild;
-      newEl.dataset.fid=fid;
-      newEl.dataset.snap=snap;
-      newNodes.push(newEl);
-    }
+  // GRUPARE PE COMPETIȚII — colasate by default, expandabile (stare în localStorage).
+  // Confidence live din cache-ul de enrich (_genLiveEnrich), pt indicatorul de grup.
+  var confLive=function(m){
+    var fid=m.fixture&&m.fixture.id;
+    var e=(typeof _genLiveEnrich!=='undefined'&&_genLiveEnrich&&_genLiveEnrich[fid])
+        ||(typeof _pmEnrich!=='undefined'&&_pmEnrich&&_pmEnrich[fid]);
+    return e?e.confidenceScore:0;
+  };
+  var groups=groupMatchesByLeague(ms, confLive);
+  var html='';
+  groups.forEach(function(g){
+    // sortare meciuri în grup: cel mai recent început sus
+    g.matches.sort(function(a,b){return new Date(b.fixture?.date||0)-new Date(a.fixture?.date||0);});
+    var hdr=buildLeagueHeader(g, 'live_collapse_');
+    html+=hdr.html;
+    // Cardurile sunt MEREU construite; collapse = CSS display:none (toggle fără re-render).
+    html+='<div class="league-group-body'+(hdr.collapsed?' collapsed':'')+'">';
+    g.matches.forEach(function(m){ html+=buildCardHtml(m, m.league&&m.league.name||''); });
+    html+='</div>';
   });
 
   var sy=document.getElementById('page').scrollTop;
-  list.replaceChildren.apply(list,newNodes);
+  list.innerHTML=html;
   document.getElementById('page').scrollTop=sy;
 }
 
@@ -648,7 +694,8 @@ function renderPM(){
   var analyzedCount=Object.keys(_pmEnrich).length;
   var pendingTxt=analyzedCount<total?' · <span style="opacity:.6">⏳ '+(total-analyzedCount)+' neanalizate</span>':'';
   var html='<div class="pm-summary"><span class="pm-summary-t">'+total+' meciuri · '+analyzedCount+' analizate'+pendingTxt+'</span></div>';
-  sorted.forEach(function(m){
+  // Builder per-meci (markup pm-card existent, neschimbat) — întoarce HTML string.
+  function buildPmCard(m){
     var fid=m.fixture&&m.fixture.id;
     var hid=m.teams&&m.teams.home&&m.teams.home.id;
     var aid=m.teams&&m.teams.away&&m.teams.away.id;
@@ -660,32 +707,33 @@ function renderPM(){
     var enr=_pmEnrich[fid];
     var isTop=enr&&probs.length&&(enr.over15Prob||0)>=topThresh&&topThresh<999;
     var _pmcc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
-    html+='<div class="pm-card" onclick="mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer;position:relative">';
-    html+='<div class="pm-header">';
-    html+='<div class="pm-kickoff"><button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>'+flag+lg+' · 🕐 '+kickoff+'</div>';
-    html+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu);font-size:13px;font-weight:600">vs</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div>';
-    html+='</div>';
+    var o='';
+    o+='<div class="pm-card" onclick="mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer;position:relative">';
+    o+='<div class="pm-header">';
+    o+='<div class="pm-kickoff"><button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>'+flag+lg+' · 🕐 '+kickoff+'</div>';
+    o+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu);font-size:13px;font-weight:600">vs</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div>';
+    o+='</div>';
     if(enr){
-      html+='<div class="pm-body">';
-      html+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(enr.over15Prob||0,100)+'%;background:'+ec(enr.over15Prob)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(enr.over15Prob)+'">'+Math.round(enr.over15Prob||0)+'%</div></div>';
-      html+='<div class="pm-meter-row"><div class="pm-meter-label">GG</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(enr.ggProb||0,100)+'%;background:'+ec(enr.ggProb)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(enr.ggProb)+'">'+Math.round(enr.ggProb||0)+'%</div></div>';
-      html+='<div class="pm-stats">';
-      html+='<span class="pm-stat">λ <span>'+Number(enr.lambdaTotal||0).toFixed(2)+'</span></span>';
-      html+='<span class="pm-stat">Gazde <span style="color:'+ec(enr.homeScoreRate)+'">'+( enr.homeScoreRate!=null?enr.homeScoreRate+'%':'—')+'</span></span>';
-      html+='<span class="pm-stat">Oaspeti <span style="color:'+ec(enr.awayScoreRate)+'">'+( enr.awayScoreRate!=null?enr.awayScoreRate+'%':'—')+'</span></span>';
+      o+='<div class="pm-body">';
+      o+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(enr.over15Prob||0,100)+'%;background:'+ec(enr.over15Prob)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(enr.over15Prob)+'">'+Math.round(enr.over15Prob||0)+'%</div></div>';
+      o+='<div class="pm-meter-row"><div class="pm-meter-label">GG</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(enr.ggProb||0,100)+'%;background:'+ec(enr.ggProb)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(enr.ggProb)+'">'+Math.round(enr.ggProb||0)+'%</div></div>';
+      o+='<div class="pm-stats">';
+      o+='<span class="pm-stat">λ <span>'+Number(enr.lambdaTotal||0).toFixed(2)+'</span></span>';
+      o+='<span class="pm-stat">Gazde <span style="color:'+ec(enr.homeScoreRate)+'">'+( enr.homeScoreRate!=null?enr.homeScoreRate+'%':'—')+'</span></span>';
+      o+='<span class="pm-stat">Oaspeti <span style="color:'+ec(enr.awayScoreRate)+'">'+( enr.awayScoreRate!=null?enr.awayScoreRate+'%':'—')+'</span></span>';
       // Badge LOW/MED/HIGH derivat din confidenceScore (pragurile noi 70/55)
       if(enr.confidenceScore!=null){
         var _csPm=enr.confidenceScore;
         var _cbPm=_csPm>=70?'HIGH':_csPm>=55?'MED':'LOW';
-        html+='<span class="badge-conf '+_cbPm+'">'+_cbPm+'</span>';
+        o+='<span class="badge-conf '+_cbPm+'">'+_cbPm+'</span>';
       }
-      html+='</div>';
-      if(enr.homeWin!=null)html+='<div class="enrich-row hda-row"><span style="color:'+ec(enr.homeWin)+'">H:'+enr.homeWin+'%</span><span style="color:'+ec(enr.draw)+'">D:'+enr.draw+'%</span><span style="color:'+ec(enr.awayWin)+'">A:'+enr.awayWin+'%</span></div>';
+      o+='</div>';
+      if(enr.homeWin!=null)o+='<div class="enrich-row hda-row"><span style="color:'+ec(enr.homeWin)+'">H:'+enr.homeWin+'%</span><span style="color:'+ec(enr.draw)+'">D:'+enr.draw+'%</span><span style="color:'+ec(enr.awayWin)+'">A:'+enr.awayWin+'%</span></div>';
       if(enr.confidenceScore!=null){
         var cs=enr.confidenceScore;
         var confColor=cs>=70?'#22c55e':cs>=55?'#f59e0b':'#ef4444';
         var safeBadge='';
-        html+='<div class="conf-bar-wrap">'+
+        o+='<div class="conf-bar-wrap">'+
           '<div class="conf-bar-bg"><div class="conf-bar-fill" style="width:'+cs+'%;background:'+confColor+'"></div></div>'+
           '<div class="conf-score-row">'+
             '<span class="conf-pct" style="color:'+confColor+'">'+cs+'%</span>'+
@@ -694,27 +742,42 @@ function renderPM(){
       }
       var _hasStr=enr.teamStrengthHome!=null||enr.teamStrengthAway!=null;
       if(_hasStr||isTop||_pmcc){
-        html+='<div class="enrich-row" style="margin-top:6px;align-items:center">';
+        o+='<div class="enrich-row" style="margin-top:6px;align-items:center">';
         if(_hasStr){
           var sh=enr.teamStrengthHome!=null?enr.teamStrengthHome:'?';
           var sa=enr.teamStrengthAway!=null?enr.teamStrengthAway:'?';
-          html+='<span class="str-badge">STR: '+sh+' vs '+sa+'</span>';
+          o+='<span class="str-badge">STR: '+sh+' vs '+sa+'</span>';
         }
         if(isTop||_pmcc){
-          html+='<span style="margin-left:auto;display:flex;align-items:center;gap:6px">';
-          if(_pmcc)html+='<span style="font-size:9px;color:var(--mu);font-weight:700">('+_pmcc+')</span>';
-          if(isTop)html+='<span class="badge-top">TOP PICK</span>';
-          html+='</span>';
+          o+='<span style="margin-left:auto;display:flex;align-items:center;gap:6px">';
+          if(_pmcc)o+='<span style="font-size:9px;color:var(--mu);font-weight:700">('+_pmcc+')</span>';
+          if(isTop)o+='<span class="badge-top">TOP PICK</span>';
+          o+='</span>';
         }
-        html+='</div>';
+        o+='</div>';
       }
-      html+='</div>';
+      o+='</div>';
     }else{
-      html+='<div class="pm-body" style="display:flex;align-items:center;justify-content:space-between">';
-      html+='<span style="font-size:11px;color:var(--mu)">Neanalizat</span>';
-      if(hid&&aid)html+='<button class="analyze-btn" id="abtn-'+fid+'" onclick="analyzeMatch('+fid+','+hid+','+aid+')">ANALIZEAZA</button>';
-      html+='</div>';
+      o+='<div class="pm-body" style="display:flex;align-items:center;justify-content:space-between">';
+      o+='<span style="font-size:11px;color:var(--mu)">Neanalizat</span>';
+      if(hid&&aid)o+='<button class="analyze-btn" id="abtn-'+fid+'" onclick="analyzeMatch('+fid+','+hid+','+aid+')">ANALIZEAZA</button>';
+      o+='</div>';
     }
+    o+='</div>';
+    return o;
+  }
+  // GRUPARE PE COMPETIȚII (PRE-MECI) — colasate by default, expandabile.
+  var confPm=function(m){var e=_pmEnrich[m.fixture&&m.fixture.id];return e?e.confidenceScore:0;};
+  // marcăm _topPick pe meciuri pt indicatorul de grup (nu modifică datele server)
+  sorted.forEach(function(m){var e=_pmEnrich[m.fixture&&m.fixture.id];m._topPick=!!(e&&probs.length&&(e.over15Prob||0)>=topThresh&&topThresh<999);});
+  var groups=groupMatchesByLeague(sorted, confPm);
+  groups.forEach(function(g){
+    // în grup: cronologic după kickoff
+    g.matches.sort(function(a,b){return new Date(a.fixture.date)-new Date(b.fixture.date);});
+    var hdr=buildLeagueHeader(g, 'pm_collapse_');
+    html+=hdr.html;
+    html+='<div class="league-group-body'+(hdr.collapsed?' collapsed':'')+'">';
+    g.matches.forEach(function(m){ html+=buildPmCard(m); });
     html+='</div>';
   });
   var sy=body.scrollTop;

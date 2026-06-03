@@ -778,6 +778,22 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~21:40] - LIVE + PRE-MECI: grupare pe competitii cu expand/collapse
+  app-ui.js: +groupMatchesByLeague(matches,confOf) (grupare league_id+country, sortat
+  alfabetic country->leagueName, OTHER ultimul; hasTopPick/maxConfidence per grup),
+  +buildLeagueHeader(group,storageKey) (drapel countryToFlag + tara + nume + logo
+  media.api-sports.io/leagues/{id}.png + indicator 🟢>=75/topPick, 🟡>=60 + count + chevron;
+  stare din localStorage, default COLASAT), +toggleLeagueGroup (toggle .expanded/.collapsed
+  + persist localStorage '0'=expanded).
+  renderMatches (LIVE): grupat, key 'live_collapse_'+id, confidence din _genLiveEnrich;
+  cardurile MEREU construite (buildCardHtml NEATINS), collapse via CSS display:none.
+  renderPM (PRE-MECI): card pm-* mutat in buildPmCard() (markup neschimbat, html+=->o+=),
+  grupat, key 'pm_collapse_'+id, confidence din _pmEnrich, _topPick marcat per meci.
+  cards.css: +clase .league-group-* (header lat 14px/min52px, flag 20px, logo 22px,
+  chevron rotate, body.collapsed display:none).
+  NEATINS: buildCardHtml, calcConfidence*/score2/3/6/7, structura datelor server.
+  DOAR app-ui.js + cards.css. node --check OK. Un commit main.
+
 [01.06 ~21:00] - UI Stabilizare: "13" -> "14" cron-uri (+ dinamic din STABILIZE_STEPS.length)
   admin.html: descrierea "Rulează toate 13 cron-uri" -> 14 (span #stab-count), stab-total
   default 13->14, confirm dialog citeste #stab-count (nu hardcodat). refreshStabilize
