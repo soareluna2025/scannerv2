@@ -778,6 +778,21 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~13:00] - UX: stack nav + overscroll blocat + refresh silentios
+  FIX1 dubla sageata: scos .g2close din g2s6(SIMULATOR)+g2s7(BILET COMPUS) —
+  ramane DOAR .g2back (← la ecranul anterior, nu inchide tot generatorul).
+  + helpers navPush/navBack/_navStack in app-state.js, reset in setTab
+  (infrastructura; overlay-urile existente revin deja la pagina din spate).
+  FIX2 overscroll: layout.css *{overscroll-behavior:none} + lista containere
+  (.page/.md-body/.md-overlay/.g2*/wc-match-modal-content/.agent-msgs/#hist-modal).
+  app-state.js: body+documentElement.style.overscrollBehavior='none'. Opreste
+  pull-to-refresh-ul NATIV care scotea userul din pagina.
+  FIX3 refresh silentios: ELIMINAT indicatorul (#pull-indicator din index.html +
+  CSS + showPullIndicator/hidePullIndicator). Trigger nou: container la capat de
+  jos (_ptrAtBottom) + tras in sus 70px+ -> refreshCurrentPage(), fara feedback
+  vizual. #hist-modal adaugat in _ptrOverlayOpen.
+  node --check OK pe app-state.js+app-ui.js. div balance 217/217. | Commit: (mai jos)
+
 [04.06 ~12:30] - UX global: pull-to-refresh + sageata back (←) in loc de X
   FIX1 pull-to-refresh: #pull-indicator (index.html + cards.css), logica in
   app-state.js (touchstart/move/end). Gate pe #page.scrollTop<=0 (continutul

@@ -146,8 +146,20 @@ function tickClock(){
 setInterval(tickClock,1000);tickClock();
 document.getElementById('ag-start-time').textContent=new Date().toTimeString().slice(0,5);
 
+// ── NAVIGARE STACK (back întoarce la pagina anterioară, nu la meniu) ──
+var _navStack=[];
+function navPush(pageId,restoreFn){
+  _navStack.push({pageId:pageId,restoreFn:restoreFn});
+}
+function navBack(){
+  if(_navStack.length===0)return;
+  var prev=_navStack.pop();
+  if(prev&&typeof prev.restoreFn==='function')prev.restoreFn();
+}
+
 // ── TABS ─────────────────────────────────────────────────────
 function setTab(t){
+  _navStack.length=0;   // schimbare tab principal → reset stack navigare
   ['live','pre','agent','fav'].forEach(function(x){
     document.getElementById('tab-'+x).classList.toggle('active',x===t);
     var nb=document.getElementById('nav-'+x);
@@ -652,9 +664,14 @@ function fmtMinute(elapsed,extra){
 }
 
 
-// ── PULL-TO-REFRESH (global) ──────────────────────────────────
-// Trage în jos când ești la topul paginii → refresh-ul tab-ului curent.
-// Dezactivat când un modal/overlay e deschis (modalele au swipe-to-close propriu).
+// ── OVERSCROLL BLOCAT (anti pull-to-refresh nativ) ────────────
+document.body.style.overscrollBehavior='none';
+document.documentElement.style.overscrollBehavior='none';
+
+// ── REFRESH SILENȚIOS LA CAPĂTUL PAGINII ──────────────────────
+// Când containerul activ (#page) e la capătul de jos și utilizatorul mai
+// trage în sus 70px+ → refresh-ul tab-ului curent. Fără indicator vizual.
+// Dezactivat când un modal/overlay e deschis.
 var _ptr={startY:0,pulling:false,lastDy:0,threshold:70};
 
 function _ptrOverlayOpen(){
@@ -666,6 +683,8 @@ function _ptrOverlayOpen(){
   if(g2&&g2.classList&&g2.classList.contains('open'))return true;
   var wcm=document.getElementById('wc-match-modal');
   if(wcm&&wcm.classList.contains('open'))return true;
+  var hm=document.getElementById('hist-modal');
+  if(hm&&hm.style.display&&hm.style.display!=='none')return true;
   return false;
 }
 function _ptrActiveTab(){
@@ -676,19 +695,6 @@ function _ptrActiveTab(){
   }
   return null;
 }
-function showPullIndicator(dy){
-  var el=document.getElementById('pull-indicator');if(!el)return;
-  var pull=Math.min(dy,120);
-  var y=Math.min(pull-60,16);          // de la -60px (ascuns) spre +16px (vizibil)
-  el.style.transform='translateX(-50%) translateY('+y+'px)';
-  if(dy>=_ptr.threshold){el.textContent='↻ Eliberează pentru refresh';el.classList.add('ready');}
-  else{el.textContent='↻ Trage pentru refresh';el.classList.remove('ready');}
-}
-function hidePullIndicator(){
-  var el=document.getElementById('pull-indicator');if(!el)return;
-  el.style.transform='translateX(-50%) translateY(-60px)';
-  el.classList.remove('ready');
-}
 function refreshCurrentPage(){
   var t=_ptrActiveTab();
   if(t==='live'&&typeof loadLive==='function')loadLive();
@@ -698,38 +704,29 @@ function refreshCurrentPage(){
   else window.location.reload();
 }
 
-// Conținutul principal derulează în #page (position:fixed, overflow-y:auto),
-// nu în window → folosim scrollTop-ul lui ca prag pentru "ești la top".
-function _ptrAtTop(){
+// Containerul activ e la capătul de jos? (scrollTop+clientHeight >= scrollHeight-5)
+function _ptrAtBottom(){
   var pg=document.getElementById('page');
-  return pg ? pg.scrollTop<=0 : window.scrollY===0;
+  if(!pg)return false;
+  return (pg.scrollTop+pg.clientHeight) >= (pg.scrollHeight-5);
 }
 document.addEventListener('touchstart',function(e){
-  if(_ptrOverlayOpen())return;
-  if(_ptrAtTop()){
-    _ptr.startY=e.touches[0].clientY;_ptr.pulling=true;_ptr.lastDy=0;
-  }
+  if(_ptrOverlayOpen()){_ptr.pulling=false;return;}
+  _ptr.startY=e.touches[0].clientY;_ptr.pulling=true;_ptr.lastDy=0;
 },{passive:true});
 
 document.addEventListener('touchmove',function(e){
   if(!_ptr.pulling)return;
-  if(_ptrOverlayOpen()){_ptr.pulling=false;hidePullIndicator();return;}
-  var dy=e.touches[0].clientY-_ptr.startY;
-  _ptr.lastDy=dy;
-  if(dy>0&&dy<150){showPullIndicator(dy);}
-  else if(dy<=0){_ptr.lastDy=0;hidePullIndicator();}
+  if(_ptrOverlayOpen()){_ptr.pulling=false;return;}
+  _ptr.lastDy=e.touches[0].clientY-_ptr.startY;
 },{passive:true});
 
 document.addEventListener('touchend',function(){
   if(!_ptr.pulling)return;
   _ptr.pulling=false;
   var dy=_ptr.lastDy;_ptr.lastDy=0;
-  if(dy>=_ptr.threshold){
-    var el=document.getElementById('pull-indicator');
-    if(el){el.textContent='↻ Reîncarcă…';el.classList.add('ready');el.style.transform='translateX(-50%) translateY(16px)';}
+  // capăt de jos + tras în sus (dy negativ) cel puțin threshold → refresh silențios
+  if(_ptrAtBottom() && dy <= -_ptr.threshold){
     refreshCurrentPage();
-    setTimeout(hidePullIndicator,700);
-  }else{
-    hidePullIndicator();
   }
 },{passive:true});

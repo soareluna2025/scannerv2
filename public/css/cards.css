@@ -469,13 +469,6 @@
 .wc-mm-bar-h{background:var(--ac,#00d67d);height:100%}
 .wc-mm-bar-a{background:#818cf8;height:100%}
 
-/* ═══ Pull-to-refresh — indicator global ═══ */
-#pull-indicator{position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-60px);
-  background:var(--ac,#00d67d);color:#000;padding:8px 20px;border-radius:0 0 20px 20px;
-  font-size:13px;font-weight:700;transition:transform .12s ease;z-index:9999;
-  box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none;white-space:nowrap}
-#pull-indicator.ready{background:#22c55e}
-
 /* ═══ Buton back (←) generic top-left ═══ */
 .btn-back{position:absolute;top:12px;left:12px;width:36px;height:36px;border-radius:50%;
   background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;
