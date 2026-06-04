@@ -778,6 +778,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[02.06 ~00:55] - H2H DIRECT: header culoare distincta + stare persistata localStorage
+  FIX1 cards.css .h2h-match-header: +background rgba(255,255,255,.06)+border-radius 8px+
+  padding 10px12px+margin; hover -> .09; .expanded -> verde subtil rgba(0,214,125,.08)+
+  border. (hover schimbat din opacity in background, consistent cu spec.)
+  FIX2 app-ui.js: toggleH2H persista — deschis localStorage.setItem(id,'1') / inchis
+  removeItem(id) (id e deja 'h2h_'+fixtureId = cheia). buildH2HMatchDetail citeste
+  isOpen=localStorage[domId]==='1' -> header .expanded + body fara .collapsed daca open.
+  Cheie consistenta intre toggle si build (testat h2h_555). NEATINS: buildCardHtml,
+  calcConfidence*/score2/3/6/7. DOAR app-ui.js+cards.css. node --check OK.
+
 [02.06 ~00:40] - H2H DIRECT: expand/collapse per meci (app-ui.js + cards.css)
   buildH2HMatchDetail(h,idx) restructurat: header MEREU vizibil (echipe+scor colorat+
   data+HT+chevron ▼) clickabil -> toggleH2H('h2h_'+fixture_id|i); body (evenimente+

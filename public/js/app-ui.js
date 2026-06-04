@@ -2209,7 +2209,7 @@ function mdRenderJucatori(d){
   document.getElementById('md-body').innerHTML=out;
 }
 
-// Toggle expand/collapse pe un meci H2H (header + body) din modal.
+// Toggle expand/collapse pe un meci H2H (header + body) din modal. Persistă starea.
 function toggleH2H(id){
   var body=document.getElementById(id);
   if(!body)return;
@@ -2217,6 +2217,8 @@ function toggleH2H(id){
   // headerul e fratele anterior al body-ului
   var header=body.previousElementSibling;
   if(header&&header.classList.contains('h2h-match-header'))header.classList.toggle('expanded',!collapsed);
+  // persistă: deschis → '1', închis → șterge. `id` e deja cheia ('h2h_'+fixtureId).
+  try{ if(collapsed) localStorage.removeItem(id); else localStorage.setItem(id,'1'); }catch(e){}
 }
 
 // Randează un meci H2H complet (scor+HT, evenimente goluri/cartonașe, statistici bară).
@@ -2243,10 +2245,12 @@ function buildH2HMatchDetail(h, idx){
   var subTxt=dtTxt+(ht&&(ht.home!=null||ht.away!=null)?(' · HT: '+(ht.home!=null?ht.home:'-')+'-'+(ht.away!=null?ht.away:'-')):'');
   var hasBody=(events.length>0 || stats.length>=2);
   var domId='h2h_'+((h.fixture_id!=null?h.fixture_id:('i'+(idx!=null?idx:0))));
+  // Stare persistată: deschis dacă localStorage[domId]==='1'.
+  var isOpen=false; try{ isOpen=hasBody && localStorage.getItem(domId)==='1'; }catch(e){}
 
   var o='<div class="h2h-match-detail">';
   // HEADER (mereu vizibil) — clickabil DOAR dacă există body de expandat.
-  o+='<div class="h2h-match-header'+(hasBody?'':' static')+'"'+(hasBody?(' onclick="toggleH2H(\''+domId+'\')"'):'')+'>';
+  o+='<div class="h2h-match-header'+(hasBody?'':' static')+(isOpen?' expanded':'')+'"'+(hasBody?(' onclick="toggleH2H(\''+domId+'\')"'):'')+'>';
   o+='<div style="flex:1;min-width:0">';
   o+='<div class="h2h-score-header">';
   o+='<span class="h2h-team-n" style="text-align:right">'+htmlEsc(hName)+'</span>';
@@ -2261,8 +2265,8 @@ function buildH2HMatchDetail(h, idx){
   // FALLBACK: fără events și fără stats → doar header (scor + data).
   if(!hasBody){ o+='</div>'; return o; }
 
-  // BODY colasat by default — evenimente + statistici.
-  o+='<div id="'+domId+'" class="h2h-match-body collapsed">';
+  // BODY — colasat by default; deschis dacă starea persistată e '1'.
+  o+='<div id="'+domId+'" class="h2h-match-body'+(isOpen?'':' collapsed')+'">';
 
   // EVENIMENTE
   if(events.length){
