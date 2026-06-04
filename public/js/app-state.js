@@ -535,9 +535,28 @@ function mevCalibrate(fk){
       if(poBdV)poBdV.textContent=origPo+'%';
     }
   };
+  // FIX 2 — NGP (Gol oricând / urm.15min) se scalează proporțional cu λ calibrat.
+  // Citește valoarea originală din data-orig (setată la randare) și o multiplică
+  // cu ratio. NU atinge backend-ul NGP — doar afișarea în cartonaș.
+  var _ngpColor=function(v){return v>=80?'#00d4a8':v>=60?'#ffd166':'#ff6b6b';};
+  var _ng15Color=function(v){return v>=40?'#00d4a8':v>=25?'#ffd166':'#ff6b6b';};
+  var _updNgp=function(ratio){
+    var a=document.getElementById('mdngp_'+fk);
+    if(a){var o=parseFloat(a.dataset.orig);
+      if(isFinite(o)){var nv=Math.min(99,Math.round(o*ratio));a.textContent=nv+'%';a.style.color=_ngpColor(nv);}}
+    var b=document.getElementById('mdng15_'+fk);
+    if(b){var o2=parseFloat(b.dataset.orig);
+      if(isFinite(o2)){var nv2=Math.min(99,Math.round(o2*ratio));b.textContent=nv2+'%';b.style.color=_ng15Color(nv2);}}
+  };
+  var _restoreNgp=function(){
+    var a=document.getElementById('mdngp_'+fk);
+    if(a){var o=parseFloat(a.dataset.orig);if(isFinite(o)){a.textContent=o+'%';a.style.color=_ngpColor(o);}}
+    var b=document.getElementById('mdng15_'+fk);
+    if(b){var o2=parseFloat(b.dataset.orig);if(isFinite(o2)){b.textContent=o2+'%';b.style.color=_ng15Color(o2);}}
+  };
   if(!c1||c1<1.01||!cx||cx<1.01||!c2||c2<1.01){
     res.innerHTML='<div style="color:var(--mu);font-size:11px;padding:8px 0">Introdu cotele pentru 1, X și 2 →</div>';
-    restoreTiles();return;}
+    restoreTiles();_restoreNgp();return;}
   var i1=1/c1,ix=1/cx,i2=1/c2,tot=i1+ix+i2;
   var p1=i1/tot,pX=ix/tot,p2=i2/tot;
   var margin=Math.round((tot-1)*100);
@@ -554,6 +573,10 @@ function mevCalibrate(fk){
   if(ltEl){ltEl.style.color='var(--mu2)';ltEl.textContent=(lam[0]+lam[1]).toFixed(2);}
   // Update confidence circle
   setConf(cal.over15);
+  // FIX 2 — actualizează NGP proporțional cu raportul λ nou / λ original.
+  var _ltOrig=parseFloat(res.dataset.lt)||0;
+  var _ltNew=lam[0]+lam[1];
+  _updNgp(_ltOrig>0 ? (_ltNew/_ltOrig) : 1);
   var mod={homeWin:+res.dataset.hw||null,draw:+res.dataset.dr||null,awayWin:+res.dataset.aw||null,
     over15:+res.dataset.o15||null,over25:+res.dataset.o25||null,gg:+res.dataset.gg||null,
     hsc:+res.dataset.hsc||null,asc:+res.dataset.asc||null};

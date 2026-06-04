@@ -1681,8 +1681,9 @@ function mdRenderSumar(d){
         var pv=p==null?'—':p+'%';
         var expId='msx_'+fk+'_'+sideKey;
         var expHtml=res?buildScoringExplain(name,res):'Date insuficiente pentru estimare.';
-        // Sub-etichetă „Al X-lea gol" doar pe meci live (res.live).
-        var subLbl=(res&&res.live)?('Al '+_msOrd(res.nextGoalNum)+' gol'):'Marchează în meci';
+        // Sub-etichetă live: "Gol N+1" pe baza scorului curent al ECHIPEI
+        // (goluri marcate până acum + 1). Pre-meci/non-live: "Marchează în meci".
+        var subLbl=(res&&res.live)?('Gol '+((sideKey==='home'?hg:ag)+1)):'Marchează în meci';
         // Starea expandată e citită din _scoringExpanded → persistă peste auto-refresh.
         var disp=(_scoringExpanded===sideKey)?'block':'none';
         var _tid=(team&&team.id)?team.id:0;
@@ -1864,7 +1865,7 @@ function mdRenderSumar(d){
     // Column 1: anytime in match — CALIBRAT din backtest 26297 predictii
     out+='<div style="padding:12px;background:rgba(0,212,168,.06);border-radius:8px;text-align:center">';
     out+='<div style="font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Gol oric&acirc;nd &icirc;n meci</div>';
-    out+='<div style="font-size:24px;font-weight:800;color:'+(_ngEarly?'#888':ngpClr)+'">'+(_ngEarly?'—':ngCal+'%')+'</div>';
+    out+='<div id="mdngp_'+fk+'" data-orig="'+(_ngEarly?'':ngCal)+'" style="font-size:24px;font-weight:800;color:'+(_ngEarly?'#888':ngpClr)+'">'+(_ngEarly?'—':ngCal+'%')+'</div>';
     out+='<div style="font-size:9px;color:var(--mu);margin-top:3px">'+(_ngEarly?'se calculează (min &lt;10)':'calibrat &middot; cot&#259; min '+minCotaNgp)+'</div>';
     if(!_ngEarly&&ngCal!==ngRaw)out+='<div style="font-size:9px;color:var(--mu);margin-top:2px;opacity:.7">raw: '+ngRaw+'%</div>';
     if(!_ngEarly&&ngpData.forte)out+='<div class="badge-forte" style="margin-top:6px;display:inline-block">⚡ FORTE</div>';
@@ -1872,7 +1873,7 @@ function mdRenderSumar(d){
     // Column 2: next 15 min — necalibrat (backtest arata discrimination slaba)
     out+='<div style="padding:12px;background:rgba(245,158,11,.06);border-radius:8px;text-align:center">';
     out+='<div style="font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Gol &icirc;n urm. 15 min</div>';
-    out+='<div style="font-size:24px;font-weight:800;color:'+ng15Clr+'">'+(ng15===null?'—':ng15+'%')+'</div>';
+    out+='<div id="mdng15_'+fk+'" data-orig="'+(ng15===null?'':ng15)+'" style="font-size:24px;font-weight:800;color:'+ng15Clr+'">'+(ng15===null?'—':ng15+'%')+'</div>';
     out+='<div style="font-size:9px;color:var(--mu);margin-top:3px">brut · zgomot &gt;30%</div>';
     out+='</div>';
     out+='</div>';  // end grid
