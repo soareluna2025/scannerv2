@@ -2463,9 +2463,15 @@ async function mdRenderClasament(d) {
 
   var homeId2=Number(hid),awayId2=Number(aid);
   var homePoints=sd.homePoints,awayPoints=sd.awayPoints;
+  var isGroup=sd.source==='group';
+  var homeName=(fix&&fix.teams&&fix.teams.home&&fix.teams.home.name)||'Gazde';
+  var awayName=(fix&&fix.teams&&fix.teams.away&&fix.teams.away.name)||'Oaspeți';
 
   var out='<div style="padding:0 0 8px"><div style="font-size:11px;color:var(--mu);margin-bottom:8px">'+
     (fix&&fix.league?fix.league.name:'')+'<span style="float:right">Sezon '+season+'</span></div>';
+  if(isGroup&&sd.groupName){
+    out+='<div style="font-size:13px;font-weight:800;color:var(--gold,#f5c542);margin-bottom:8px">'+htmlEsc(sd.groupName)+'</div>';
+  }
   out+='<div style="overflow-x:auto"><table class="standings-tbl">';
   out+='<thead><tr><th>#</th><th class="tn">Echipă</th><th>J</th><th>V</th><th>E</th><th>Î</th><th>GF</th><th>GA</th><th>GD</th><th style="color:var(--ac)">Pct</th></tr></thead>';
   out+='<tbody>';
@@ -2487,9 +2493,17 @@ async function mdRenderClasament(d) {
         rowCls='srow-away';
       }
     }
+    // Mod grupă: evidențiere pe culori fixe (verde=gazdă, portocaliu=oaspete),
+    // fără logica de comparare puncte specifică clasamentului general.
+    var rowStyle='';
+    if(isGroup){
+      rowCls='';
+      if(isHome)rowStyle='background:rgba(0,214,125,0.15)';
+      else if(isAway)rowStyle='background:rgba(255,165,0,0.15)';
+    }
     var logoHtml=row.team_logo?'<img src="'+row.team_logo+'" width="16" height="16" style="vertical-align:middle;margin-right:4px;border-radius:2px" onerror="this.style.display=\'none\'">':'';
     var bold=isHome||isAway?'font-weight:800;':'';
-    out+='<tr class="'+rowCls+'">';
+    out+='<tr class="'+rowCls+'"'+(rowStyle?' style="'+rowStyle+'"':'')+'>';
     out+='<td style="color:var(--mu)">'+row.rank+'</td>';
     out+='<td class="tn" style="'+bold+'">'+logoHtml+htmlEsc(row.team_name||'')+'</td>';
     out+='<td>'+row.played+'</td><td>'+row.win+'</td><td>'+row.draw+'</td><td>'+row.lose+'</td>';
@@ -2501,10 +2515,15 @@ async function mdRenderClasament(d) {
   });
   out+='</tbody></table></div>';
   // Legend
-  out+='<div style="display:flex;gap:12px;font-size:10px;color:var(--mu);margin-top:8px">';
-  out+='<span><span style="display:inline-block;width:10px;height:10px;background:rgba(34,197,94,.3);border-radius:2px;margin-right:4px"></span>Echipă în avantaj</span>';
-  out+='<span><span style="display:inline-block;width:10px;height:10px;background:rgba(239,68,68,.2);border-radius:2px;margin-right:4px"></span>Echipă în dezavantaj</span>';
-  out+='<span><span style="display:inline-block;width:10px;height:10px;background:rgba(245,158,11,.15);border-radius:2px;margin-right:4px"></span>Egal</span>';
+  out+='<div style="display:flex;gap:12px;font-size:10px;color:var(--mu);margin-top:8px;flex-wrap:wrap">';
+  if(isGroup){
+    out+='<span>🟢 '+htmlEsc(homeName)+'</span>';
+    out+='<span>🟡 '+htmlEsc(awayName)+'</span>';
+  }else{
+    out+='<span><span style="display:inline-block;width:10px;height:10px;background:rgba(34,197,94,.3);border-radius:2px;margin-right:4px"></span>Echipă în avantaj</span>';
+    out+='<span><span style="display:inline-block;width:10px;height:10px;background:rgba(239,68,68,.2);border-radius:2px;margin-right:4px"></span>Echipă în dezavantaj</span>';
+    out+='<span><span style="display:inline-block;width:10px;height:10px;background:rgba(245,158,11,.15);border-radius:2px;margin-right:4px"></span>Egal</span>';
+  }
   out+='</div>';
   out+='</div>';
   body.innerHTML=out;

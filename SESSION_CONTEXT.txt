@@ -778,6 +778,18 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~11:45] - standings-data: grupa specifica a celor 2 echipe (nu liga intreaga)
+  MOD1 api/standings-data.js: groupForTeam() afla grupa echipei home; daca exista,
+  teamsInGroups() intoarce toate echipele din acea grupa (sau ambele grupe daca
+  home/away difera). Per rand: isHome/isAway. Coloane extinse: group_name/form/
+  description. Raspuns nou: groupName + source ('group'/'league'/'none'). Fallback
+  la clasament general (DB->API) pastrat cand liga n-are grupe.
+  MOD2 public/js/app-ui.js mdRenderClasament: cand source==='group' -> header
+  groupName auriu, rand isHome bg verde rgba(0,214,125,.15) bold, isAway bg
+  portocaliu rgba(255,165,0,.15) bold, legenda 🟢 home · 🟡 away. Altfel
+  comportament existent (comparare puncte).
+  node --check OK pe ambele. | Commit: (vezi mai jos)
+
 [04.06 ~11:15] - Tab CALIFICARI: modal detalii meci la tap
   MOD1 api/worldcup-qualifiers.js: query fixtures cu json_agg subquery (evita
   produs cartezian) — events acum type IN ('Goal','Card') cu assist_name, +
