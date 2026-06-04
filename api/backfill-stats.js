@@ -63,8 +63,10 @@ export async function backfillMatchStats(limit) {
   const { rows: missing } = await query(`
     SELECT fh.fixture_id, fh.home_team_id, fh.away_team_id
     FROM fixtures_history fh
+    INNER JOIN leagues l ON l.league_id = fh.league_id
     WHERE fh.status_short IN ('FT','AET','PEN')
       AND fh.home_team_id IS NOT NULL
+      AND l.active = true
       AND NOT EXISTS (SELECT 1 FROM match_stats ms WHERE ms.fixture_id = fh.fixture_id)
     ORDER BY fh.match_date DESC
     LIMIT $1
