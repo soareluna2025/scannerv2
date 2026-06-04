@@ -778,6 +778,12 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~13:20] - Eliminat swipe-to-close de pe TOATE modalele (md/tp/wc)
+  public/js/app-ui.js DOAR: scoase cele 3 IIFE-uri swipe-down-to-close (dy>80
+  + scrollTop<=0 -> mdClose/tpClose/wcClose). Cauzau inchideri accidentale la
+  scroll/refresh. Inchidere acum DOAR cu butonul ←. grep dy>80 -> 0 rezultate.
+  node --check OK. | Commit: (vezi mai jos)
+
 [04.06 ~13:00] - UX: stack nav + overscroll blocat + refresh silentios
   FIX1 dubla sageata: scos .g2close din g2s6(SIMULATOR)+g2s7(BILET COMPUS) —
   ramane DOAR .g2back (← la ecranul anterior, nu inchide tot generatorul).

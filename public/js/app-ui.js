@@ -1102,16 +1102,8 @@ function mdClose(){
   _scoringExpanded=null; // reset stare explicație la închidere
 }
 
-// Swipe-down to close
-(function(){
-  var startY=0;
-  var ov=document.getElementById('md-overlay');
-  ov.addEventListener('touchstart',function(e){startY=e.touches[0].clientY;},{passive:true});
-  ov.addEventListener('touchend',function(e){
-    var dy=e.changedTouches[0].clientY-startY;
-    if(dy>80&&document.getElementById('md-body').scrollTop<=0)mdClose();
-  },{passive:true});
-})();
+// Swipe-to-close eliminat (cauza închideri accidentale) — închidere DOAR cu ← .
+
 
 async function mdFetch(silent){
   try{
@@ -2557,17 +2549,8 @@ function tpTab(idx){
   tpRender();
 }
 
-// Swipe-down to close (același pattern ca md-overlay)
-(function(){
-  var startY=0;
-  var ov=document.getElementById('tp-overlay');
-  if(!ov)return;
-  ov.addEventListener('touchstart',function(e){startY=e.touches[0].clientY;},{passive:true});
-  ov.addEventListener('touchend',function(e){
-    var dy=e.changedTouches[0].clientY-startY;
-    if(dy>80&&document.getElementById('tp-body').scrollTop<=0)tpClose();
-  },{passive:true});
-})();
+// Swipe-to-close eliminat (cauza închideri accidentale) — închidere DOAR cu ← .
+
 
 async function tpFetch(){
   try{
@@ -2856,15 +2839,7 @@ function wcTab(idx){
   document.querySelectorAll('#wc-overlay .md-tab').forEach(function(t,i){t.classList.toggle('active',i===idx);});
   wcRender();
 }
-// Swipe-down close (același pattern ca md/tp)
-(function(){
-  var startY=0;var ov=document.getElementById('wc-overlay');if(!ov)return;
-  ov.addEventListener('touchstart',function(e){startY=e.touches[0].clientY;},{passive:true});
-  ov.addEventListener('touchend',function(e){
-    var dy=e.changedTouches[0].clientY-startY;
-    
-  },{passive:true});
-})();
+// Swipe-to-close eliminat (cauza închideri accidentale) — închidere DOAR cu ← .
 
 async function wcFetch(){
   try{
