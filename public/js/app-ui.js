@@ -1100,6 +1100,8 @@ function mdClose(){
   document.getElementById('md-overlay').classList.remove('open');
   if(_mdRefreshTimer){clearInterval(_mdRefreshTimer);_mdRefreshTimer=null;}
   _scoringExpanded=null; // reset stare explicație la închidere
+  // Golește cache-ul de cote CALIBRARE pt acest meci (userul a închis cartonașul).
+  if(typeof _mevCache!=='undefined'&&_md&&_md.fixtureId!=null)delete _mevCache[String(_md.fixtureId)];
 }
 
 // Swipe-to-close eliminat (cauza închideri accidentale) — închidere DOAR cu ← .
@@ -2108,6 +2110,22 @@ function mdRenderSumar(d){
   }
 
   document.getElementById('md-body').innerHTML=out;
+
+  // Restaurează cotele din "CALIBRARE CU COTE REALE" după re-randarea live
+  // (WebSocket ~2s rescrie tot HTML-ul). Valorile sunt păstrate în _mevCache.
+  (function(){
+    if(typeof _mevCache==='undefined')return;
+    var cc=_mevCache[fk];
+    if(!cc)return;
+    var e1=document.getElementById('mev_c1_'+fk);
+    var ex=document.getElementById('mev_cx_'+fk);
+    var e2=document.getElementById('mev_c2_'+fk);
+    if(e1&&cc.c1!=null)e1.value=cc.c1;
+    if(ex&&cc.cx!=null)ex.value=cc.cx;
+    if(e2&&cc.c2!=null)e2.value=cc.c2;
+    // Dacă toate cotele sunt complete → recalculează rezultatele automat.
+    if(e1&&ex&&e2&&cc.c1&&cc.cx&&cc.c2&&typeof mevCalibrate==='function'){ mevCalibrate(fk); }
+  })();
 }
 
 function mdRenderFormatii(d){

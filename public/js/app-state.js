@@ -469,12 +469,19 @@ function _mkts(lH,lA){
     gg:Math.round((1-e0)*(1-e1)*100),hsc:Math.round((1-e0)*100),asc:Math.round((1-e1)*100),
     lH:lH,lA:lA};
 }
+// Cache valori introduse în "CALIBRARE CU COTE REALE" — supraviețuiește re-randării
+// live (WebSocket ~2s) ca să nu se piardă inputul userului. { [fk]: {c1,cx,c2} }.
+var _mevCache = {};
 function mevCalibrate(fk){
   var res=document.getElementById('mev_res_'+fk);
   if(!res) return;
   var v1=((document.getElementById('mev_c1_'+fk)||{}).value||'').replace(',','.');
   var vx=((document.getElementById('mev_cx_'+fk)||{}).value||'').replace(',','.');
   var v2=((document.getElementById('mev_c2_'+fk)||{}).value||'').replace(',','.');
+  // Salvează imediat valorile introduse (chiar parțiale) ca să le pot restaura
+  // după re-randare. Dacă toate sunt goale → userul a golit manual → șterge.
+  if(!v1 && !vx && !v2){ delete _mevCache[fk]; }
+  else { _mevCache[fk] = { c1:v1, cx:vx, c2:v2 }; }
   var c1=parseFloat(v1),cx=parseFloat(vx),c2=parseFloat(v2);
   var ec2=function(v){return v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
   // Helper: update a Poisson tile value element
