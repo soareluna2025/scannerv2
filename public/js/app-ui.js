@@ -3166,7 +3166,7 @@ function wcShowMatchDetail(fid){
   var sub=[htP,dt].filter(Boolean).join(' · ');
 
   var html='<div class="wc-match-modal-content">';
-  html+='<button class="wc-match-modal-close" onclick="wcCloseMatchDetail()">×</button>';
+  html+='<button class="wc-match-modal-close" onclick="wcCloseMatchDetail()">←</button>';
   html+='<div class="wc-match-modal-header">';
   html+='<div class="wc-mm-team">'+wcFlag(null,hn,26)+'<span>'+htmlEsc(hn)+'</span></div>';
   html+='<div class="wc-mm-score">'+sc+'</div>';

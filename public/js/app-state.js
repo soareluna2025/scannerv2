@@ -651,3 +651,85 @@ function fmtMinute(elapsed,extra){
   return elapsed+"'";
 }
 
+
+// ── PULL-TO-REFRESH (global) ──────────────────────────────────
+// Trage în jos când ești la topul paginii → refresh-ul tab-ului curent.
+// Dezactivat când un modal/overlay e deschis (modalele au swipe-to-close propriu).
+var _ptr={startY:0,pulling:false,lastDy:0,threshold:70};
+
+function _ptrOverlayOpen(){
+  // md/tp/wc folosesc .md-overlay.open; alte modale au stiluri inline (display:flex).
+  if(document.querySelector('.md-overlay.open'))return true;
+  var ma=document.getElementById('ma-overlay');
+  if(ma&&ma.style.display&&ma.style.display!=='none')return true;
+  var g2=document.getElementById('gen2-ov');
+  if(g2&&g2.classList&&g2.classList.contains('open'))return true;
+  var wcm=document.getElementById('wc-match-modal');
+  if(wcm&&wcm.classList.contains('open'))return true;
+  return false;
+}
+function _ptrActiveTab(){
+  var tabs=['live','pre','agent','fav'];
+  for(var i=0;i<tabs.length;i++){
+    var nb=document.getElementById('nav-'+tabs[i]);
+    if(nb&&nb.classList.contains('active'))return tabs[i];
+  }
+  return null;
+}
+function showPullIndicator(dy){
+  var el=document.getElementById('pull-indicator');if(!el)return;
+  var pull=Math.min(dy,120);
+  var y=Math.min(pull-60,16);          // de la -60px (ascuns) spre +16px (vizibil)
+  el.style.transform='translateX(-50%) translateY('+y+'px)';
+  if(dy>=_ptr.threshold){el.textContent='↻ Eliberează pentru refresh';el.classList.add('ready');}
+  else{el.textContent='↻ Trage pentru refresh';el.classList.remove('ready');}
+}
+function hidePullIndicator(){
+  var el=document.getElementById('pull-indicator');if(!el)return;
+  el.style.transform='translateX(-50%) translateY(-60px)';
+  el.classList.remove('ready');
+}
+function refreshCurrentPage(){
+  var t=_ptrActiveTab();
+  if(t==='live'&&typeof loadLive==='function')loadLive();
+  else if(t==='pre'&&typeof loadPM==='function')loadPM();
+  else if(t==='fav'&&typeof renderFavs==='function')renderFavs();
+  else if(t==='agent'){ if(typeof agUpdateStats==='function')agUpdateStats(); }
+  else window.location.reload();
+}
+
+// Conținutul principal derulează în #page (position:fixed, overflow-y:auto),
+// nu în window → folosim scrollTop-ul lui ca prag pentru "ești la top".
+function _ptrAtTop(){
+  var pg=document.getElementById('page');
+  return pg ? pg.scrollTop<=0 : window.scrollY===0;
+}
+document.addEventListener('touchstart',function(e){
+  if(_ptrOverlayOpen())return;
+  if(_ptrAtTop()){
+    _ptr.startY=e.touches[0].clientY;_ptr.pulling=true;_ptr.lastDy=0;
+  }
+},{passive:true});
+
+document.addEventListener('touchmove',function(e){
+  if(!_ptr.pulling)return;
+  if(_ptrOverlayOpen()){_ptr.pulling=false;hidePullIndicator();return;}
+  var dy=e.touches[0].clientY-_ptr.startY;
+  _ptr.lastDy=dy;
+  if(dy>0&&dy<150){showPullIndicator(dy);}
+  else if(dy<=0){_ptr.lastDy=0;hidePullIndicator();}
+},{passive:true});
+
+document.addEventListener('touchend',function(){
+  if(!_ptr.pulling)return;
+  _ptr.pulling=false;
+  var dy=_ptr.lastDy;_ptr.lastDy=0;
+  if(dy>=_ptr.threshold){
+    var el=document.getElementById('pull-indicator');
+    if(el){el.textContent='↻ Reîncarcă…';el.classList.add('ready');el.style.transform='translateX(-50%) translateY(16px)';}
+    refreshCurrentPage();
+    setTimeout(hidePullIndicator,700);
+  }else{
+    hidePullIndicator();
+  }
+},{passive:true});

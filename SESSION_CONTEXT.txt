@@ -778,6 +778,19 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~12:30] - UX global: pull-to-refresh + sageata back (←) in loc de X
+  FIX1 pull-to-refresh: #pull-indicator (index.html + cards.css), logica in
+  app-state.js (touchstart/move/end). Gate pe #page.scrollTop<=0 (continutul
+  deruleaza in #page position:fixed, NU window). Prag 70px. refreshCurrentPage()
+  dispatch pe tab activ: live->loadLive, pre->loadPM, fav->renderFavs, agent->
+  agUpdateStats, fallback reload. Dezactivat cand un overlay e deschis
+  (_ptrOverlayOpen: .md-overlay.open / ma-overlay / gen2-ov.open / wc-match-modal).
+  FIX2 back arrow: md-close ✕->← (deja stanga via md-hdr). ma-overlay header
+  restructurat cu ← stanga. g2close ✕->← + CSS order:-1 (muta stanga).
+  wc-match-modal-close ×->← + CSS left:12px. Adaugat .btn-back in cards.css.
+  tp/wc overlay aveau deja ← stanga. node --check OK pe app-state.js+app-ui.js.
+  | Commit: (vezi mai jos)
+
 [04.06 ~12:00] - WC card: reordonare taburi (default GRUPE WC)
   public/js/app-ui.js DOAR. Ordine noua: 0=GRUPE WC,1=MECIURI,2=CALIFICARI,
   3=BRACKET,4=PONTUL. wcRender() dispatch actualizat. Tab bar reconstruit in
