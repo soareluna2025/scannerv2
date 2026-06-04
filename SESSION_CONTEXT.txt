@@ -778,6 +778,18 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[02.06 ~00:10] - cron NOU collect-national-history (ultimele 20 meciuri/nationala CM)
+  api/cron/collect-national-history.js (NOU): citeste echipele CM 2026 DIN DB la runtime
+  (DISTINCT home/away_team_id din fixtures WHERE league_id=1, UNION) — nu hardcodat.
+  Per echipa secvential: /fixtures?team={id}&last=20&status=FT -> saveFixture upsert in
+  fixtures_history (fixture_id/date/league/season/teams/goals/home_ht-away_ht din
+  score.halftime/status), ON CONFLICT (fixture_id) DO UPDATE pe goals/ht/status. Doar
+  FT/AET/PEN cu scor. sleep 200ms/echipa. Raspuns {ok,teams_processed,fixtures_upserted,
+  errors[]}. logCron.
+  server.js: +collect-national-history in cronFiles. deploy.yml crontab: +C17
+  "0 3 * * 1" (luni 03:00) + grep-v dedup + echo. ~48 calls/rulare.
+  NEATINS: scoring/buildCardHtml. node --check OK, YAML valid. Un commit main.
+
 [01.06 ~23:50] - H2H DIRECT modal: render bogat (scor/HT + evenimente + statistici)
   app-ui.js: +buildH2HMatchDetail(h) — header echipe+scor colorat (verde/rosu/egal) +
   subtitlu data·HT; evenimente sortate elapsed ASC (⚽ gol +assist / 🟨🟥 cartonas,
