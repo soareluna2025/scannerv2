@@ -668,24 +668,38 @@ function fmtMinute(elapsed,extra){
 document.body.style.overscrollBehavior='none';
 document.documentElement.style.overscrollBehavior='none';
 
-// ── PULL-TO-REFRESH cu indicator (trage în jos la topul paginii → refresh) ──
-// La topul containerului #page, tragerea în jos arată un spinner (ca în app-uri
-// native); la eliberare peste prag → refresh-ul tab-ului curent. Pe toate modulele.
-// Dezactivat când un modal/overlay e deschis.
-var _ptr={startY:0,pulling:false,lastDy:0,threshold:70};
+// ── PULL-TO-REFRESH cu indicator (trage în jos la top → refresh) ──
+// La topul containerului activ (pagina SAU cartonașul/modalul deschis), tragerea
+// în jos arată un spinner (ca în app native); la eliberare peste prag → refresh.
+// Funcționează și în cartonașe (md/tp/wc) — refresh datele modalului respectiv.
+var _ptr={startY:0,pulling:false,lastDy:0,threshold:70,refresh:null};
 
-function _ptrOverlayOpen(){
-  // md/tp/wc folosesc .md-overlay.open; alte modale au stiluri inline (display:flex).
-  if(document.querySelector('.md-overlay.open'))return true;
+// Modale secundare unde NU vrem pull-refresh (rămân blocate).
+function _ptrBlockedOverlay(){
   var ma=document.getElementById('ma-overlay');
   if(ma&&ma.style.display&&ma.style.display!=='none')return true;
   var g2=document.getElementById('gen2-ov');
   if(g2&&g2.classList&&g2.classList.contains('open'))return true;
-  var wcm=document.getElementById('wc-match-modal');
-  if(wcm&&wcm.classList.contains('open'))return true;
   var hm=document.getElementById('hist-modal');
   if(hm&&hm.style.display&&hm.style.display!=='none')return true;
+  var wcm=document.getElementById('wc-match-modal');
+  if(wcm&&wcm.classList.contains('open'))return true;
   return false;
+}
+// Contextul activ: scroller-ul + funcția de refresh.
+// Cartonaș meci (md) / pagină echipă (tp) / hub WC (wc) → refresh datele lor;
+// altfel → pagina principală (tab-ul curent).
+function _ptrContext(){
+  var md=document.getElementById('md-overlay');
+  if(md&&md.classList.contains('open'))
+    return {el:document.getElementById('md-body'), refresh:function(){ if(typeof mdFetch==='function')mdFetch(true); }};
+  var tp=document.getElementById('tp-overlay');
+  if(tp&&tp.classList.contains('open'))
+    return {el:document.getElementById('tp-body'), refresh:function(){ if(typeof tpFetch==='function')tpFetch(); }};
+  var wc=document.getElementById('wc-overlay');
+  if(wc&&wc.classList.contains('open'))
+    return {el:document.getElementById('wc-body'), refresh:function(){ if(typeof wcFetch==='function')wcFetch(); }};
+  return {el:document.getElementById('page'), refresh:refreshCurrentPage};
 }
 function _ptrActiveTab(){
   var tabs=['live','pre','agent','fav'];
@@ -703,12 +717,6 @@ function refreshCurrentPage(){
   else if(t==='agent'){ if(typeof agUpdateStats==='function')agUpdateStats(); }
   else window.location.reload();
 }
-
-// Containerul activ e la topul paginii? (#page.scrollTop <= 0)
-function _ptrAtTop(){
-  var pg=document.getElementById('page');
-  return pg ? pg.scrollTop<=0 : (window.scrollY===0);
-}
 function showPullSpinner(dy){
   var el=document.getElementById('pull-refresh');if(!el)return;
   var p=Math.min(dy/_ptr.threshold,1);                 // 0..1
@@ -723,20 +731,21 @@ function hidePullSpinner(){
 function triggerPullRefresh(){
   var el=document.getElementById('pull-refresh');
   if(el){ el.style.opacity='1'; el.style.transform='translateX(-50%) translateY(46px) scale(1)'; }
-  refreshCurrentPage();
+  if(typeof _ptr.refresh==='function')_ptr.refresh(); else refreshCurrentPage();
   setTimeout(hidePullSpinner,800);
 }
 
 document.addEventListener('touchstart',function(e){
-  if(_ptrOverlayOpen()){_ptr.pulling=false;return;}
-  if(_ptrAtTop()){
-    _ptr.startY=e.touches[0].clientY;_ptr.pulling=true;_ptr.lastDy=0;
+  if(_ptrBlockedOverlay()){_ptr.pulling=false;return;}
+  var ctx=_ptrContext();
+  if(ctx.el && ctx.el.scrollTop<=0){
+    _ptr.startY=e.touches[0].clientY;_ptr.pulling=true;_ptr.lastDy=0;_ptr.refresh=ctx.refresh;
   }
 },{passive:true});
 
 document.addEventListener('touchmove',function(e){
   if(!_ptr.pulling)return;
-  if(_ptrOverlayOpen()){_ptr.pulling=false;hidePullSpinner();return;}
+  if(_ptrBlockedOverlay()){_ptr.pulling=false;hidePullSpinner();return;}
   var dy=e.touches[0].clientY-_ptr.startY;
   _ptr.lastDy=dy;
   if(dy>0){ showPullSpinner(dy); }
