@@ -721,14 +721,61 @@ async function getH2HFromDB(homeId, awayId) {
   // Echipele care nu au jucat live recent au h2h gol, deși fixtures_history are datele.
   if (h2hRows.length < 3) {
     try {
+      // Query ÎMBOGĂȚIT: scor final + HT + evenimente (goluri/cartonașe) + statistici
+      // per echipă, agregate ca JSON per fixture. fixtures_history are home_ht/away_ht
+      // (NU home_goals_ht) — aliasate la home_goals_ht/away_goals_ht.
       const fh = await query(
-        `SELECT home_team_id, away_team_id, home_goals, away_goals, match_date, fixture_id
-         FROM fixtures_history
-         WHERE ((home_team_id = $1 AND away_team_id = $2)
-             OR (home_team_id = $2 AND away_team_id = $1))
-           AND status_short = 'FT'
-           AND home_goals IS NOT NULL
-         ORDER BY match_date DESC
+        `SELECT
+           fh.fixture_id, fh.match_date,
+           fh.home_team_name, fh.away_team_name,
+           fh.home_team_id, fh.away_team_id,
+           fh.home_goals, fh.away_goals,
+           fh.home_ht AS home_goals_ht, fh.away_ht AS away_goals_ht,
+           fh.status_short, fh.league_id, fh.season,
+           COALESCE(
+             json_agg(
+               DISTINCT jsonb_build_object(
+                 'elapsed', me.elapsed,
+                 'team_id', me.team_id,
+                 'team_name', me.team_name,
+                 'player', me.player_name,
+                 'assist', me.assist_name,
+                 'type', me.type,
+                 'detail', me.detail
+               )
+             ) FILTER (WHERE me.id IS NOT NULL AND me.type IN ('Goal','Card')),
+             '[]'
+           ) AS events,
+           COALESCE(
+             json_agg(
+               DISTINCT jsonb_build_object(
+                 'team_id', ms.team_id,
+                 'team_name', ms.team_name,
+                 'shots_on_goal', ms.shots_on_goal,
+                 'shots_total', ms.shots_total,
+                 'corner_kicks', ms.corner_kicks,
+                 'ball_possession', ms.ball_possession,
+                 'yellow_cards', ms.yellow_cards,
+                 'red_cards', ms.red_cards,
+                 'expected_goals', ms.expected_goals,
+                 'passes_accurate', ms.passes_accurate,
+                 'pass_percentage', ms.pass_percentage
+               )
+             ) FILTER (WHERE ms.id IS NOT NULL),
+             '[]'
+           ) AS stats
+         FROM fixtures_history fh
+         LEFT JOIN match_events me ON me.fixture_id = fh.fixture_id
+         LEFT JOIN match_stats ms ON ms.fixture_id = fh.fixture_id
+         WHERE ((fh.home_team_id = $1 AND fh.away_team_id = $2)
+             OR (fh.home_team_id = $2 AND fh.away_team_id = $1))
+           AND fh.status_short IN ('FT','AET','PEN')
+           AND fh.home_goals IS NOT NULL
+         GROUP BY fh.fixture_id, fh.match_date, fh.home_team_name,
+           fh.away_team_name, fh.home_team_id, fh.away_team_id,
+           fh.home_goals, fh.away_goals, fh.home_ht,
+           fh.away_ht, fh.status_short, fh.league_id, fh.season
+         ORDER BY fh.match_date DESC
          LIMIT 10`,
         [homeId, awayId]
       );
@@ -736,6 +783,15 @@ async function getH2HFromDB(homeId, awayId) {
       const seenFids = new Set(h2hRows.map(r => r.fixture_id).filter(v => v != null));
       for (const row of fh.rows) {
         if (row.fixture_id != null && seenFids.has(row.fixture_id)) continue;
+        // Câmpuri NOI (nested) — păstrând TOATE câmpurile flat existente (backwards-compat).
+        row.home_team = { id: row.home_team_id, name: row.home_team_name };
+        row.away_team = { id: row.away_team_id, name: row.away_team_name };
+        row.score     = { home: row.home_goals ?? 0, away: row.away_goals ?? 0 };
+        row.score_ht  = (row.home_goals_ht != null || row.away_goals_ht != null)
+          ? { home: row.home_goals_ht, away: row.away_goals_ht } : null;
+        row.status    = row.status_short;
+        row.events    = Array.isArray(row.events) ? row.events : [];
+        row.stats     = Array.isArray(row.stats) ? row.stats : [];
         h2hRows.push(row);
       }
       // Re-sortare DESC după match_date + cap la 10
