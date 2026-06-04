@@ -469,6 +469,43 @@ function _mkts(lH,lA){
     gg:Math.round((1-e0)*(1-e1)*100),hsc:Math.round((1-e0)*100),asc:Math.round((1-e1)*100),
     lH:lH,lA:lA};
 }
+// Minute RĂMASE din meci pentru fixture-ul fk — citite din DOM (badge-ul de minut
+// din cartonaș: "R1 · 62'", "R2 · 62'", "EXTRA · 95'", "PAUZĂ · HT") cu fallback
+// pe ST.ms (status.short + elapsed). Întoarce null dacă nu poate fi determinat
+// (→ apelantul cade pe ratio-ul simplu). DOAR citire — niciun calcul de scoring.
+function _mevRemainingMinutes(fk){
+  try{
+    var half=null, mn=null;
+    // 1) DOM — badge-ul de minut din modal
+    var badge=document.querySelector('#md-overlay .md-min-badge')||document.querySelector('.md-min-badge');
+    var txt=badge?(badge.textContent||''):'';
+    if(txt){
+      if(/EXTRA/i.test(txt))      half='ET';
+      else if(/R1/i.test(txt))    half='1H';
+      else if(/R2/i.test(txt))    half='2H';
+      else if(/HT|PAUZ/i.test(txt))half='HT';
+      var m=txt.match(/(\d+)/);   // primul număr = minutul (la "45+2" ia 45)
+      if(m) mn=parseInt(m[1],10);
+    }
+    // 2) Fallback ST.ms după fixture id
+    if(half===null||mn===null){
+      var fid=parseInt(fk,10);
+      var mm=(typeof ST!=='undefined'&&ST.ms||[]).find(function(x){return x.fixture&&x.fixture.id===fid;});
+      var st=mm&&mm.fixture&&mm.fixture.status;
+      if(st){
+        if(half===null){var sh=st.short; half=(sh==='1H'||sh==='2H'||sh==='ET'||sh==='HT')?sh:null;}
+        if(mn===null && typeof st.elapsed==='number') mn=st.elapsed;
+      }
+    }
+    if(mn===null && half===null) return null;
+    if(half==='ET') return 5;                                  // extra time: conservator
+    if(half==='HT') return 45;                                 // pauză: repriza 2 neîncepută
+    if(half==='1H'){ if(mn==null)mn=0; return Math.max(1,45-mn)+45; }
+    if(half==='2H'){ if(mn==null)mn=45; return Math.max(1,90-mn); }
+    if(mn!=null) return Math.max(1,90-mn);                     // half necunoscut → minut generic
+    return null;
+  }catch(_){ return null; }
+}
 // Cache valori introduse în "CALIBRARE CU COTE REALE" — supraviețuiește re-randării
 // live (WebSocket ~2s) ca să nu se piardă inputul userului. { [fk]: {c1,cx,c2} }.
 var _mevCache = {};
@@ -554,6 +591,14 @@ function mevCalibrate(fk){
     var b=document.getElementById('mdng15_'+fk);
     if(b){var o2=parseFloat(b.dataset.orig);if(isFinite(o2)){b.textContent=o2+'%';b.style.color=_ng15Color(o2);}}
   };
+  // Setează NGP la valori absolute (din calculul pe minute rămase). Nu suprascrie
+  // "—" (data-orig gol → NGP nesigur/early sau pre-meci) ca să nu inventeze cifre.
+  var _setNgp=function(ngMeci,ng15){
+    var a=document.getElementById('mdngp_'+fk);
+    if(a&&isFinite(parseFloat(a.dataset.orig))){a.textContent=ngMeci+'%';a.style.color=_ngpColor(ngMeci);}
+    var b=document.getElementById('mdng15_'+fk);
+    if(b&&isFinite(parseFloat(b.dataset.orig))){b.textContent=ng15+'%';b.style.color=_ng15Color(ng15);}
+  };
   if(!c1||c1<1.01||!cx||cx<1.01||!c2||c2<1.01){
     res.innerHTML='<div style="color:var(--mu);font-size:11px;padding:8px 0">Introdu cotele pentru 1, X și 2 →</div>';
     restoreTiles();_restoreNgp();return;}
@@ -573,10 +618,22 @@ function mevCalibrate(fk){
   if(ltEl){ltEl.style.color='var(--mu2)';ltEl.textContent=(lam[0]+lam[1]).toFixed(2);}
   // Update confidence circle
   setConf(cal.over15);
-  // FIX 2 — actualizează NGP proporțional cu raportul λ nou / λ original.
-  var _ltOrig=parseFloat(res.dataset.lt)||0;
+  // NGP calibrat pe minutele RĂMASE din meci (nu pe 90 min întregi).
+  //   λ_rămas = λ_calibrat_total × (minute_rămase / 90)
+  //   NGP_meci  = 1 − e^(−λ_rămas)
+  //   NGP_15min = 1 − e^(−λ_calibrat_total × 15/90)
   var _ltNew=lam[0]+lam[1];
-  _updNgp(_ltOrig>0 ? (_ltNew/_ltOrig) : 1);
+  var _rem=_mevRemainingMinutes(fk);
+  if(_rem!=null && _rem>0){
+    var _lamRem=_ltNew*(_rem/90);
+    var _ngMeci=Math.min(99, Math.round((1-Math.exp(-_lamRem))*100));
+    var _ng15 =Math.min(99, Math.round((1-Math.exp(-_ltNew*(15/90)))*100));
+    _setNgp(_ngMeci,_ng15);
+  } else {
+    // Minutul nu poate fi citit → fallback la ratio simplu (comportament anterior).
+    var _ltOrig=parseFloat(res.dataset.lt)||0;
+    _updNgp(_ltOrig>0 ? (_ltNew/_ltOrig) : 1);
+  }
   var mod={homeWin:+res.dataset.hw||null,draw:+res.dataset.dr||null,awayWin:+res.dataset.aw||null,
     over15:+res.dataset.o15||null,over25:+res.dataset.o25||null,gg:+res.dataset.gg||null,
     hsc:+res.dataset.hsc||null,asc:+res.dataset.asc||null};
