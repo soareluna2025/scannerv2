@@ -424,3 +424,13 @@
 .h2h-stat-bars{display:flex;height:5px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.06);direction:rtl}
 .h2h-bar-h{background:var(--ac);height:100%}
 .h2h-bar-a{background:#818cf8;height:100%}
+
+/* ═══ H2H DIRECT — expand/collapse per meci ═══ */
+.h2h-match-header{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0}
+.h2h-match-header.static{cursor:default}
+.h2h-match-header:hover{opacity:0.8}
+.h2h-match-header.static:hover{opacity:1}
+.h2h-match-body{overflow:hidden}
+.h2h-match-body.collapsed{display:none}
+.h2h-chevron{font-size:11px;color:var(--mu);transition:transform 0.2s;flex-shrink:0}
+.h2h-match-header.expanded .h2h-chevron{transform:rotate(180deg)}

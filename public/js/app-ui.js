@@ -2094,7 +2094,7 @@ function mdRenderSumar(d){
   // H2H
   if(en.h2hForm&&en.h2hForm.length){
     out+='<div class="md-section"><div class="md-section-title">H2H Direct (ultimele 5)</div>';
-    en.h2hForm.forEach(function(h){ out+=buildH2HMatchDetail(h); });
+    en.h2hForm.forEach(function(h,i){ out+=buildH2HMatchDetail(h,i); });
     out+='</div>';
   }
 
@@ -2209,9 +2209,20 @@ function mdRenderJucatori(d){
   document.getElementById('md-body').innerHTML=out;
 }
 
+// Toggle expand/collapse pe un meci H2H (header + body) din modal.
+function toggleH2H(id){
+  var body=document.getElementById(id);
+  if(!body)return;
+  var collapsed=body.classList.toggle('collapsed');
+  // headerul e fratele anterior al body-ului
+  var header=body.previousElementSibling;
+  if(header&&header.classList.contains('h2h-match-header'))header.classList.toggle('expanded',!collapsed);
+}
+
 // Randează un meci H2H complet (scor+HT, evenimente goluri/cartonașe, statistici bară).
 // Defensiv: dacă lipsesc events/stats (date bogate), cade pe rândul simplu (scor+data).
-function buildH2HMatchDetail(h){
+// `idx` = index în listă (fallback pt id unic dacă fixture_id lipsește).
+function buildH2HMatchDetail(h, idx){
   // Normalizare: acceptă atât forma bogată (home_team/score/events/stats) cât și cea
   // simplă (homeTeam/homeGoals). Backwards-compat cu mapările existente.
   var hName=(h.home_team&&h.home_team.name)||h.homeTeam||h.home||'?';
@@ -2229,17 +2240,29 @@ function buildH2HMatchDetail(h){
   var ac=(hg!=null&&ag!=null)?(ag>hg?'#22c55e':ag<hg?'#ef4444':'var(--tx)'):'var(--tx)';
   var scoreTxt=(hg!=null&&ag!=null)?(hg+' - '+ag):'—';
 
+  var subTxt=dtTxt+(ht&&(ht.home!=null||ht.away!=null)?(' · HT: '+(ht.home!=null?ht.home:'-')+'-'+(ht.away!=null?ht.away:'-')):'');
+  var hasBody=(events.length>0 || stats.length>=2);
+  var domId='h2h_'+((h.fixture_id!=null?h.fixture_id:('i'+(idx!=null?idx:0))));
+
   var o='<div class="h2h-match-detail">';
-  // HEADER
+  // HEADER (mereu vizibil) — clickabil DOAR dacă există body de expandat.
+  o+='<div class="h2h-match-header'+(hasBody?'':' static')+'"'+(hasBody?(' onclick="toggleH2H(\''+domId+'\')"'):'')+'>';
+  o+='<div style="flex:1;min-width:0">';
   o+='<div class="h2h-score-header">';
   o+='<span class="h2h-team-n" style="text-align:right">'+htmlEsc(hName)+'</span>';
   o+='<span class="h2h-score-c"><span style="color:'+hc+'">'+(hg!=null?hg:'-')+'</span> - <span style="color:'+ac+'">'+(ag!=null?ag:'-')+'</span></span>';
   o+='<span class="h2h-team-n" style="text-align:left">'+htmlEsc(aName)+'</span>';
   o+='</div>';
-  o+='<div class="h2h-sub">'+dtTxt+(ht&&(ht.home!=null||ht.away!=null)?(' · HT: '+(ht.home!=null?ht.home:'-')+'-'+(ht.away!=null?ht.away:'-')):'')+'</div>';
+  o+='<div class="h2h-sub">'+subTxt+'</div>';
+  o+='</div>';
+  if(hasBody)o+='<span class="h2h-chevron">▼</span>';
+  o+='</div>';
 
-  // FALLBACK: fără events și fără stats → doar scor + data (deja afișate sus).
-  if(!events.length && !stats.length){ o+='</div>'; return o; }
+  // FALLBACK: fără events și fără stats → doar header (scor + data).
+  if(!hasBody){ o+='</div>'; return o; }
+
+  // BODY colasat by default — evenimente + statistici.
+  o+='<div id="'+domId+'" class="h2h-match-body collapsed">';
 
   // EVENIMENTE
   if(events.length){
@@ -2287,7 +2310,8 @@ function buildH2HMatchDetail(h){
     if(rows)o+='<div class="h2h-stats">'+rows+'</div>';
   }
 
-  o+='</div>';
+  o+='</div>';   // închide .h2h-match-body
+  o+='</div>';   // închide .h2h-match-detail
   return o;
 }
 
@@ -2318,7 +2342,7 @@ function mdRenderForma(d){
 
   if(en.h2hForm&&en.h2hForm.length){
     out+='<div class="md-section"><div class="md-section-title">H2H Direct (ultimele 5)</div>';
-    en.h2hForm.forEach(function(h){ out+=buildH2HMatchDetail(h); });
+    en.h2hForm.forEach(function(h,i){ out+=buildH2HMatchDetail(h,i); });
     out+='</div>';
   }
 

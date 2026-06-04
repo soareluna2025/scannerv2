@@ -778,6 +778,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[02.06 ~00:40] - H2H DIRECT: expand/collapse per meci (app-ui.js + cards.css)
+  buildH2HMatchDetail(h,idx) restructurat: header MEREU vizibil (echipe+scor colorat+
+  data+HT+chevron ▼) clickabil -> toggleH2H('h2h_'+fixture_id|i); body (evenimente+
+  statistici) COLASAT by default (.h2h-match-body.collapsed display:none). toggleH2H(id):
+  toggle .collapsed pe body + .expanded pe header (rotire chevron via prev sibling).
+  Header static (fara click/chevron) cand nu exista body (fallback doar scor+data).
+  Call-sites (mdRenderSumar+mdRenderForma) paseaza index. cards.css: +.h2h-match-header
+  (clickabil/hover/static), .h2h-match-body.collapsed, .h2h-chevron (rotate .expanded).
+  NEATINS: buildCardHtml, calcConfidence*/score2/3/6/7. DOAR app-ui.js+cards.css. node --check OK. Testat.
+
 [02.06 ~00:25] - h2hForm: passthrough date bogate (score_ht/events/stats) — completeaza H2H UI
   enrich.js maparea h2hForm (sbH2H.slice(0,5)): +score_ht, events[], stats[] din
   getH2HFromDB + home_team_id/away_team_id (aditiv, pt alinierea evenimentelor in UI).
