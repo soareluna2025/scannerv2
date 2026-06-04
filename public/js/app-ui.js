@@ -3055,7 +3055,7 @@ async function wcRenderQualifiers(){
         g.fixtures.forEach(function(m){
           var dt=m.match_date?new Date(m.match_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
           var sc=(m.home_goals!=null&&m.away_goals!=null)?(m.home_goals+'-'+m.away_goals):'–';
-          out+='<div style="padding:6px 4px;border-bottom:1px solid var(--bd)">';
+          out+='<div onclick="wcShowMatchDetail('+m.fixture_id+')" style="cursor:pointer;padding:6px 4px;border-bottom:1px solid var(--bd)">';
           out+='<div style="display:flex;align-items:center;gap:6px;font-size:12px">';
           out+='<span style="color:var(--mu);font-size:10px;min-width:62px">'+dt+'</span>';
           out+='<span style="flex:1;text-align:right">'+htmlEsc(m.home_team_name||'')+' '+wcFlag(null,m.home_team_name,14)+'</span>';
@@ -3094,4 +3094,95 @@ function wcQualToggleMatches(id){
   el.style.display=open?'none':'block';
   if(ar)ar.textContent=open?'▼':'▲';
 }
+
+// ── Modal detalii meci CALIFICĂRI (scor, HT, evenimente, statistici) ──
+function _wcFindQualMatch(fid){
+  var confs=(_wc.qual&&_wc.qual.confederations)||[];
+  for(var i=0;i<confs.length;i++){
+    var gs=confs[i].groups||[];
+    for(var j=0;j<gs.length;j++){
+      var fx=gs[j].fixtures||[];
+      for(var k=0;k<fx.length;k++){ if(fx[k].fixture_id===fid)return fx[k]; }
+    }
+  }
+  return null;
+}
+function _wcEventIcon(e){
+  if(e.type==='Goal')return (e.detail&&/own/i.test(e.detail))?'⚽ (og)':(e.detail&&/penalty/i.test(e.detail))?'⚽ (p)':'⚽';
+  if(e.type==='Card')return (e.detail&&/red/i.test(e.detail))?'🟥':'🟨';
+  return '•';
+}
+function _wcStatBar(label,hv,av){
+  hv=(hv==null||hv==='')?null:Number(hv);
+  av=(av==null||av==='')?null:Number(av);
+  if(hv==null&&av==null)return '';
+  var hh=hv||0, aa=av||0, tot=hh+aa;
+  var hp=tot>0?Math.round(hh/tot*100):50, ap=100-hp;
+  var fmt=function(v){return v==null?'-':(Number.isInteger(v)?v:Number(v).toFixed(2));};
+  return '<div class="wc-mm-stat-row">'+
+    '<span class="wc-mm-stat-v">'+fmt(hv)+'</span>'+
+    '<div class="wc-mm-stat-mid"><div class="wc-mm-stat-label">'+htmlEsc(label)+'</div>'+
+    '<div class="wc-mm-stat-bars"><div class="wc-mm-bar-h" style="width:'+hp+'%"></div><div class="wc-mm-bar-a" style="width:'+ap+'%"></div></div></div>'+
+    '<span class="wc-mm-stat-v">'+fmt(av)+'</span></div>';
+}
+function wcShowMatchDetail(fid){
+  var m=_wcFindQualMatch(fid);
+  if(!m)return;
+  var hn=m.home_team_name||'?', an=m.away_team_name||'?';
+  var hid=m.home_team_id, aid=m.away_team_id;
+  var sc=(m.home_goals!=null&&m.away_goals!=null)?(m.home_goals+' - '+m.away_goals):'– –';
+  var htP=(m.score_ht&&m.score_ht.home!=null&&m.score_ht.away!=null)?('HT '+m.score_ht.home+'-'+m.score_ht.away):'';
+  var dt=m.match_date?new Date(m.match_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
+  var sub=[htP,dt].filter(Boolean).join(' · ');
+
+  var html='<div class="wc-match-modal-content">';
+  html+='<button class="wc-match-modal-close" onclick="wcCloseMatchDetail()">×</button>';
+  html+='<div class="wc-match-modal-header">';
+  html+='<div class="wc-mm-team">'+wcFlag(null,hn,26)+'<span>'+htmlEsc(hn)+'</span></div>';
+  html+='<div class="wc-mm-score">'+sc+'</div>';
+  html+='<div class="wc-mm-team">'+wcFlag(null,an,26)+'<span>'+htmlEsc(an)+'</span></div>';
+  html+='</div>';
+  if(sub)html+='<div class="wc-mm-sub">'+htmlEsc(sub)+'</div>';
+
+  var events=(m.events||[]).slice().sort(function(a,b){return (a.elapsed||0)-(b.elapsed||0);});
+  var stats=m.stats||[];
+
+  if(!events.length && !stats.length){
+    html+='<div class="wc-mm-empty">Fără evenimente sau statistici disponibile</div>';
+  }else{
+    if(events.length){
+      html+='<div class="wc-match-events">';
+      events.forEach(function(e){
+        var isHome=(e.team_id===hid);
+        var min=(e.elapsed!=null?e.elapsed+"'":'');
+        var assist=(e.type==='Goal'&&e.assist_name)?'<span class="wc-mm-assist">('+htmlEsc(e.assist_name)+')</span>':'';
+        var line=_wcEventIcon(e)+' '+min+' '+htmlEsc(e.player_name||'')+assist;
+        html+='<div class="wc-mm-event '+(isHome?'home':'away')+'">'+line+'</div>';
+      });
+      html+='</div>';
+    }
+    if(stats.length){
+      var sh=stats.find(function(s){return s.team_id===hid;})||{};
+      var sa=stats.find(function(s){return s.team_id===aid;})||{};
+      var bars=_wcStatBar('Posesie',sh.ball_possession,sa.ball_possession)+
+        _wcStatBar('Șuturi pe poartă',sh.shots_on_goal,sa.shots_on_goal)+
+        _wcStatBar('Șuturi total',sh.shots_total,sa.shots_total)+
+        _wcStatBar('Cornere',sh.corner_kicks,sa.corner_kicks)+
+        _wcStatBar('xG',sh.expected_goals,sa.expected_goals)+
+        _wcStatBar('Cartonașe galbene',sh.yellow_cards,sa.yellow_cards);
+      if(bars)html+='<div class="wc-match-stats">'+bars+'</div>';
+    }
+  }
+  html+='</div>';
+
+  var ov=document.getElementById('wc-match-modal');
+  if(!ov){
+    ov=document.createElement('div');ov.id='wc-match-modal';ov.className='wc-match-modal';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){if(e.target===ov)wcCloseMatchDetail();});
+  }
+  ov.innerHTML=html;
+  ov.classList.add('open');
+}
+function wcCloseMatchDetail(){ var ov=document.getElementById('wc-match-modal'); if(ov)ov.classList.remove('open'); }
 

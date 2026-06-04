@@ -437,3 +437,34 @@
 .h2h-match-body.collapsed{display:none}
 .h2h-chevron{font-size:11px;color:var(--mu);transition:transform 0.2s;flex-shrink:0}
 .h2h-match-header.expanded .h2h-chevron{transform:rotate(180deg)}
+
+/* ═══ WC CALIFICĂRI — modal detalii meci (scor, evenimente, statistici) ═══ */
+.wc-match-modal{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.72);
+  display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)}
+.wc-match-modal.open{display:flex}
+.wc-match-modal-content{position:relative;width:100%;max-width:520px;max-height:86vh;overflow-y:auto;
+  background:var(--sur,#15161c);border-radius:16px 16px 0 0;padding:18px 16px 26px;
+  border-top:2px solid var(--gold,#f5c542)}
+.wc-match-modal-close{position:absolute;top:10px;right:12px;width:32px;height:32px;border:none;
+  border-radius:50%;background:rgba(255,255,255,.08);color:var(--tx,#fff);font-size:20px;cursor:pointer;line-height:1}
+.wc-match-modal-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px}
+.wc-mm-team{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--tx);text-align:center}
+.wc-mm-team span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.wc-mm-score{font-size:24px;font-weight:800;min-width:74px;text-align:center;color:var(--tx)}
+.wc-mm-sub{text-align:center;font-size:11px;color:var(--mu);margin-top:6px}
+.wc-mm-empty{text-align:center;font-size:12px;color:var(--mu);padding:24px 0}
+.wc-match-events{margin-top:16px;display:flex;flex-direction:column;gap:5px;
+  border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
+.wc-mm-event{font-size:12px;color:var(--tx2,#cdd)}
+.wc-mm-event.home{text-align:left}
+.wc-mm-event.away{text-align:right}
+.wc-mm-assist{color:var(--mu);font-size:10px;margin-left:4px}
+.wc-match-stats{margin-top:16px;display:flex;flex-direction:column;gap:9px;
+  border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
+.wc-mm-stat-row{display:grid;grid-template-columns:38px 1fr 38px;align-items:center;column-gap:8px}
+.wc-mm-stat-v{font-size:12px;font-weight:700;color:var(--tx);text-align:center}
+.wc-mm-stat-mid{display:flex;flex-direction:column;gap:3px}
+.wc-mm-stat-label{text-align:center;font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.4px}
+.wc-mm-stat-bars{display:flex;height:5px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.06)}
+.wc-mm-bar-h{background:var(--ac,#00d67d);height:100%}
+.wc-mm-bar-a{background:#818cf8;height:100%}

@@ -44,49 +44,56 @@ export default async function handler(req, res) {
       }
     }
 
-    // ── FIXTURES + goluri (match_events type='Goal') ──
+    // ── FIXTURES + evenimente (goluri+cartonașe) + statistici per echipă ──
+    // json_agg în subquery evită produsul cartezian (events × stats) și întoarce
+    // direct array-uri parsate de driver-ul pg.
     const fxRes = await query(
       `SELECT fh.fixture_id, fh.league_id, fh.season, fh.match_date,
               fh.home_team_id, fh.home_team_name, fh.away_team_id, fh.away_team_name,
               fh.home_goals, fh.away_goals, fh.home_ht, fh.away_ht,
-              me.elapsed, me.player_name, me.team_id AS event_team_id, me.detail
+              COALESCE((
+                SELECT json_agg(json_build_object(
+                  'elapsed', me.elapsed, 'player_name', me.player_name,
+                  'assist_name', me.assist_name, 'team_id', me.team_id,
+                  'type', me.type, 'detail', me.detail)
+                  ORDER BY me.elapsed ASC NULLS LAST)
+                FROM match_events me
+                WHERE me.fixture_id = fh.fixture_id AND me.type IN ('Goal','Card')
+              ), '[]') AS events,
+              COALESCE((
+                SELECT json_agg(json_build_object(
+                  'team_id', ms.team_id, 'team_name', ms.team_name,
+                  'ball_possession', ms.ball_possession,
+                  'shots_on_goal', ms.shots_on_goal, 'shots_total', ms.shots_total,
+                  'corner_kicks', ms.corner_kicks, 'expected_goals', ms.expected_goals,
+                  'yellow_cards', ms.yellow_cards, 'red_cards', ms.red_cards))
+                FROM match_stats ms WHERE ms.fixture_id = fh.fixture_id
+              ), '[]') AS stats
          FROM fixtures_history fh
-         LEFT JOIN match_events me ON me.fixture_id = fh.fixture_id AND me.type = 'Goal'
         WHERE fh.league_id = ANY($1)
-        ORDER BY fh.league_id, fh.match_date ASC, me.elapsed ASC NULLS LAST`,
+        ORDER BY fh.league_id, fh.match_date ASC`,
       [QUAL_LEAGUES]
     ).catch(() => ({ rows: [] }));
 
-    // Aglomerăm rândurile (1/gol) într-un singur obiect fixture cu events[].
+    // Un rând per fixture (events/stats sunt deja array-uri JSON).
     const fxMap = new Map();
     for (const r of fxRes.rows) {
-      let f = fxMap.get(r.fixture_id);
-      if (!f) {
-        f = {
-          fixture_id: r.fixture_id,
-          league_id: r.league_id,
-          season: r.season,
-          match_date: r.match_date,
-          home_team_id: r.home_team_id,
-          away_team_id: r.away_team_id,
-          home_team_name: r.home_team_name,
-          away_team_name: r.away_team_name,
-          home_goals: r.home_goals,
-          away_goals: r.away_goals,
-          home_ht: r.home_ht,
-          away_ht: r.away_ht,
-          events: [],
-        };
-        fxMap.set(r.fixture_id, f);
-      }
-      if (r.elapsed != null && r.player_name) {
-        f.events.push({
-          elapsed: r.elapsed,
-          player_name: r.player_name,
-          team_id: r.event_team_id,
-          detail: r.detail,
-        });
-      }
+      fxMap.set(r.fixture_id, {
+        fixture_id: r.fixture_id,
+        league_id: r.league_id,
+        season: r.season,
+        match_date: r.match_date,
+        home_team_id: r.home_team_id,
+        away_team_id: r.away_team_id,
+        home_team_name: r.home_team_name,
+        away_team_name: r.away_team_name,
+        home_goals: r.home_goals,
+        away_goals: r.away_goals,
+        home_ht: r.home_ht,
+        away_ht: r.away_ht,
+        events: Array.isArray(r.events) ? r.events : [],
+        stats: Array.isArray(r.stats) ? r.stats : [],
+      });
     }
 
     // ── Construim confederațiile ──
@@ -121,13 +128,17 @@ export default async function handler(req, res) {
         (groupFixtures[g] = groupFixtures[g] || []).push({
           fixture_id: f.fixture_id,
           match_date: f.match_date,
+          home_team_id: f.home_team_id,
+          away_team_id: f.away_team_id,
           home_team_name: f.home_team_name,
           away_team_name: f.away_team_name,
           home_goals: f.home_goals,
           away_goals: f.away_goals,
           home_ht: f.home_ht,
           away_ht: f.away_ht,
-          events: f.events.sort((a, b) => (a.elapsed || 0) - (b.elapsed || 0)),
+          score_ht: { home: f.home_ht, away: f.away_ht },
+          events: f.events,
+          stats: f.stats,
         });
       }
 

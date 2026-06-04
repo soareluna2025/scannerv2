@@ -778,6 +778,20 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~11:15] - Tab CALIFICARI: modal detalii meci la tap
+  MOD1 api/worldcup-qualifiers.js: query fixtures cu json_agg subquery (evita
+  produs cartezian) — events acum type IN ('Goal','Card') cu assist_name, +
+  stats[] din match_stats (possession/sot/shots/corners/xg/yellow/red per echipa).
+  Per meci: score_ht{home,away}, events[], stats[], home_team_id/away_team_id.
+  MOD2 public/js/app-ui.js: rand meci -> onclick wcShowMatchDetail(fid). Functie
+  noua: cauta meciul in _wc.qual, construieste modal (header scor+HT+data,
+  evenimente sortate elapsed cu ⚽/🟨/🟥 aliniate home stanga/away dreapta,
+  bare statistici comparative). Fallback "fara date". + helpers _wcEventIcon/
+  _wcStatBar/_wcFindQualMatch, wcCloseMatchDetail (overlay creat dinamic).
+  MOD3 public/css/cards.css: .wc-match-modal* (overlay fullscreen + content +
+  header + events + stats bars), pe modelul .h2h-match-detail.
+  node --check OK pe worldcup-qualifiers.js + app-ui.js. | Commit: (vezi mai jos)
+
 [04.06 ~10:30] - Tab CALIFICARI CM 2026: cron colectare + endpoint + UI
   PAS1 api/cron/collect-wc-qualifiers.js (NOU): colecteaza fixtures(FT)+standings
   pentru 10 entries WC_QUALIFIERS (CAF/AFC/CONCACAF/UEFA/OFC/CONMEBOL). Upsert in
