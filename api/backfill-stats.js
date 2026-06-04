@@ -14,7 +14,7 @@ import { fetchApiFootball } from './utils/fetch-api.js';
 
 const log = (...m) => console.log('[backfill-stats]', ...m);
 
-async function backfillH2H(limit) {
+export async function backfillH2H(limit) {
   // Selectez meciuri FT din fixtures_history fara entry in h2h
   const { rows: missing } = await query(`
     SELECT fh.fixture_id, fh.league_id, fh.home_team_id, fh.away_team_id,
@@ -58,15 +58,12 @@ async function backfillH2H(limit) {
   return { total: missing.length, ok };
 }
 
-async function backfillMatchStats(limit) {
-  // Selectez meciuri FT recente (ultimele 90 zile) fara match_stats
-  // Limit la 90 zile ca să nu cheltuim API calls pe meciuri foarte vechi
-  // (API-Football returnează 'no data' pentru >365 zile oricum)
+export async function backfillMatchStats(limit) {
+  // Selectez TOATE meciurile FT fara match_stats (tot istoricul disponibil)
   const { rows: missing } = await query(`
     SELECT fh.fixture_id, fh.home_team_id, fh.away_team_id
     FROM fixtures_history fh
-    WHERE fh.status_short = 'FT'
-      AND fh.match_date >= NOW() - INTERVAL '90 days'
+    WHERE fh.status_short IN ('FT','AET','PEN')
       AND fh.home_team_id IS NOT NULL
       AND NOT EXISTS (SELECT 1 FROM match_stats ms WHERE ms.fixture_id = fh.fixture_id)
     ORDER BY fh.match_date DESC

@@ -778,6 +778,17 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~09:00] - backfill-stats: tot istoricul + cron 3x/zi fara ADMIN_KEY
+  MOD1 api/backfill-stats.js backfillMatchStats: eliminat filtrul "match_date >=
+  NOW()-INTERVAL '90 days'"; acum proceseaza tot istoricul FT/AET/PEN lipsa
+  match_stats. backfillMatchStats + backfillH2H acum EXPORTATE.
+  MOD2 api/cron/backfill-stats-cron.js (NOU): wrapper fara auth, importa cele
+  doua functii, ruleaza backfillMatchStats(1000)+backfillH2H(500), returneaza
+  {ok,match_stats,h2h}.
+  MOD3 server.js cronFiles += 'backfill-stats-cron'. deploy.yml: C18/C19/C20
+  la 09:00/14:00/20:00 -> /api/cron/backfill-stats-cron + grep -v dedup.
+  node --check OK pe ambele fisiere. | Commit: (vezi mai jos)
+
 [02.06 ~00:55] - H2H DIRECT: header culoare distincta + stare persistata localStorage
   FIX1 cards.css .h2h-match-header: +background rgba(255,255,255,.06)+border-radius 8px+
   padding 10px12px+margin; hover -> .09; .expanded -> verde subtil rgba(0,214,125,.08)+
