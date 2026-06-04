@@ -2862,7 +2862,7 @@ function wcTab(idx){
   ov.addEventListener('touchstart',function(e){startY=e.touches[0].clientY;},{passive:true});
   ov.addEventListener('touchend',function(e){
     var dy=e.changedTouches[0].clientY-startY;
-    if(dy>80&&document.getElementById('wc-body').scrollTop<=0)wcClose();
+    
   },{passive:true});
 })();
 
