@@ -1651,6 +1651,23 @@ function mdRenderSumar(d){
     out+='</div>';
   }
 
+  // ── PIAȚĂ (cote 1X2 pre-meci, DOAR afișare din market_odds; fără calcul) ──
+  if(d.market_odds){
+    var mo=d.market_odds;
+    var fmtO=function(v){return (v==null)?'—':Number(v).toFixed(2);};
+    var bkLbl=mo.bookmaker?(' ('+htmlEsc(mo.bookmaker)+')'):'';
+    var cell=function(lbl,val){
+      return '<div style="flex:1;text-align:center;background:var(--sur2);border-radius:8px;padding:8px">'+
+        '<div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.4px">'+lbl+'</div>'+
+        '<div style="font-size:16px;font-weight:800;color:var(--tx);margin-top:2px">'+fmtO(val)+'</div></div>';
+    };
+    out+='<div class="md-section">';
+    out+='<div class="md-section-title">Piață'+bkLbl+'</div>';
+    out+='<div style="display:flex;gap:8px;padding:6px 0">';
+    out+=cell('Gazde',mo.home)+cell('Egal',mo.draw)+cell('Oaspeți',mo.away);
+    out+='</div></div>';
+  }
+
   // ── PROBABILITATE MARCARE (sub Player Intelligence) ──────────────────────
   (function(){
     var rH=calcScoringProb(d,'home');

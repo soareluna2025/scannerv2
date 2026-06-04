@@ -6,6 +6,36 @@ const matchCache = new Map();
 const MATCH_CACHE_TTL        =      60_000; // 1 min — live matches
 const MATCH_CACHE_TTL_STATIC = 10 * 60_000; // 10 min — NS / FT
 
+// Feature flag — afișare cote 1X2 pre-meci (citite din prematch_data). DOAR afișare.
+const SHOW_MARKET_ODDS = true;
+
+// Extrage cotele 1X2 (Match Winner: Home/Draw/Away) dintr-un payload /odds
+// API-Football salvat în prematch_data (array de response-uri). Preferă Bet365
+// (bookmaker id=8); altfel prima casă disponibilă. Returnează {home,draw,away,bookmaker}
+// sau null dacă nu găsește. PUR citire — niciun calcul de scoring.
+function extractMatchWinnerOdds(payload) {
+  try {
+    const arr = Array.isArray(payload) ? payload : (payload ? [payload] : []);
+    let bookmakers = [];
+    for (const entry of arr) {
+      if (Array.isArray(entry?.bookmakers)) bookmakers = bookmakers.concat(entry.bookmakers);
+    }
+    if (!bookmakers.length) return null;
+    const bk = bookmakers.find(b => Number(b?.id) === 8) || bookmakers[0];
+    const bet = (bk?.bets || []).find(b => b?.name === 'Match Winner');
+    if (!bet || !Array.isArray(bet.values)) return null;
+    const pick = name => {
+      const v = bet.values.find(x => String(x?.value).toLowerCase() === name);
+      const n = v ? parseFloat(v.odd) : NaN;
+      return Number.isFinite(n) ? n : null;
+    };
+    const home = pick('home'), draw = pick('draw'), away = pick('away');
+    if (home == null && draw == null && away == null) return null;
+    return { home, draw, away, bookmaker: bk?.name || null };
+  } catch (_) { return null; }
+}
+
+
 // ── fmtDate — normalizează data la "YYYY-MM-DD" indiferent de tip ─────────────
 // API-Football trimite string ISO ("2026-05-30T20:00:00+00:00"), dar fallback-ul
 // din DB (h2hFromDB cu r.match_date) întoarce un obiect Date din node-postgres,
@@ -577,6 +607,22 @@ export default async function handler(req, res) {
       responseData.matchStats = { home: hRow, away: aRow };
     } catch (e) {
       responseData.matchStats = { home: null, away: null, error: e.message };
+    }
+
+    // Cote 1X2 pre-meci (DOAR afișare) — citite din prematch_data (data_type='odds').
+    // Feature flag SHOW_MARKET_ODDS; market_odds:null dacă lipsă date sau flag off.
+    if (SHOW_MARKET_ODDS) {
+      try {
+        const { rows: odRows } = await query(
+          `SELECT payload FROM prematch_data
+            WHERE fixture_id = $1 AND data_type = 'odds'
+            ORDER BY collected_at DESC LIMIT 1`,
+          [Number(id)]
+        );
+        responseData.market_odds = odRows.length ? extractMatchWinnerOdds(odRows[0].payload) : null;
+      } catch (_) {
+        responseData.market_odds = null;
+      }
     }
 
     // NU cache-ui răspunsuri degradate (fixture din fallback DB) → reîncearcă API la următorul fetch.
