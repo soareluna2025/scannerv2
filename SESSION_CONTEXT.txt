@@ -778,6 +778,12 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~13:35] - Generator: o singura sageata ← per ecran (g2s1-g2s7)
+  index.html DOAR. Audit: g2s1 avea doar g2close(←=gen2Close) OK; g2s2-g2s5 aveau
+  DUBLA (g2back+g2close) -> scos g2close, ramane g2back(←=gen2Back); g2s6/g2s7
+  deja OK. Acum: g2s1 ← inchide tot, g2s2-g2s7 ← merge inapoi. div 217/217.
+  | Commit: (vezi mai jos)
+
 [04.06 ~13:20] - Eliminat swipe-to-close de pe TOATE modalele (md/tp/wc)
   public/js/app-ui.js DOAR: scoase cele 3 IIFE-uri swipe-down-to-close (dy>80
   + scrollTop<=0 -> mdClose/tpClose/wcClose). Cauzau inchideri accidentale la
