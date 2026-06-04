@@ -668,9 +668,9 @@ function fmtMinute(elapsed,extra){
 document.body.style.overscrollBehavior='none';
 document.documentElement.style.overscrollBehavior='none';
 
-// ── REFRESH SILENȚIOS LA CAPĂTUL PAGINII ──────────────────────
-// Când containerul activ (#page) e la capătul de jos și utilizatorul mai
-// trage în sus 70px+ → refresh-ul tab-ului curent. Fără indicator vizual.
+// ── PULL-TO-REFRESH cu indicator (trage în jos la topul paginii → refresh) ──
+// La topul containerului #page, tragerea în jos arată un spinner (ca în app-uri
+// native); la eliberare peste prag → refresh-ul tab-ului curent. Pe toate modulele.
 // Dezactivat când un modal/overlay e deschis.
 var _ptr={startY:0,pulling:false,lastDy:0,threshold:70};
 
@@ -704,29 +704,50 @@ function refreshCurrentPage(){
   else window.location.reload();
 }
 
-// Containerul activ e la capătul de jos? (scrollTop+clientHeight >= scrollHeight-5)
-function _ptrAtBottom(){
+// Containerul activ e la topul paginii? (#page.scrollTop <= 0)
+function _ptrAtTop(){
   var pg=document.getElementById('page');
-  if(!pg)return false;
-  return (pg.scrollTop+pg.clientHeight) >= (pg.scrollHeight-5);
+  return pg ? pg.scrollTop<=0 : (window.scrollY===0);
 }
+function showPullSpinner(dy){
+  var el=document.getElementById('pull-refresh');if(!el)return;
+  var p=Math.min(dy/_ptr.threshold,1);                 // 0..1
+  el.style.opacity=p;
+  el.style.transform='translateX(-50%) translateY('+Math.min(dy*0.45,46)+'px) scale('+(0.4+0.6*p)+')';
+}
+function hidePullSpinner(){
+  var el=document.getElementById('pull-refresh');if(!el)return;
+  el.style.opacity='0';
+  el.style.transform='translateX(-50%) translateY(0) scale(0.4)';
+}
+function triggerPullRefresh(){
+  var el=document.getElementById('pull-refresh');
+  if(el){ el.style.opacity='1'; el.style.transform='translateX(-50%) translateY(46px) scale(1)'; }
+  refreshCurrentPage();
+  setTimeout(hidePullSpinner,800);
+}
+
 document.addEventListener('touchstart',function(e){
   if(_ptrOverlayOpen()){_ptr.pulling=false;return;}
-  _ptr.startY=e.touches[0].clientY;_ptr.pulling=true;_ptr.lastDy=0;
+  if(_ptrAtTop()){
+    _ptr.startY=e.touches[0].clientY;_ptr.pulling=true;_ptr.lastDy=0;
+  }
 },{passive:true});
 
 document.addEventListener('touchmove',function(e){
   if(!_ptr.pulling)return;
-  if(_ptrOverlayOpen()){_ptr.pulling=false;return;}
-  _ptr.lastDy=e.touches[0].clientY-_ptr.startY;
+  if(_ptrOverlayOpen()){_ptr.pulling=false;hidePullSpinner();return;}
+  var dy=e.touches[0].clientY-_ptr.startY;
+  _ptr.lastDy=dy;
+  if(dy>0){ showPullSpinner(dy); }
+  else { _ptr.lastDy=0; hidePullSpinner(); }
 },{passive:true});
 
 document.addEventListener('touchend',function(){
   if(!_ptr.pulling)return;
   _ptr.pulling=false;
   var dy=_ptr.lastDy;_ptr.lastDy=0;
-  // capăt de jos + tras în sus (dy negativ) cel puțin threshold → refresh silențios
-  if(_ptrAtBottom() && dy <= -_ptr.threshold){
-    refreshCurrentPage();
-  }
+  // la topul paginii + tras în jos cel puțin pragul → refresh cu spinner
+  if(dy>=_ptr.threshold){ triggerPullRefresh(); }
+  else { hidePullSpinner(); }
 },{passive:true});

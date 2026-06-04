@@ -469,6 +469,13 @@
 .wc-mm-bar-h{background:var(--ac,#00d67d);height:100%}
 .wc-mm-bar-a{background:#818cf8;height:100%}
 
+/* ═══ Pull-to-refresh — spinner global (trage în jos la topul paginii) ═══ */
+#pull-refresh{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(0) scale(.4);
+  z-index:9999;opacity:0;pointer-events:none;width:40px;height:40px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(15,23,41,.92);border-radius:50%;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+#pull-refresh .spin{width:22px;height:22px;border-width:2px}
+
 /* ═══ Buton back (←) generic top-left ═══ */
 .btn-back{position:absolute;top:12px;left:12px;width:36px;height:36px;border-radius:50%;
   background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;
