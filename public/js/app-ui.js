@@ -704,14 +704,23 @@ function renderPM(){
   var _todayLocal=(typeof pmTodayStr==='function')?pmTodayStr():null;
   if((typeof PM_DATE==='string')&&PM_DATE&&_todayLocal&&PM_DATE!==_todayLocal) return;
   var body=document.getElementById('pm-body');
-  var total=_pmMatches.length;
+  // Filtru zi LOCALĂ: afișează DOAR meciurile din ziua selectată (PM_DATE), nu
+  // toată fereastra de ~30h întoarsă de /api/today (azi + parte din mâine).
+  // Ziua meciului = data LOCALĂ a fixture.date (nu UTC) → 01:30 noaptea cade corect.
+  var _selDay=(typeof PM_DATE==='string'&&PM_DATE)?PM_DATE:_todayLocal;
+  var _localDay=function(dl){var dd=new Date(dl);if(isNaN(dd.getTime()))return '';
+    return dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');};
+  var _pmDay=_selDay
+    ? _pmMatches.filter(function(m){return m.fixture&&m.fixture.date&&_localDay(m.fixture.date)===_selDay;})
+    : _pmMatches.slice();
+  var total=_pmDay.length;
   if(!total){body.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-t">Niciun meci</div></div>';return;}
   var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
   // Calculate TOP PICK threshold (top 25% by over15Prob)
   var probs=Object.values(_pmEnrich).map(function(e){return e.over15Prob||0;}).sort(function(a,b){return b-a;});
   var topThresh=probs.length?probs[Math.floor(probs.length*0.25)]||0:999;
   // Sort chronologically by kickoff; TOP PICK badge still shown based on over15Prob threshold
-  var sorted=_pmMatches.slice().sort(function(a,b){
+  var sorted=_pmDay.slice().sort(function(a,b){
     return new Date(a.fixture.date)-new Date(b.fixture.date);
   });
   var analyzedCount=Object.keys(_pmEnrich).length;
