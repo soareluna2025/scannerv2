@@ -405,3 +405,22 @@
 .league-group-header.expanded .league-group-chevron { transform: rotate(180deg); }
 .league-group-body { margin-bottom: 8px; }
 .league-group-body.collapsed { display: none; }
+
+/* ═══ H2H DIRECT — detalii bogate per meci (scor/HT, evenimente, statistici) ═══ */
+.h2h-match-detail{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.h2h-match-detail:last-child{border-bottom:none}
+.h2h-score-header{display:flex;align-items:center;gap:8px;justify-content:center}
+.h2h-score-header .h2h-team-n{flex:1;font-size:12px;font-weight:700;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.h2h-score-c{font-size:16px;font-weight:800;min-width:54px;text-align:center}
+.h2h-sub{text-align:center;font-size:10px;color:var(--mu);margin-top:2px}
+.h2h-events{margin-top:8px;display:flex;flex-direction:column;gap:3px}
+.h2h-event-home{text-align:left;font-size:11px;color:var(--tx2,#cdd)}
+.h2h-event-away{text-align:right;font-size:11px;color:var(--tx2,#cdd)}
+.h2h-assist{color:var(--mu);font-size:10px;margin-left:4px}
+.h2h-stats{margin-top:10px;display:flex;flex-direction:column;gap:7px}
+.h2h-stat-row{display:grid;grid-template-columns:34px 1fr 34px;grid-template-rows:auto auto;align-items:center;column-gap:6px}
+.h2h-stat-v{font-size:11px;font-weight:700;color:var(--tx)}
+.h2h-stat-l{grid-column:1 / -1;text-align:center;font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.4px;margin-top:1px}
+.h2h-stat-bars{display:flex;height:5px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.06);direction:rtl}
+.h2h-bar-h{background:var(--ac);height:100%}
+.h2h-bar-a{background:#818cf8;height:100%}

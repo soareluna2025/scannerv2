@@ -2094,17 +2094,7 @@ function mdRenderSumar(d){
   // H2H
   if(en.h2hForm&&en.h2hForm.length){
     out+='<div class="md-section"><div class="md-section-title">H2H Direct (ultimele 5)</div>';
-    en.h2hForm.forEach(function(h){
-      var hT=h.homeTeam||h.home||'?';
-      var aT=h.awayTeam||h.away||'?';
-      var sc=(h.homeGoals!=null&&h.awayGoals!=null)?(h.homeGoals+'-'+h.awayGoals):(h.score||'—');
-      var dt=h.date?new Date(h.date).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
-      out+='<div class="md-h2h-row">';
-      out+='<div class="md-h2h-teams">'+hT+' vs '+aT+'</div>';
-      out+='<div class="md-h2h-score">'+sc+'</div>';
-      out+='<div class="md-h2h-date">'+dt+'</div>';
-      out+='</div>';
-    });
+    en.h2hForm.forEach(function(h){ out+=buildH2HMatchDetail(h); });
     out+='</div>';
   }
 
@@ -2219,6 +2209,88 @@ function mdRenderJucatori(d){
   document.getElementById('md-body').innerHTML=out;
 }
 
+// Randează un meci H2H complet (scor+HT, evenimente goluri/cartonașe, statistici bară).
+// Defensiv: dacă lipsesc events/stats (date bogate), cade pe rândul simplu (scor+data).
+function buildH2HMatchDetail(h){
+  // Normalizare: acceptă atât forma bogată (home_team/score/events/stats) cât și cea
+  // simplă (homeTeam/homeGoals). Backwards-compat cu mapările existente.
+  var hName=(h.home_team&&h.home_team.name)||h.homeTeam||h.home||'?';
+  var aName=(h.away_team&&h.away_team.name)||h.awayTeam||h.away||'?';
+  var hId=(h.home_team&&h.home_team.id)||h.home_team_id;
+  var hg=(h.score&&h.score.home!=null)?h.score.home:(h.homeGoals!=null?h.homeGoals:h.home_goals);
+  var ag=(h.score&&h.score.away!=null)?h.score.away:(h.awayGoals!=null?h.awayGoals:h.away_goals);
+  var ht=h.score_ht||((h.home_goals_ht!=null||h.away_goals_ht!=null)?{home:h.home_goals_ht,away:h.away_goals_ht}:null);
+  var dt=h.date||h.match_date;
+  var dtTxt=dt?new Date(dt).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
+  var events=Array.isArray(h.events)?h.events:[];
+  var stats=Array.isArray(h.stats)?h.stats:[];
+
+  var hc=(hg!=null&&ag!=null)?(hg>ag?'#22c55e':hg<ag?'#ef4444':'var(--tx)'):'var(--tx)';
+  var ac=(hg!=null&&ag!=null)?(ag>hg?'#22c55e':ag<hg?'#ef4444':'var(--tx)'):'var(--tx)';
+  var scoreTxt=(hg!=null&&ag!=null)?(hg+' - '+ag):'—';
+
+  var o='<div class="h2h-match-detail">';
+  // HEADER
+  o+='<div class="h2h-score-header">';
+  o+='<span class="h2h-team-n" style="text-align:right">'+htmlEsc(hName)+'</span>';
+  o+='<span class="h2h-score-c"><span style="color:'+hc+'">'+(hg!=null?hg:'-')+'</span> - <span style="color:'+ac+'">'+(ag!=null?ag:'-')+'</span></span>';
+  o+='<span class="h2h-team-n" style="text-align:left">'+htmlEsc(aName)+'</span>';
+  o+='</div>';
+  o+='<div class="h2h-sub">'+dtTxt+(ht&&(ht.home!=null||ht.away!=null)?(' · HT: '+(ht.home!=null?ht.home:'-')+'-'+(ht.away!=null?ht.away:'-')):'')+'</div>';
+
+  // FALLBACK: fără events și fără stats → doar scor + data (deja afișate sus).
+  if(!events.length && !stats.length){ o+='</div>'; return o; }
+
+  // EVENIMENTE
+  if(events.length){
+    var ev=events.slice().sort(function(a,b){return (a.elapsed||0)-(b.elapsed||0);});
+    o+='<div class="h2h-events">';
+    ev.forEach(function(e){
+      var isHome=(hId!=null && Number(e.team_id)===Number(hId));
+      var icon='';
+      if(e.type==='Goal')icon='⚽';
+      else if(e.type==='Card')icon=(e.detail&&e.detail.indexOf('Red')>=0)?'🟥':'🟨';
+      else return;
+      var assist=(e.type==='Goal'&&e.assist)?'<span class="h2h-assist">(assist: '+htmlEsc(e.assist)+')</span>':'';
+      o+='<div class="'+(isHome?'h2h-event-home':'h2h-event-away')+'">'+
+         icon+' '+(e.elapsed!=null?e.elapsed+"'":'')+' '+htmlEsc(e.player||'?')+assist+'</div>';
+    });
+    o+='</div>';
+  }
+
+  // STATISTICI — bare comparative home vs away
+  if(stats.length>=2){
+    // identifică echipa gazdă/oaspete în array (după team_id), fallback la ordine
+    var sh=stats.find(function(s){return hId!=null&&Number(s.team_id)===Number(hId);})||stats[0];
+    var sa=stats.find(function(s){return s!==sh;})||stats[1];
+    var num=function(v){return (v==null||v==='')?null:Number(v);};
+    var bar=function(label,vh,va,fmt){
+      if(vh==null&&va==null)return '';
+      var h0=vh||0,a0=va||0,tot=h0+a0,hp=tot>0?Math.round(h0/tot*100):50,ap=100-hp;
+      var hf=vh==null?'—':(fmt?fmt(vh):vh), af=va==null?'—':(fmt?fmt(va):va);
+      return '<div class="h2h-stat-row">'+
+        '<span class="h2h-stat-v">'+hf+'</span>'+
+        '<div class="h2h-stat-bars"><div class="h2h-bar-h" style="width:'+hp+'%"></div><div class="h2h-bar-a" style="width:'+ap+'%"></div></div>'+
+        '<span class="h2h-stat-v" style="text-align:right">'+af+'</span>'+
+        '<span class="h2h-stat-l">'+label+'</span></div>';
+    };
+    var pct=function(v){return Number(v)+'%';};
+    var f1=function(v){return Number(v).toFixed(2);};
+    var rows='';
+    rows+=bar('Posesie', num(sh.ball_possession), num(sa.ball_possession), pct);
+    rows+=bar('Șuturi pe poartă', num(sh.shots_on_goal), num(sa.shots_on_goal));
+    rows+=bar('Șuturi total', num(sh.shots_total), num(sa.shots_total));
+    rows+=bar('Cornere', num(sh.corner_kicks), num(sa.corner_kicks));
+    var xgh=num(sh.expected_goals),xga=num(sa.expected_goals);
+    if((xgh&&xgh>0)||(xga&&xga>0))rows+=bar('xG', xgh, xga, f1);
+    rows+=bar('Pase precise', num(sh.passes_accurate), num(sa.passes_accurate));
+    if(rows)o+='<div class="h2h-stats">'+rows+'</div>';
+  }
+
+  o+='</div>';
+  return o;
+}
+
 function mdRenderForma(d){
   var en=d.enrich||{};
   var fix=d.fixture;
@@ -2246,17 +2318,7 @@ function mdRenderForma(d){
 
   if(en.h2hForm&&en.h2hForm.length){
     out+='<div class="md-section"><div class="md-section-title">H2H Direct (ultimele 5)</div>';
-    en.h2hForm.forEach(function(h){
-      var hT=h.homeTeam||h.home||'?';
-      var aT=h.awayTeam||h.away||'?';
-      var sc=(h.homeGoals!=null&&h.awayGoals!=null)?(h.homeGoals+'-'+h.awayGoals):(h.score||'—');
-      var dt=h.date?new Date(h.date).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
-      out+='<div class="md-h2h-row">';
-      out+='<div class="md-h2h-teams">'+hT+' vs '+aT+'</div>';
-      out+='<div class="md-h2h-score">'+sc+'</div>';
-      out+='<div class="md-h2h-date">'+dt+'</div>';
-      out+='</div>';
-    });
+    en.h2hForm.forEach(function(h){ out+=buildH2HMatchDetail(h); });
     out+='</div>';
   }
 

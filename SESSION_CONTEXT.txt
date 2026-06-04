@@ -778,6 +778,20 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[01.06 ~23:50] - H2H DIRECT modal: render bogat (scor/HT + evenimente + statistici)
+  app-ui.js: +buildH2HMatchDetail(h) — header echipe+scor colorat (verde/rosu/egal) +
+  subtitlu data·HT; evenimente sortate elapsed ASC (⚽ gol +assist / 🟨🟥 cartonas,
+  aliniat stanga=gazda / dreapta=oaspete dupa team_id); statistici bare comparative
+  (Posesie/SOT/Suturi/Cornere/xG daca>0/Pase precise). DEFENSIV: accepta forma bogata
+  (home_team/score/events/stats) SAU simpla (homeTeam/homeGoals) -> fallback scor+data
+  daca events=[] && stats=[] (fara sectiuni goale). Inlocuit ambele blocuri H2H identice
+  (mdRenderSumar + mdRenderForma) cu apel la helper. cards.css: +clase .h2h-match-detail/
+  -score-header/-events/-event-home/-event-away/-stats/-stat-row + bare.
+  ATENTIE PASSTHROUGH: enrich.js:1481 mapeaza h2hForm DOAR date/teams/goals (NU events/
+  stats/score_ht) — render-ul e gata+defensiv dar va arata doar scor+HT pana cand
+  h2hForm va include events/stats/score_ht (enrich.js NEATINS in acest task, conform regulilor).
+  NEATINS: buildCardHtml, calcConfidence*/score2/3/6/7. DOAR app-ui.js + cards.css. node --check OK.
+
 [01.06 ~23:25] - getH2HFromDB imbogatit: scor HT + evenimente + statistici (enrich.js)
   Ramura fallback fixtures_history din getH2HFromDB rescrisa: query cu LEFT JOIN
   match_events (json_agg goluri/cartonase: elapsed/team/player/assist/type/detail)
