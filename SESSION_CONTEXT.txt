@@ -6986,54 +6986,27 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     Confirmare pe VPS: \d predictions; curl -s '.../api/admin/vs-api?days=30'.
 
 ═══════════════════════════════════════════════════════════════
-PENDING — ÎMBUNĂTĂȚIRE SCORING: COEFICIENT CALITATE ADVERSAR
+PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════
 
-PROBLEMA ACTUALĂ:
-  score2 (Formă) și score3 (H2H) tratează toate meciurile la fel.
-  5 victorii în Liga 3 Zimbabwe = 5 victorii în Premier League.
-  Calitatea adversarului nu e luată în calcul.
+CONCLUZIE: NU modifica score2/score3 direct.
+MOTIV: Risc dublă-numărare cu Lambda Maher care deja normalizează
+parțial calitatea ligii. Multiplicatori hardcodați contrazic
+filozofia sistemului (zero valori hardcodate).
 
-SOLUȚIA PROPUSĂ:
-  Coeficient de calitate adversar care modifică ponderea
-  fiecărui meci în calculul formei și H2H.
+CALEA CORECTĂ: Adaugă ca FEATURE în modelul ML existent
+(Logistic Regression pe score1-7 salvate în predictions).
+Modelul învață singur ponderea corectă din date.
 
-NAȚIONALE — FIFA World Ranking:
-  Top 10 FIFA → 2.0x
-  Top 20 FIFA → 1.7x
-  Top 50 FIFA → 1.3x
-  Top 100 FIFA → 1.0x
-  Sub 100 FIFA → 0.7x
-  Intră în score2 + score3 pentru naționale.
-
-CLUBURI — Tier ligă + TeamStrength:
-  Tier 1 (PL, Bundesliga, Serie A, LaLiga, Ligue 1, UCL) → 1.5x
-  Tier 2 (Championship, 2.Bundesliga etc.) → 1.0x
-  Tier 3 (ligi naționale mid) → 0.7x
-  Tier 4 (ligi mici) → 0.5x
-  Formula: coef = (tier_factor × 0.6) + (team_strength_normalized × 0.4)
-  Intră în score2 pentru cluburi.
-
-IMPACT AȘTEPTAT:
-  Confidence ≥70 de la 77.5% → 80-82% (+3-5pp)
-
-CONDIȚII OBLIGATORII ÎNAINTE DE IMPLEMENTARE:
-  ⚠ NU IMPLEMENTA fără sesiune dedicată de analiză!
-  
-  1. ANALIZĂ DATE din DB — calculează coeficienții din date reale
-  2. SIMULARE pe date istorice — compară Brier Score nou vs 0.1511
-  3. Dacă Brier Score se îmbunătățește → implementează
-  4. Dacă Brier Score crește → ajustează coeficienții
-  5. Naționale și cluburi implementate SEPARAT
-  6. Aprobare explicită Vlad înainte de orice modificare scoring
-
-DATE NECESARE (pregătire fără risc — NU ating scoring):
-  - Adaugă coloana `tier` în tabela leagues (1-4)
-  - Populează tier pentru cele 263 ligi active
+PREGĂTIRE FĂRĂ RISC (nu ating scoring):
+  - Populează coloana tier în leagues (coloana există deja!)
   - Colectează FIFA ranking pentru naționale
-  - Salvează în teams coloana `fifa_ranking`
 
-REGULA ABSOLUTĂ:
-  score2 și score3 sunt NEATINSE până la sesiunea dedicată.
-  Orice modificare necesită aprobare explicită Vlad.
+VALIDARE:
+  - Per-piață (1X2/GG/Over), nu doar Brier global
+  - Pe cohorta Confidence≥70 specific
+  - Target: 77.5% → 80-82%
+
+CONDIȚII: Sesiune dedicată + aprobare explicită Vlad.
+NU implementa fără parcurgerea pașilor de mai sus.
 ═══════════════════════════════════════════════════════════════
