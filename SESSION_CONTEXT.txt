@@ -778,6 +778,15 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[02.06 ~00:25] - h2hForm: passthrough date bogate (score_ht/events/stats) — completeaza H2H UI
+  enrich.js maparea h2hForm (sbH2H.slice(0,5)): +score_ht, events[], stats[] din
+  getH2HFromDB + home_team_id/away_team_id (aditiv, pt alinierea evenimentelor in UI).
+  Campurile EXISTENTE (date/homeTeam/awayTeam orientate dupa team-id/homeGoals/awayGoals)
+  NEATINSE. Inchide gap-ul din task-ul anterior: buildH2HMatchDetail primeste acum
+  events/stats/score_ht -> sectiuni evenimente+statistici se randeaza efectiv.
+  NEATINS: calcConfidence*/score2/3/6/7, buildCardHtml. DOAR maparea h2hForm in enrich.js.
+  node --check OK. Un commit main.
+
 [02.06 ~00:10] - cron NOU collect-national-history (ultimele 20 meciuri/nationala CM)
   api/cron/collect-national-history.js (NOU): citeste echipele CM 2026 DIN DB la runtime
   (DISTINCT home/away_team_id din fixtures WHERE league_id=1, UNION) — nu hardcodat.

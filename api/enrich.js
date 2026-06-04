@@ -1479,11 +1479,19 @@ export default async function handler(req, res) {
       // Sursa primară: sbH2H (h2h table + fixtures_history fallback).
       // Numele echipelor sunt derivate prin team_id față de hId/aId actuali.
       h2hForm: (Array.isArray(sbH2H) ? sbH2H : []).slice(0, 5).map(row => ({
+        // câmpurile EXISTENTE — NEATINSE (orientare după team-id față de hId/aId)
         date:      row.match_date,
         homeTeam:  row.home_team_id === hId ? (hn || 'Gazde')    : (an || 'Oaspeți'),
         awayTeam:  row.away_team_id === aId ? (an || 'Oaspeți')  : (hn || 'Gazde'),
         homeGoals: row.home_goals ?? 0,
         awayGoals: row.away_goals ?? 0,
+        // CÂMPURI NOI — date bogate din getH2HFromDB
+        score_ht:      row.score_ht || null,
+        events:        row.events || [],
+        stats:         row.stats || [],
+        // team-id-uri pt alinierea home/away a evenimentelor în UI (aditiv, non-breaking)
+        home_team_id:  row.home_team_id,
+        away_team_id:  row.away_team_id,
       })),
     };
 
