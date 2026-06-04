@@ -778,6 +778,13 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~12:00] - WC card: reordonare taburi (default GRUPE WC)
+  public/js/app-ui.js DOAR. Ordine noua: 0=GRUPE WC,1=MECIURI,2=CALIFICARI,
+  3=BRACKET,4=PONTUL. wcRender() dispatch actualizat. Tab bar reconstruit in
+  wcOpen() (innerHTML #wc-overlay .md-tabs) ca sa ramana sincron cu dispatch-ul
+  fara a atinge index.html. Default la deschidere = GRUPE WC (idx 0). node --check OK.
+  | Commit: (vezi mai jos)
+
 [04.06 ~11:45] - standings-data: grupa specifica a celor 2 echipe (nu liga intreaga)
   MOD1 api/standings-data.js: groupForTeam() afla grupa echipei home; daca exista,
   teamsInGroups() intoarce toate echipele din acea grupa (sau ambele grupe daca

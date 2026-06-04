@@ -2836,6 +2836,17 @@ function wcOpen(){
   _wc.tabIdx=0;_wc.data=null;_wc.qual=null;
   var ov=document.getElementById('wc-overlay');ov.classList.add('open');
   document.getElementById('wc-body').innerHTML='<div class="spinner"><div class="spin"></div></div>';
+  // Ordinea taburilor (default = GRUPE WC). Definită aici ca să rămână sincronă
+  // cu dispatch-ul din wcRender() — index 0..4.
+  var tabsEl=document.querySelector('#wc-overlay .md-tabs');
+  if(tabsEl){
+    tabsEl.innerHTML=
+      '<button class="md-tab active" onclick="wcTab(0)">GRUPE WC</button>'+
+      '<button class="md-tab" onclick="wcTab(1)">MECIURI</button>'+
+      '<button class="md-tab" onclick="wcTab(2)">CALIFICĂRI</button>'+
+      '<button class="md-tab" onclick="wcTab(3)">BRACKET</button>'+
+      '<button class="md-tab" onclick="wcTab(4)">PONTUL</button>';
+  }
   document.querySelectorAll('#wc-overlay .md-tab').forEach(function(t,i){t.classList.toggle('active',i===0);});
   wcFetch();
 }
@@ -2867,11 +2878,11 @@ async function wcFetch(){
 function wcRender(){
   var d=_wc.data;if(!d)return;
   try{
-    if(_wc.tabIdx===0)wcRenderPont(d);
+    if(_wc.tabIdx===0)wcRenderGroups(d);
     else if(_wc.tabIdx===1)wcRenderMatches(d);
-    else if(_wc.tabIdx===2)wcRenderGroups(d);
-    else if(_wc.tabIdx===3)wcRenderQualifiers();
-    else if(_wc.tabIdx===4)wcRenderBracket(d);
+    else if(_wc.tabIdx===2)wcRenderQualifiers();
+    else if(_wc.tabIdx===3)wcRenderBracket(d);
+    else if(_wc.tabIdx===4)wcRenderPont(d);
   }catch(e){
     document.getElementById('wc-body').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+htmlEsc(e.message)+'</div></div>';
   }
