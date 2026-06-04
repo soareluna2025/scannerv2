@@ -7,7 +7,7 @@ const MATCH_CACHE_TTL        =      60_000; // 1 min — live matches
 const MATCH_CACHE_TTL_STATIC = 10 * 60_000; // 10 min — NS / FT
 
 // Feature flag — afișare cote 1X2 pre-meci (citite din prematch_data). DOAR afișare.
-const SHOW_MARKET_ODDS = true;
+const SHOW_MARKET_ODDS = false;
 
 // Extrage cotele 1X2 (Match Winner: Home/Draw/Away) dintr-un payload /odds
 // API-Football salvat în prematch_data (array de response-uri). Preferă Bet365
