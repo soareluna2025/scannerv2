@@ -2718,7 +2718,7 @@ function tpRenderStatistici(d){
 var SPORTSBET_AFFILIATE_URL = 'https://sportsbet.io/';  // placeholder — completează tu
 var WC_START = new Date('2026-06-11T00:00:00');
 var WC_END   = new Date('2026-07-19T23:59:59');
-var _wc={data:null,tabIdx:0,day:null};
+var _wc={data:null,tabIdx:0,day:null,qual:null};
 
 // Drapel echipă — GARANTAT pentru orice națională.
 // Strategie: nume țară → ISO2 (mapă completă). Din ISO2 derivăm:
@@ -2814,7 +2814,7 @@ function wcRenderFeatured(){
 }
 
 function wcOpen(){
-  _wc.tabIdx=0;_wc.data=null;
+  _wc.tabIdx=0;_wc.data=null;_wc.qual=null;
   var ov=document.getElementById('wc-overlay');ov.classList.add('open');
   document.getElementById('wc-body').innerHTML='<div class="spinner"><div class="spin"></div></div>';
   document.querySelectorAll('#wc-overlay .md-tab').forEach(function(t,i){t.classList.toggle('active',i===0);});
@@ -2851,7 +2851,8 @@ function wcRender(){
     if(_wc.tabIdx===0)wcRenderPont(d);
     else if(_wc.tabIdx===1)wcRenderMatches(d);
     else if(_wc.tabIdx===2)wcRenderGroups(d);
-    else if(_wc.tabIdx===3)wcRenderBracket(d);
+    else if(_wc.tabIdx===3)wcRenderQualifiers();
+    else if(_wc.tabIdx===4)wcRenderBracket(d);
   }catch(e){
     document.getElementById('wc-body').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+htmlEsc(e.message)+'</div></div>';
   }
@@ -2988,5 +2989,109 @@ function wcRenderBracket(d){
     out+='</div>';
   });
   body.innerHTML=out;
+}
+
+// ── Tab CALIFICĂRI — date din /api/worldcup-qualifiers (endpoint separat) ──
+// Confederații → grupe (expand/collapse) → standings + "Vezi meciuri" cu goluri.
+var WC_CONF_META={
+  'Europe':{e:'🇪🇺',l:'EUROPA · UEFA'},
+  'Africa':{e:'🌍',l:'AFRICA · CAF'},
+  'Asia':{e:'🌏',l:'ASIA · AFC'},
+  'CONCACAF':{e:'🌎',l:'CONCACAF'},
+  'South America':{e:'🌎',l:'AMERICA DE SUD · CONMEBOL'},
+  'Oceania':{e:'🌊',l:'OCEANIA · OFC'},
+};
+async function wcRenderQualifiers(){
+  var body=document.getElementById('wc-body');
+  if(!_wc.qual){
+    body.innerHTML='<div class="spinner"><div class="spin"></div></div>';
+    try{
+      var r=await fetch('/api/worldcup-qualifiers');var d=await r.json();
+      if(d.error||d.ok===false)throw new Error(d.error||'eroare necunoscută');
+      _wc.qual=d;
+    }catch(e){
+      body.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare</div><div class="empty-s">'+htmlEsc(e.message)+'</div></div>';
+      return;
+    }
+  }
+  var confs=_wc.qual.confederations||[];
+  if(!confs.length){ body.innerHTML='<div class="empty"><div class="empty-icon">🌍</div><div class="empty-t">Calificări indisponibile</div><div class="empty-s">Rulează cron-ul collect-wc-qualifiers pentru a popula datele</div></div>'; return; }
+  var out='';
+  // Legendă culori
+  out+='<div style="font-size:10px;color:var(--mu);margin-bottom:8px;display:flex;gap:14px;flex-wrap:wrap">'+
+    '<span><span style="display:inline-block;width:10px;height:10px;background:rgba(34,197,94,.3);border-radius:2px;margin-right:4px"></span>Calificată</span>'+
+    '<span><span style="display:inline-block;width:10px;height:10px;background:rgba(245,158,11,.3);border-radius:2px;margin-right:4px"></span>Baraj / Play-off</span></div>';
+  confs.forEach(function(c){
+    var meta=WC_CONF_META[c.name]||{e:'🏆',l:c.name};
+    out+='<div class="md-section">';
+    out+='<div class="md-section-title" style="color:var(--gold)">'+meta.e+' '+htmlEsc(meta.l)+'</div>';
+    (c.groups||[]).forEach(function(g,gi){
+      var gid='wcq_'+c.league_id+'_'+gi;
+      out+='<div style="margin-bottom:12px">';
+      out+='<div onclick="wcQualToggleGroup(\''+gid+'\')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;background:var(--sur2);border-radius:8px;padding:8px 12px;font-weight:800;font-size:12px">'+
+        '<span>'+htmlEsc(g.name)+'</span><span id="'+gid+'_arw">▼</span></div>';
+      out+='<div id="'+gid+'" style="margin-top:6px">';
+      // standings
+      out+='<div style="overflow-x:auto"><table class="standings-tbl"><thead><tr><th>#</th><th class="tn">Echipă</th><th>J</th><th>V</th><th>E</th><th>Î</th><th>GD</th><th style="color:var(--ac)">Pct</th></tr></thead><tbody>';
+      (g.standings||[]).forEach(function(rw){
+        var desc=String(rw.description||'').toLowerCase();
+        var rowstyle='';
+        if(/qualified|world cup/.test(desc))rowstyle='background:rgba(34,197,94,.12)';
+        else if(/play-?off/.test(desc))rowstyle='background:rgba(245,158,11,.12)';
+        var gd=Number(rw.goals_diff||0);
+        out+='<tr style="'+rowstyle+'">';
+        out+='<td style="color:var(--mu)">'+rw.rank+'</td>';
+        out+='<td class="tn">'+wcFlag(rw.team_logo,rw.team_name,16)+' '+htmlEsc(rw.team_name||'')+'</td>';
+        out+='<td>'+(rw.played||0)+'</td><td>'+(rw.win||0)+'</td><td>'+(rw.draw||0)+'</td><td>'+(rw.lose||0)+'</td>';
+        out+='<td style="color:'+(gd>=0?'#22c55e':'#ef4444')+'">'+(gd>0?'+':'')+gd+'</td>';
+        out+='<td style="font-weight:800;color:var(--ac)">'+(rw.points||0)+'</td></tr>';
+      });
+      out+='</tbody></table></div>';
+      // fixtures (expand/collapse)
+      if((g.fixtures||[]).length){
+        var mid=gid+'_m';
+        out+='<div onclick="wcQualToggleMatches(\''+mid+'\')" style="cursor:pointer;text-align:center;font-size:11px;font-weight:700;color:var(--ac);padding:7px;margin-top:2px">Vezi meciuri <span id="'+mid+'_arw">▼</span></div>';
+        out+='<div id="'+mid+'" style="display:none">';
+        g.fixtures.forEach(function(m){
+          var dt=m.match_date?new Date(m.match_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
+          var sc=(m.home_goals!=null&&m.away_goals!=null)?(m.home_goals+'-'+m.away_goals):'–';
+          out+='<div style="padding:6px 4px;border-bottom:1px solid var(--bd)">';
+          out+='<div style="display:flex;align-items:center;gap:6px;font-size:12px">';
+          out+='<span style="color:var(--mu);font-size:10px;min-width:62px">'+dt+'</span>';
+          out+='<span style="flex:1;text-align:right">'+htmlEsc(m.home_team_name||'')+' '+wcFlag(null,m.home_team_name,14)+'</span>';
+          out+='<span style="font-weight:800;min-width:34px;text-align:center">'+sc+'</span>';
+          out+='<span style="flex:1">'+wcFlag(null,m.away_team_name,14)+' '+htmlEsc(m.away_team_name||'')+'</span>';
+          out+='</div>';
+          if((m.events||[]).length){
+            var ev=m.events.map(function(e){
+              var nm=(e.player_name||'').trim();var sh=nm.split(' ').slice(-1)[0]||nm;
+              return '⚽ '+e.elapsed+"' "+htmlEsc(sh);
+            }).join(' · ');
+            out+='<div style="font-size:10px;color:var(--mu);margin-top:3px;padding-left:62px">'+ev+'</div>';
+          }
+          out+='</div>';
+        });
+        out+='</div>';
+      }
+      out+='</div>';  // gid content
+      out+='</div>';  // group wrapper
+    });
+    out+='</div>';  // md-section
+  });
+  body.innerHTML=out;
+}
+function wcQualToggleGroup(id){
+  var el=document.getElementById(id);var ar=document.getElementById(id+'_arw');
+  if(!el)return;
+  var open=el.style.display!=='none';
+  el.style.display=open?'none':'';
+  if(ar)ar.textContent=open?'▶':'▼';
+}
+function wcQualToggleMatches(id){
+  var el=document.getElementById(id);var ar=document.getElementById(id+'_arw');
+  if(!el)return;
+  var open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  if(ar)ar.textContent=open?'▼':'▲';
 }
 

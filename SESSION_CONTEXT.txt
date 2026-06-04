@@ -778,6 +778,22 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~10:30] - Tab CALIFICARI CM 2026: cron colectare + endpoint + UI
+  PAS1 api/cron/collect-wc-qualifiers.js (NOU): colecteaza fixtures(FT)+standings
+  pentru 10 entries WC_QUALIFIERS (CAF/AFC/CONCACAF/UEFA/OFC/CONMEBOL). Upsert in
+  fixtures_history + standings (toate campurile: rank/points/group_name/description/
+  form/status etc.). Sleep 300ms. Returneaza leagues_processed/fixtures_upserted/
+  standings_upserted/errors. Inreg. in cronFiles, NU in crontab (rulare manuala 1x).
+  PAS2 api/worldcup-qualifiers.js (NOU): GET /api/worldcup-qualifiers, READ-ONLY DB,
+  grupeaza standings+fixtures pe confederatii->grupe. Sezon tinta = MAX(season) per
+  liga. Meciurile atribuite grupei dupa apartenenta echipelor (fixtures_history nu
+  are group_name). Events din match_events type=Goal. Inreg. in apiFiles.
+  PAS3 UI app-ui.js + index.html: tab "GRUPE"->"GRUPE WC", tab nou "CALIFICARI"
+  (idx 3), BRACKET->idx 4. wcRenderQualifiers() fetch separat /api/worldcup-qualifiers,
+  confederatie cu emoji+label, grupe expand/collapse, standings colorate (verde=
+  Qualified/World Cup, galben=Play-off), "Vezi meciuri" cu goluri (⚽ min jucator).
+  node --check OK pe toate. | Commit: (vezi mai jos)
+
 [04.06 ~09:00] - backfill-stats: tot istoricul + cron 3x/zi fara ADMIN_KEY
   MOD1 api/backfill-stats.js backfillMatchStats: eliminat filtrul "match_date >=
   NOW()-INTERVAL '90 days'"; acum proceseaza tot istoricul FT/AET/PEN lipsa
