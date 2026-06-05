@@ -1903,12 +1903,13 @@ function mdRenderSumar(d){
         poissonOver15:en.over15Prob,
         poissonOver25:en.over25Prob,
         poissonOver35:(en.over35Prob!=null?en.over35Prob:en.over25Prob),
+        poissonOver45:(en.over45Prob!=null?en.over45Prob:(en.over35Prob!=null?en.over35Prob:en.over25Prob)),
       };
       if(typeof calibLiveFresh==='function' && calibLiveFresh()){
         var _pat=calcPatternAdjusted(_patFx,_calibCache);
         if(_pat){
           var _pclr=_pat.final>=70?'#22c55e':_pat.final>=50?'#f59e0b':'#ef4444';
-          var _mLbl=_pat.market==='over15'?'Over 1.5':_pat.market==='over25'?'Over 2.5':'Over 3.5';
+          var _mLbl=_pat.market==='over15'?'Over 1.5':_pat.market==='over25'?'Over 2.5':_pat.market==='over35'?'Over 3.5':'Over 4.5';
           out+='<div class="md-section"><div class="md-section-title">📊 Pattern Live</div>';
           out+='<div style="background:rgba(99,102,241,.06);border-radius:8px;padding:12px">';
           out+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';

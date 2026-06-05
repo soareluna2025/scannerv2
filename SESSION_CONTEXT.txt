@@ -778,6 +778,15 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~16:45] - calibrate-live + Pattern Live: adaugat over35 + over45
+  calibrate-live.js: stats[key] are acum o35/o45; hits++ daca finalTotal>=4 (o35)
+  / >=5 (o45); maparea marketShort->market extinsa (over35/over45). market e TEXT
+  -> fara migrare. app-state.js calcPatternAdjusted: totalGoals 3->over35, 4->over45,
+  >=5->null; poisson over45 fallback over35->over25. app-ui.js: _patFx adauga
+  poissonOver45; eticheta extinsa "Over 4.5 ajustat". Tabelul se populeaza cu
+  over35/45 la urmatoarea rulare cron (duminica 05:30); pana atunci entry lipsa->null.
+  NEATINS: scoring/NGP/calcConfidence*. node --check OK pe toate 3. | Commit: (mai jos)
+
 [04.06 ~16:30] - Pattern Live: piata relevanta dupa golurile marcate (nu mereu over15)
   app-state.js calcPatternAdjusted: market din totalGoals = hg+ag: 0/1->over15,
   2->over25, 3->over35, >=4->null (piata irelevanta). key cu market corect; entry

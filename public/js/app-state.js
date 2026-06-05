@@ -516,12 +516,14 @@ function calcPatternAdjusted(fx, live){
   if(totalGoals <= 1)       market = 'over15';
   else if(totalGoals === 2) market = 'over25';
   else if(totalGoals === 3) market = 'over35';   // poate lipsi din calibration_live
-  else return null;                              // ≥4 goluri → piața nu mai e relevantă
+  else if(totalGoals === 4) market = 'over45';
+  else return null;                              // ≥5 goluri → piața nu mai e relevantă
   // Poisson corespunzător pieței
   var poisson;
   if(market === 'over15')      poisson = Number(fx.poissonOver15);
   else if(market === 'over25') poisson = Number(fx.poissonOver25);
-  else { poisson = Number(fx.poissonOver35); if(!isFinite(poisson)) poisson = Number(fx.poissonOver25); }
+  else if(market === 'over35') { poisson = Number(fx.poissonOver35); if(!isFinite(poisson)) poisson = Number(fx.poissonOver25); }
+  else { poisson = Number(fx.poissonOver45); if(!isFinite(poisson)) poisson = Number(fx.poissonOver35); if(!isFinite(poisson)) poisson = Number(fx.poissonOver25); }
   if(!isFinite(poisson)) return null;
   var key = _patMinuteBucket(elapsed) + '|' + _patScoreState(hg,ag) + '|' + market;
   var entry = live[key];

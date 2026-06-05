@@ -99,12 +99,16 @@ export default async function handler(req, res) {
         const mb = minuteBucket(m);
         const sst = scoreState(hAt, aAt);
         const key = `${mb}|${sst}`;
-        if (!stats[key]) stats[key] = { o15: { n: 0, hits: 0 }, o25: { n: 0, hits: 0 }, gg: { n: 0, hits: 0 } };
+        if (!stats[key]) stats[key] = { o15: { n: 0, hits: 0 }, o25: { n: 0, hits: 0 }, o35: { n: 0, hits: 0 }, o45: { n: 0, hits: 0 }, gg: { n: 0, hits: 0 } };
         // Check markets
         stats[key].o15.n++;
         if (finalTotal >= 2) stats[key].o15.hits++;
         stats[key].o25.n++;
         if (finalTotal >= 3) stats[key].o25.hits++;
+        stats[key].o35.n++;
+        if (finalTotal >= 4) stats[key].o35.hits++;
+        stats[key].o45.n++;
+        if (finalTotal >= 5) stats[key].o45.hits++;
         stats[key].gg.n++;
         if (finalH > 0 && finalA > 0) stats[key].gg.hits++;
       }
@@ -116,7 +120,11 @@ export default async function handler(req, res) {
       const [minute_bucket, score_state] = key.split('|');
       for (const [marketShort, data] of Object.entries(mkts)) {
         if (data.n < 10) continue;
-        const market = marketShort === 'o15' ? 'over15' : marketShort === 'o25' ? 'over25' : 'gg';
+        const market = marketShort === 'o15' ? 'over15'
+                     : marketShort === 'o25' ? 'over25'
+                     : marketShort === 'o35' ? 'over35'
+                     : marketShort === 'o45' ? 'over45'
+                     : 'gg';
         const real_pct = +(data.hits / data.n * 100).toFixed(2);
         await query(`
           INSERT INTO calibration_live (minute_bucket, score_state, market, n_samples, real_pct, generated_at)
