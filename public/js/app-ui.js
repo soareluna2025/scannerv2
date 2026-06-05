@@ -1894,6 +1894,34 @@ function mdRenderSumar(d){
     out+='</div>';
     out+='</div>';
 
+    // ── 📊 PATTERN LIVE — Over 1.5 ajustat cu calibrarea live (DOAR afișare) ──
+    if(typeof SHOW_LIVE_PATTERN!=='undefined' && SHOW_LIVE_PATTERN && en.over15Prob!=null){
+      var _patFx={
+        elapsed:mn, homeGoals:hg, awayGoals:ag,
+        lambdaHome:en.lambdaHome, lambdaAway:en.lambdaAway,
+        leagueAvgGoals:(en.leagueStats&&en.leagueStats.avg_goals_per_match)||null,
+        poissonOver15:en.over15Prob,
+      };
+      if(typeof calibLiveFresh==='function' && calibLiveFresh()){
+        var _pat=calcPatternAdjusted(_patFx,_calibCache);
+        if(_pat){
+          var _pclr=_pat.final>=70?'#22c55e':_pat.final>=50?'#f59e0b':'#ef4444';
+          out+='<div class="md-section"><div class="md-section-title">📊 Pattern Live</div>';
+          out+='<div style="background:rgba(99,102,241,.06);border-radius:8px;padding:12px">';
+          out+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+          out+='<span style="font-size:12px;color:var(--mu)">Over 1.5 ajustat</span>';
+          out+='<span style="font-size:22px;font-weight:800;color:'+_pclr+'">'+_pat.final+'%</span></div>';
+          out+='<div style="font-size:10px;color:var(--mu);line-height:1.6">';
+          out+='Poisson: <b style="color:var(--tx)">'+_pat.poisson+'%</b> · Pattern real: <b style="color:var(--tx)">'+_pat.pattern_pct+'%</b> (N='+_pat.pattern_n+')<br>';
+          out+='w_pattern: <b style="color:var(--tx)">'+_pat.w_pattern+'%</b> · w_poisson: <b style="color:var(--tx)">'+_pat.w_poisson+'%</b>';
+          out+='</div></div></div>';
+        }
+      } else if(typeof loadCalibLive==='function'){
+        // Date necache-uite → randează re-randarea după fetch (10min cache).
+        loadCalibLive(function(){ if(_md.tabIdx===0 && String(_md.fixtureId)===fk) mdRender(); });
+      }
+    }
+
   }
 
   // Poisson probs — date PRE-MECI, periculoase la pariere live cand meciul a evoluat

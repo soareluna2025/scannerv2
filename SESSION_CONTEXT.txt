@@ -778,6 +778,20 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~16:20] - Pattern Analysis LIVE in cartonas (tab SUMAR, doar live; zero backend)
+  app-state.js: SHOW_LIVE_PATTERN flag + cache _calibCache/_calibCacheTime (10min)
+  + loadCalibLive() (fetch /api/calibration camp `live`, un singur fetch in zbor)
+  + calcPatternAdjusted(fx,live): minute_bucket+score_state -> key|over15; pattern_adj=
+  min(95,pct*λmeci/leagueAvg); credibility=n/(n+300); w_pattern=(elapsed/90)*cred;
+  final=poisson*w_poisson+pattern_adj*w_pattern, clamp [5,95]. Helpers _patMinuteBucket/
+  _patScoreState.
+  app-ui.js mdRenderSumar (DOAR isLive, sub NGP): bloc "📊 Pattern Live" — Over1.5
+  ajustat + Poisson%/Pattern real%(N)/w_pattern/w_poisson, culori 70/50. Daca cache
+  ne-fresh -> loadCalibLive(cb=mdRender). leagueAvg=en.leagueStats.avg_goals_per_match
+  fallback 2.5. poisson=en.over15Prob.
+  NEATINS: calcConfidence*/score1-7/NGP backend/api/calibration. node --check OK ambele.
+  | Commit: (vezi mai jos)
+
 [04.06 ~16:00] - PRE-MECI: meciurile de maine nu mai apar la AZI (filtru zi locala)
   app-ui.js renderPM() DOAR. /api/today intoarce fereastra ~30h (NOW-2h..+28h)
   si renderPM afisa tot -> meciuri de maine in AZI. Fix: _selDay=PM_DATE; _localDay()

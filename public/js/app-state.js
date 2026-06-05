@@ -469,6 +469,74 @@ function _mkts(lH,lA){
     gg:Math.round((1-e0)*(1-e1)*100),hsc:Math.round((1-e0)*100),asc:Math.round((1-e1)*100),
     lH:lH,lA:lA};
 }
+// ── PATTERN ANALYSIS LIVE (Over 1.5 ajustat cu calibrarea live) ──────────────
+// DOAR afișare: combină Poisson Over1.5 cu % real istoric din /api/calibration
+// (câmpul `live`, per minute_bucket|score_state|over15), ponderat pe timp+credibilitate.
+// Zero atingere scoring/NGP backend. Flag false → feature complet oprit.
+var SHOW_LIVE_PATTERN = true;
+var _calibCache = null;            // obiectul d.live din /api/calibration
+var _calibCacheTime = 0;
+var _calibFetching = false;
+var _CALIB_TTL = 10 * 60 * 1000;   // 10 min
+
+function calibLiveFresh(){ return _calibCache && (Date.now() - _calibCacheTime < _CALIB_TTL); }
+function loadCalibLive(cb){
+  if(calibLiveFresh()){ if(cb)cb(_calibCache); return; }
+  if(_calibFetching) return;       // un singur fetch în zbor
+  _calibFetching = true;
+  fetch('/api/calibration').then(function(r){return r.json();}).then(function(d){
+    _calibCache = (d && d.live) ? d.live : {};
+    _calibCacheTime = Date.now();
+    _calibFetching = false;
+    if(cb)cb(_calibCache);
+  }).catch(function(){ _calibFetching = false; });
+}
+function _patMinuteBucket(m){
+  if(m<=15)return '0-15'; if(m<=30)return '16-30'; if(m<=45)return '31-45';
+  if(m<=60)return '46-60'; if(m<=75)return '61-75'; return '76-90';
+}
+function _patScoreState(h,a){
+  if(h===0&&a===0)return '0-0';
+  if(h===1&&a===0)return '1-0';
+  if(h===0&&a===1)return '0-1';
+  if(h===1&&a===1)return '1-1';
+  if(h>=2&&h-a>=2)return 'home_+2';
+  if(a>=2&&a-h>=2)return 'away_+2';
+  return 'other';
+}
+function calcPatternAdjusted(fx, live){
+  if(!live || !fx) return null;
+  var poisson = Number(fx.poissonOver15);
+  if(!isFinite(poisson)) return null;
+  var elapsed = Number(fx.elapsed) || 0;
+  var hg = Number(fx.homeGoals) || 0, ag = Number(fx.awayGoals) || 0;
+  var lh = Number(fx.lambdaHome) || 0, la = Number(fx.lambdaAway) || 0;
+  var lgAvg = Number(fx.leagueAvgGoals); if(!(lgAvg>0)) lgAvg = 2.5;
+  var key = _patMinuteBucket(elapsed) + '|' + _patScoreState(hg,ag) + '|over15';
+  var entry = live[key];
+  if(!entry) return null;
+  var pattern_pct = Number(entry.pct), pattern_n = Number(entry.n);
+  if(!isFinite(pattern_pct)) return null;
+  var lambda_meci = lh + la;
+  var strength_ratio = lgAvg>0 ? (lambda_meci/lgAvg) : 1;
+  var pattern_ajustat = Math.min(95, pattern_pct * strength_ratio);
+  var credibility = pattern_n / (pattern_n + 300);
+  var w_time = elapsed / 90;
+  var w_pattern = w_time * credibility;
+  var w_poisson = 1 - w_pattern;
+  var final = poisson * w_poisson + pattern_ajustat * w_pattern;
+  final = Math.round(Math.min(95, Math.max(5, final)));
+  return {
+    final: final,
+    poisson: Math.round(poisson),
+    pattern_pct: Math.round(pattern_pct),
+    pattern_n: pattern_n,
+    pattern_adj: Math.round(pattern_ajustat),
+    w_pattern: Math.round(w_pattern*100),
+    w_poisson: Math.round(w_poisson*100),
+  };
+}
+
 // Minute RĂMASE din meci pentru fixture-ul fk — citite din DOM (badge-ul de minut
 // din cartonaș: "R1 · 62'", "R2 · 62'", "EXTRA · 95'", "PAUZĂ · HT") cu fallback
 // pe ST.ms (status.short + elapsed). Întoarce null dacă nu poate fi determinat
