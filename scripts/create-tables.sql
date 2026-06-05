@@ -1114,6 +1114,22 @@ CREATE TABLE IF NOT EXISTS elo_applied (
     fixture_id INTEGER PRIMARY KEY
 );
 
+-- ── 46. elo_history ──────────────────────────────────────────────
+-- ELO POINT-IN-TIME: ELO-ul fiecărei echipe DINAINTEA fiecărui meci (snapshot
+-- pre-meci în timpul replay-ului cronologic din build-elo). Fără lookahead →
+-- folosibil pt backtest valid. NEFOLOSIT încă în scoring.
+CREATE TABLE IF NOT EXISTS elo_history (
+    fixture_id    INTEGER NOT NULL,
+    home_team_id  INTEGER NOT NULL,
+    away_team_id  INTEGER NOT NULL,
+    home_elo      NUMERIC(8,2) NOT NULL,
+    away_elo      NUMERIC(8,2) NOT NULL,
+    elo_diff      NUMERIC(8,2) NOT NULL,
+    home_win_prob NUMERIC(5,4) NOT NULL,
+    PRIMARY KEY (fixture_id)
+);
+CREATE INDEX IF NOT EXISTS idx_elo_history_fixture ON elo_history(fixture_id);
+
 -- ================================================================
 --  VERIFICARE
 -- ================================================================

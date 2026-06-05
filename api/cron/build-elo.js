@@ -23,6 +23,12 @@ async function ensureTables() {
   await query(`CREATE INDEX IF NOT EXISTS idx_elo_team   ON elo_ratings(team_id)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_elo_league ON elo_ratings(league_id)`);
   await query(`CREATE TABLE IF NOT EXISTS elo_applied (fixture_id INTEGER PRIMARY KEY)`);
+  await query(`CREATE TABLE IF NOT EXISTS elo_history (
+    fixture_id INTEGER NOT NULL, home_team_id INTEGER NOT NULL, away_team_id INTEGER NOT NULL,
+    home_elo NUMERIC(8,2) NOT NULL, away_elo NUMERIC(8,2) NOT NULL,
+    elo_diff NUMERIC(8,2) NOT NULL, home_win_prob NUMERIC(5,4) NOT NULL,
+    PRIMARY KEY (fixture_id))`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_elo_history_fixture ON elo_history(fixture_id)`);
 }
 
 async function logCron(status, msg = '') {
@@ -52,16 +58,46 @@ export default async function handler(req, res) {
       return t;
     };
 
+    // Buffer pt elo_history (snapshot PRE-MECI) — bulk insert la fiecare 1000.
+    const histBuf = [];
+    const HIST_CH = 1000;
+    async function flushHist() {
+      if (!histBuf.length) return;
+      const vals = [], params = [];
+      histBuf.forEach((r, i) => {
+        const b = i * 7;
+        vals.push(`($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7})`);
+        params.push(r.fid, r.hid, r.aid, r.he, r.ae, r.diff, r.hwp);
+      });
+      await query(`INSERT INTO elo_history
+          (fixture_id, home_team_id, away_team_id, home_elo, away_elo, elo_diff, home_win_prob)
+        VALUES ${vals.join(',')}
+        ON CONFLICT (fixture_id) DO UPDATE SET
+          home_elo=EXCLUDED.home_elo, away_elo=EXCLUDED.away_elo,
+          elo_diff=EXCLUDED.elo_diff, home_win_prob=EXCLUDED.home_win_prob`, params);
+      histBuf.length = 0;
+    }
+
     for (const m of rows) {
       const lid = m.league_id;
       const H = getT(m.home_team_id, lid), A = getT(m.away_team_id, lid);
-      const expH = 1 / (1 + Math.pow(10, (A.elo - H.elo) / 400));
+      // Snapshot PRE-MECI (ELO-ul de DINAINTEA meciului — fără lookahead).
+      const preH = H.elo, preA = A.elo;
+      const expH = 1 / (1 + Math.pow(10, (preA - preH) / 400));  // = home_win_prob
+      histBuf.push({
+        fid: m.fixture_id, hid: m.home_team_id, aid: m.away_team_id,
+        he: +preH.toFixed(2), ae: +preA.toFixed(2),
+        diff: +(preH - preA).toFixed(2), hwp: +expH.toFixed(4),
+      });
+      if (histBuf.length >= HIST_CH) await flushHist();
+      // ABIA DUPĂ snapshot → actualizează ELO cu rezultatul meciului.
       const hg = Number(m.home_goals), ag = Number(m.away_goals);
       const actH = hg > ag ? 1 : hg === ag ? 0.5 : 0;
       H.elo += kFactor(H.games) * (actH - expH);
       A.elo += kFactor(A.games) * ((1 - actH) - (1 - expH));
       H.games++; A.games++;
     }
+    await flushHist();  // restul buffer-ului
 
     // UPSERT toate echipele
     let upserts = 0;
@@ -84,7 +120,13 @@ export default async function handler(req, res) {
     }
 
     await logCron('success', `teams:${upserts} matches:${rows.length}`);
-    return res.status(200).json({ ok: true, teams: upserts, matches: rows.length });
+    return res.status(200).json({
+      ok: true,
+      teams: upserts,
+      matches: rows.length,
+      elo_history_rows: rows.length,
+      note: 'ELO snapshot pre-meci salvat în elo_history. Verifică: SELECT COUNT(*) FROM elo_history;',
+    });
   } catch (e) {
     await logCron('error', e.message);
     return res.status(500).json({ ok: false, error: e.message });
