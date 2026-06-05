@@ -1,4 +1,4 @@
-// api/backfill.js — Season-first backfill (2026→2022)
+// api/backfill.js — Season-first backfill (2026→2010, newest-first)
 // Per-fixture: statistics + events + players
 // Persistent state in app_settings (resume after VPS restart)
 
@@ -8,7 +8,7 @@ import { calcPlayerScore } from './calc-utils.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
 import { isAllowedLeague } from './utils/league-filter.js';
 
-const SEASONS    = [2026, 2025];
+const SEASONS    = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010];
 const LEAGUE_IDS = [...ALLOWED_LEAGUE_IDS];
 const BASE_URL   = 'https://v3.football.api-sports.io';
 const DELAY_MS   = 60;              // FIX3: redus — concurența limitează rata, nu sleep-ul
@@ -438,7 +438,9 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
   // FIX3 — procesare în batch-uri concurente. Mărimea batch-ului e DINAMICĂ:
   // 5 când stabilizarea rulează (evită epuizarea pool-ului DB), altfel 10.
   // Graceful stop: verifică stopFlag ÎNTRE batch-uri (termină batch-ul curent).
-  const cutoff = new Date('2024-05-30');
+  // Cutoff istoric: colectăm din 2010 încolo (extins de la 2024-05-30 ca să umplem
+  // golurile 2010-2023). Meciurile dinainte de 2010 rămân ignorate.
+  const cutoff = new Date('2010-01-01');
   let fi = startFi;
   while (fi < fixtures.length) {
     if (stopFlag) {
@@ -471,7 +473,7 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
     await Promise.all(batch.map(async (fx) => {
       const fid = fx?.fixture?.id;
       if (!fid) return;
-      // Retenție 2 ani: skip meciuri mai vechi de cutoff
+      // Skip meciuri mai vechi de cutoff (acum 2010-01-01).
       const _mDate = fx?.fixture?.date;
       if (_mDate && new Date(_mDate) < cutoff) return;
       const hid = fx?.teams?.home?.id;
@@ -715,6 +717,15 @@ export async function getBackfillStatus() {
     totalLeagues:        totalPairs,
     completedLeagues:    completedPairs,
     progressPct,
+    // Progres pe sezoane (range 2010→prezent).
+    seasonsTotal:        SEASONS.length,
+    seasonsList:         SEASONS,
+    currentSeasonIndex:  si,
+    seasonsCompleted:    si,
+    seasonsRemaining:    Math.max(0, SEASONS.length - si),
+    seasonProgressPct:   LEAGUE_IDS.length > 0
+      ? Math.round(li / LEAGUE_IDS.length * 1000) / 10
+      : 0,
     apiUsedToday:        usedToday,
     apiPlanLimit:        planLimit,
     apiRemainingToday:   Math.max(0, planLimit - usedToday),

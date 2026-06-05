@@ -778,6 +778,18 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~18:00] - Backfill extins 2010->prezent (toate ligile whitelist)
+  api/backfill.js DOAR. SEASONS = [2026..2010] (17 sezoane, newest-first) in loc de
+  [2026,2025]. CRITIC: cutoff schimbat 2024-05-30 -> 2010-01-01 (altfel meciurile
+  pre-2024 erau SKIP-uite la linia ~476 indiferent de sezoane). Status extins:
+  seasonsTotal/seasonsList/currentSeasonIndex/seasonsCompleted/seasonsRemaining/
+  seasonProgressPct (ETA exista deja). Pastrate: apiFetch retry 429, isAllowedLeague
+  filtru, START/STOP/RESUME persistent, concurenta x10, aceleasi tabele
+  (fixtures_history/match_events/match_stats/player_stats/h2h, ON CONFLICT).
+  ⚠ COST API URIAS: 17 sez x ~165 ligi x mii meciuri x 3 calls (stats+events+players)
+  -> potential MILIOANE de calls. Contrazice restrictia anterioara [2026,2025] +
+  bugetul din CLAUDE.md. Cerut explicit de user. node --check OK. | Commit: (mai jos)
+
 [04.06 ~17:45] - ELO blend POST-scoring in predictii (sesiune dedicata, aprobat Vlad)
   api/enrich.js: dupa payload (1496), USE_ELO_BLEND flag + citire elo_history pe
   fixture_id (point-in-time, fara lookahead). Daca lipseste/flag off -> neschimbat.
