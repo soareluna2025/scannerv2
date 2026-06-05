@@ -15,6 +15,27 @@ const DONE = ['FT', 'AET', 'PEN'];
 
 function kFactor(games) { return games < 10 ? 40 : games < 30 ? 32 : 24; }
 
+// Multiplicator de importanță a competiției aplicat peste K (meciuri „grele"
+// mișcă ELO mai mult). Default 1.0 pt ligi normale.
+function getCompetitionWeight(leagueId) {
+  // UCL, UEL, UECL
+  if ([2, 3, 848].includes(leagueId)) return 1.5;
+  // Cupe Mondiale + Calificări CM + Nations League
+  if ([1, 5, 6, 29, 30, 31, 32, 33, 34].includes(leagueId)) return 1.5;
+  // Ligi principale majore (top 10 europene)
+  if ([39, 140, 135, 78, 61, 88, 94, 203, 207, 197].includes(leagueId)) return 1.3;
+  // Copa Libertadores, Copa Sudamericana
+  if ([13, 11].includes(leagueId)) return 1.3;
+  // Cupe naționale principale
+  if ([45, 143, 137, 81, 65].includes(leagueId)) return 0.8;
+  // Ligi secundare
+  if ([40, 141, 136, 79, 62].includes(leagueId)) return 0.9;
+  // Amicale
+  if ([10].includes(leagueId)) return 0.5;
+  // Default — ligi normale
+  return 1.0;
+}
+
 async function ensureTables() {
   await query(`CREATE TABLE IF NOT EXISTS elo_ratings (
     team_id INTEGER NOT NULL, league_id INTEGER NOT NULL,
@@ -38,6 +59,10 @@ async function logCron(status, msg = '') {
 export default async function handler(req, res) {
   try {
     await ensureTables();
+    // Reconstrucție curată: golim guard-ul de idempotență ca să permitem
+    // re-procesarea completă cu noul K (ponderat pe competiție). Se repopulează
+    // la final cu setul replay-at.
+    await query(`DELETE FROM elo_applied`).catch(() => {});
 
     const { rows } = await query(`
       SELECT fixture_id, league_id, home_team_id, away_team_id, home_goals, away_goals
@@ -91,10 +116,14 @@ export default async function handler(req, res) {
       });
       if (histBuf.length >= HIST_CH) await flushHist();
       // ABIA DUPĂ snapshot → actualizează ELO cu rezultatul meciului.
+      // K = K_bază (după nr. meciuri) × greutatea competiției.
       const hg = Number(m.home_goals), ag = Number(m.away_goals);
       const actH = hg > ag ? 1 : hg === ag ? 0.5 : 0;
-      H.elo += kFactor(H.games) * (actH - expH);
-      A.elo += kFactor(A.games) * ((1 - actH) - (1 - expH));
+      const weight = getCompetitionWeight(lid);
+      const kH = kFactor(H.games) * weight;
+      const kA = kFactor(A.games) * weight;
+      H.elo += kH * (actH - expH);
+      A.elo += kA * ((1 - actH) - (1 - expH));
       H.games++; A.games++;
     }
     await flushHist();  // restul buffer-ului
@@ -125,7 +154,7 @@ export default async function handler(req, res) {
       teams: upserts,
       matches: rows.length,
       elo_history_rows: rows.length,
-      note: 'ELO snapshot pre-meci salvat în elo_history. Verifică: SELECT COUNT(*) FROM elo_history;',
+      note: 'K ponderat cu importanța competiției',
     });
   } catch (e) {
     await logCron('error', e.message);
