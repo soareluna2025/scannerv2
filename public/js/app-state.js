@@ -506,13 +506,24 @@ function _patScoreState(h,a){
 }
 function calcPatternAdjusted(fx, live){
   if(!live || !fx) return null;
-  var poisson = Number(fx.poissonOver15);
-  if(!isFinite(poisson)) return null;
   var elapsed = Number(fx.elapsed) || 0;
   var hg = Number(fx.homeGoals) || 0, ag = Number(fx.awayGoals) || 0;
   var lh = Number(fx.lambdaHome) || 0, la = Number(fx.lambdaAway) || 0;
   var lgAvg = Number(fx.leagueAvgGoals); if(!(lgAvg>0)) lgAvg = 2.5;
-  var key = _patMinuteBucket(elapsed) + '|' + _patScoreState(hg,ag) + '|over15';
+  // Piața RELEVANTĂ din golurile deja marcate (Over 1.5 e inutil la scor 1-1).
+  var totalGoals = hg + ag;
+  var market;
+  if(totalGoals <= 1)       market = 'over15';
+  else if(totalGoals === 2) market = 'over25';
+  else if(totalGoals === 3) market = 'over35';   // poate lipsi din calibration_live
+  else return null;                              // ≥4 goluri → piața nu mai e relevantă
+  // Poisson corespunzător pieței
+  var poisson;
+  if(market === 'over15')      poisson = Number(fx.poissonOver15);
+  else if(market === 'over25') poisson = Number(fx.poissonOver25);
+  else { poisson = Number(fx.poissonOver35); if(!isFinite(poisson)) poisson = Number(fx.poissonOver25); }
+  if(!isFinite(poisson)) return null;
+  var key = _patMinuteBucket(elapsed) + '|' + _patScoreState(hg,ag) + '|' + market;
   var entry = live[key];
   if(!entry) return null;
   var pattern_pct = Number(entry.pct), pattern_n = Number(entry.n);
@@ -529,11 +540,11 @@ function calcPatternAdjusted(fx, live){
   return {
     final: final,
     poisson: Math.round(poisson),
-    pattern_pct: Math.round(pattern_pct),
-    pattern_n: pattern_n,
-    pattern_adj: Math.round(pattern_ajustat),
-    w_pattern: Math.round(w_pattern*100),
-    w_poisson: Math.round(w_poisson*100),
+    patternPct: Math.round(pattern_pct),
+    patternN: pattern_n,
+    wPattern: Math.round(w_pattern*100),
+    wPoisson: Math.round(w_poisson*100),
+    market: market,
   };
 }
 
