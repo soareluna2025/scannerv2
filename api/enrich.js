@@ -1495,6 +1495,45 @@ export default async function handler(req, res) {
       })),
     };
 
+    // ── ELO BLEND post-scoring (sesiune dedicată, aprobat Vlad) ──────────────
+    // Ajustare DOAR pe over15Prob / ggProb / homeWin, folosind ELO pre-meci
+    // (elo_history, point-in-time, fără lookahead). NU atinge score1-7 /
+    // calcConfidence* (acelea rămân intacte). Dacă ELO lipsește sau flag off →
+    // predicție NESCHIMBATĂ. Marchează payload.eloAdjusted / eloDiffUsed.
+    const USE_ELO_BLEND = true;
+    if (USE_ELO_BLEND && fid) {
+      try {
+        const eloRes = await query(
+          `SELECT home_elo, away_elo, elo_diff, home_win_prob FROM elo_history WHERE fixture_id = $1`,
+          [Number(fid)]
+        );
+        const er = eloRes.rows[0];
+        if (er) {
+          const eloDiff = Number(er.elo_diff);
+          const hwpElo  = Number(er.home_win_prob);   // 0..1
+          const balanced = Math.abs(eloDiff) <= 100;
+          // A) Over 1.5
+          if (payload.over15Prob != null) {
+            const base = balanced ? 74.1 : 86.6;
+            payload.over15Prob = Math.round(payload.over15Prob * 0.85 + base * 0.15);
+          }
+          // B) GG
+          if (payload.ggProb != null) {
+            const base = balanced ? 50.0 : 61.9;
+            payload.ggProb = Math.round(payload.ggProb * 0.85 + base * 0.15);
+          }
+          // C) Home Win — doar când home e favorit (eloDiff > 0)
+          if (payload.homeWin != null && eloDiff > 0 && Number.isFinite(hwpElo)) {
+            payload.homeWin = (eloDiff > 100)
+              ? Math.round(payload.homeWin * 0.80 + hwpElo * 100 * 0.20)
+              : Math.round(payload.homeWin * 0.85 + hwpElo * 100 * 0.15);
+          }
+          payload.eloAdjusted = true;
+          payload.eloDiffUsed = +eloDiff.toFixed(2);
+        }
+      } catch (_) { /* ELO indisponibil → predicție neschimbată */ }
+    }
+
     // Fire-and-forget: colectare injuries + prediction save + pre_match snapshot
     if (fid) {
       fetchAndStoreInjuries(Number(fid));
@@ -1596,9 +1635,10 @@ export default async function handler(req, res) {
             lambda_home, lambda_away, lambda_total, over15_prob, over25_prob, gg_prob,
             home_score_rate, away_score_rate, h2h_over15, confidence,
             api_home_pct, api_draw_pct, api_away_pct,
-            score1, score2, score3, score4, score6, score7, h2h_sample, league_group)
+            score1, score2, score3, score4, score6, score7, h2h_sample, league_group,
+            elo_adjusted, elo_diff_used)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
-            $20,$21,$22,$23,$24,$25,$26,$27)
+            $20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
           ON CONFLICT (fixture_id) DO UPDATE SET
             lambda_home=EXCLUDED.lambda_home, lambda_away=EXCLUDED.lambda_away,
             lambda_total=EXCLUDED.lambda_total,
@@ -1612,6 +1652,7 @@ export default async function handler(req, res) {
             score1=EXCLUDED.score1, score2=EXCLUDED.score2, score3=EXCLUDED.score3,
             score4=EXCLUDED.score4, score6=EXCLUDED.score6, score7=EXCLUDED.score7,
             h2h_sample=EXCLUDED.h2h_sample, league_group=EXCLUDED.league_group,
+            elo_adjusted=EXCLUDED.elo_adjusted, elo_diff_used=EXCLUDED.elo_diff_used,
             updated_at=NOW()
           WHERE predictions.result_over15 IS NULL`,
           [
@@ -1625,6 +1666,7 @@ export default async function handler(req, res) {
             _bd.poisson ?? null, _bd.forma ?? null, _bd.h2h ?? null,
             _bd.live ?? null, _bd.consistenta ?? null, _bd.putereEchipe ?? null,
             payload.h2hSample ?? null, _leagueGroup,
+            payload.eloAdjusted === true, payload.eloDiffUsed ?? null,
           ]
         ).catch(() => {});
       }

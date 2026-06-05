@@ -1662,6 +1662,11 @@ function mdRenderSumar(d){
     out+='</div>';
   }
 
+  // ── Indicator ELO ajustat (discret, sub Confidence Score) ──
+  if(en.eloAdjusted){
+    out+='<div style="text-align:center;margin:-2px 0 8px"><span style="display:inline-block;font-size:10px;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:3px 9px">⚡ ELO ajustat</span></div>';
+  }
+
   // ── PIAȚĂ (cote 1X2 pre-meci, DOAR afișare din market_odds; fără calcul) ──
   if(d.market_odds){
     var mo=d.market_odds;

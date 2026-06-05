@@ -11,3 +11,7 @@ ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score6 NUMERIC(5,2);
 ALTER TABLE predictions ADD COLUMN IF NOT EXISTS score7 NUMERIC(5,2);
 ALTER TABLE predictions ADD COLUMN IF NOT EXISTS h2h_sample INTEGER;
 ALTER TABLE predictions ADD COLUMN IF NOT EXISTS league_group TEXT;
+
+-- ELO blend post-scoring (sesiune dedicată) — marcare ajustare ELO per predicție.
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS elo_adjusted BOOLEAN DEFAULT FALSE;
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS elo_diff_used NUMERIC(8,2);
