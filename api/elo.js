@@ -1,3 +1,5 @@
+import { query } from './db.js';
+
 const K = 32;
 
 function getOrSet(map, id) {
@@ -62,4 +64,44 @@ export function calcElo(homeMatches, awayMatches, homeId, awayId, h2hMatches = [
     homeForm: recentForm(homeMatches, homeId),
     awayForm: recentForm(awayMatches, awayId),
   };
+}
+
+// GET /api/elo?home=&away=&league= — întoarce ELO GLOBAL persistat (elo_ratings).
+// Fix pt ruta moartă (înainte nu exista default export → 500). Read-only DB.
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  try {
+    const q = req.query || {};
+    const home = Number(q.home || q.h);
+    const away = Number(q.away || q.a);
+    const league = Number(q.league || q.lg || q.league_id);
+    if (!home || !away) return res.status(400).json({ ok: false, error: 'home & away required' });
+
+    const sql = league
+      ? `SELECT team_id, elo, games FROM elo_ratings WHERE league_id = $1 AND team_id = ANY($2)`
+      : `SELECT team_id, elo, games FROM elo_ratings WHERE team_id = ANY($1)`;
+    const params = league ? [league, [home, away]] : [[home, away]];
+    const { rows } = await query(sql, params).catch(() => ({ rows: [] }));
+
+    const pick = (id) => {
+      const r = rows.find(x => Number(x.team_id) === id);
+      return r ? { elo: Number(r.elo), games: r.games } : { elo: 1500, games: 0 };
+    };
+    const H = pick(home), A = pick(away);
+    const eloDiff = Math.round(H.elo - A.elo);
+    const homeWinProb = Math.round(1 / (1 + Math.pow(10, -eloDiff / 400)) * 1000) / 1000;
+
+    return res.status(200).json({
+      ok: true,
+      homeElo: Math.round(H.elo), awayElo: Math.round(A.elo),
+      homeGames: H.games, awayGames: A.games,
+      eloDiff,
+      homeWinProb,
+      awayWinProb: Math.round((1 - homeWinProb) * 1000) / 1000,
+      source: 'elo_ratings',
+    });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
 }

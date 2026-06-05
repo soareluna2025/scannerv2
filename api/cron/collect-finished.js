@@ -4,6 +4,51 @@ import { fetchApiFootball } from '../utils/fetch-api.js';
 import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 import { isAllowedMatch } from '../utils/league-filter.js';
 
+// ── ELO incremental (PASUL 4) — actualizează ELO global la fiecare meci FT nou.
+// Idempotent prin elo_applied (un meci aplicat o singură dată; build-elo, sursa
+// de adevăr săptămânală, marchează toate fixturile). NEFOLOSIT în scoring.
+function eloK(games) { return games < 10 ? 40 : games < 30 ? 32 : 24; }
+async function ensureEloTables() {
+  await query(`CREATE TABLE IF NOT EXISTS elo_ratings (
+    team_id INTEGER NOT NULL, league_id INTEGER NOT NULL,
+    elo NUMERIC(8,2) DEFAULT 1500, games INTEGER DEFAULT 0,
+    updated_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (team_id, league_id))`);
+  await query(`CREATE TABLE IF NOT EXISTS elo_applied (fixture_id INTEGER PRIMARY KEY)`);
+}
+async function updateEloForFixture(fx) {
+  const fid = fx.fixture?.id;
+  const lid = fx.league?.id;
+  const hId = fx.teams?.home?.id, aId = fx.teams?.away?.id;
+  const hg = fx.goals?.home, ag = fx.goals?.away;
+  if (!fid || !lid || !hId || !aId || hg == null || ag == null) return false;
+  // Idempotență: dacă meciul a fost deja aplicat → skip (evită dublă numărare).
+  const seen = await query(`SELECT 1 FROM elo_applied WHERE fixture_id = $1`, [fid]);
+  if (seen.rows.length) return false;
+  const cur = await query(
+    `SELECT team_id, elo, games FROM elo_ratings WHERE league_id = $1 AND team_id = ANY($2)`,
+    [lid, [hId, aId]]
+  );
+  const map = {};
+  cur.rows.forEach(r => { map[r.team_id] = { elo: Number(r.elo), games: r.games }; });
+  const H = map[hId] || { elo: 1500, games: 0 };
+  const A = map[aId] || { elo: 1500, games: 0 };
+  const expH = 1 / (1 + Math.pow(10, (A.elo - H.elo) / 400));
+  const actH = hg > ag ? 1 : hg === ag ? 0.5 : 0;
+  const newH = H.elo + eloK(H.games) * (actH - expH);
+  const newA = A.elo + eloK(A.games) * ((1 - actH) - (1 - expH));
+  const up = (tid, elo, games) => query(
+    `INSERT INTO elo_ratings (team_id, league_id, elo, games, updated_at)
+     VALUES ($1,$2,$3,$4,NOW())
+     ON CONFLICT (team_id, league_id) DO UPDATE SET
+       elo=EXCLUDED.elo, games=EXCLUDED.games, updated_at=NOW()`,
+    [tid, lid, +elo.toFixed(2), games]
+  );
+  await up(hId, newH, H.games + 1);
+  await up(aId, newA, A.games + 1);
+  await query(`INSERT INTO elo_applied (fixture_id) VALUES ($1) ON CONFLICT DO NOTHING`, [fid]);
+  return true;
+}
+
 async function collectFixture(fixtureId) {
   const r = await fetchApiFootball(`/fixtures/players?fixture=${fixtureId}`);
   const data = await r.json();
@@ -279,9 +324,14 @@ export default async function handler(req, res) {
     let totalPlayers = 0, totalMatchStats = 0, totalEvents = 0, totalOdds = 0;
     let psFailed = 0, msFailed = 0, evFailed = 0, oddsFailed = 0;
 
+    await ensureEloTables().catch(() => {});
+
     for (const fx of toProcess) {
       const fixtureId  = fx.fixture.id;
       const homeTeamId = fx.teams?.home?.id;
+
+      // ELO incremental (idempotent prin elo_applied) — non-blocking.
+      try { await updateEloForFixture(fx); } catch (_) {}
 
       try { totalPlayers    += await collectFixture(fixtureId); }
       catch (e) { psFailed++; console.error('collectFixture error:', fixtureId, e.message); }

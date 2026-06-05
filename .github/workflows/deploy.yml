@@ -78,6 +78,7 @@ jobs:
             C18="0 9 * * * curl -sf http://localhost:3000/api/cron/backfill-stats-cron >> $LOG 2>&1"
             C19="0 14 * * * curl -sf http://localhost:3000/api/cron/backfill-stats-cron >> $LOG 2>&1"
             C20="0 20 * * * curl -sf http://localhost:3000/api/cron/backfill-stats-cron >> $LOG 2>&1"
+            C21="0 6 * * 1 curl -sf http://localhost:3000/api/cron/build-elo >> $LOG 2>&1"
 
             (
               crontab -l 2>/dev/null \
@@ -99,7 +100,8 @@ jobs:
                 | grep -v 'api/cron/cazarma-router' \
                 | grep -v 'api/cron/auto-predict' \
                 | grep -v 'api/cron/collect-national-history' \
-                | grep -v 'api/cron/backfill-stats-cron'
+                | grep -v 'api/cron/backfill-stats-cron' \
+                | grep -v 'api/cron/build-elo'
               echo "$C0"
               echo "$C2"
               echo "$C4"
@@ -119,6 +121,7 @@ jobs:
               echo "$C18"
               echo "$C19"
               echo "$C20"
+              echo "$C21"
             ) | crontab -
 
             echo "CRONTAB ACTIV:"

@@ -1093,6 +1093,27 @@ CREATE INDEX IF NOT EXISTS idx_fh_league_status       ON fixtures_history(league
 CREATE INDEX IF NOT EXISTS idx_fh_home_team           ON fixtures_history(home_team_id);
 CREATE INDEX IF NOT EXISTS idx_fh_away_team           ON fixtures_history(away_team_id);
 
+-- ── 45. elo_ratings ──────────────────────────────────────────────
+-- ELO global persistat per (echipă, ligă). Reconstruit săptămânal de cron
+-- build-elo din fixtures_history (cronologic, K dinamic) + update incremental
+-- la collect-finished. NEFOLOSIT încă în scoring — doar calculat și persistat.
+CREATE TABLE IF NOT EXISTS elo_ratings (
+    team_id    INTEGER NOT NULL,
+    league_id  INTEGER NOT NULL,
+    elo        NUMERIC(8,2) DEFAULT 1500,
+    games      INTEGER DEFAULT 0,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (team_id, league_id)
+);
+CREATE INDEX IF NOT EXISTS idx_elo_team   ON elo_ratings(team_id);
+CREATE INDEX IF NOT EXISTS idx_elo_league ON elo_ratings(league_id);
+
+-- Guard de idempotență pt update-ul incremental ELO (un meci aplicat o singură
+-- dată între reconstrucțiile săptămânale; build-elo le marchează pe toate).
+CREATE TABLE IF NOT EXISTS elo_applied (
+    fixture_id INTEGER PRIMARY KEY
+);
+
 -- ================================================================
 --  VERIFICARE
 -- ================================================================
