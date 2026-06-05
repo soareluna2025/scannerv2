@@ -8,7 +8,7 @@ import { calcPlayerScore } from './calc-utils.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
 import { isAllowedLeague } from './utils/league-filter.js';
 
-const SEASONS    = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010];
+const SEASONS    = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018];
 const LEAGUE_IDS = [...ALLOWED_LEAGUE_IDS];
 const BASE_URL   = 'https://v3.football.api-sports.io';
 const DELAY_MS   = 60;              // FIX3: redus — concurența limitează rata, nu sleep-ul
