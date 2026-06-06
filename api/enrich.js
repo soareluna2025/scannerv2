@@ -1503,14 +1503,35 @@ export default async function handler(req, res) {
     const USE_ELO_BLEND = true;
     if (USE_ELO_BLEND && fid) {
       try {
+        let eloDiff = null, hwpElo = null;
+        // 1) elo_history pe fixture (meciuri trecute/backtest — point-in-time).
         const eloRes = await query(
-          `SELECT home_elo, away_elo, elo_diff, home_win_prob FROM elo_history WHERE fixture_id = $1`,
+          `SELECT elo_diff, home_win_prob FROM elo_history WHERE fixture_id = $1`,
           [Number(fid)]
         );
         const er = eloRes.rows[0];
         if (er) {
-          const eloDiff = Number(er.elo_diff);
-          const hwpElo  = Number(er.home_win_prob);   // 0..1
+          eloDiff = Number(er.elo_diff);
+          hwpElo  = Number(er.home_win_prob);   // 0..1
+        } else if (hId && aId && lgid) {
+          // 2) Fallback elo_ratings (meciuri VIITOARE / NS — fără snapshot în history).
+          const rr = await query(
+            `SELECT er_h.elo AS home_elo, er_h.games AS home_games,
+                    er_a.elo AS away_elo, er_a.games AS away_games
+               FROM elo_ratings er_h
+               JOIN elo_ratings er_a ON er_a.team_id = $2 AND er_a.league_id = $3
+              WHERE er_h.team_id = $1 AND er_h.league_id = $3`,
+            [Number(hId), Number(aId), Number(lgid)]
+          );
+          const r2 = rr.rows[0];
+          // Skip blend dacă vreo echipă are < 10 meciuri (ELO neîncrezător).
+          if (r2 && Number(r2.home_games) >= 10 && Number(r2.away_games) >= 10) {
+            eloDiff = Number(r2.home_elo) - Number(r2.away_elo);
+            hwpElo  = 1 / (1 + Math.pow(10, -eloDiff / 400));
+          }
+        }
+
+        if (eloDiff != null) {
           const balanced = Math.abs(eloDiff) <= 100;
           // A) Over 1.5
           if (payload.over15Prob != null) {

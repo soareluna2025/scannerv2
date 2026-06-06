@@ -778,6 +778,14 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~18:30] - ELO blend: fallback la elo_ratings pt meciuri viitoare (NS)
+  api/enrich.js USE_ELO_BLEND DOAR. Inainte citea doar elo_history WHERE fixture_id
+  -> meciurile viitoare (fara snapshot) sareau blendul. Acum 2 surse: (1) elo_history
+  pe fixture (trecut/backtest); (2) daca lipseste -> elo_ratings JOIN home+away pe
+  league_id, skip daca games<10 oricare echipa; calculeaza eloDiff=home-away,
+  home_win_prob=1/(1+10^(-diff/400)). Blend identic dupa (Over1.5/GG/HomeWin).
+  NEATINS: score1-7, calcConfidence*. node --check OK. | Commit: (vezi mai jos)
+
 [04.06 ~18:15] - H2H istoric 2018+ in backfill (per-fixture) + migrare bulk
   AUDIT: h2h scris de scan.js, backfill-stats.js, backfill.js(buildH2H). Schema h2h
   UNIQUE compus (team1_id,team2_id,fixture_id) — NU doar fixture_id; team1/team2 NOT
