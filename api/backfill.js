@@ -409,6 +409,26 @@ async function buildH2H(homeId, awayId) {
   await setSetting(refreshKey, String(Date.now()));
 }
 
+// Scrie meciul curent ca rând în h2h, direct din fixtures_history (row-per-fixture).
+// Necesar pt date istorice 2018-2023: buildH2H filtrează pe ultimii 2 ani și ar
+// sări meciurile vechi. team1/team2 = LEAST/GREATEST(home,away) (schema cere NOT NULL).
+// Idempotent prin ON CONFLICT (team1_id, team2_id, fixture_id) DO NOTHING.
+async function saveH2HFromFixture(fixtureId) {
+  await dbQuery(
+    `INSERT INTO h2h
+       (team1_id, team2_id, fixture_id, home_team_id, away_team_id,
+        match_date, home_goals, away_goals, league_id, season)
+     SELECT LEAST(home_team_id, away_team_id), GREATEST(home_team_id, away_team_id),
+            fixture_id, home_team_id, away_team_id,
+            match_date, home_goals, away_goals, league_id, season
+       FROM fixtures_history
+      WHERE fixture_id = $1
+        AND home_team_id IS NOT NULL AND away_team_id IS NOT NULL
+     ON CONFLICT (team1_id, team2_id, fixture_id) DO NOTHING`,
+    [fixtureId]
+  );
+}
+
 // ── Core: process one league+season ──────────────────────────────────────────────────────
 
 async function processLeagueSeason(leagueId, season, si, li, startFi) {
@@ -487,6 +507,9 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
       // lacuna structurală: backfill colecta date brute dar nu istoricul FT →
       // h2h/form/league-stats rămâneau goale pentru sezoanele backfill-uite.
       try { await saveFixtureHistory(fx, season); } catch (e) { log(`history ${fid}: ${e.message}`); }
+
+      // H2H row-per-fixture (date istorice 2018+) — direct din fixtures_history salvat.
+      try { await saveH2HFromFixture(fid); } catch (e) { log(`h2h-row ${fid}: ${e.message}`); }
 
       if (hid && aid && hid !== aid) {
         try { await buildH2H(hid, aid); } catch (e) { log(`h2h ${hid}-${aid}: ${e.message}`); }
