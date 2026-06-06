@@ -65,7 +65,7 @@ export default async function handler(req, res) {
     await query(`DELETE FROM elo_applied`).catch(() => {});
 
     const { rows } = await query(`
-      SELECT fixture_id, league_id, home_team_id, away_team_id, home_goals, away_goals
+      SELECT fixture_id, league_id, home_team_id, away_team_id, home_goals, away_goals, match_date
       FROM fixtures_history
       WHERE status_short = ANY($1)
         AND home_team_id IS NOT NULL AND away_team_id IS NOT NULL
@@ -73,6 +73,23 @@ export default async function handler(req, res) {
         AND league_id = ANY($2)
       ORDER BY match_date ASC NULLS LAST, fixture_id ASC
     `, [DONE, ALLOWED]);
+
+    // ── Rolling Window 100: include în replay doar ultimele 100 meciuri per echipă.
+    // Parcurgere cronologică DESC; un meci e inclus dacă e în top-100 al gazdei SAU
+    // al oaspetelui. Echipele cu <100 meciuri își păstrează toate meciurile.
+    const teamCount = new Map();   // team_id → câte meciuri i-am inclus deja
+    const included = new Set();    // fixture_id incluse în replay
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const m = rows[i];
+      const hc = teamCount.get(m.home_team_id) || 0;
+      const ac = teamCount.get(m.away_team_id) || 0;
+      let keep = false;
+      if (hc < 100) { teamCount.set(m.home_team_id, hc + 1); keep = true; }
+      if (ac < 100) { teamCount.set(m.away_team_id, ac + 1); keep = true; }
+      if (keep) included.add(m.fixture_id);
+    }
+    const NOW_TS = Date.now();
+    let matchesUsed = 0;
 
     // ELO per (team_id, league_id) — conform PK. Replay cronologic din 1500.
     const teamElo = new Map();
@@ -104,6 +121,8 @@ export default async function handler(req, res) {
     }
 
     for (const m of rows) {
+      if (!included.has(m.fixture_id)) continue;   // Rolling window 100
+      matchesUsed++;
       const lid = m.league_id;
       const H = getT(m.home_team_id, lid), A = getT(m.away_team_id, lid);
       // Snapshot PRE-MECI (ELO-ul de DINAINTEA meciului — fără lookahead).
@@ -116,12 +135,18 @@ export default async function handler(req, res) {
       });
       if (histBuf.length >= HIST_CH) await flushHist();
       // ABIA DUPĂ snapshot → actualizează ELO cu rezultatul meciului.
-      // K = K_bază (după nr. meciuri) × greutatea competiției.
+      // K = K_bază (după nr. meciuri) × greutatea competiției × temporal decay.
       const hg = Number(m.home_goals), ag = Number(m.away_goals);
       const actH = hg > ag ? 1 : hg === ag ? 0.5 : 0;
       const weight = getCompetitionWeight(lid);
-      const kH = kFactor(H.games) * weight;
-      const kA = kFactor(A.games) * weight;
+      // Temporal decay: meciurile vechi mișcă ELO mai puțin (phi=0.03/lună).
+      let decayFactor = 1;
+      if (m.match_date) {
+        const monthsAgo = (NOW_TS - new Date(m.match_date).getTime()) / (1000 * 60 * 60 * 24 * 30);
+        if (Number.isFinite(monthsAgo)) decayFactor = Math.exp(-0.03 * Math.max(0, monthsAgo));
+      }
+      const kH = kFactor(H.games) * weight * decayFactor;
+      const kA = kFactor(A.games) * weight * decayFactor;
       H.elo += kH * (actH - expH);
       A.elo += kA * ((1 - actH) - (1 - expH));
       H.games++; A.games++;
@@ -148,13 +173,14 @@ export default async function handler(req, res) {
       await query(`INSERT INTO elo_applied (fixture_id) VALUES ${vals} ON CONFLICT DO NOTHING`, chunk);
     }
 
-    await logCron('success', `teams:${upserts} matches:${rows.length}`);
+    await logCron('success', `teams:${upserts} used:${matchesUsed}/${rows.length}`);
     return res.status(200).json({
       ok: true,
       teams: upserts,
-      matches: rows.length,
-      elo_history_rows: rows.length,
-      note: 'K ponderat cu importanța competiției',
+      matches_total: rows.length,
+      matches_used: matchesUsed,
+      elo_history_rows: matchesUsed,
+      note: 'Temporal decay phi=0.03/lună + Rolling window 100',
     });
   } catch (e) {
     await logCron('error', e.message);
