@@ -422,4 +422,5 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   514,   // (Algeria)
   516,   // (Algeria)
   832,   // (Algeria)
+  1224,  // Copa Sul-Sudeste (Brazilia)
 ]);
