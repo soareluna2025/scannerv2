@@ -58,6 +58,7 @@ SELECT
     p.home_win_prob_elo,
     p.home_position_norm, p.away_position_norm,
     p.confidence,
+    p.result_winner, p.result_over15, p.result_over25, p.result_gg,
     fh.home_goals, fh.away_goals,
     fh.home_ht, fh.away_ht,
     COALESCE(fh.home_ht, ht.home_ht_calc) AS home_ht_final,
