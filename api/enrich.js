@@ -1615,6 +1615,22 @@ export default async function handler(req, res) {
       }
     }
 
+    // Guard date insuficiente — penalizare graduală când predicția se sprijină pe
+    // puține surse reale (H2H <3, fără score7/putere echipe, formă insuficientă).
+    // NU atinge calcConfidence*/score1-7; doar ajustează confidenceScore (handler).
+    const thinDataFlags = [
+      result.h2hSample < 3,                 // H2H insuficient
+      !confData.breakdown?.putereEchipe,    // score7 null (lipsă teamStrengths)
+      formInsufficient,                     // formă insuficientă (hGames<3 || aGames<3)
+    ];
+    const thinCount = thinDataFlags.filter(Boolean).length;
+    if (thinCount >= 2) {
+      const thinPenalty = thinCount === 3 ? 15 : 8;
+      confData.confidenceScore = Math.max(10, confData.confidenceScore - thinPenalty);
+      confData._thinData = true;
+      confData._thinCount = thinCount;
+    }
+
     // Calculez probabilități cartonașe/cornere pentru piețele biletului compus
     const _lgAvgYellow  = leagueStats ? +(leagueStats.avg_yellow_cards) || 3.5 : 3.5;
     const _lgAvgCorners = leagueStats ? +(leagueStats.avg_corners)       || 9.0 : 9.0;
