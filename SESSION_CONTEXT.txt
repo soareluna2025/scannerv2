@@ -778,7 +778,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - Clamp global pe produsul factorilor λ (enrich.js)
+[07.06 ~now] - teams_stats fallback cu split acasă/deplasare (enrich.js)
+  getTeamStatsFromDB(): + goals_for_home/away, goals_against_home/away în SELECT.
+  Override fallback (DOAR când formInsufficient): λ din rate venue-specific —
+  gazda goals_for_home/played_home, oaspete goals_for_away/played_away (+
+  apărare simetric). Fallback la media globală (avg_goals_for/against) dacă
+  played_home/away=0 sau coloane null. Restul (lambdaTotal/matrice/clean sheets)
+  neatins. node --check OK. NEATINS calcConfidence*/score1-7, logica principală.
+  | Commit: git
+
+[07.06 ~earlier] - Clamp global pe produsul factorilor λ (enrich.js)
   Baseline λ capturat înainte de lanțul multiplicativ (după Maher+h2h/
   teams_stats/standings). LAMBDA_MIN_RATIO=0.65 → result.lambdaHome/Away nu pot
   scădea sub 65% din baseline (Math.max). La intervenție → recalc lambdaTotal +

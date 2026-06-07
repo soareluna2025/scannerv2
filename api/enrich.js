@@ -1004,7 +1004,9 @@ async function getTeamStatsFromDB(teamId, leagueId) {
       ? await query(
           `SELECT avg_goals_for, avg_goals_against,
                   clean_sheets_home, clean_sheets_away,
-                  played_home, played_away
+                  played_home, played_away,
+                  goals_for_home, goals_for_away,
+                  goals_against_home, goals_against_away
            FROM teams_stats WHERE team_id = $1 AND league_id = $2
            ORDER BY season DESC LIMIT 1`,
           [teamId, Number(leagueId)]
@@ -1012,7 +1014,9 @@ async function getTeamStatsFromDB(teamId, leagueId) {
       : await query(
           `SELECT avg_goals_for, avg_goals_against,
                   clean_sheets_home, clean_sheets_away,
-                  played_home, played_away
+                  played_home, played_away,
+                  goals_for_home, goals_for_away,
+                  goals_against_home, goals_against_away
            FROM teams_stats WHERE team_id = $1
            ORDER BY season DESC LIMIT 1`,
           [teamId]
@@ -1188,10 +1192,20 @@ export default async function handler(req, res) {
       const tsHConceded = tsH ? +(tsH.avg_goals_against) : null;
       const tsAScored   = tsA ? +(tsA.avg_goals_for)     : null;
       const tsAConceded = tsA ? +(tsA.avg_goals_against) : null;
-      if (tsHScored != null && tsAConceded != null)
-        result.lambdaHome = +((tsHScored + tsAConceded) / 2).toFixed(2);
-      if (tsAScored != null && tsHConceded != null)
-        result.lambdaAway = +((tsAScored + tsHConceded) / 2).toFixed(2);
+      // Split venue-specific: gazda folosește rata ACASĂ, oaspetele rata în
+      // DEPLASARE. Fallback la media globală dacă played_home/away=0 sau lipsă.
+      const homeRate = (tsH && Number(tsH.played_home) > 0 && tsH.goals_for_home != null)
+        ? Number(tsH.goals_for_home) / Number(tsH.played_home) : tsHScored;
+      const awayRate = (tsA && Number(tsA.played_away) > 0 && tsA.goals_for_away != null)
+        ? Number(tsA.goals_for_away) / Number(tsA.played_away) : tsAScored;
+      const homeDefRate = (tsH && Number(tsH.played_home) > 0 && tsH.goals_against_home != null)
+        ? Number(tsH.goals_against_home) / Number(tsH.played_home) : tsHConceded;
+      const awayDefRate = (tsA && Number(tsA.played_away) > 0 && tsA.goals_against_away != null)
+        ? Number(tsA.goals_against_away) / Number(tsA.played_away) : tsAConceded;
+      if (homeRate != null && awayDefRate != null)
+        result.lambdaHome = +((homeRate + awayDefRate) / 2).toFixed(2);
+      if (awayRate != null && homeDefRate != null)
+        result.lambdaAway = +((awayRate + homeDefRate) / 2).toFixed(2);
       result.lambdaTotal = +(result.lambdaHome + result.lambdaAway).toFixed(2);
       // Recalculate matrix with improved lambdas
       const mx2 = calcPoisson6x6(result.lambdaHome, result.lambdaAway);
