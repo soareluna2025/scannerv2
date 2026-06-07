@@ -112,19 +112,25 @@ MARKETS = {
     "over05_total": ("y_over05", FEATURES_PREMATCH, "Over 0.5 Total"),
     "over15_total": ("y_over15", FEATURES_PREMATCH, "Over 1.5 Total"),
     "over25_total": ("y_over25", FEATURES_PREMATCH, "Over 2.5 Total"),
+    "over35_total": ("y_over35", FEATURES_PREMATCH, "Over 3.5 Total"),
+    "over45_total": ("y_over45", FEATURES_PREMATCH, "Over 4.5 Total"),
     "btts_total":   ("y_btts",   FEATURES_PREMATCH, "BTTS Total"),
     "over05_home":  ("y_over05_home", FEATURES_PREMATCH, "Over 0.5 Home"),
     "over05_away":  ("y_over05_away", FEATURES_PREMATCH, "Over 0.5 Away"),
     "home_win":     ("y_home_win", FEATURES_PREMATCH, "Home Win"),
+    "draw":         ("y_draw",     FEATURES_PREMATCH, "Draw"),
+    "away_win":     ("y_away_win", FEATURES_PREMATCH, "Away Win"),
     # Repriza 1 (pre-meci features)
     "ht_over05": ("y_ht_over05", FEATURES_PREMATCH, "HT Over 0.5"),
     "ht_over15": ("y_ht_over15", FEATURES_PREMATCH, "HT Over 1.5"),
+    "ht_over25": ("y_ht_over25", FEATURES_PREMATCH, "HT Over 2.5"),
     "ht_btts":   ("y_ht_btts",   FEATURES_PREMATCH, "HT BTTS"),
     "ht_home":   ("y_ht_home",   FEATURES_PREMATCH, "HT Home Score"),
     "ht_away":   ("y_ht_away",   FEATURES_PREMATCH, "HT Away Score"),
     # Repriza 2 (pre-meci + HT features)
     "r2_over05": ("y_r2_over05", FEATURES_HT, "R2 Over 0.5"),
     "r2_over15": ("y_r2_over15", FEATURES_HT, "R2 Over 1.5"),
+    "r2_over25": ("y_r2_over25", FEATURES_HT, "R2 Over 2.5"),
     "r2_btts":   ("y_r2_btts",   FEATURES_HT, "R2 BTTS"),
     "r2_home":   ("y_r2_home",   FEATURES_HT, "R2 Home Score"),
     "r2_away":   ("y_r2_away",   FEATURES_HT, "R2 Away Score"),
@@ -173,17 +179,23 @@ def main():
     df["y_over05"] = (df["home_goals"] + df["away_goals"] >= 1).astype(int)
     df["y_over15"] = (df["home_goals"] + df["away_goals"] >= 2).astype(int)
     df["y_over25"] = (df["home_goals"] + df["away_goals"] >= 3).astype(int)
+    df["y_over35"] = (df["home_goals"] + df["away_goals"] >= 4).astype(int)
+    df["y_over45"] = (df["home_goals"] + df["away_goals"] >= 5).astype(int)
     df["y_btts"]   = ((df["home_goals"] > 0) & (df["away_goals"] > 0)).astype(int)
     df["y_over05_home"] = (df["home_goals"] >= 1).astype(int)
     df["y_over05_away"] = (df["away_goals"] >= 1).astype(int)
     df["y_home_win"] = (df["result_winner"] == "home").astype(int)
+    df["y_draw"]     = (df["result_winner"] == "draw").astype(int)
+    df["y_away_win"] = (df["result_winner"] == "away").astype(int)
     df["y_ht_over05"] = (df["goals_ht"] >= 1).astype(int)
     df["y_ht_over15"] = (df["goals_ht"] >= 2).astype(int)
+    df["y_ht_over25"] = (df["goals_ht"] >= 3).astype(int)
     df["y_ht_btts"]   = ((df["home_ht"] > 0) & (df["away_ht"] > 0)).astype(int)
     df["y_ht_home"]   = (df["home_ht"] >= 1).astype(int)
     df["y_ht_away"]   = (df["away_ht"] >= 1).astype(int)
     df["y_r2_over05"] = (df["goals_r2"] >= 1).astype(int)
     df["y_r2_over15"] = (df["goals_r2"] >= 2).astype(int)
+    df["y_r2_over25"] = (df["goals_r2"] >= 3).astype(int)
     df["y_r2_btts"]   = ((df["home_r2"] > 0) & (df["away_r2"] > 0)).astype(int)
     df["y_r2_home"]   = (df["home_r2"] >= 1).astype(int)
     df["y_r2_away"]   = (df["away_r2"] >= 1).astype(int)
