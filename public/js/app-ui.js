@@ -1343,8 +1343,11 @@ function _mdLiveCtx(d){
 function _mlApplyLive(markets, lc){
   var hg=lc.homeGoals||0, ag=lc.awayGoals||0, tg=hg+ag;
   var setF=function(k,c){ if(markets[k]&&c){ markets[k].prob=100; markets[k].fulfilled=true; } };
-  setF('over05_total',tg>=1); setF('over15_total',tg>=2); setF('over25_total',tg>=3);
-  setF('btts_total',hg>0&&ag>0); setF('over05_home',hg>=1); setF('over05_away',ag>=1);
+  setF('over05_total',tg>=1); setF('over15_total',tg>=2); setF('over25_total',tg>=3); setF('over35_total',tg>=4); setF('over45_total',tg>=5);
+  setF('btts_total',hg>0&&ag>0);
+  // Home/Away score: dacă echipa a marcat → relabel "Gol 2" (prob ML ca proxy).
+  if(hg>=1 && markets.over05_home){ markets.over05_home.relabel='Gol 2 Gazde'; }
+  if(ag>=1 && markets.over05_away){ markets.over05_away.relabel='Gol 2 Oaspeți'; }
   if(lc.r1Done && lc.homeHT!=null && lc.awayHT!=null){
     var hh=lc.homeHT||0, ah=lc.awayHT||0, thh=hh+ah;
     var setFinal=function(k,c){ if(markets[k]){ markets[k].final=true; markets[k].fulfilled=!!c; markets[k].prob=c?100:0; } };
@@ -1353,8 +1356,20 @@ function _mlApplyLive(markets, lc){
     // Piețe R2 deja îndeplinite (goluri repriza 2 = curent − HT).
     var hr2=Math.max(0,hg-hh), ar2=Math.max(0,ag-ah), gr2=hr2+ar2;
     setF('r2_over05',gr2>=1); setF('r2_over15',gr2>=2); setF('r2_over25',gr2>=3);
-    setF('r2_btts',hr2>0&&ar2>0); setF('r2_home',hr2>=1); setF('r2_away',ar2>=1);
+    setF('r2_btts',hr2>0&&ar2>0);
+    if(hr2>=1 && markets.r2_home){ markets.r2_home.relabel='R2 Gol 2 Gazde'; }
+    if(ar2>=1 && markets.r2_away){ markets.r2_away.relabel='R2 Gol 2 Oaspeți'; }
   }
+  // Ladder collapse: o linie Over îndeplinită cu un succesor încă DESCHIS se ascunde
+  // → în grid apare automat linia următoare (cardul ei propriu, cu prob ML).
+  function ladderHide(keys){
+    for(var i=0;i<keys.length;i++){
+      var k=keys[i]; if(!markets[k]||!markets[k].fulfilled) continue;
+      for(var j=i+1;j<keys.length;j++){ if(markets[keys[j]]&&!markets[keys[j]].fulfilled){ markets[k].hidden=true; break; } }
+    }
+  }
+  ladderHide(['over05_total','over15_total','over25_total','over35_total','over45_total']);
+  ladderHide(['r2_over05','r2_over15','r2_over25']);
 }
 function mdRenderML(d){
   var body=document.getElementById('md-body');
@@ -1370,19 +1385,20 @@ function mdRenderML(d){
 
   var clr=function(p){return p>=70?'#00d4aa':p>=50?'#f59e0b':'#ef4444';};
   function card(key){
-    var m=M[key]; if(!m)return '';
+    var m=M[key]; if(!m||m.hidden)return '';
     var p=m.prob, c=clr(p);
+    var desc=m.relabel||m.desc;
     // Piață R1 FINALĂ (rezultat cunoscut)
     if(m.final){
       var fc=m.fulfilled?'#00d4aa':'#ef4444';
       return '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px">'
-        +'<div style="font-size:11px;color:var(--mu)">'+htmlEsc(m.desc)+' <span style="font-size:8px;color:var(--mu)">· Rezultat final R1</span></div>'
+        +'<div style="font-size:11px;color:var(--mu)">'+htmlEsc(desc)+' <span style="font-size:8px;color:var(--mu)">· Rezultat final R1</span></div>'
         +'<div style="font-size:20px;font-weight:800;color:'+fc+';margin-top:2px">'+(m.fulfilled?'✅ DA':'❌ NU')+'</div></div>';
     }
     // Piață deja ÎNDEPLINITĂ (scor curent)
     if(m.fulfilled){
       return '<div style="background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.3);border-radius:10px;padding:10px">'
-        +'<div style="font-size:11px;color:var(--mu)">'+htmlEsc(m.desc)+' <span style="font-size:8px;font-weight:800;color:#021;background:#00d4aa;border-radius:4px;padding:1px 5px;margin-left:4px">✅ ÎNDEPLINIT</span></div>'
+        +'<div style="font-size:11px;color:var(--mu)">'+htmlEsc(desc)+' <span style="font-size:8px;font-weight:800;color:#021;background:#00d4aa;border-radius:4px;padding:1px 5px;margin-left:4px">✅ ÎNDEPLINIT</span></div>'
         +'<div style="font-size:22px;font-weight:800;color:#00d4aa;line-height:1.1;margin-top:2px">100%</div>'
         +'<div style="height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-top:4px"><div style="height:100%;width:100%;background:#00d4aa"></div></div></div>';
     }
@@ -1397,7 +1413,7 @@ function mdRenderML(d){
     }
     var hot=p>=80?'<span style="font-size:8px;font-weight:800;color:#fff;background:#ef4444;border-radius:4px;padding:1px 5px;margin-left:4px">HOT</span>':'';
     return '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px">'
-      +'<div style="font-size:11px;color:var(--mu)">'+htmlEsc(m.desc)+hot+'</div>'
+      +'<div style="font-size:11px;color:var(--mu)">'+htmlEsc(desc)+hot+'</div>'
       +'<div style="font-size:22px;font-weight:800;color:'+c+';line-height:1.1;margin-top:2px">'+p+'%</div>'
       +'<div style="height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-top:4px"><div style="height:100%;width:'+Math.min(100,p)+'%;background:'+c+'"></div></div>'
       +cmp+'</div>';

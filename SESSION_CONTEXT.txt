@@ -778,7 +778,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[04.06 ~21:45] - ML per-secunda: piete R2 indeplinite + statistici live API
+[04.06 ~22:00] - Tab ML: afiseaza piata urmatoare cand una e indeplinita
+  app-ui.js DOAR. _mlApplyLive: ladderHide() ascunde linia Over indeplinita care are
+  succesor inca deschis (total: over05->15->25->35->45; R2: r2_over05->15->25) -> in grid
+  apare automat linia urmatoare cu prob ML. Home/Away score: cand a marcat -> relabel
+  "Gol 2 Gazde/Oaspeti" (over05_home/away) si "R2 Gol 2 Gazde/Oaspeti" (r2_home/away),
+  pastrand prob ML ca proxy (nu mai e 100% fulfilled). card(): skip m.hidden, foloseste
+  m.relabel||m.desc. Top linie fulfilled fara succesor deschis ramane ✅ ÎNDEPLINIT.
+  NEATINS scoring. node --check OK. | Commit: vezi git.
+
+  [04.06 ~21:45] - ML per-secunda: piete R2 indeplinite + statistici live API
   FIX1 app-ui.js _mlApplyLive + ml-predict.js applyLiveContext: R2 fulfilled (goluri R2=
   curent-HT: r2_over05/15/25/btts/home/away) + ht_over25, cand r1Done. Ex: min57 1-1
   HT1-0 -> r2_over05 100%. FIX2 statistici live: match.js fetch /fixtures/statistics
