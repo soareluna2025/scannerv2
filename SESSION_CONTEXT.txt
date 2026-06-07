@@ -778,7 +778,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[04.06 ~22:20] - Tab ML rescris in 3 blocuri (PRE-MECI / REPRIZA 1 / REPRIZA 2)
+[04.06 ~22:45] - Tab ML rescris v4 (3 blocuri detaliate)
+  app-ui.js mdRenderML rescris complet (splice). BLOC1 PRE-MECI: total over ladder 5
+  celule, Rezultat 1X2, Sansa dubla 1X/X2/12 (sumă probs), BTTS DA/NU, goluri per
+  echipa tot meciul. BLOC2 R1: total R1 (Ov0.5/1.5/2.5+BTTS), Rezultat R1 1X2 (DA/NU
+  din scor sau —), goluri per echipa R1 (Ov0.5/1.5 din ht_home/away+_over15). BLOC3 R2
+  (r1Done&&homeHT): total R2, Rezultat R2 (— fara model), per echipa R2 (Ov0.5/1.5/2.5),
+  combinatii R1&R2 (produs probs). CSS v4 (ml-oc yes/no/active/pending, mc green/yellow/
+  red, ml-team-label). _mlApplyLive pastrat. NEATINS scoring. node --check OK. | Commit: git.
+
+  [04.06 ~22:20] - Tab ML rescris in 3 blocuri (PRE-MECI / REPRIZA 1 / REPRIZA 2)
   app-ui.js mdRenderML rescris complet. BLOC1 PRE-MECI: carduri over05-45+BTTS (stari
   done/active/normal din scor curent), 1X2 (home/draw/away), over05 gazde/oaspeti.
   BLOC2 REPRIZA1: 2 coloane per echipa (ml-team-label home/away) x4 over (overCell:
