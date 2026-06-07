@@ -121,7 +121,13 @@ FEATURES_PREMATCH = [
     "home_elo", "away_elo", "elo_diff_ml", "home_win_prob_elo", "elo_sum",
     "home_position_norm", "away_position_norm",
     "confidence",
+    # Conștiență temporală + scor curent. La ANTRENARE = starea finală a meciului
+    # (terminat → elapsed=90, scor final). La INFERENȚĂ LIVE, api/ml-predict.js
+    # suprascrie cu minutul și scorul curent (pre-meci → elapsed_norm=0, goals=0).
+    "elapsed_norm", "minutes_remaining",
+    "goals_home_current", "goals_away_current", "goal_diff_current",
 ]
+# FEATURES_HT moștenește cele 5 features live de mai sus + adaugă stările R1/stats.
 FEATURES_HT = FEATURES_PREMATCH + [
     "home_ht", "away_ht", "goals_ht",
     "shots_home", "shots_away",
@@ -202,6 +208,16 @@ def main():
     df["lambda_sum"] = df["lambda_home"].fillna(0) + df["lambda_away"].fillna(0)
     df["lambda_ratio"] = df["lambda_home"].fillna(0) / df["lambda_away"].replace(0, 1).fillna(1)
     df["elo_sum"] = df["home_elo"].fillna(1500) + df["away_elo"].fillna(1500)
+
+    # Conștiență temporală + scor curent. Datele istorice sunt meciuri TERMINATE →
+    # snapshot la final (elapsed=90 → elapsed_norm=1, minutes_remaining=0, scor final).
+    # predictions NU are coloana `elapsed`, deci o derivăm: meci terminat = 90'.
+    # La inferență LIVE, api/ml-predict.js trimite minutul/scorul real curent.
+    df["elapsed_norm"] = 1.0                      # 90/90 (meci terminat)
+    df["minutes_remaining"] = 0.0                 # (90-90)/90
+    df["goals_home_current"] = df["home_goals"]
+    df["goals_away_current"] = df["away_goals"]
+    df["goal_diff_current"] = df["home_goals"] - df["away_goals"]
 
     # Probabilitățile modelului actual pot lipsi pe unele predicții → fillna(50)
     # ca brier_actual (comparația cu modelul curent) să nu primească NaN.

@@ -778,6 +778,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[07.06 ~now] - ML conștiență temporală + scor (TOATE 34 piețe)
+  train_model.py: FEATURES_PREMATCH += elapsed_norm, minutes_remaining,
+  goals_home_current, goals_away_current, goal_diff_current (FEATURES_HT le
+  moștenește). La antrenare = stare finală (elapsed_norm=1, min_rem=0, scor
+  final din home_goals/away_goals). ml-predict.js buildFeatures(): elapsed_norm
+  & minutes_remaining acum NORMALIZATE (90-el)/90 + ACTIVE; goals_*_current din
+  liveCtx; pre-meci → elapsed_norm=0, min_rem=1, goals=0. NEATINS scoring
+  (calcConfidence*/score1-7). node --check OK, py_compile OK. RE-ANTRENARE
+  necesară pe VPS (toate 34) ca exportul să includă noile features. | Commit: git
+
 [04.06 ~22:45] - Tab ML rescris v4 (3 blocuri detaliate)
   app-ui.js mdRenderML rescris complet (splice). BLOC1 PRE-MECI: total over ladder 5
   celule, Rezultat 1X2, Sansa dubla 1X/X2/12 (sumă probs), BTTS DA/NU, goluri per

@@ -37,6 +37,10 @@ function buildFeatures(en, elo, lc) {
   const aht = (lc.awayHT != null ? lc.awayHT : lc.away_ht);
   const goalsHt = (num(hht) != null && num(aht) != null) ? num(hht) + num(aht) : null;
   const ls = lc.liveStats || lc;   // statistici live reale (din API) prioritar
+  // Conștiență temporală + scor curent (acum ACTIVE ca features în model).
+  const _el = num(lc.elapsed);
+  const _elLive = _el != null && _el > 0;
+  const _hgCur = num(lc.homeGoals), _agCur = num(lc.awayGoals);
   return {
     score1: num(bd.poisson), score2: num(bd.forma), score3: num(bd.h2h),
     score6: num(bd.consistenta), score7: num(bd.putereEchipe),
@@ -54,9 +58,14 @@ function buildFeatures(en, elo, lc) {
     shots_on_target_home: num(ls.shots_on_target_home), shots_on_target_away: num(ls.shots_on_target_away),
     corners_home: num(ls.corners_home), corners_away: num(ls.corners_away),
     possession_home: num(ls.possession_home), possession_away: num(ls.possession_away),
-    // elapsed normalizat (feature suplimentar — folosit doar dacă modelul îl conține)
-    elapsed_norm: (num(lc.elapsed) != null && num(lc.elapsed) > 0) ? num(lc.elapsed) / 90 : null,
-    minutes_remaining: num(lc.minutesRemaining),
+    // Conștiență temporală + scor curent (ACTIVE ca features — vezi FEATURES_PREMATCH).
+    // Pre-meci (fără liveCtx): elapsed_norm=0, minutes_remaining=1, goals=0.
+    // Live: elapsed/90, (90-elapsed)/90 (normalizat), scorul curent din liveCtx.
+    elapsed_norm: _elLive ? Math.min(1, _el / 90) : 0,
+    minutes_remaining: _elLive ? Math.max(0, (90 - _el) / 90) : 1,
+    goals_home_current: _hgCur != null ? _hgCur : 0,
+    goals_away_current: _agCur != null ? _agCur : 0,
+    goal_diff_current: (_hgCur != null && _agCur != null) ? _hgCur - _agCur : 0,
   };
 }
 
