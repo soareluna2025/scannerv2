@@ -33,7 +33,28 @@ import joblib
 ML_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def _load_env_file(path="/root/scannerv2/.env"):
+    # Încarcă manual KEY=VALUE din .env (fără python-dotenv). Setează doar cheile
+    # care NU există deja în environment → funcționează manual ȘI din cron/PM2.
+    try:
+        with open(path, "r") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
+
 def get_conn():
+    _load_env_file()   # din .env dacă lipsesc din mediu (cron/PM2)
     url = os.getenv("POSTGRES_URL")
     if url:
         return psycopg2.connect(url)
