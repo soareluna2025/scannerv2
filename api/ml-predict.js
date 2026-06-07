@@ -8,10 +8,15 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXPORT_PATH = path.join(__dirname, '..', 'ml', 'model_export.json');
+const LIVE_MODEL_PATH = path.join(__dirname, '..', 'ml', 'model_live_export.json');
 
 let _models;          // undefined = neîncărcat, null = lipsă, obiect = încărcat
 let _loadedAt = 0;
 const RELOAD_MS = 10 * 60 * 1000;   // recitește exportul la 10 min (re-antrenări)
+
+let _liveModel = null;   // null = lipsă/neîncărcat, obiect = încărcat
+let _liveModelTs = 0;    // mtimeMs al fișierului încărcat
+let _liveCheckedAt = 0;  // ultima verificare (throttle la RELOAD_MS)
 
 function loadModels() {
   const now = Date.now();
@@ -23,6 +28,25 @@ function loadModels() {
   }
   _loadedAt = now;
   return _models;
+}
+
+// Modelul LIVE (model_live_export.json). Reîncărcare pe mtime, throttle RELOAD_MS.
+// Silent-fail: fișier lipsă → null → integrarea live e dezactivată complet.
+function loadLiveModel() {
+  const now = Date.now();
+  if (now - _liveCheckedAt < RELOAD_MS) return _liveModel;
+  _liveCheckedAt = now;
+  try {
+    const mt = fs.statSync(LIVE_MODEL_PATH).mtimeMs;
+    if (mt !== _liveModelTs) {                    // fișierul s-a schimbat → reîncarcă
+      _liveModel = JSON.parse(fs.readFileSync(LIVE_MODEL_PATH, 'utf8'));
+      _liveModelTs = mt;
+    }
+  } catch (_) {
+    _liveModel = null;   // export inexistent → live ML indisponibil
+    _liveModelTs = 0;
+  }
+  return _liveModel;
 }
 
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
@@ -86,6 +110,73 @@ function lrProb(model, feat) {
   return Math.round(Math.max(0, Math.min(100, p * 100)));
 }
 
+// Vectorul de 31 features pentru modelele LIVE — ORDINE IDENTICĂ cu
+// ml/train_live.py FEATURES. ELO: enrichData prioritar, fallback la eloData.
+function buildLiveFeatures(en, lc, elo) {
+  en = en || {}; lc = lc || {}; elo = elo || {};
+  const bd = en.breakdown || {};
+  const ls = lc.liveStats || {};
+  const f = {};
+  f.minute = lc.elapsed || 0;
+  f.predicted_value = (en.over15Prob || 50) / 100;
+  f.ngp_value = en.ngp || 0.5;
+  f.layer1_score = (bd.poisson || 50) / 100;
+  f.layer2_score = (bd.forma || 50) / 100;
+  f.layer3_score = (bd.h2h || 50) / 100;
+  f.layer4_score = (bd.live || 0) / 100;
+  f.layer5_score = 0;
+  f.layer6_score = (bd.consistenta || 50) / 100;
+  f.layer7_score = (bd.putereEchipe || 50) / 100;
+  f.lambda_home = en.lambdaHome || 1.5;
+  f.lambda_away = en.lambdaAway || 1.2;
+  f.home_goals = lc.homeGoals || 0;
+  f.away_goals = lc.awayGoals || 0;
+  f.home_sot = ls.shots_on_target_home || 0;
+  f.away_sot = ls.shots_on_target_away || 0;
+  f.home_shots = ls.shots_home || 0;
+  f.away_shots = ls.shots_away || 0;
+  f.home_possession = ls.possession_home || 50;
+  f.away_possession = ls.possession_away || 50;
+  f.home_corners = ls.corners_home || 0;
+  f.away_corners = ls.corners_away || 0;
+  f.home_da = 0;
+  f.away_da = 0;
+  f.home_elo = en.homeElo || elo.home_elo || 1500;
+  f.away_elo = en.awayElo || elo.away_elo || 1500;
+  f.elo_diff_ml = en.eloDiffUsed || elo.elo_diff || 0;
+  f.elapsed_norm = (lc.elapsed || 0) / 90;
+  f.minutes_remaining = Math.max(0, 90 - (lc.elapsed || 0)) / 90;
+  f.goal_diff = (lc.homeGoals || 0) - (lc.awayGoals || 0);
+  f.total_goals_now = (lc.homeGoals || 0) + (lc.awayGoals || 0);
+  return f;
+}
+
+// Mapare model live → cheie de piață afișată în UI.
+const LIVE_MARKET_MAP = [
+  ['live_ngp',    'live_any_goal',       'Mai cad goluri?'],
+  ['live_over15', 'live_over15_updated', 'Over 1.5 se întâmplă?'],
+];
+
+// Rulează modelele LIVE — DOAR în repriză (status 1H/2H). Altfel / lipsă model → {}.
+function predictLiveMarkets(enrichData, liveCtx, eloData) {
+  try {
+    const lc = liveCtx || {};
+    if (!liveCtx || (lc.status !== '1H' && lc.status !== '2H')) return {};
+    const lm = loadLiveModel();
+    if (!lm || typeof lm !== 'object') return {};
+    const feat = buildLiveFeatures(enrichData, lc, eloData);
+    const out = {};
+    for (const [srcKey, mktKey, desc] of LIVE_MARKET_MAP) {
+      const m = lm[srcKey];
+      if (!m) continue;                       // model lipsă din export → skip silențios
+      const prob = lrProb(m, feat);
+      if (prob == null) continue;
+      out[mktKey] = { prob, desc, live: true, brierLr: m.brier_lr ?? null, nSamples: m.n_samples ?? null };
+    }
+    return out;
+  } catch (_) { return {}; }
+}
+
 // enrichData = payload din enrich.js; eloData = {home_elo,away_elo,elo_diff,home_win_prob}
 // liveCtx (opțional) = {elapsed,status,homeGoals,awayGoals,homeHT,awayHT,isLive,isHT,minutesRemaining}
 export function predictAllMarkets(enrichData, eloData, liveCtx) {
@@ -120,6 +211,20 @@ export function predictAllMarkets(enrichData, eloData, liveCtx) {
 
     // ── Context live: marchează piețele deja decise (fulfilled / final R1) ──
     applyLiveContext(markets, lc);
+
+    // ── Modele LIVE (model_live_export.json) — doar în repriză (1H/2H) ──
+    if (liveCtx && (lc.status === '1H' || lc.status === '2H')) {
+      const liveMk = predictLiveMarkets(enrichData, lc, eloData);
+      Object.assign(markets, liveMk);
+      const lo = liveMk.live_over15_updated;
+      if (lo && lo.prob != null) {
+        // Suprascrie over0.5/1.5 ale reprizei curente cu predicția live actualizată,
+        // dar NU peste piețele deja decise (fulfilled/final = fapt).
+        const over = (k) => { const mk = markets[k]; if (mk && !mk.fulfilled && !mk.final) mk.prob = lo.prob; };
+        if (lc.status === '1H') { over('ht_over05'); over('ht_over15'); }
+        else if (lc.status === '2H') { over('r2_over05'); over('r2_over15'); }
+      }
+    }
 
     return { markets, htAvailable, bestBrier, trainedOn, live: !!lc.isLive, status: lc.status || 'NS', elapsed: num(lc.elapsed) || 0 };
   } catch (_) { return null; }

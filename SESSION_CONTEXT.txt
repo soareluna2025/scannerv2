@@ -778,7 +778,19 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - ml/train_live.py (modele ML LIVE pe prediction_log)
+[07.06 ~now] - Integrare modele LIVE (model_live_export.json) în app
+  ml-predict.js: + loadLiveModel() (reload pe mtime, throttle RELOAD_MS,
+  silent-fail), buildLiveFeatures() (31 features în ordinea din train_live.py),
+  predictLiveMarkets() (doar status 1H/2H; live_ngp→live_any_goal,
+  live_over15→live_over15_updated). predictAllMarkets adaugă piețele live +
+  suprascrie ht_over05/15 (1H) / r2_over05/15 (2H) cu live_over15_updated (NU
+  peste fulfilled/final). app-ui.js mdRenderML: bloc „🔴 LIVE ACUM" (când
+  lc.isLive, dacă există prob live) + badge „🔴 live" la R1(1H)/R2(2H).
+  match.js neschimbat (status deja corect). gitignore deja are export-ul.
+  node --check OK ×2. NEATINS scoring. ⚠ posibil scale-mismatch features
+  (train raw 0-100 vs buildLiveFeatures /100) — vezi notă owner. | Commit: git
+
+[07.06 ~earlier] - ml/train_live.py (modele ML LIVE pe prediction_log)
   Script NOU: antrenează 4 modele live (live_ngp/over15/gg/confidence) pe
   prediction_log (outcome WIN/LOSS). Features live din live_stats la momentul
   predicției (LATERAL JOIN elapsed<=minute) + ELO + derivate (elapsed_norm,

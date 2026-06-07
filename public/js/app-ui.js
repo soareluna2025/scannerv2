@@ -1447,6 +1447,21 @@ function mdRenderML(d){
   out+='<span style="font-size:11px;font-weight:700;color:'+stClr+'">'+stTxt+'</span>';
   out+='<span style="font-size:10px;color:var(--mu);margin-left:auto">'+trained+' meciuri · LR</span></div>';
 
+  // ════ BLOC 0 — 🔴 LIVE ACUM (modele live, doar în repriză) ════
+  if(lc.isLive){
+    var pLiveGoal=prob('live_any_goal'), pLiveOv15=prob('live_over15_updated');
+    if(pLiveGoal!=null||pLiveOv15!=null){
+      out+='<div class="md-section">';
+      out+='<div class="md-section-title" style="color:#ff7777">🔴 LIVE ACUM</div>';
+      out+='<div style="'+grid(3)+'">'
+        +mc('Mai cad goluri?',pLiveGoal)
+        +mc('Over 1.5?',pLiveOv15)
+        +mc('Min '+lc.elapsed,null)+'</div>';
+      out+='<div style="font-size:9px;color:#6b7a99;margin-top:6px">Bazat pe statistici live · actualizat la fiecare minut</div>';
+      out+='</div>';
+    }
+  }
+
   // ════ BLOC 1 — PRE-MECI ════
   out+='<div class="md-section"><div class="md-section-title">PRE-MECI</div>';
   out+='<div class="ml-sub">Total goluri meci</div>';
@@ -1479,7 +1494,7 @@ function mdRenderML(d){
   var r1Live=(lc.status==='1H'), r1Done=lc.r1Done;
   var r1H=r1Done?(lc.homeHT||0):hg, r1A=r1Done?(lc.awayHT||0):ag, thh=r1H+r1A;
   var r1Badge=r1Done?('✅ Rezultat final R1 · HT '+(lc.homeHT!=null?lc.homeHT:'?')+'-'+(lc.awayHT!=null?lc.awayHT:'?')):'⏱ Predicție pre-meci';
-  out+='<div class="md-section"><div class="md-section-title">REPRIZA 1</div>';
+  out+='<div class="md-section"><div class="md-section-title">REPRIZA 1'+(lc.status==='1H'?' <span style="font-size:9px;color:#ff7777;font-weight:700">🔴 live</span>':'')+'</div>';
   out+='<div style="font-size:10px;color:var(--mu);margin-bottom:8px">'+r1Badge+'</div>';
   out+='<div class="ml-sub">Total goluri R1</div>';
   var r1BttsDone=r1Done?((lc.homeHT||0)>0&&(lc.awayHT||0)>0):(hg>0&&ag>0);
@@ -1506,7 +1521,7 @@ function mdRenderML(d){
     var hr2=Math.max(0,hg-(lc.homeHT||0)), ar2=Math.max(0,ag-(lc.awayHT||0)), gr2=hr2+ar2;
     var r2Badge=lc.isHT?('⏸ Pauză · HT '+lc.homeHT+'-'+lc.awayHT):('🔴 LIVE · min '+lc.elapsed+' · scor HT '+lc.homeHT+'-'+lc.awayHT);
     var r2BttsDone=(hr2>0&&ar2>0);
-    out+='<div class="md-section"><div class="md-section-title">REPRIZA 2</div>';
+    out+='<div class="md-section"><div class="md-section-title">REPRIZA 2'+(lc.status==='2H'?' <span style="font-size:9px;color:#ff7777;font-weight:700">🔴 live</span>':'')+'</div>';
     out+='<div style="font-size:10px;color:var(--mu);margin-bottom:8px">'+r2Badge+'</div>';
     out+='<div class="ml-sub">Total goluri R2</div>';
     out+='<div style="'+grid(4)+'">'
