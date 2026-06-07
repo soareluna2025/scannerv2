@@ -1,16 +1,19 @@
 """
-AlohaScan — Antrenare model ML pe predicțiile istorice.
+AlohaScan — Antrenare model ML complet (pre-meci + repriza 1 + repriza 2).
 
-Citește din tabela `predictions` (features score1-7 + ELO + poziție clasament +
-probabilități + labels rezolvate), antrenează Logistic Regression + Gradient
-Boosting pentru Home Win, raportează Brier vs modelul actual, exportă coeficienții
-LR ca JSON pentru consum în Node.js.
+Citește din `predictions` (features pre-meci) + `fixtures_history` (scor final/HT)
++ `match_events` (HT calculat fallback) + `match_stats` (statistici totale), apoi
+antrenează LogisticRegression + GradientBoosting pe MULTE piețe (total / HT / R2),
+raportează Brier vs modelul actual și exportă totul în ml/model_export.json.
 
-⚠ SECURITATE: conexiunea DB se ia din VARIABILE DE MEDIU (nu hardcodăm parola).
-   Setează POSTGRES_URL, sau PGPASSWORD/PGUSER/PGDATABASE/PGHOST înainte de rulare:
+⚠ SECURITATE: conexiunea DB se ia din VARIABILE DE MEDIU (nu hardcodăm parola):
      export POSTGRES_URL="postgresql://alohascan:***@127.0.0.1:5432/elefant"
-   sau
-     export PGPASSWORD=*** PGUSER=alohascan PGDATABASE=elefant PGHOST=127.0.0.1
+   sau  export PGPASSWORD=*** PGUSER=alohascan PGDATABASE=elefant PGHOST=127.0.0.1
+
+⚠ SCHEMA: match_stats e WIDE per-echipă (fixture_id, team_id, shots_on_goal,
+   shots_total, corner_kicks, ball_possession, ...) — NU EAV (is_home/stat_type/value).
+   match_events are team_id (echipa care a marcat). Query-ul de mai jos respectă
+   schema REALĂ (join pe team_id față de fixtures_history.home/away_team_id).
 
 Rulare:  pip install -r ml/requirements.txt  &&  python ml/train_model.py
 """
@@ -30,7 +33,6 @@ import joblib
 ML_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-# ── PASUL 2 — Conectare la DB (din mediu, FĂRĂ parolă hardcodată) ──────────────
 def get_conn():
     url = os.getenv("POSTGRES_URL")
     if url:
@@ -38,12 +40,13 @@ def get_conn():
     return psycopg2.connect(
         dbname=os.getenv("PGDATABASE", "elefant"),
         user=os.getenv("PGUSER", "alohascan"),
-        password=os.getenv("PGPASSWORD"),   # din mediu — nu în cod
+        password=os.getenv("PGPASSWORD"),
         host=os.getenv("PGHOST", "127.0.0.1"),
         port=os.getenv("PGPORT", "5432"),
     )
 
 
+# PASUL 1 — Query extins (adaptat la schema REALĂ: match_stats wide, match_events team_id)
 QUERY = """
 SELECT
     p.fixture_id,
@@ -55,116 +58,198 @@ SELECT
     p.home_win_prob_elo,
     p.home_position_norm, p.away_position_norm,
     p.confidence,
-    p.result_winner, p.result_over15, p.result_over25, p.result_gg,
-    p.created_at,
-    COALESCE(p.lambda_home, 0) + COALESCE(p.lambda_away, 0) AS lambda_sum,
-    CASE WHEN COALESCE(p.lambda_away, 0) > 0
-         THEN COALESCE(p.lambda_home, 0) / p.lambda_away
-         ELSE 1 END AS lambda_ratio,
-    CASE WHEN p.home_elo IS NOT NULL AND p.away_elo IS NOT NULL
-         THEN p.home_elo + p.away_elo
-         ELSE NULL END AS elo_sum
+    fh.home_goals, fh.away_goals,
+    fh.home_ht, fh.away_ht,
+    COALESCE(fh.home_ht, ht.home_ht_calc) AS home_ht_final,
+    COALESCE(fh.away_ht, ht.away_ht_calc) AS away_ht_final,
+    ms_home.shots_total     AS shots_home,
+    ms_home.shots_on_goal   AS shots_on_target_home,
+    ms_home.corner_kicks    AS corners_home,
+    ms_home.ball_possession AS possession_home,
+    ms_away.shots_total     AS shots_away,
+    ms_away.shots_on_goal   AS shots_on_target_away,
+    ms_away.corner_kicks    AS corners_away,
+    ms_away.ball_possession AS possession_away,
+    p.created_at
 FROM predictions p
+JOIN fixtures_history fh ON fh.fixture_id = p.fixture_id
+LEFT JOIN (
+    SELECT me.fixture_id,
+        SUM(CASE WHEN me.elapsed <= 45 AND me.team_id = fh2.home_team_id THEN 1 ELSE 0 END) AS home_ht_calc,
+        SUM(CASE WHEN me.elapsed <= 45 AND me.team_id = fh2.away_team_id THEN 1 ELSE 0 END) AS away_ht_calc
+    FROM match_events me
+    JOIN fixtures_history fh2 ON fh2.fixture_id = me.fixture_id
+    WHERE me.type = 'Goal' AND (me.detail IS NULL OR me.detail <> 'Own Goal')
+    GROUP BY me.fixture_id
+) ht ON ht.fixture_id = p.fixture_id
+LEFT JOIN match_stats ms_home ON ms_home.fixture_id = p.fixture_id AND ms_home.team_id = fh.home_team_id
+LEFT JOIN match_stats ms_away ON ms_away.fixture_id = p.fixture_id AND ms_away.team_id = fh.away_team_id
 WHERE p.result_winner IS NOT NULL
-  AND p.home_elo IS NOT NULL
   AND p.score1 IS NOT NULL
-  AND p.score2 IS NOT NULL
+  AND fh.home_goals IS NOT NULL
 ORDER BY p.created_at ASC
 """
 
-FEATURES_WIN = [
+FEATURES_PREMATCH = [
     "score1", "score2", "score3", "score6", "score7",
     "home_win_prob", "draw_prob", "away_win_prob",
+    "over15_prob", "over25_prob", "gg_prob",
     "lambda_home", "lambda_away", "lambda_sum", "lambda_ratio",
     "home_elo", "away_elo", "elo_diff_ml", "home_win_prob_elo", "elo_sum",
     "home_position_norm", "away_position_norm",
     "confidence",
 ]
+FEATURES_HT = FEATURES_PREMATCH + [
+    "home_ht", "away_ht", "goals_ht",
+    "shots_home", "shots_away",
+    "shots_on_target_home", "shots_on_target_away",
+    "corners_home", "corners_away",
+    "possession_home", "possession_away",
+]
+
+MARKETS = {
+    "over05_total": ("y_over05", FEATURES_PREMATCH, "Over 0.5 Total"),
+    "over15_total": ("y_over15", FEATURES_PREMATCH, "Over 1.5 Total"),
+    "over25_total": ("y_over25", FEATURES_PREMATCH, "Over 2.5 Total"),
+    "btts_total":   ("y_btts",   FEATURES_PREMATCH, "BTTS Total"),
+    "over05_home":  ("y_over05_home", FEATURES_PREMATCH, "Over 0.5 Home"),
+    "over05_away":  ("y_over05_away", FEATURES_PREMATCH, "Over 0.5 Away"),
+    "home_win":     ("y_home_win", FEATURES_PREMATCH, "Home Win"),
+    # Repriza 1 (pre-meci features)
+    "ht_over05": ("y_ht_over05", FEATURES_PREMATCH, "HT Over 0.5"),
+    "ht_over15": ("y_ht_over15", FEATURES_PREMATCH, "HT Over 1.5"),
+    "ht_btts":   ("y_ht_btts",   FEATURES_PREMATCH, "HT BTTS"),
+    "ht_home":   ("y_ht_home",   FEATURES_PREMATCH, "HT Home Score"),
+    "ht_away":   ("y_ht_away",   FEATURES_PREMATCH, "HT Away Score"),
+    # Repriza 2 (pre-meci + HT features)
+    "r2_over05": ("y_r2_over05", FEATURES_HT, "R2 Over 0.5"),
+    "r2_over15": ("y_r2_over15", FEATURES_HT, "R2 Over 1.5"),
+    "r2_btts":   ("y_r2_btts",   FEATURES_HT, "R2 BTTS"),
+    "r2_home":   ("y_r2_home",   FEATURES_HT, "R2 Home Score"),
+    "r2_away":   ("y_r2_away",   FEATURES_HT, "R2 Away Score"),
+}
+
+ACTUAL_COL = {"y_over15": "over15_prob", "y_over25": "over25_prob",
+              "y_btts": "gg_prob", "y_home_win": "home_win_prob"}
 
 
 def main():
     conn = get_conn()
     df = pd.read_sql(QUERY, conn)
+    conn.close()
     print(f"Date extrase: {len(df)} predicții")
     if len(df) < 200:
         print("⚠ Prea puține date pentru antrenare (recomandat 2000+). Ies.")
-        conn.close()
         return
 
-    # ── PASUL 3 — Pregătire features ──────────────────────────────────────────
-    df["days_old"] = (pd.Timestamp.now(tz='UTC') - pd.to_datetime(df["created_at"], utc=True)).dt.days
+    # Temporal weight — predicțiile recente cântăresc mai mult (tz-aware UTC).
+    df["days_old"] = (pd.Timestamp.now(tz="UTC") - pd.to_datetime(df["created_at"], utc=True)).dt.days
     df["sample_weight"] = np.exp(-0.001 * df["days_old"])
 
-    for col in FEATURES_WIN:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-        med = df[col].median()
-        df[col] = df[col].fillna(med if pd.notna(med) else 0)
+    # PASUL 2 — features derivate (scor HT + R2 + pre-meci)
+    for c in ["home_goals", "away_goals", "home_ht_final", "away_ht_final",
+              "lambda_home", "lambda_away", "home_elo", "away_elo",
+              "shots_home", "shots_away", "shots_on_target_home", "shots_on_target_away",
+              "corners_home", "corners_away", "possession_home", "possession_away"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    y_win = (df["result_winner"] == "home").astype(int)
-    X = df[FEATURES_WIN]
-    weights = df["sample_weight"]
+    df["home_ht"] = df["home_ht_final"].fillna(0)
+    df["away_ht"] = df["away_ht_final"].fillna(0)
+    df["goals_ht"] = df["home_ht"] + df["away_ht"]
+    df["home_r2"] = df["home_goals"] - df["home_ht"]
+    df["away_r2"] = df["away_goals"] - df["away_ht"]
+    df["goals_r2"] = df["home_r2"] + df["away_r2"]
+    df["lambda_sum"] = df["lambda_home"].fillna(0) + df["lambda_away"].fillna(0)
+    df["lambda_ratio"] = df["lambda_home"].fillna(0) / df["lambda_away"].replace(0, 1).fillna(1)
+    df["elo_sum"] = df["home_elo"].fillna(1500) + df["away_elo"].fillna(1500)
 
-    # ── PASUL 4 — Antrenare (80/20) ───────────────────────────────────────────
-    X_train, X_test, y_train, y_test, w_train, w_test, idx_train, idx_test = train_test_split(
-        X, y_win, weights, df.index, test_size=0.2, random_state=42
-    )
+    # PASUL 3 — labels toate piețele
+    df["y_over05"] = (df["home_goals"] + df["away_goals"] >= 1).astype(int)
+    df["y_over15"] = (df["home_goals"] + df["away_goals"] >= 2).astype(int)
+    df["y_over25"] = (df["home_goals"] + df["away_goals"] >= 3).astype(int)
+    df["y_btts"]   = ((df["home_goals"] > 0) & (df["away_goals"] > 0)).astype(int)
+    df["y_over05_home"] = (df["home_goals"] >= 1).astype(int)
+    df["y_over05_away"] = (df["away_goals"] >= 1).astype(int)
+    df["y_home_win"] = (df["result_winner"] == "home").astype(int)
+    df["y_ht_over05"] = (df["goals_ht"] >= 1).astype(int)
+    df["y_ht_over15"] = (df["goals_ht"] >= 2).astype(int)
+    df["y_ht_btts"]   = ((df["home_ht"] > 0) & (df["away_ht"] > 0)).astype(int)
+    df["y_ht_home"]   = (df["home_ht"] >= 1).astype(int)
+    df["y_ht_away"]   = (df["away_ht"] >= 1).astype(int)
+    df["y_r2_over05"] = (df["goals_r2"] >= 1).astype(int)
+    df["y_r2_over15"] = (df["goals_r2"] >= 2).astype(int)
+    df["y_r2_btts"]   = ((df["home_r2"] > 0) & (df["away_r2"] > 0)).astype(int)
+    df["y_r2_home"]   = (df["home_r2"] >= 1).astype(int)
+    df["y_r2_away"]   = (df["away_r2"] >= 1).astype(int)
 
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    # PASUL 5 — antrenează modele pentru toate piețele
+    results = {}
+    for market_key, (label_col, features, desc) in MARKETS.items():
+        print(f"\n=== {desc} ===")
+        mask = df[label_col].notna()
+        # fillna median apoi 0 (în caz de coloană complet goală → fără crash sklearn)
+        X = df.loc[mask, features].fillna(df[features].median()).fillna(0)
+        y = df.loc[mask, label_col].astype(int)
+        w = df.loc[mask, "sample_weight"]
 
-    lr = LogisticRegression(max_iter=1000, random_state=42)
-    lr.fit(X_train_scaled, y_train, sample_weight=w_train)
+        if len(y) < 100 or y.nunique() < 2:
+            print(f"  Date insuficiente: {len(y)} rânduri (sau o singură clasă)")
+            continue
 
-    gb = GradientBoostingClassifier(
-        n_estimators=200, max_depth=4, learning_rate=0.05, random_state=42
-    )
-    gb.fit(X_train, y_train, sample_weight=w_train)
+        X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(
+            X, y, w, test_size=0.2, random_state=42
+        )
 
-    # ── PASUL 5 — Validare Brier ──────────────────────────────────────────────
-    brier_lr = brier_score_loss(y_test, lr.predict_proba(X_test_scaled)[:, 1], sample_weight=w_test)
-    brier_gb = brier_score_loss(y_test, gb.predict_proba(X_test)[:, 1], sample_weight=w_test)
-    brier_actual = brier_score_loss(y_test, df.loc[idx_test, "home_win_prob"] / 100.0)
+        scaler = StandardScaler()
+        X_train_s = scaler.fit_transform(X_train)
+        X_test_s = scaler.transform(X_test)
 
-    print("\n=== REZULTATE HOME WIN ===")
-    print("Logistic Regression:")
-    print(f"  Brier: {brier_lr:.4f}")
-    print(f"  Accuracy: {accuracy_score(y_test, lr.predict(X_test_scaled)):.4f}")
-    print("Gradient Boosting:")
-    print(f"  Brier: {brier_gb:.4f}")
-    print(f"  Accuracy: {accuracy_score(y_test, gb.predict(X_test)):.4f}")
-    print(f"Model actual (home_win_prob): Brier {brier_actual:.4f}")
+        lr = LogisticRegression(max_iter=1000, random_state=42)
+        lr.fit(X_train_s, y_train, sample_weight=w_train)
 
-    feature_importance = pd.DataFrame({
-        "feature": FEATURES_WIN,
-        "importance": gb.feature_importances_,
-    }).sort_values("importance", ascending=False)
-    print("\n=== IMPORTANȚA FEATURES ===")
-    print(feature_importance.to_string(index=False))
+        gb = GradientBoostingClassifier(n_estimators=200, max_depth=4,
+                                        learning_rate=0.05, random_state=42)
+        gb.fit(X_train, y_train, sample_weight=w_train)
 
-    # ── PASUL 6 — Salvare modele + ponderi ────────────────────────────────────
-    joblib.dump(lr, os.path.join(ML_DIR, "model_lr_win.pkl"))
-    joblib.dump(gb, os.path.join(ML_DIR, "model_gb_win.pkl"))
-    joblib.dump(scaler, os.path.join(ML_DIR, "scaler_win.pkl"))
+        brier_lr = brier_score_loss(y_test, lr.predict_proba(X_test_s)[:, 1], sample_weight=w_test)
+        brier_gb = brier_score_loss(y_test, gb.predict_proba(X_test)[:, 1], sample_weight=w_test)
 
-    weights_json = {
-        "features": FEATURES_WIN,
-        "coefficients": lr.coef_[0].tolist(),
-        "intercept": float(lr.intercept_[0]),
-        "scaler_mean": scaler.mean_.tolist(),
-        "scaler_scale": scaler.scale_.tolist(),
-        "brier_lr": float(brier_lr),
-        "brier_gb": float(brier_gb),
-        "brier_actual": float(brier_actual),
-        "trained_on": int(len(df)),
-        "trained_at": pd.Timestamp.now().isoformat(),
-    }
-    with open(os.path.join(ML_DIR, "model_weights.json"), "w") as f:
-        json.dump(weights_json, f, indent=2)
+        actual_col = ACTUAL_COL.get(label_col)
+        brier_actual = None
+        if actual_col:
+            brier_actual = brier_score_loss(y_test, df.loc[X_test.index, actual_col] / 100.0)
 
-    print("\n✅ Modele salvate în ml/ (model_lr_win.pkl, model_gb_win.pkl, scaler_win.pkl)")
-    print("✅ Ponderi exportate în ml/model_weights.json")
-    conn.close()
+        line = f"  N={len(y)} | LR: {brier_lr:.4f} | GB: {brier_gb:.4f}"
+        if brier_actual is not None:
+            line += f" | Actual: {brier_actual:.4f} | {'✅ ML CÂȘTIGĂ' if brier_gb < brier_actual else '❌ Model actual mai bun'}"
+        print(line)
+
+        fi = pd.DataFrame({"feature": features, "importance": gb.feature_importances_})
+        fi = fi.sort_values("importance", ascending=False).head(5)
+        print(f"  Top features: {', '.join(fi['feature'].tolist())}")
+
+        results[market_key] = {
+            "description": desc,
+            "n_samples": int(len(y)),
+            "brier_lr": float(brier_lr),
+            "brier_gb": float(brier_gb),
+            "brier_actual": float(brier_actual) if brier_actual is not None else None,
+            "ml_wins": bool(brier_gb < brier_actual) if brier_actual is not None else None,
+            "features": features,
+            "lr_coef": lr.coef_[0].tolist(),
+            "lr_intercept": float(lr.intercept_[0]),
+            "scaler_mean": scaler.mean_.tolist(),
+            "scaler_scale": scaler.scale_.tolist(),
+            "feature_importances": dict(zip(features, gb.feature_importances_.tolist())),
+        }
+
+        joblib.dump(gb, os.path.join(ML_DIR, f"model_gb_{market_key}.pkl"))
+        joblib.dump(scaler, os.path.join(ML_DIR, f"scaler_{market_key}.pkl"))
+
+    with open(os.path.join(ML_DIR, "model_export.json"), "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"\n✅ {len(results)} modele salvate în ml/")
+    print("✅ Export complet în ml/model_export.json")
 
 
 if __name__ == "__main__":
