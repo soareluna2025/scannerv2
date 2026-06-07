@@ -778,7 +778,15 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - Factor „golgheter accidentat" pe lambda (enrich.js)
+[07.06 ~now] - Clamp global pe produsul factorilor λ (enrich.js)
+  Baseline λ capturat înainte de lanțul multiplicativ (după Maher+h2h/
+  teams_stats/standings). LAMBDA_MIN_RATIO=0.65 → result.lambdaHome/Away nu pot
+  scădea sub 65% din baseline (Math.max). La intervenție → recalc lambdaTotal +
+  matrice Poisson + result._lambdaClamped=true. Plasat după Smart injury
+  penalty, ÎNAINTE de model-weights multiplier (calibrarea învățată rămâne
+  autoritativă). node --check OK. NEATINS calcConfidence*/score1-7. | Commit: git
+
+[07.06 ~earlier] - Factor „golgheter accidentat" pe lambda (enrich.js)
   + getTopScorerInjuryFactor(teamId, injuries): SELECT golgheter #1 din
   top_scorers (team_id, SEASON, ORDER goals DESC LIMIT 1); dacă e în `injuries`
   → 0.90, altfel 1.0 (±10% max, silent-fail→1.0). Aplicat pe lambdaHome/Away

@@ -1240,6 +1240,11 @@ export default async function handler(req, res) {
       result._standingsBlend = `H(${stnH.avgScored}/${stnH.avgConceded})|A(${stnA.avgScored}/${stnA.avgConceded})`;
     }
 
+    // Baseline λ înainte de lanțul de factori multiplicativi (după Maher + h2h
+    // blend / teams_stats override / standings). Referință pt clamp-ul de mai jos.
+    const lambdaHomeBaseline = result.lambdaHome;
+    const lambdaAwayBaseline = result.lambdaAway;
+
     // Top scorer factor — lambda ajustat cu puterea atacantului de top vs media ligii (±15% max)
     if (lgid && (topScorerFactorH !== 1.0 || topScorerFactorA !== 1.0)) {
       result.lambdaHome  = +(result.lambdaHome  * topScorerFactorH).toFixed(2);
@@ -1336,6 +1341,25 @@ export default async function handler(req, res) {
         });
         result._injuryLambda = `H:${injFactorH.toFixed(2)}|A:${injFactorA.toFixed(2)}`;
       }
+    }
+
+    // Clamp global — produsul factorilor (top scorer/lineup/top assist/injury
+    // accidentări) nu poate scădea λ sub LAMBDA_MIN_RATIO din baseline → evită
+    // over-deflation (worst-case stacking ~0.71×). Aplicat ÎNAINTE de
+    // model-weights multiplier (calibrarea învățată rămâne autoritativă).
+    const LAMBDA_MIN_RATIO = 0.65;
+    const prevClampH = result.lambdaHome, prevClampA = result.lambdaAway;
+    result.lambdaHome = Math.max(result.lambdaHome, +(lambdaHomeBaseline * LAMBDA_MIN_RATIO).toFixed(2));
+    result.lambdaAway = Math.max(result.lambdaAway, +(lambdaAwayBaseline * LAMBDA_MIN_RATIO).toFixed(2));
+    if (result.lambdaHome !== prevClampH || result.lambdaAway !== prevClampA) {
+      result.lambdaTotal = +(result.lambdaHome + result.lambdaAway).toFixed(2);
+      const mxClamp = calcPoisson6x6(result.lambdaHome, result.lambdaAway);
+      Object.assign(result, {
+        over15Prob: mxClamp.over15Prob, over25Prob: mxClamp.over25Prob,
+        ggProb: mxClamp.ggProb, homeWin: mxClamp.homeWin,
+        draw: mxClamp.draw, awayWin: mxClamp.awayWin,
+      });
+      result._lambdaClamped = true;
     }
 
     // Model-weights lambda multiplier — auto-calibrare per ligă din learning-analysis
