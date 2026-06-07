@@ -127,6 +127,10 @@ MARKETS = {
     "ht_btts":   ("y_ht_btts",   FEATURES_PREMATCH, "HT BTTS"),
     "ht_home":   ("y_ht_home",   FEATURES_PREMATCH, "HT Home Score"),
     "ht_away":   ("y_ht_away",   FEATURES_PREMATCH, "HT Away Score"),
+    "ht_home_over15": ("y_ht_home_over15", FEATURES_PREMATCH, "HT Gazde Over 1.5"),
+    "ht_home_over25": ("y_ht_home_over25", FEATURES_PREMATCH, "HT Gazde Over 2.5"),
+    "ht_away_over15": ("y_ht_away_over15", FEATURES_PREMATCH, "HT Oaspeți Over 1.5"),
+    "ht_away_over25": ("y_ht_away_over25", FEATURES_PREMATCH, "HT Oaspeți Over 2.5"),
     # Repriza 2 (pre-meci + HT features)
     "r2_over05": ("y_r2_over05", FEATURES_HT, "R2 Over 0.5"),
     "r2_over15": ("y_r2_over15", FEATURES_HT, "R2 Over 1.5"),
@@ -134,6 +138,10 @@ MARKETS = {
     "r2_btts":   ("y_r2_btts",   FEATURES_HT, "R2 BTTS"),
     "r2_home":   ("y_r2_home",   FEATURES_HT, "R2 Home Score"),
     "r2_away":   ("y_r2_away",   FEATURES_HT, "R2 Away Score"),
+    "r2_home_over15": ("y_r2_home_over15", FEATURES_HT, "R2 Gazde Over 1.5"),
+    "r2_home_over25": ("y_r2_home_over25", FEATURES_HT, "R2 Gazde Over 2.5"),
+    "r2_away_over15": ("y_r2_away_over15", FEATURES_HT, "R2 Oaspeți Over 1.5"),
+    "r2_away_over25": ("y_r2_away_over25", FEATURES_HT, "R2 Oaspeți Over 2.5"),
 }
 
 ACTUAL_COL = {"y_over15": "over15_prob", "y_over25": "over25_prob",
@@ -193,12 +201,20 @@ def main():
     df["y_ht_btts"]   = ((df["home_ht"] > 0) & (df["away_ht"] > 0)).astype(int)
     df["y_ht_home"]   = (df["home_ht"] >= 1).astype(int)
     df["y_ht_away"]   = (df["away_ht"] >= 1).astype(int)
+    df["y_ht_home_over15"] = (df["home_ht"] >= 2).astype(int)
+    df["y_ht_home_over25"] = (df["home_ht"] >= 3).astype(int)
+    df["y_ht_away_over15"] = (df["away_ht"] >= 2).astype(int)
+    df["y_ht_away_over25"] = (df["away_ht"] >= 3).astype(int)
     df["y_r2_over05"] = (df["goals_r2"] >= 1).astype(int)
     df["y_r2_over15"] = (df["goals_r2"] >= 2).astype(int)
     df["y_r2_over25"] = (df["goals_r2"] >= 3).astype(int)
     df["y_r2_btts"]   = ((df["home_r2"] > 0) & (df["away_r2"] > 0)).astype(int)
     df["y_r2_home"]   = (df["home_r2"] >= 1).astype(int)
     df["y_r2_away"]   = (df["away_r2"] >= 1).astype(int)
+    df["y_r2_home_over15"] = (df["home_r2"] >= 2).astype(int)
+    df["y_r2_home_over25"] = (df["home_r2"] >= 3).astype(int)
+    df["y_r2_away_over15"] = (df["away_r2"] >= 2).astype(int)
+    df["y_r2_away_over25"] = (df["away_r2"] >= 3).astype(int)
 
     # PASUL 5 — antrenează modele pentru toate piețele
     results = {}
