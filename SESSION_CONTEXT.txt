@@ -778,6 +778,23 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~20:30] - Tab ML (🤖) in cartonas: inferenta LR din model_export.json
+  PAS1 api/ml-predict.js (NOU): predictAllMarkets(enrich,elo,ht) — incarca ml/
+  model_export.json (cache 10min, silent-fail daca lipseste), construieste features
+  (score1-7=breakdown.*, probs, lambda, ELO, pozitie, confidence + HT/stats), aplica
+  LR scalat (mean/scale+coef+intercept), feature lipsa->mean (neutru). Returneaza
+  {markets, htAvailable, bestBrier, trainedOn}.
+  PAS2 api/enrich.js: import predictAllMarkets; blend ELO construieste eloResult
+  {home/away_elo,elo_diff,home_win_prob} (elo_history sau ratings); dupa blend ->
+  payload.mlPredictions/mlAvailable (try/catch). NEATINS scoring.
+  PAS3 index.html: buton #md-tab-ml ascuns (mdTab(6)). app-ui.js: USE_ML_TAB flag,
+  _mdHasML/_mdEnMerged, mdRender toggle vizibilitate tab + dispatch 6, mdRenderML:
+  header + sectiuni TOT MECIUL/REPRIZA1/REPRIZA2(doar htAvailable), carduri colorate
+  (>=70 verde/50 galben/<50 rosu) + bara + HOT>=80 + comparatie "Model: X% ▲/▼"
+  pe over15/25/btts/home_win. Nota Brier best. mlPredictions vine din _pmEnrich cache.
+  node --check OK toate. div 218/218. ⚠ model_export.json e gitignored/absent ->
+  mlAvailable false pana la antrenare pe VPS -> tab ascuns (silent). | Commit: (mai jos)
+
 [04.06 ~20:00] - ML training extins: multi-piata (total/HT/R2), ambele reprize
   ml/train_model.py rescris. Query extins: predictions + fixtures_history (scor final/
   HT) + match_events (HT calc fallback) + match_stats (stats totale). ⚠ SQL ADAPTAT

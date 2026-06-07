@@ -1279,6 +1279,15 @@ function mdRender(){
   var d=_md.data;
   // Guard global: o eroare de parsing într-un singur tab (ex. dată/regex pe format
   // neașteptat) NU mai blochează tot modalul + loghează stack-ul real pentru debug.
+  // Tab ML (🤖) — apare DOAR dacă există predicții ML în cache (en.mlAvailable).
+  try{
+    var _mlBtn=document.getElementById('md-tab-ml');
+    if(_mlBtn){
+      var _mlOk=(typeof USE_ML_TAB==='undefined'||USE_ML_TAB) && _mdHasML(d);
+      _mlBtn.style.display=_mlOk?'':'none';
+      if(!_mlOk && _md.tabIdx===6){ _md.tabIdx=0; document.querySelectorAll('.md-tab').forEach(function(t,i){t.classList.toggle('active',i===0);}); }
+    }
+  }catch(_){}
   try{
     if(_md.tabIdx===0)mdRenderSumar(d);
     else if(_md.tabIdx===1)mdRenderFormatii(d);
@@ -1286,11 +1295,77 @@ function mdRender(){
     else if(_md.tabIdx===3)mdRenderForma(d);
     else if(_md.tabIdx===4)mdRenderClasament(d);
     else if(_md.tabIdx===5)mdRenderStatistici(d);
+    else if(_md.tabIdx===6)mdRenderML(d);
   }catch(e){
     console.error('[mdRender] tab '+_md.tabIdx+' error:',e&&e.stack?e.stack:e);
     var body=document.getElementById('md-body');
     if(body)body.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-t">Eroare la afișare</div><div class="empty-s">'+htmlEsc(e&&e.message||String(e))+'</div></div>';
   }
+}
+
+// ── TAB ML (🤖) — afișare predicții ML din /api/enrich (payload.mlPredictions) ──
+// AFIȘARE SUPLIMENTARĂ: nu atinge scoring. Tab-ul apare doar dacă există date ML.
+var USE_ML_TAB = true;
+function _mdEnMerged(d){
+  var fid=_md&&_md.fixtureId;
+  var base=(d&&d.enrich)||{};
+  var cached=(_pmEnrich&&_pmEnrich[fid])||(_genLiveEnrich&&_genLiveEnrich[fid])||{};
+  return Object.assign({},base,cached);
+}
+function _mdHasML(d){
+  try{
+    var en=_mdEnMerged(d);
+    return !!(en.mlAvailable && en.mlPredictions && en.mlPredictions.markets
+      && Object.keys(en.mlPredictions.markets).length);
+  }catch(_){ return false; }
+}
+var _ML_ACTUAL_FIELD={ over15_total:'over15Prob', over25_total:'over25Prob', btts_total:'ggProb', home_win:'homeWin' };
+function mdRenderML(d){
+  var body=document.getElementById('md-body');
+  var en=_mdEnMerged(d);
+  var ml=en.mlPredictions;
+  if(!ml||!ml.markets){ body.innerHTML='<div class="empty"><div class="empty-icon">🤖</div><div class="empty-t">ML indisponibil</div><div class="empty-s">Modelul nu e încă antrenat pentru acest meci</div></div>'; return; }
+  var M=ml.markets;
+  var clr=function(p){return p>=70?'#00d4aa':p>=50?'#f59e0b':'#ef4444';};
+  function card(key){
+    var m=M[key]; if(!m)return '';
+    var p=m.prob, c=clr(p);
+    var af=_ML_ACTUAL_FIELD[key];
+    var actual=(af&&en[af]!=null)?Math.round(en[af]):null;
+    var cmp='';
+    if(actual!=null){
+      var diff=p-actual;
+      var arr=diff>=0?'<span style="color:#00d4aa">▲+'+diff+'%</span>':'<span style="color:#ef4444">▼'+diff+'%</span>';
+      cmp='<div style="font-size:9px;color:var(--mu);margin-top:3px">Model: '+actual+'% '+arr+'</div>';
+    }
+    var hot=p>=80?'<span style="font-size:8px;font-weight:800;color:#fff;background:#ef4444;border-radius:4px;padding:1px 5px;margin-left:4px">HOT</span>':'';
+    return '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px">'
+      +'<div style="font-size:11px;color:var(--mu)">'+htmlEsc(m.desc)+hot+'</div>'
+      +'<div style="font-size:22px;font-weight:800;color:'+c+';line-height:1.1;margin-top:2px">'+p+'%</div>'
+      +'<div style="height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-top:4px"><div style="height:100%;width:'+Math.min(100,p)+'%;background:'+c+'"></div></div>'
+      +cmp+'</div>';
+  }
+  function section(title,badge,keys){
+    var cards=keys.map(card).filter(Boolean);
+    if(!cards.length)return '';
+    var h='<div class="md-section"><div class="md-section-title">'+title+'</div>';
+    if(badge)h+='<div style="font-size:10px;color:var(--mu);margin-bottom:8px">'+badge+'</div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+cards.join('')+'</div></div>';
+    return h;
+  }
+  var trained=ml.trainedOn?(Math.round(ml.trainedOn/1000)+'k'):'—';
+  var bestBrier=(ml.bestBrier!=null)?Number(ml.bestBrier).toFixed(4):'—';
+  var out='';
+  out+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:10px 12px;margin-bottom:12px">';
+  out+='<span style="font-weight:800;color:#a5b4fc">🤖 ML ACTIV</span>';
+  out+='<span style="font-size:10px;color:var(--mu)">'+trained+' meciuri antrenate · LR model</span></div>';
+  out+=section('TOT MECIUL', null, ['over05_total','over15_total','over25_total','btts_total','over05_home','over05_away','home_win']);
+  out+=section('REPRIZA 1', '⏱ Predicție pre-meci', ['ht_over05','ht_over15','ht_btts','ht_home','ht_away']);
+  if(ml.htAvailable){
+    out+=section('REPRIZA 2', '📊 Include scor HT + stats R1', ['r2_over05','r2_over15','r2_btts','r2_home','r2_away']);
+  }
+  out+='<div style="font-size:10px;color:var(--mu);margin-top:10px;line-height:1.4">🤖 Model antrenat pe '+trained+' meciuri reale · Logistic Regression · Brier '+bestBrier+'</div>';
+  body.innerHTML=out;
 }
 
 // ── PROBABILITATE MARCARE — secțiune NOUĂ, complet independentă ──────────────

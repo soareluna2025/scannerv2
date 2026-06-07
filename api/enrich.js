@@ -1,4 +1,5 @@
 import { calcPoisson6x6 } from './calc-utils.js';
+import { predictAllMarkets } from './ml-predict.js';
 import { query } from './db.js';
 import { logPrediction } from './log-prediction.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
@@ -1501,18 +1502,20 @@ export default async function handler(req, res) {
     // calcConfidence* (acelea rămân intacte). Dacă ELO lipsește sau flag off →
     // predicție NESCHIMBATĂ. Marchează payload.eloAdjusted / eloDiffUsed.
     const USE_ELO_BLEND = true;
+    let eloResult = null;   // {home_elo,away_elo,elo_diff,home_win_prob} pt ML/UI
     if (USE_ELO_BLEND && fid) {
       try {
         let eloDiff = null, hwpElo = null;
         // 1) elo_history pe fixture (meciuri trecute/backtest — point-in-time).
         const eloRes = await query(
-          `SELECT elo_diff, home_win_prob FROM elo_history WHERE fixture_id = $1`,
+          `SELECT home_elo, away_elo, elo_diff, home_win_prob FROM elo_history WHERE fixture_id = $1`,
           [Number(fid)]
         );
         const er = eloRes.rows[0];
         if (er) {
           eloDiff = Number(er.elo_diff);
           hwpElo  = Number(er.home_win_prob);   // 0..1
+          eloResult = { home_elo: Number(er.home_elo), away_elo: Number(er.away_elo), elo_diff: eloDiff, home_win_prob: hwpElo };
         } else if (hId && aId && lgid) {
           // 2) Fallback elo_ratings (meciuri VIITOARE / NS — fără snapshot în history).
           const rr = await query(
@@ -1528,6 +1531,7 @@ export default async function handler(req, res) {
           if (r2 && Number(r2.home_games) >= 10 && Number(r2.away_games) >= 10) {
             eloDiff = Number(r2.home_elo) - Number(r2.away_elo);
             hwpElo  = 1 / (1 + Math.pow(10, -eloDiff / 400));
+            eloResult = { home_elo: Number(r2.home_elo), away_elo: Number(r2.away_elo), elo_diff: eloDiff, home_win_prob: hwpElo };
           }
         }
 
@@ -1554,6 +1558,16 @@ export default async function handler(req, res) {
         }
       } catch (_) { /* ELO indisponibil → predicție neschimbată */ }
     }
+
+    // ── ML PREDICTIONS (afișare suplimentară; NU atinge scoring) ──────────────
+    // Inferență LR din ml/model_export.json. Silent-fail dacă exportul lipsește.
+    try {
+      const mlPredictions = predictAllMarkets(payload, eloResult);
+      if (mlPredictions) {
+        payload.mlPredictions = mlPredictions;
+        payload.mlAvailable = true;
+      }
+    } catch (_) { /* ML indisponibil → fără tab ML */ }
 
     // Fire-and-forget: colectare injuries + prediction save + pre_match snapshot
     if (fid) {
