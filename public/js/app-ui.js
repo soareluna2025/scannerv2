@@ -1393,7 +1393,7 @@ function mdRenderML(d){
   function bigCard(label,p,state){
     if(state==='done'){
       return '<div class="ml-card done"><div style="font-size:10px;color:#6b7a99">'+htmlEsc(label)+' <span style="color:#00d4aa">✓</span></div>'
-        +'<div style="font-size:20px;font-weight:800;color:#6b7a99;margin-top:2px">100%</div></div>';
+        +'<div class="ml-card-prob" style="font-weight:800;margin-top:2px">100%</div></div>';
     }
     var c=clr(p), cls='ml-card'+(state==='active'?' active':'');
     return '<div class="'+cls+'"><div style="font-size:10px;color:#6b7a99">'+htmlEsc(label)+'</div>'
@@ -1402,9 +1402,9 @@ function mdRenderML(d){
   // ── Celulă Over per echipă (BLOC 2/3) ──
   function overCell(name,n,scored,phaseDone,p){
     var inner, cls;
-    if(scored>=n){ cls='ml-oc fulfilled'; inner='<span style="color:#00d4aa">DA ✓</span>'; }
-    else if(phaseDone){ cls='ml-oc fulfilled'; inner='<span style="color:#ef4444">NU ✗</span>'; }
-    else { var active=(n===scored+1); cls='ml-oc '+(active?'active':'pending'); inner='<span style="color:'+(active?'#00d4aa':'#6b7a99')+'">'+(p!=null?p+'%':'—')+'</span>'; }
+    if(scored>=n){ cls='ml-oc fulfilled yes'; inner='DA ✓'; }
+    else if(phaseDone){ cls='ml-oc fulfilled no'; inner='NU ✗'; }
+    else { var active=(n===scored+1); cls='ml-oc '+(active?'active':'pending'); inner=(p!=null?p+'%':'—'); }
     return '<div class="'+cls+'"><div class="ml-oc-name">'+name+'</div><div class="ml-oc-prob">'+inner+'</div></div>';
   }
   function teamCol(scored,phaseDone,p05){
@@ -1438,14 +1438,21 @@ function mdRenderML(d){
     +'.ml-team-label.home{color:#00d4aa;border:1px solid #00d4aa30}'
     +'.ml-team-label.away{color:#3b82f6;border:1px solid #3b82f630}'
     +'.ml-oc{border-radius:8px;padding:8px 10px;border:1px solid #1a2030}'
-    +'.ml-oc.fulfilled{opacity:.4;background:#0d1117}'
-    +'.ml-oc.active{background:#111827;border-color:#00d4aa40;box-shadow:0 0 8px #00d4aa15;border-left:2px solid #00d4aa}'
-    +'.ml-oc.pending{opacity:.6;background:#0d1117}'
     +'.ml-oc-name{font-size:9px;color:#6b7a99;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}'
     +'.ml-oc-prob{font-size:18px;font-weight:700;line-height:1}'
+    +'.ml-oc.fulfilled{opacity:.5;background:#0d1117;border-color:#1a2030}'
+    +'.ml-oc.fulfilled.yes{opacity:1;background:#00d4aa15;border-color:#00d4aa40}'
+    +'.ml-oc.fulfilled.yes .ml-oc-prob{color:#00d4aa;font-size:16px;font-weight:800}'
+    +'.ml-oc.fulfilled.no{opacity:1;background:#ef444415;border-color:#ef444440}'
+    +'.ml-oc.fulfilled.no .ml-oc-prob{color:#ef4444;font-size:16px;font-weight:800}'
+    +'.ml-oc.active{background:#111827;border-color:#00d4aa60;border-left:3px solid #00d4aa;box-shadow:0 0 12px #00d4aa20}'
+    +'.ml-oc.active .ml-oc-prob{color:#00d4aa;font-size:20px}'
+    +'.ml-oc.pending{opacity:.35;background:#0d1117}'
+    +'.ml-oc.pending .ml-oc-prob{color:#4a5568;font-size:14px}'
     +'.ml-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px}'
-    +'.ml-card.done{opacity:.4}'
     +'.ml-card.active{border-color:#00d4aa;box-shadow:0 0 8px #00d4aa20}'
+    +'.ml-card.done{opacity:.45;background:#0d1117;border-color:#1a2030}'
+    +'.ml-card.done .ml-card-prob{color:#4a5568;font-size:14px}'
     +'</style>';
   // Header
   out+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:10px 12px;margin-bottom:12px">';
