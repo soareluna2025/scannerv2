@@ -92,7 +92,7 @@ def main():
         return
 
     # ── PASUL 3 — Pregătire features ──────────────────────────────────────────
-    df["days_old"] = (pd.Timestamp.now() - pd.to_datetime(df["created_at"])).dt.days
+    df["days_old"] = (pd.Timestamp.now(tz='UTC') - pd.to_datetime(df["created_at"], utc=True)).dt.days
     df["sample_weight"] = np.exp(-0.001 * df["days_old"])
 
     for col in FEATURES_WIN:
