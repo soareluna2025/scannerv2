@@ -3,3 +3,4 @@ model_weights.json
 __pycache__/
 *.pyc
 model_export.json
+train.log
