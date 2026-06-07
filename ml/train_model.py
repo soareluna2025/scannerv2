@@ -19,6 +19,7 @@ Rulare:  pip install -r ml/requirements.txt  &&  python ml/train_model.py
 """
 
 import os
+import sys
 import json
 import numpy as np
 import pandas as pd
@@ -237,9 +238,22 @@ def main():
     df["y_r2_away_over15"] = (df["away_r2"] >= 2).astype(int)
     df["y_r2_away_over25"] = (df["away_r2"] >= 3).astype(int)
 
-    # PASUL 5 — antrenează modele pentru toate piețele
+    # PASUL 5 — antrenează modele. Cu argumente CLI → DOAR piețele cerute (merge
+    # în model_export.json, nu suprascrie tot). Fără argumente → toate (ca înainte).
+    selected = [a for a in sys.argv[1:] if not a.startswith("-")]
+    if selected:
+        unknown = [k for k in selected if k not in MARKETS]
+        if unknown:
+            print("⚠ Piețe necunoscute (ignorate):", ", ".join(unknown))
+        selected = [k for k in selected if k in MARKETS]
+        if not selected:
+            print("Nicio piață validă în argumente. Ies.")
+            return
+        print("Antrenez DOAR:", ", ".join(selected))
+    markets_to_train = MARKETS if not selected else {k: MARKETS[k] for k in selected}
+
     results = {}
-    for market_key, (label_col, features, desc) in MARKETS.items():
+    for market_key, (label_col, features, desc) in markets_to_train.items():
         print(f"\n=== {desc} ===")
         mask = df[label_col].notna()
         # fillna median apoi 0 (în caz de coloană complet goală → fără crash sklearn)
@@ -301,10 +315,21 @@ def main():
         joblib.dump(gb, os.path.join(ML_DIR, f"model_gb_{market_key}.pkl"))
         joblib.dump(scaler, os.path.join(ML_DIR, f"scaler_{market_key}.pkl"))
 
-    with open(os.path.join(ML_DIR, "model_export.json"), "w") as f:
-        json.dump(results, f, indent=2)
-    print(f"\n✅ {len(results)} modele salvate în ml/")
-    print("✅ Export complet în ml/model_export.json")
+    export_path = os.path.join(ML_DIR, "model_export.json")
+    # Antrenare parțială (cu argumente) → MERGE cu exportul existent (păstrează
+    # celelalte piețe). Antrenare completă → suprascrie tot (comportament actual).
+    final = {}
+    if selected:
+        try:
+            with open(export_path) as f:
+                final = json.load(f)
+        except Exception:
+            final = {}
+    final.update(results)
+    with open(export_path, "w") as f:
+        json.dump(final, f, indent=2)
+    print(f"\n✅ {len(results)} modele antrenate" + (" (merge)" if selected else ""))
+    print(f"✅ Export ({len(final)} piețe total) în ml/model_export.json")
 
 
 if __name__ == "__main__":
