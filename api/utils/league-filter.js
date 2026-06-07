@@ -8,7 +8,8 @@
 //   75  — Serie C Brazilia (pro, prinsă de 'serie c')
 //   76  — Serie D Brazilia (pro, prinsă de 'serie d')
 //   906 — Reserve League Argentina (prinsă de 'reserve')
-export const FORCE_ALLOW_IDS = new Set([75, 76, 906]);
+//   1224 — Copa Sul-Sudeste Brazilia
+export const FORCE_ALLOW_IDS = new Set([75, 76, 906, 1224]);
 
 export const WOMEN_TERMS = [
   'women', 'female', 'ladies', 'lady', 'girl',
