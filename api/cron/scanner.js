@@ -33,7 +33,6 @@ const liveCache         = {}; // { [fixtureId]: { home_goals, away_goals, status
 const prematchCache     = {}; // { [fixtureId]: { ts, composite } }
 const _lastBroadcastSnap = {}; // { [fixtureId]: snap string } — pentru delta updates
 
-let _patternRunCount = 0;
 let _scanCounter = 0;
 
 function getMatchPriority(m) {
@@ -189,23 +188,6 @@ async function resolveOutcome(fixtureId, outcome, finalHome, finalAway) {
      WHERE fixture_id=$4`,
     [outcome, finalHome, finalAway, fixtureId]
   );
-}
-
-async function leagueSnapshots(leagueId, limit = 200) {
-  try {
-    const r = leagueId
-      ? await query(
-          `SELECT * FROM match_snapshots
-           WHERE league_id=$1 AND outcome != 'LIVE'
-           ORDER BY created_at DESC LIMIT $2`,
-          [leagueId, limit])
-      : await query(
-          `SELECT * FROM match_snapshots
-           WHERE outcome != 'LIVE'
-           ORDER BY created_at DESC LIMIT $1`,
-          [limit]);
-    return r.rows;
-  } catch (_) { return []; }
 }
 
 // M5: Save FT match to fixtures_history and update form_stats for both teams
