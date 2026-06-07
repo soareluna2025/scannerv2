@@ -164,6 +164,11 @@ def main():
     df["lambda_ratio"] = df["lambda_home"].fillna(0) / df["lambda_away"].replace(0, 1).fillna(1)
     df["elo_sum"] = df["home_elo"].fillna(1500) + df["away_elo"].fillna(1500)
 
+    # Probabilitățile modelului actual pot lipsi pe unele predicții → fillna(50)
+    # ca brier_actual (comparația cu modelul curent) să nu primească NaN.
+    for _pc in ["home_win_prob", "over15_prob", "over25_prob", "gg_prob"]:
+        df[_pc] = pd.to_numeric(df[_pc], errors="coerce").fillna(50)
+
     # PASUL 3 — labels toate piețele
     df["y_over05"] = (df["home_goals"] + df["away_goals"] >= 1).astype(int)
     df["y_over15"] = (df["home_goals"] + df["away_goals"] >= 2).astype(int)
