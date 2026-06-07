@@ -778,7 +778,15 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - Eliminare completă „Bilete + ROI" + curățare schema
+[07.06 ~now] - Factor „golgheter accidentat" pe lambda (enrich.js)
+  + getTopScorerInjuryFactor(teamId, injuries): SELECT golgheter #1 din
+  top_scorers (team_id, SEASON, ORDER goals DESC LIMIT 1); dacă e în `injuries`
+  → 0.90, altfel 1.0 (±10% max, silent-fail→1.0). Aplicat pe lambdaHome/Away
+  (ambele) DUPĂ blocul topAssistFactor, recalc lambdaTotal + matrice Poisson
+  (mirror exact). getTopScorerFactor() existent NEATINS. node --check OK.
+  NEATINS calcConfidence*/score1-7. | Commit: git
+
+[07.06 ~earlier] - Eliminare completă „Bilete + ROI" + curățare schema
   app-live.js: șters tot clusterul bilete (BETS_ADDED/getSelections/
   setSelections/loadBetsAddedCache, toggleBetFromPick, switchFavSub,
   toggleFavPicker, addFavMarketToSelections, renderSelectionsSection, stake

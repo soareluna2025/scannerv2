@@ -316,6 +316,26 @@ async function getTopAssistInjuryFactor(teamId, injuries) {
   } catch (_) { return 1.0; }
 }
 
+// Top-scorer injury factor — dacă golgheterul #1 al echipei (din top_scorers)
+// e accidentat (în array-ul `injuries`), atacul scade 10% (×0.90).
+// Disponibil → 1.0 (neschimbat). Factor maxim ±10%. Silent-fail → 1.0.
+async function getTopScorerInjuryFactor(teamId, injuries) {
+  if (!teamId) return 1.0;
+  try {
+    const { rows } = await query(
+      `SELECT player_id, player_name, goals FROM top_scorers
+        WHERE team_id = $1 AND season = $2
+        ORDER BY goals DESC LIMIT 1`,
+      [Number(teamId), SEASON]
+    );
+    const top = rows[0];
+    if (!top || top.player_id == null) return 1.0;
+    const injured = Array.isArray(injuries)
+      && injuries.some(i => Number(i.player_id) === Number(top.player_id));
+    return injured ? 0.90 : 1.0;
+  } catch (_) { return 1.0; }
+}
+
 async function getSquadCount(teamId) {
   if (!teamId) return 0;
   try {
@@ -1268,6 +1288,28 @@ export default async function handler(req, res) {
         draw: mxTaf.draw, awayWin: mxTaf.awayWin,
       });
       result._topAssistFactor = `H:${topAssistFactorH.toFixed(2)}|A:${topAssistFactorA.toFixed(2)}`;
+    }
+
+    // Top-scorer injury factor — golgheterul #1 accidentat → λ ×0.90 (±10% max).
+    // Folosește array-ul `injuries` deja adus în pipeline (silent-fail → 1.0).
+    let topScorerInjuryFactorH = 1.0, topScorerInjuryFactorA = 1.0;
+    try {
+      [topScorerInjuryFactorH, topScorerInjuryFactorA] = await Promise.all([
+        getTopScorerInjuryFactor(hId, injuries),
+        getTopScorerInjuryFactor(aId, injuries),
+      ]);
+    } catch (_) { /* silent */ }
+    if (topScorerInjuryFactorH !== 1.0 || topScorerInjuryFactorA !== 1.0) {
+      result.lambdaHome  = +(result.lambdaHome  * topScorerInjuryFactorH).toFixed(2);
+      result.lambdaAway  = +(result.lambdaAway  * topScorerInjuryFactorA).toFixed(2);
+      result.lambdaTotal = +(result.lambdaHome + result.lambdaAway).toFixed(2);
+      const mxTsi = calcPoisson6x6(result.lambdaHome, result.lambdaAway);
+      Object.assign(result, {
+        over15Prob: mxTsi.over15Prob, over25Prob: mxTsi.over25Prob,
+        ggProb: mxTsi.ggProb, homeWin: mxTsi.homeWin,
+        draw: mxTsi.draw, awayWin: mxTsi.awayWin,
+      });
+      result._topScorerInjuryFactor = `H:${topScorerInjuryFactorH.toFixed(2)}|A:${topScorerInjuryFactorA.toFixed(2)}`;
     }
 
     // Smart injury lambda penalty — jucători importanți lipsă reduc puterea de atac
