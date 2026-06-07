@@ -36,6 +36,7 @@ function buildFeatures(en, elo, lc) {
   const hht = (lc.homeHT != null ? lc.homeHT : lc.home_ht);
   const aht = (lc.awayHT != null ? lc.awayHT : lc.away_ht);
   const goalsHt = (num(hht) != null && num(aht) != null) ? num(hht) + num(aht) : null;
+  const ls = lc.liveStats || lc;   // statistici live reale (din API) prioritar
   return {
     score1: num(bd.poisson), score2: num(bd.forma), score3: num(bd.h2h),
     score6: num(bd.consistenta), score7: num(bd.putereEchipe),
@@ -49,10 +50,10 @@ function buildFeatures(en, elo, lc) {
     confidence: num(en.confidenceScore),
     // HT / stats R1 (live la pauză/R2; pre-meci → null → neutralizate)
     home_ht: num(hht), away_ht: num(aht), goals_ht: goalsHt,
-    shots_home: num(lc.shots_home), shots_away: num(lc.shots_away),
-    shots_on_target_home: num(lc.shots_on_target_home), shots_on_target_away: num(lc.shots_on_target_away),
-    corners_home: num(lc.corners_home), corners_away: num(lc.corners_away),
-    possession_home: num(lc.possession_home), possession_away: num(lc.possession_away),
+    shots_home: num(ls.shots_home), shots_away: num(ls.shots_away),
+    shots_on_target_home: num(ls.shots_on_target_home), shots_on_target_away: num(ls.shots_on_target_away),
+    corners_home: num(ls.corners_home), corners_away: num(ls.corners_away),
+    possession_home: num(ls.possession_home), possession_away: num(ls.possession_away),
     // elapsed normalizat (feature suplimentar — folosit doar dacă modelul îl conține)
     elapsed_norm: (num(lc.elapsed) != null && num(lc.elapsed) > 0) ? num(lc.elapsed) / 90 : null,
     minutes_remaining: num(lc.minutesRemaining),
@@ -137,9 +138,19 @@ export function applyLiveContext(markets, lc) {
     };
     setFinal('ht_over05', thh >= 1);
     setFinal('ht_over15', thh >= 2);
+    setFinal('ht_over25', thh >= 3);
     setFinal('ht_btts', hh > 0 && ah > 0);
     setFinal('ht_home', hh >= 1);
     setFinal('ht_away', ah >= 1);
+
+    // Piețe R2 deja îndeplinite (golurile din repriza 2 = curent − HT).
+    const hr2 = Math.max(0, hg - hh), ar2 = Math.max(0, ag - ah), gr2 = hr2 + ar2;
+    setF('r2_over05', gr2 >= 1);
+    setF('r2_over15', gr2 >= 2);
+    setF('r2_over25', gr2 >= 3);
+    setF('r2_btts', hr2 > 0 && ar2 > 0);
+    setF('r2_home', hr2 >= 1);
+    setF('r2_away', ar2 >= 1);
   }
   return markets;
 }

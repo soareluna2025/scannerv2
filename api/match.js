@@ -1,4 +1,5 @@
 import { calcPoisson6x6, parseOddsItem, calcEV } from './calc-utils.js';
+import { predictAllMarkets } from './ml-predict.js';
 import { query } from './db.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
 
@@ -623,6 +624,74 @@ export default async function handler(req, res) {
       } catch (_) {
         responseData.market_odds = null;
       }
+    }
+
+    // ── Statistici LIVE din API (doar meci activ) + ML live-aware ─────────────
+    // liveStats e opțional (silent-fail). Când meciul e live, recalculăm predicțiile
+    // ML cu context live (minut/scor/HT + statistici reale) → R2 corect.
+    const _st = (fixture && fixture.fixture && fixture.fixture.status) || {};
+    const _short = _st.short;
+    const _isLive = ['1H', '2H', 'HT', 'ET'].includes(_short);
+    if (_isLive) {
+      try {
+        const statsResp = await fetchApiFootball(`/fixtures/statistics?fixture=${id}`);
+        const sj = await statsResp.json();
+        if (sj && Array.isArray(sj.response) && sj.response.length) {
+          // Aliniere home/away după team.id (nu presupune ordinea).
+          const byTeam = {};
+          for (const blk of sj.response) if (blk && blk.team) byTeam[Number(blk.team.id)] = blk.statistics || [];
+          const hArr = byTeam[Number(hId)] || sj.response[0]?.statistics || [];
+          const aArr = byTeam[Number(aId)] || sj.response[1]?.statistics || [];
+          const getStat = (arr, type) => { const s = (arr || []).find(x => x.type === type); return s && s.value != null ? (parseInt(s.value) || 0) : 0; };
+          responseData.liveStats = {
+            shots_on_target_home: getStat(hArr, 'Shots on Goal'),
+            shots_on_target_away: getStat(aArr, 'Shots on Goal'),
+            shots_home: getStat(hArr, 'Total Shots'),
+            shots_away: getStat(aArr, 'Total Shots'),
+            corners_home: getStat(hArr, 'Corner Kicks'),
+            corners_away: getStat(aArr, 'Corner Kicks'),
+            possession_home: getStat(hArr, 'Ball Possession') || 50,
+            possession_away: getStat(aArr, 'Ball Possession') || 50,
+          };
+        }
+      } catch (_) { /* statistici opționale */ }
+
+      // ELO point-in-time (elo_history) → fallback elo_ratings.
+      let eloData = null;
+      try {
+        const eh = await query(`SELECT home_elo, away_elo, elo_diff, home_win_prob FROM elo_history WHERE fixture_id=$1`, [Number(id)]);
+        if (eh.rows[0]) {
+          const r = eh.rows[0];
+          eloData = { home_elo: Number(r.home_elo), away_elo: Number(r.away_elo), elo_diff: Number(r.elo_diff), home_win_prob: Number(r.home_win_prob) };
+        } else {
+          const lid = fixture?.league?.id;
+          if (lid) {
+            const rr = await query(
+              `SELECT er_h.elo AS home_elo, er_a.elo AS away_elo FROM elo_ratings er_h
+                 JOIN elo_ratings er_a ON er_a.team_id=$2 AND er_a.league_id=$3
+                WHERE er_h.team_id=$1 AND er_h.league_id=$3`,
+              [Number(hId), Number(aId), Number(lid)]
+            );
+            if (rr.rows[0]) {
+              const r = rr.rows[0], dd = Number(r.home_elo) - Number(r.away_elo);
+              eloData = { home_elo: Number(r.home_elo), away_elo: Number(r.away_elo), elo_diff: dd, home_win_prob: 1 / (1 + Math.pow(10, -dd / 400)) };
+            }
+          }
+        }
+      } catch (_) {}
+
+      // ML live-aware (predictAllMarkets aplică fulfilled/final + folosește liveStats).
+      try {
+        const liveCtx = {
+          elapsed: _st.elapsed || 0, status: _short,
+          homeGoals: fixture.goals?.home ?? 0, awayGoals: fixture.goals?.away ?? 0,
+          homeHT: fixture.score?.halftime?.home ?? null, awayHT: fixture.score?.halftime?.away ?? null,
+          minutesRemaining: Math.max(0, 90 - (_st.elapsed || 0)),
+          liveStats: responseData.liveStats || null,
+        };
+        const ml = predictAllMarkets(enrich, eloData, liveCtx);
+        if (ml) { responseData.mlPredictions = ml; responseData.mlAvailable = true; }
+      } catch (_) { /* ML indisponibil */ }
     }
 
     // NU cache-ui răspunsuri degradate (fixture din fallback DB) → reîncearcă API la următorul fetch.

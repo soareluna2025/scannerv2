@@ -1314,9 +1314,9 @@ function _mdEnMerged(d){
 }
 function _mdHasML(d){
   try{
-    var en=_mdEnMerged(d);
-    return !!(en.mlAvailable && en.mlPredictions && en.mlPredictions.markets
-      && Object.keys(en.mlPredictions.markets).length);
+    // Preferă ML live din /api/match (d.mlPredictions); altfel cache-ul pre-meci.
+    var ml=(d&&d.mlPredictions)||_mdEnMerged(d).mlPredictions;
+    return !!(ml && ml.markets && Object.keys(ml.markets).length);
   }catch(_){ return false; }
 }
 var _ML_ACTUAL_FIELD={ over15_total:'over15Prob', over25_total:'over25Prob', btts_total:'ggProb', home_win:'homeWin' };
@@ -1348,16 +1348,22 @@ function _mlApplyLive(markets, lc){
   if(lc.r1Done && lc.homeHT!=null && lc.awayHT!=null){
     var hh=lc.homeHT||0, ah=lc.awayHT||0, thh=hh+ah;
     var setFinal=function(k,c){ if(markets[k]){ markets[k].final=true; markets[k].fulfilled=!!c; markets[k].prob=c?100:0; } };
-    setFinal('ht_over05',thh>=1); setFinal('ht_over15',thh>=2);
+    setFinal('ht_over05',thh>=1); setFinal('ht_over15',thh>=2); setFinal('ht_over25',thh>=3);
     setFinal('ht_btts',hh>0&&ah>0); setFinal('ht_home',hh>=1); setFinal('ht_away',ah>=1);
+    // Piețe R2 deja îndeplinite (goluri repriza 2 = curent − HT).
+    var hr2=Math.max(0,hg-hh), ar2=Math.max(0,ag-ah), gr2=hr2+ar2;
+    setF('r2_over05',gr2>=1); setF('r2_over15',gr2>=2); setF('r2_over25',gr2>=3);
+    setF('r2_btts',hr2>0&&ar2>0); setF('r2_home',hr2>=1); setF('r2_away',ar2>=1);
   }
 }
 function mdRenderML(d){
   var body=document.getElementById('md-body');
   var en=_mdEnMerged(d);
-  var ml=en.mlPredictions;
+  // Preferă ML live din /api/match (cu statistici live + context); altfel pre-meci.
+  var ml=(d&&d.mlPredictions)||en.mlPredictions;
   if(!ml||!ml.markets){ body.innerHTML='<div class="empty"><div class="empty-icon">🤖</div><div class="empty-t">ML indisponibil</div><div class="empty-s">Modelul nu e încă antrenat pentru acest meci</div></div>'; return; }
   var lc=_mdLiveCtx(d);
+  lc.liveStats=(d&&d.liveStats)||null;
   // Clonează markets (nu muta cache-ul) + aplică context live client-side.
   var M={}; Object.keys(ml.markets).forEach(function(k){ M[k]=Object.assign({},ml.markets[k]); });
   _mlApplyLive(M, lc);

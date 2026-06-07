@@ -778,7 +778,18 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[04.06 ~21:30] - ML training: +6 piete (Over3.5/4.5 total, Draw, Away Win, HT Over2.5, R2 Over2.5) -> 23 total. Labels y_over35/y_over45/y_draw/y_away_win/y_ht_over25/y_r2_over25 + intrari MARKETS. py_compile OK. | Commit: vezi git.
+[04.06 ~21:45] - ML per-secunda: piete R2 indeplinite + statistici live API
+  FIX1 app-ui.js _mlApplyLive + ml-predict.js applyLiveContext: R2 fulfilled (goluri R2=
+  curent-HT: r2_over05/15/25/btts/home/away) + ht_over25, cand r1Done. Ex: min57 1-1
+  HT1-0 -> r2_over05 100%. FIX2 statistici live: match.js fetch /fixtures/statistics
+  cand live -> responseData.liveStats (shots/SOT/corners/possession, aliniat pe team.id);
+  match.js recalculeaza ML cu liveCtx+liveStats+ELO (elo_history/ratings) ->
+  responseData.mlPredictions (server, unde ruleaza predictAllMarkets). ml-predict
+  buildFeatures prefera lc.liveStats. app-ui mdRenderML prefera d.mlPredictions (live)
+  peste cache pre-meci; _mdHasML idem. liveStats optional (silent-fail). NEATINS scoring.
+  node --check OK. | Commit: vezi git.
+
+  [04.06 ~21:30] - ML training: +6 piete (Over3.5/4.5 total, Draw, Away Win, HT Over2.5, R2 Over2.5) -> 23 total. Labels y_over35/y_over45/y_draw/y_away_win/y_ht_over25/y_r2_over25 + intrari MARKETS. py_compile OK. | Commit: vezi git.
 
 [04.06 ~21:15] - Crontab antrenare ML zilnica (scripts/setup-crontab.sh)
   Script NOU: adauga in crontab "30 5 * * *" antrenarea ml/train_model.py, idempotent
