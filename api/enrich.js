@@ -296,9 +296,22 @@ async function getTopScorerFactor(teamId, leagueId) {
   } catch (_) { return 1.0; }
 }
 
+// Clasifică o indisponibilitate după type/reason → severitatea penalizării:
+//   'NATIONAL'     — reason conține 'national' → convocare națională, FĂRĂ penalizare
+//   'OUT'          — type='Missing Fixture' (și nu national) → indisponibil cert (100%)
+//   'QUESTIONABLE' — type='Questionable' SAU type/reason lipsă/altele → 50% penalizare
+function classifyInjury(inj) {
+  const type   = (inj && inj.type   != null ? String(inj.type)   : '').trim();
+  const reason = (inj && inj.reason != null ? String(inj.reason) : '').trim().toLowerCase();
+  if (reason.includes('national')) return 'NATIONAL';
+  if (type === 'Missing Fixture')  return 'OUT';
+  if (type === 'Questionable')     return 'QUESTIONABLE';
+  return 'QUESTIONABLE';   // type/reason lipsă sau altele → tratează ca questionable
+}
+
 // Top-assist injury factor — dacă cel mai bun pasator decisiv al echipei (din
-// top_assists) e accidentat (în array-ul `injuries`), atacul scade 10% (×0.90).
-// Disponibil → 1.0 (neschimbat). Factor maxim ±10%. Silent-fail → 1.0.
+// top_assists) e accidentat (în array-ul `injuries`), atacul scade după severitate:
+// OUT ×0.90, QUESTIONABLE ×0.95, NATIONAL/absent 1.0. Silent-fail → 1.0.
 async function getTopAssistInjuryFactor(teamId, injuries) {
   if (!teamId) return 1.0;
   try {
@@ -310,15 +323,19 @@ async function getTopAssistInjuryFactor(teamId, injuries) {
     );
     const top = rows[0];
     if (!top || top.player_id == null) return 1.0;
-    const injured = Array.isArray(injuries)
-      && injuries.some(i => Number(i.player_id) === Number(top.player_id));
-    return injured ? 0.90 : 1.0;
+    const inj = Array.isArray(injuries)
+      ? injuries.find(i => Number(i.player_id) === Number(top.player_id)) : null;
+    if (!inj) return 1.0;
+    const sev = classifyInjury(inj);
+    if (sev === 'NATIONAL') return 1.0;       // convocare națională → fără penalizare
+    if (sev === 'QUESTIONABLE') return 0.95;  // incert → jumătate de penalizare
+    return 0.90;                              // OUT cert
   } catch (_) { return 1.0; }
 }
 
 // Top-scorer injury factor — dacă golgheterul #1 al echipei (din top_scorers)
-// e accidentat (în array-ul `injuries`), atacul scade 10% (×0.90).
-// Disponibil → 1.0 (neschimbat). Factor maxim ±10%. Silent-fail → 1.0.
+// e accidentat (în array-ul `injuries`), atacul scade după severitate:
+// OUT ×0.90, QUESTIONABLE ×0.95, NATIONAL/absent 1.0. Silent-fail → 1.0.
 async function getTopScorerInjuryFactor(teamId, injuries) {
   if (!teamId) return 1.0;
   try {
@@ -330,9 +347,13 @@ async function getTopScorerInjuryFactor(teamId, injuries) {
     );
     const top = rows[0];
     if (!top || top.player_id == null) return 1.0;
-    const injured = Array.isArray(injuries)
-      && injuries.some(i => Number(i.player_id) === Number(top.player_id));
-    return injured ? 0.90 : 1.0;
+    const inj = Array.isArray(injuries)
+      ? injuries.find(i => Number(i.player_id) === Number(top.player_id)) : null;
+    if (!inj) return 1.0;
+    const sev = classifyInjury(inj);
+    if (sev === 'NATIONAL') return 1.0;       // convocare națională → fără penalizare
+    if (sev === 'QUESTIONABLE') return 0.95;  // incert → jumătate de penalizare
+    return 0.90;                              // OUT cert
   } catch (_) { return 1.0; }
 }
 
@@ -493,8 +514,10 @@ async function getInjuredPlayerScores(injuries, homeId, awayId) {
       if (!inj.player_id) continue;
       const data = scoreMap[inj.player_id];
       if (!data) continue;
+      const sev = classifyInjury(inj);
+      if (sev === 'NATIONAL') continue;   // convocare națională → nu contează
       const tid = Number(inj.team_id) || data.teamId;
-      const entry = { id: inj.player_id, name: inj.player_name, score: data.score };
+      const entry = { id: inj.player_id, name: inj.player_name, score: data.score, severity: sev };
       if (tid === homeId) home.push(entry);
       else if (tid === awayId) away.push(entry);
     }
@@ -863,22 +886,26 @@ async function getInjuries(fixtureId) {
     const data = await r.json();
     const list = data.response || [];
     const mapped = list
-      .map(item => ({
-        fixture_id:  fid,
-        team_id:     item.team?.id     || null,
-        team_name:   item.team?.name   || null,
-        player_id:   item.player?.id   || null,
-        player_name: item.player?.name || null,
-        type:        item.player?.type || null,
-        reason:      item.player?.reason || null,
-      }))
-      // Include doar indisponibili reali; exclude Questionable + Inactiv/Inactive.
+      .map(item => {
+        const o = {
+          fixture_id:  fid,
+          team_id:     item.team?.id     || null,
+          team_name:   item.team?.name   || null,
+          player_id:   item.player?.id   || null,
+          player_name: item.player?.name || null,
+          type:        item.player?.type || null,
+          reason:      item.player?.reason || null,
+        };
+        o.severity = classifyInjury(o);
+        return o;
+      })
+      // Exclude inactivii + convocările la națională (fără penalizare). Păstrează
+      // OUT cert ȘI Questionable (acesta din urmă → penalizare redusă în aval).
       .filter(p => {
-        const t = (p.type || '').trim();
         const reason = (p.reason || '').trim().toLowerCase();
-        if (t === 'Questionable') return false;
         if (reason === 'inactiv' || reason === 'inactive') return false;
-        return t === 'Missing Fixture' || t === 'Injured' || t === 'Injury' || t === '';
+        if (p.severity === 'NATIONAL') return false;
+        return true;
       });
     if (mapped.length > 0) {
       _injuriesCache.set(fid, { ts: Date.now(), data: mapped });
@@ -903,11 +930,15 @@ async function getInjuriesFromDB(fixtureId) {
          SELECT *, ROW_NUMBER() OVER (PARTITION BY team_id ORDER BY player_id) AS _rn
            FROM injuries
           WHERE fixture_id = $1
-            AND (type IS NULL OR type IN ('Missing Fixture', 'Injured', 'Injury'))
+            AND (type IS NULL OR type IN ('Missing Fixture', 'Injured', 'Injury', 'Questionable'))
        ) q WHERE _rn <= 15`,
       [fixtureId]
     );
-    if (r.rows.length > 0) return r.rows;
+    if (r.rows.length > 0) {
+      return r.rows
+        .map(row => ({ ...row, severity: classifyInjury(row) }))
+        .filter(p => p.severity !== 'NATIONAL');
+    }
 
     // Fallback: prematch_data stochează injuries ca array JSON brut
     const pd = await query(
@@ -918,15 +949,19 @@ async function getInjuriesFromDB(fixtureId) {
     if (!pd.rows.length) return [];
     const arr = pd.rows[0].payload;
     if (!Array.isArray(arr)) return [];
-    return arr.map(item => ({
-      fixture_id:  fixtureId,
-      team_id:     item.team?.id    || null,
-      team_name:   item.team?.name  || null,
-      player_id:   item.player?.id  || null,
-      player_name: item.player?.name || null,
-      type:        item.player?.type || null,
-      reason:      item.player?.reason || null,
-    }));
+    return arr.map(item => {
+      const o = {
+        fixture_id:  fixtureId,
+        team_id:     item.team?.id    || null,
+        team_name:   item.team?.name  || null,
+        player_id:   item.player?.id  || null,
+        player_name: item.player?.name || null,
+        type:        item.player?.type || null,
+        reason:      item.player?.reason || null,
+      };
+      o.severity = classifyInjury(o);
+      return o;
+    }).filter(p => p.severity !== 'NATIONAL');
   } catch (_) { return []; }
 }
 
@@ -1333,13 +1368,24 @@ export default async function handler(req, res) {
 
     // Smart injury lambda penalty — jucători importanți lipsă reduc puterea de atac
     if (fid && Array.isArray(injuries) && injuries.length > 0) {
+      const baseInjFactor = (score) => {
+        if (score > 80) return 0.88;
+        if (score > 65) return 0.94;
+        if (score > 45) return 0.97;
+        return 1.0;
+      };
+      // Per jucător: factor după importanță, ajustat pe severitate (OUT 100%,
+      // QUESTIONABLE 50%, NATIONAL exclus). Reține cea mai puternică penalizare.
       const applyInjLambda = (players) => {
         if (!players.length) return 1.0;
-        const top = Math.max(...players.map(p => p.score));
-        if (top > 80) return 0.88;
-        if (top > 65) return 0.94;
-        if (top > 45) return 0.97;
-        return 1.0;
+        let factor = 1.0;
+        for (const p of players) {
+          if (p.severity === 'NATIONAL') continue;
+          let f = baseInjFactor(p.score);
+          if (p.severity === 'QUESTIONABLE') f = 1 - (1 - f) / 2;  // jumătate de penalizare
+          if (f < factor) factor = f;
+        }
+        return factor;
       };
       const injFactorH = applyInjLambda(injuredScores.home);
       const injFactorA = applyInjLambda(injuredScores.away);

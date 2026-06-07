@@ -778,7 +778,18 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - Cod mort scos din scanner.js
+[07.06 ~now] - Filtrare injuries pe severitate (enrich.js)
+  + classifyInjury(inj) → OUT / QUESTIONABLE / NATIONAL (din type/reason).
+  getInjuries + getInjuriesFromDB: păstrează Questionable (+severity), exclud
+  convocările la națională (reason~national) + inactivii; SQL DB adaugă
+  'Questionable'. getInjuredPlayerScores: skip NATIONAL, atașează severity.
+  Lambda penalty applyInjLambda: OUT=factor de bază, QUESTIONABLE=jumătate
+  penalizare (0.94 în loc de 0.88...), NATIONAL exclus, ia cea mai puternică.
+  getTopAssist/ScorerInjuryFactor: OUT×0.90, QUESTIONABLE×0.95, NATIONAL/absent
+  1.0. type/reason lipsă → QUESTIONABLE. node --check OK. NEATINS
+  calcConfidence*/score1-7. | Commit: git
+
+[07.06 ~earlier] - Cod mort scos din scanner.js
   Șters `let _patternRunCount = 0;` (nefolosit) + funcția leagueSnapshots()
   (nefolosită după eliminarea league_patterns). node --check OK, zero referințe
   reziduale. | Commit: git
