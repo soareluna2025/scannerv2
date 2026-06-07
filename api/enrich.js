@@ -124,7 +124,7 @@ function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
   return { lambda: currentGoals + lambdaRemaining, dynamic: true };
 }
 
-function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agParam, sothParam, sotaParam, lgHome = 1.2, lgAway = 1.2, leagueStats = null) {
+export function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agParam, sothParam, sotaParam, lgHome = 1.2, lgAway = 1.2, leagueStats = null) {
   // Sprint 4D — clamp scoruri extreme: orice meci cu total > 5 goluri
   // se tratează proporțional ca și cum totalul ar fi 5. Previne outliers
   // (ex: 6-0 demolare sau 5-3 carnaval) să infleze artificial lambdaHome/lambdaAway
@@ -564,7 +564,7 @@ function _finalizeConfidence(layers, score1, score2, score3, score6, score7,
 }
 
 // FUNCȚIA 1: calcConfidencePreMatch — pre-meci (fără liveStats)
-function calcConfidencePreMatch(result, teamStrengths) {
+export function calcConfidencePreMatch(result, teamStrengths) {
   const { score1, score2, score3, score7, teamStrengthHome, teamStrengthAway } =
     _calcConfidenceCommonScores(result, teamStrengths);
 

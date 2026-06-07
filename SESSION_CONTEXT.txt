@@ -778,6 +778,22 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~19:20] - Backfill predicții retroactive 2022+ (DB-only, reuse enrich)
+  api/cron/backfill-predictions.js (NOU). Reutilizeaza calcPoisson + calcConfidence
+  PreMatch din enrich.js (acum EXPORTATE — doar `export` adaugat, logica NEATINSA).
+  DB-ONLY (zero API). POINT-IN-TIME: formBefore/h2hBefore citesc doar meciuri cu
+  match_date < data meciului (fara lookahead), shape identic getHomeForm. Per meci:
+  labels din scor final (winner/over15/over25/gg); calcPoisson(...,0,0,0,0,0,...,ls)
+  -> probs; calcConfidencePreMatch(result,null) -> score1/2/3/6/7+confidence;
+  INSERT predictions (FARA season - nu exista coloana!) + ELO din elo_history (LEFT
+  JOIN) ON CONFLICT DO NOTHING (nu suprascrie reale). Resume via NOT EXISTS + LIMIT
+  20000/rulare. Cache league_stats. server.js cronFiles += 'backfill-predictions'.
+  Raspuns: processed/skipped/errors/batch_size/total_predictions_now/note.
+  ⚠ NUANTA ONESTA: forma point-in-time vine din fixtures_history backfill-uit; calitate
+  variabila pt sezoane vechi (standings/player-strength lipsesc -> teamStrengths=null,
+  acelasi path ca live fara player_stats). node --check OK. Rulare manuala repetata
+  pana matches.length<20000. | Commit: (vezi mai jos)
+
 [04.06 ~19:00] - Features ML in predictions: ELO + pozitie clasament
   PAS1 audit: predictions NU are home_team_id/away_team_id/season (doar home_team/
   away_team TEXT + league_id) -> PASUL4 corectat sa faca punte via fixtures_history.
