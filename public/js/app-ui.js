@@ -1407,11 +1407,12 @@ function mdRenderML(d){
     else { var active=(n===scored+1); cls='ml-oc '+(active?'active':'pending'); inner=(p!=null?p+'%':'—'); }
     return '<div class="'+cls+'"><div class="ml-oc-name">'+name+'</div><div class="ml-oc-prob">'+inner+'</div></div>';
   }
-  function teamCol(scored,phaseDone,p05){
+  function teamCol(scored,phaseDone,probs){
+    probs=probs||{};
     return '<div style="display:flex;flex-direction:column;gap:6px">'
-      +overCell('Over 0.5',1,scored,phaseDone,p05)
-      +overCell('Over 1.5',2,scored,phaseDone,null)
-      +overCell('Over 2.5',3,scored,phaseDone,null)
+      +overCell('Over 0.5',1,scored,phaseDone,probs.o05)
+      +overCell('Over 1.5',2,scored,phaseDone,probs.o15)
+      +overCell('Over 2.5',3,scored,phaseDone,probs.o25)
       +overCell('Over 3.5',4,scored,phaseDone,null)+'</div>';
   }
   // ── Piață extra (HT/R2 total) — DA/NU dacă decisă, altfel % ──
@@ -1483,8 +1484,8 @@ function mdRenderML(d){
   out+='<div class="md-section"><div class="md-section-title">REPRIZA 1</div>';
   out+='<div style="font-size:10px;color:var(--mu);margin-bottom:8px">'+r1Badge+'</div>';
   out+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
-  out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div>'+teamCol(r1Home,lc.r1Done,prob('ht_home'))+'</div>';
-  out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div>'+teamCol(r1Away,lc.r1Done,prob('ht_away'))+'</div>';
+  out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div>'+teamCol(r1Home,lc.r1Done,{o05:prob('ht_home'),o15:prob('ht_home_over15'),o25:prob('ht_home_over25')})+'</div>';
+  out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div>'+teamCol(r1Away,lc.r1Done,{o05:prob('ht_away'),o15:prob('ht_away_over15'),o25:prob('ht_away_over25')})+'</div>';
   out+='</div>';
   out+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">'
     +xMarket('HT Over 0.5', thh>=1, lc.r1Done, prob('ht_over05'))
@@ -1500,8 +1501,8 @@ function mdRenderML(d){
     out+='<div class="md-section"><div class="md-section-title">REPRIZA 2</div>';
     out+='<div style="font-size:10px;color:var(--mu);margin-bottom:8px">'+r2Badge+'</div>';
     out+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
-    out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div>'+teamCol(hr2,false,prob('r2_home'))+'</div>';
-    out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div>'+teamCol(ar2,false,prob('r2_away'))+'</div>';
+    out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div>'+teamCol(hr2,false,{o05:prob('r2_home'),o15:prob('r2_home_over15'),o25:prob('r2_home_over25')})+'</div>';
+    out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div>'+teamCol(ar2,false,{o05:prob('r2_away'),o15:prob('r2_away_over15'),o25:prob('r2_away_over25')})+'</div>';
     out+='</div>';
     out+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">'
       +xMarket('R2 Over 1.5', gr2>=2, false, prob('r2_over15'))
