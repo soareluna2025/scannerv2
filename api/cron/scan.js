@@ -61,20 +61,6 @@ async function leagueSnapshots(leagueId, limit = 200) {
   } catch (_) { return []; }
 }
 
-async function upsertLeaguePattern(row) {
-  await query(
-    `INSERT INTO league_patterns
-       (league_id, sample_size, avg_ng, avg_over15, updated_at)
-     VALUES ($1,$2,$3,$4,NOW())
-     ON CONFLICT (league_id) DO UPDATE SET
-       sample_size=EXCLUDED.sample_size,
-       avg_ng=EXCLUDED.avg_ng,
-       avg_over15=EXCLUDED.avg_over15,
-       updated_at=NOW()`,
-    [row.league_id, row.sample_size, row.avg_ng, row.avg_over15]
-  );
-}
-
 async function saveLiveStats(m, f, status) {
   await query(
     `INSERT INTO live_stats
@@ -170,16 +156,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ error: 'No API key' });
   }
 
-  // Ensure league_patterns table exists (referenced by upsertLeaguePattern)
-  await query(`CREATE TABLE IF NOT EXISTS league_patterns (
-    league_id    INTEGER PRIMARY KEY,
-    avg_ng       DECIMAL(5,2) DEFAULT 0,
-    avg_over15   DECIMAL(5,2) DEFAULT 0,
-    avg_gg       DECIMAL(5,2) DEFAULT 0,
-    sample_size  INTEGER DEFAULT 0,
-    updated_at   TIMESTAMP DEFAULT NOW()
-  )`).catch(() => {});
-
   _runCount++;
   log(`run #${_runCount}`);
 
@@ -271,30 +247,6 @@ export default async function handler(req, res) {
       log(`h2h: ${finishedMatches.length} meciuri salvate`);
     } catch (e) {
       log(`saveH2H error: ${e.message}`);
-    }
-  }
-
-  if (_runCount % 10 === 0) {
-    log('recalculating league patterns...');
-    try {
-      const recent = await leagueSnapshots(null, 1000);
-      const byLeague = {};
-      for (const s of recent) {
-        if (!s.league_id) continue;
-        if (!byLeague[s.league_id]) byLeague[s.league_id] = [];
-        byLeague[s.league_id].push(s);
-      }
-      let patternCount = 0;
-      for (const [lid, snaps] of Object.entries(byLeague)) {
-        const n         = snaps.length;
-        const avg_ng    = Math.round(snaps.reduce((s, x) => s + (x.ng    || 0), 0) / n);
-        const avg_over15 = Math.round(snaps.reduce((s, x) => s + (x.over15 || 0), 0) / n);
-        await upsertLeaguePattern({ league_id: Number(lid), sample_size: n, avg_ng, avg_over15 });
-        patternCount++;
-      }
-      log(`league patterns: ${patternCount} ligi actualizate din ${recent.length} snapshots`);
-    } catch (e) {
-      log(`league patterns error: ${e.message}`);
     }
   }
 

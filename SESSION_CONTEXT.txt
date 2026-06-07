@@ -778,7 +778,18 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - Factor top_assists pe lambda (enrich.js)
+[07.06 ~now] - Curățare cod + tabele inutile
+  Șters: api/bets.js (fișier complet) + 'bets' din apiFiles (server.js, altfel
+  ruta 500-ea) + endpoint /bets-aggregate (admin.js) + în scan.js
+  upsertLeaguePattern() + CREATE TABLE league_patterns + blocul de recalcul
+  pattern (_runCount%10). leagueSnapshots() rămâne definit (nefolosit acum,
+  inofensiv). node --check OK ×3. DROP tabele (venue_weather, sidelined,
+  live_odds, fixture_status_log, trophies, transfers, bets, league_patterns)
+  = MANUAL pe VPS (sandbox nu ajunge la DB). ⚠ frontend „Bilete + ROI"
+  (app-live.js + index.html) încă cheamă /api/bets → va da 404 (neatins per
+  instrucțiuni). ⚠ parolă DB expusă în prompt → rotește. | Commit: git
+
+[07.06 ~earlier] - Factor top_assists pe lambda (enrich.js)
   + getTopAssistInjuryFactor(teamId, injuries): SELECT top pasator din
   top_assists (team_id, SEASON, ORDER assists DESC LIMIT 1); dacă e în
   `injuries` → 0.90, altfel 1.0 (±10% max, silent-fail→1.0). Aplicat pe
