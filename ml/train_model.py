@@ -164,6 +164,9 @@ MARKETS = {
     "r2_home_over25": ("y_r2_home_over25", FEATURES_HT, "R2 Gazde Over 2.5"),
     "r2_away_over15": ("y_r2_away_over15", FEATURES_HT, "R2 Oaspeți Over 1.5"),
     "r2_away_over25": ("y_r2_away_over25", FEATURES_HT, "R2 Oaspeți Over 2.5"),
+    "r2_home_win": ("y_r2_home_win", FEATURES_HT, "R2 Gazde câștigă"),
+    "r2_draw":     ("y_r2_draw",     FEATURES_HT, "R2 Egal"),
+    "r2_away_win": ("y_r2_away_win", FEATURES_HT, "R2 Oaspeți câștigă"),
 }
 
 ACTUAL_COL = {"y_over15": "over15_prob", "y_over25": "over25_prob",
@@ -237,6 +240,9 @@ def main():
     df["y_r2_home_over25"] = (df["home_r2"] >= 3).astype(int)
     df["y_r2_away_over15"] = (df["away_r2"] >= 2).astype(int)
     df["y_r2_away_over25"] = (df["away_r2"] >= 3).astype(int)
+    df["y_r2_home_win"] = (df["home_r2"] > df["away_r2"]).astype(int)
+    df["y_r2_draw"]     = (df["home_r2"] == df["away_r2"]).astype(int)
+    df["y_r2_away_win"] = (df["away_r2"] > df["home_r2"]).astype(int)
 
     # PASUL 5 — antrenează modele. Cu argumente CLI → DOAR piețele cerute (merge
     # în model_export.json, nu suprascrie tot). Fără argumente → toate (ca înainte).

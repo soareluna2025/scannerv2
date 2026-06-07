@@ -1515,7 +1515,7 @@ function mdRenderML(d){
       +oc('Ov 2.5',3,gr2,false,true,prob('r2_over25'))
       +res('BTTS',r2BttsDone,false,prob('r2_btts'))+'</div>';
     out+='<div class="ml-sub">Rezultat R2</div>';
-    out+='<div style="'+grid(3)+'">'+mc('1 Gazde',null)+mc('X Egal',null)+mc('2 Oaspeți',null)+'</div>';
+    out+='<div style="'+grid(3)+'">'+mc('1 Gazde',prob('r2_home_win'))+mc('X Egal',prob('r2_draw'))+mc('2 Oaspeți',prob('r2_away_win'))+'</div>';
     out+='<div class="ml-sub">Goluri per echipă R2</div>';
     out+='<div style="'+grid(2)+'">';
     out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
