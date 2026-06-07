@@ -778,6 +778,22 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~21:00] - Tab ML context-aware live (minut/scor/status/HT)
+  PAS1+3 app-ui.js mdRenderML: _mdLiveCtx(d) din d.fixture (elapsed/status/goals/
+  score.halftime/isLive/isHT/r1Done/minutesRemaining). _mlApplyLive() pe o COPIE a
+  markets (nu muta cache): piete deja indeplinite (over05/15/25/btts/over05_home/away
+  din scor curent) -> prob 100 + fulfilled (badge "✅ ÎNDEPLINIT"); R1 terminata
+  (2H/HT/ET + HT stiut) -> ht_* final DA/NU "Rezultat final R1". Header status:
+  ⏱ Pre-meci / 🔴 LIVE R1 / ⏸ Pauza HT x-y / 🔴 LIVE R2. Sectiunea R2 apare cand
+  r1Done && homeHT!=null (badge "📊 Live · min X · scor HT").
+  PAS2 api/ml-predict.js: predictAllMarkets(en,elo,liveCtx) — buildFeatures mapeaza
+  liveCtx (homeHT/awayHT->home_ht/away_ht/goals_ht, elapsed_norm, minutes_remaining);
+  htAvailable din liveCtx; applyLiveContext() exportat (fulfilled/final server-ready).
+  ⚠ LIMITARE: predictAllMarkets e Node-only (fs) -> NU poate rula in browser; overrides
+  live aplicate CLIENT-SIDE in mdRenderML. Probabilitatile R2 vin din server (HT
+  neutralizat) pana cand enrich primeste liveCtx (interzis aici: DOAR app-ui+ml-predict).
+  NEATINS: calcConfidence*/score1-7. node --check OK. | Commit: (vezi mai jos)
+
 [04.06 ~20:30] - Tab ML (🤖) in cartonas: inferenta LR din model_export.json
   PAS1 api/ml-predict.js (NOU): predictAllMarkets(enrich,elo,ht) — incarca ml/
   model_export.json (cache 10min, silent-fail daca lipseste), construieste features

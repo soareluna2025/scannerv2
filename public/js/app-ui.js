@@ -1320,16 +1320,67 @@ function _mdHasML(d){
   }catch(_){ return false; }
 }
 var _ML_ACTUAL_FIELD={ over15_total:'over15Prob', over25_total:'over25Prob', btts_total:'ggProb', home_win:'homeWin' };
+// Context live din d.fixture (frontend îl are; ml-predict rulează server-side).
+function _mdLiveCtx(d){
+  var fx=(d&&d.fixture)||{};
+  var st=(fx.fixture&&fx.fixture.status)||{};
+  var lc={
+    elapsed: st.elapsed||0,
+    status: st.short||'NS',
+    homeGoals: (fx.goals&&fx.goals.home!=null)?fx.goals.home:0,
+    awayGoals: (fx.goals&&fx.goals.away!=null)?fx.goals.away:0,
+    homeHT: (fx.score&&fx.score.halftime&&fx.score.halftime.home!=null)?fx.score.halftime.home:null,
+    awayHT: (fx.score&&fx.score.halftime&&fx.score.halftime.away!=null)?fx.score.halftime.away:null,
+  };
+  lc.isLive=(['1H','2H','ET'].indexOf(lc.status)>=0);
+  lc.isHT=(lc.status==='HT');
+  lc.r1Done=(lc.status==='2H'||lc.status==='HT'||lc.status==='ET');
+  lc.minutesRemaining=Math.max(0,90-lc.elapsed);
+  return lc;
+}
+// Aplică contextul live pe markets (echivalentul client al applyLiveContext din
+// ml-predict.js — care rulează server-side și nu primește încă liveCtx). Mutează copia.
+function _mlApplyLive(markets, lc){
+  var hg=lc.homeGoals||0, ag=lc.awayGoals||0, tg=hg+ag;
+  var setF=function(k,c){ if(markets[k]&&c){ markets[k].prob=100; markets[k].fulfilled=true; } };
+  setF('over05_total',tg>=1); setF('over15_total',tg>=2); setF('over25_total',tg>=3);
+  setF('btts_total',hg>0&&ag>0); setF('over05_home',hg>=1); setF('over05_away',ag>=1);
+  if(lc.r1Done && lc.homeHT!=null && lc.awayHT!=null){
+    var hh=lc.homeHT||0, ah=lc.awayHT||0, thh=hh+ah;
+    var setFinal=function(k,c){ if(markets[k]){ markets[k].final=true; markets[k].fulfilled=!!c; markets[k].prob=c?100:0; } };
+    setFinal('ht_over05',thh>=1); setFinal('ht_over15',thh>=2);
+    setFinal('ht_btts',hh>0&&ah>0); setFinal('ht_home',hh>=1); setFinal('ht_away',ah>=1);
+  }
+}
 function mdRenderML(d){
   var body=document.getElementById('md-body');
   var en=_mdEnMerged(d);
   var ml=en.mlPredictions;
   if(!ml||!ml.markets){ body.innerHTML='<div class="empty"><div class="empty-icon">🤖</div><div class="empty-t">ML indisponibil</div><div class="empty-s">Modelul nu e încă antrenat pentru acest meci</div></div>'; return; }
-  var M=ml.markets;
+  var lc=_mdLiveCtx(d);
+  // Clonează markets (nu muta cache-ul) + aplică context live client-side.
+  var M={}; Object.keys(ml.markets).forEach(function(k){ M[k]=Object.assign({},ml.markets[k]); });
+  _mlApplyLive(M, lc);
+
   var clr=function(p){return p>=70?'#00d4aa':p>=50?'#f59e0b':'#ef4444';};
   function card(key){
     var m=M[key]; if(!m)return '';
     var p=m.prob, c=clr(p);
+    // Piață R1 FINALĂ (rezultat cunoscut)
+    if(m.final){
+      var fc=m.fulfilled?'#00d4aa':'#ef4444';
+      return '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px">'
+        +'<div style="font-size:11px;color:var(--mu)">'+htmlEsc(m.desc)+' <span style="font-size:8px;color:var(--mu)">· Rezultat final R1</span></div>'
+        +'<div style="font-size:20px;font-weight:800;color:'+fc+';margin-top:2px">'+(m.fulfilled?'✅ DA':'❌ NU')+'</div></div>';
+    }
+    // Piață deja ÎNDEPLINITĂ (scor curent)
+    if(m.fulfilled){
+      return '<div style="background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.3);border-radius:10px;padding:10px">'
+        +'<div style="font-size:11px;color:var(--mu)">'+htmlEsc(m.desc)+' <span style="font-size:8px;font-weight:800;color:#021;background:#00d4aa;border-radius:4px;padding:1px 5px;margin-left:4px">✅ ÎNDEPLINIT</span></div>'
+        +'<div style="font-size:22px;font-weight:800;color:#00d4aa;line-height:1.1;margin-top:2px">100%</div>'
+        +'<div style="height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-top:4px"><div style="height:100%;width:100%;background:#00d4aa"></div></div></div>';
+    }
+    // Card normal + comparație cu modelul actual (unde există)
     var af=_ML_ACTUAL_FIELD[key];
     var actual=(af&&en[af]!=null)?Math.round(en[af]):null;
     var cmp='';
@@ -1353,16 +1404,27 @@ function mdRenderML(d){
     h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+cards.join('')+'</div></div>';
     return h;
   }
+
+  // Status indicator
+  var statusTxt, statusClr;
+  if(lc.status==='HT'){ statusTxt='⏸ Pauză · HT '+(lc.homeHT!=null?lc.homeHT:'?')+'-'+(lc.awayHT!=null?lc.awayHT:'?'); statusClr='#f59e0b'; }
+  else if(lc.status==='2H'||lc.status==='ET'){ statusTxt='🔴 LIVE · R2 · min '+lc.elapsed; statusClr='#ef4444'; }
+  else if(lc.status==='1H'){ statusTxt='🔴 LIVE · R1 · min '+lc.elapsed; statusClr='#ef4444'; }
+  else { statusTxt='⏱ Pre-meci'; statusClr='var(--mu)'; }
+
   var trained=ml.trainedOn?(Math.round(ml.trainedOn/1000)+'k'):'—';
   var bestBrier=(ml.bestBrier!=null)?Number(ml.bestBrier).toFixed(4):'—';
   var out='';
   out+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:10px 12px;margin-bottom:12px">';
-  out+='<span style="font-weight:800;color:#a5b4fc">🤖 ML ACTIV</span>';
-  out+='<span style="font-size:10px;color:var(--mu)">'+trained+' meciuri antrenate · LR model</span></div>';
+  out+='<span style="font-weight:800;color:#a5b4fc">🤖 ML</span>';
+  out+='<span style="font-size:11px;font-weight:700;color:'+statusClr+'">'+statusTxt+'</span>';
+  out+='<span style="font-size:10px;color:var(--mu);margin-left:auto">'+trained+' meciuri · LR</span></div>';
   out+=section('TOT MECIUL', null, ['over05_total','over15_total','over25_total','btts_total','over05_home','over05_away','home_win']);
-  out+=section('REPRIZA 1', '⏱ Predicție pre-meci', ['ht_over05','ht_over15','ht_btts','ht_home','ht_away']);
-  if(ml.htAvailable){
-    out+=section('REPRIZA 2', '📊 Include scor HT + stats R1', ['r2_over05','r2_over15','r2_btts','r2_home','r2_away']);
+  var r1Badge=lc.r1Done?'✅ Rezultat final R1':'⏱ Predicție pre-meci';
+  out+=section('REPRIZA 1', r1Badge, ['ht_over05','ht_over15','ht_btts','ht_home','ht_away']);
+  // Repriza 2 — apare când R1 e terminată și avem scorul HT.
+  if(lc.r1Done && lc.homeHT!=null){
+    out+=section('REPRIZA 2', '📊 Live · min '+lc.elapsed+' · scor HT '+lc.homeHT+'-'+lc.awayHT, ['r2_over05','r2_over15','r2_btts','r2_home','r2_away']);
   }
   out+='<div style="font-size:10px;color:var(--mu);margin-top:10px;line-height:1.4">🤖 Model antrenat pe '+trained+' meciuri reale · Logistic Regression · Brier '+bestBrier+'</div>';
   body.innerHTML=out;

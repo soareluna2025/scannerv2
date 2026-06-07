@@ -27,12 +27,15 @@ function loadModels() {
 
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 
-// Construiește harta de features din payload-ul enrich + ELO (+ HT/stats dacă există).
-function buildFeatures(en, elo, ht) {
-  en = en || {}; elo = elo || {}; ht = ht || {};
+// Construiește harta de features din payload-ul enrich + ELO (+ context live).
+function buildFeatures(en, elo, lc) {
+  en = en || {}; elo = elo || {}; lc = lc || {};
   const bd = en.breakdown || {};
   const lh = num(en.lambdaHome) || 0, la = num(en.lambdaAway) || 0;
   const homeElo = num(elo.home_elo), awayElo = num(elo.away_elo);
+  const hht = (lc.homeHT != null ? lc.homeHT : lc.home_ht);
+  const aht = (lc.awayHT != null ? lc.awayHT : lc.away_ht);
+  const goalsHt = (num(hht) != null && num(aht) != null) ? num(hht) + num(aht) : null;
   return {
     score1: num(bd.poisson), score2: num(bd.forma), score3: num(bd.h2h),
     score6: num(bd.consistenta), score7: num(bd.putereEchipe),
@@ -44,12 +47,15 @@ function buildFeatures(en, elo, ht) {
     elo_sum: (homeElo != null && awayElo != null) ? homeElo + awayElo : null,
     home_position_norm: num(en.homePositionNorm), away_position_norm: num(en.awayPositionNorm),
     confidence: num(en.confidenceScore),
-    // HT / stats R1 (doar live la pauză; pre-meci → null → neutralizate)
-    home_ht: num(ht.home_ht), away_ht: num(ht.away_ht), goals_ht: num(ht.goals_ht),
-    shots_home: num(ht.shots_home), shots_away: num(ht.shots_away),
-    shots_on_target_home: num(ht.shots_on_target_home), shots_on_target_away: num(ht.shots_on_target_away),
-    corners_home: num(ht.corners_home), corners_away: num(ht.corners_away),
-    possession_home: num(ht.possession_home), possession_away: num(ht.possession_away),
+    // HT / stats R1 (live la pauză/R2; pre-meci → null → neutralizate)
+    home_ht: num(hht), away_ht: num(aht), goals_ht: goalsHt,
+    shots_home: num(lc.shots_home), shots_away: num(lc.shots_away),
+    shots_on_target_home: num(lc.shots_on_target_home), shots_on_target_away: num(lc.shots_on_target_away),
+    corners_home: num(lc.corners_home), corners_away: num(lc.corners_away),
+    possession_home: num(lc.possession_home), possession_away: num(lc.possession_away),
+    // elapsed normalizat (feature suplimentar — folosit doar dacă modelul îl conține)
+    elapsed_norm: (num(lc.elapsed) != null && num(lc.elapsed) > 0) ? num(lc.elapsed) / 90 : null,
+    minutes_remaining: num(lc.minutesRemaining),
   };
 }
 
@@ -71,13 +77,14 @@ function lrProb(model, feat) {
 }
 
 // enrichData = payload din enrich.js; eloData = {home_elo,away_elo,elo_diff,home_win_prob}
-// htData (opțional) = {home_ht,away_ht,goals_ht,shots_*,...} pentru piețele R2.
-export function predictAllMarkets(enrichData, eloData, htData) {
+// liveCtx (opțional) = {elapsed,status,homeGoals,awayGoals,homeHT,awayHT,isLive,isHT,minutesRemaining}
+export function predictAllMarkets(enrichData, eloData, liveCtx) {
   try {
     const models = loadModels();
     if (!models || typeof models !== 'object') return null;
-    const feat = buildFeatures(enrichData, eloData, htData);
-    const htAvailable = !!(htData && htData.home_ht != null && htData.away_ht != null);
+    const lc = liveCtx || {};
+    const feat = buildFeatures(enrichData, eloData, lc);
+    const htAvailable = (lc.homeHT != null && lc.awayHT != null);
 
     const markets = {};
     let count = 0, bestBrier = null, trainedOn = null;
@@ -100,6 +107,39 @@ export function predictAllMarkets(enrichData, eloData, htData) {
       } catch (_) { /* skip piață */ }
     }
     if (!count) return null;
-    return { markets, htAvailable, bestBrier, trainedOn };
+
+    // ── Context live: marchează piețele deja decise (fulfilled / final R1) ──
+    applyLiveContext(markets, lc);
+
+    return { markets, htAvailable, bestBrier, trainedOn, live: !!lc.isLive, status: lc.status || 'NS', elapsed: num(lc.elapsed) || 0 };
   } catch (_) { return null; }
+}
+
+// Marchează piețele deja îndeplinite (scor curent) + rezultatele finale R1
+// (când meciul e în repriza 2 sau pauză). Mutează `markets` in-place.
+export function applyLiveContext(markets, lc) {
+  if (!markets || !lc) return markets;
+  const hg = num(lc.homeGoals) || 0, ag = num(lc.awayGoals) || 0;
+  const tg = hg + ag;
+  const setF = (k, cond) => { if (markets[k] && cond) { markets[k].prob = 100; markets[k].fulfilled = true; } };
+  setF('over05_total', tg >= 1);
+  setF('over15_total', tg >= 2);
+  setF('over25_total', tg >= 3);
+  setF('btts_total', hg > 0 && ag > 0);
+  setF('over05_home', hg >= 1);
+  setF('over05_away', ag >= 1);
+
+  // R1 terminată (status 2H / HT) și avem scorul HT → marchează piețele HT ca FINALE.
+  if ((lc.status === '2H' || lc.status === 'HT' || lc.status === 'ET') && lc.homeHT != null && lc.awayHT != null) {
+    const hh = num(lc.homeHT) || 0, ah = num(lc.awayHT) || 0, thh = hh + ah;
+    const setFinal = (k, cond) => {
+      if (markets[k]) { markets[k].final = true; markets[k].fulfilled = !!cond; markets[k].prob = cond ? 100 : 0; }
+    };
+    setFinal('ht_over05', thh >= 1);
+    setFinal('ht_over15', thh >= 2);
+    setFinal('ht_btts', hh > 0 && ah > 0);
+    setFinal('ht_home', hh >= 1);
+    setFinal('ht_away', ah >= 1);
+  }
+  return markets;
 }
