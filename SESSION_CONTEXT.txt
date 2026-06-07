@@ -778,7 +778,18 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[04.06 ~22:00] - Tab ML: afiseaza piata urmatoare cand una e indeplinita
+[04.06 ~22:20] - Tab ML rescris in 3 blocuri (PRE-MECI / REPRIZA 1 / REPRIZA 2)
+  app-ui.js mdRenderML rescris complet. BLOC1 PRE-MECI: carduri over05-45+BTTS (stari
+  done/active/normal din scor curent), 1X2 (home/draw/away), over05 gazde/oaspeti.
+  BLOC2 REPRIZA1: 2 coloane per echipa (ml-team-label home/away) x4 over (overCell:
+  fulfilled DA/NU blurat, active border verde+prob, pending gri); extra HT Over0.5/1.5/
+  BTTS/2.5 (DA/NU daca R1 done, altfel %). r1 scored = r1Done?HT:goluri curente.
+  BLOC3 REPRIZA2: doar r1Done&&homeHT!=null; idem cu homeR2/awayR2=curent-HT; extra
+  R2 Over1.5/BTTS/2.5. CSS inline injectat (ml-oc/ml-card/ml-team-label). Prob per-echipa
+  over1.5+ = "—" (nu exista model dedicat; doar over0.5=ht_home/r2_home). _mlApplyLive
+  pastrat. NEATINS scoring. node --check OK. | Commit: vezi git.
+
+  [04.06 ~22:00] - Tab ML: afiseaza piata urmatoare cand una e indeplinita
   app-ui.js DOAR. _mlApplyLive: ladderHide() ascunde linia Over indeplinita care are
   succesor inca deschis (total: over05->15->25->35->45; R2: r2_over05->15->25) -> in grid
   apare automat linia urmatoare cu prob ML. Home/Away score: cand a marcat -> relabel
