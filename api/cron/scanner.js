@@ -208,20 +208,6 @@ async function leagueSnapshots(leagueId, limit = 200) {
   } catch (_) { return []; }
 }
 
-async function upsertLeaguePattern(row) {
-  await query(
-    `INSERT INTO league_patterns
-       (league_id, sample_size, avg_ng, avg_over15, updated_at)
-     VALUES ($1,$2,$3,$4,NOW())
-     ON CONFLICT (league_id) DO UPDATE SET
-       sample_size=EXCLUDED.sample_size,
-       avg_ng=EXCLUDED.avg_ng,
-       avg_over15=EXCLUDED.avg_over15,
-       updated_at=NOW()`,
-    [row.league_id, row.sample_size, row.avg_ng, row.avg_over15]
-  );
-}
-
 // M5: Save FT match to fixtures_history and update form_stats for both teams
 async function saveFormStats(m) {
   const fid    = m.fixture?.id;
@@ -701,29 +687,6 @@ async function scanLive10s() {
     // ── Rezolvare WIN/LOSS pentru contorul NGP — mn6 ────────────────────────
     resolveNGPOutcomes(raw).catch(e => log(`resolveNGPOutcomes: ${e.message}`));
 
-    // League patterns la fiecare 10 rulări
-    _patternRunCount++;
-    if (_patternRunCount % 10 === 0) {
-      leagueSnapshots(null, 1000).then(recent => {
-        const byLeague = {};
-        for (const s of recent) {
-          if (!s.league_id) continue;
-          if (!byLeague[s.league_id]) byLeague[s.league_id] = [];
-          byLeague[s.league_id].push(s);
-        }
-        let count = 0;
-        for (const [lid, snaps] of Object.entries(byLeague)) {
-          const n          = snaps.length;
-          const avg_ng     = Math.round(snaps.reduce((s, x) => s + (x.ng    || 0), 0) / n);
-          const avg_over15 = Math.round(snaps.reduce((s, x) => s + (x.over15 || 0), 0) / n);
-          upsertLeaguePattern({ league_id: Number(lid), sample_size: n, avg_ng, avg_over15 })
-            .catch(() => {});
-          count++;
-        }
-        log(`league patterns: ${count} updated`);
-      }).catch(() => {});
-    }
-
     // ── FILTRARE FROZEN-DEAD la IEȘIRE (cheia fix-ului) ─────────────────────
     // Ascundem meciurile cu minut înghețat din lista trimisă către frontend, FĂRĂ
     // a le șterge din cache → rămân ascunse permanent cât timp API le retrimite
@@ -903,21 +866,7 @@ async function ensureTables() {
         updated_at    TIMESTAMP DEFAULT NOW()
       )
     `);
-    await query(`
-      CREATE TABLE IF NOT EXISTS league_patterns (
-        league_id   INTEGER PRIMARY KEY,
-        sample_size INTEGER DEFAULT 0,
-        avg_ng      NUMERIC(5,2),
-        avg_over15  NUMERIC(5,2),
-        avg_goals   NUMERIC(4,2),
-        avg_cards   NUMERIC(4,2),
-        avg_corners NUMERIC(4,2),
-        over15_pct  NUMERIC(5,2),
-        gg_pct      NUMERIC(5,2),
-        updated_at  TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    log('ensureTables: match_snapshots + league_patterns OK');
+    log('ensureTables: match_snapshots OK');
   } catch (e) {
     log(`ensureTables error: ${e.message}`);
   }
