@@ -15,3 +15,13 @@ ALTER TABLE predictions ADD COLUMN IF NOT EXISTS league_group TEXT;
 -- ELO blend post-scoring (sesiune dedicată) — marcare ajustare ELO per predicție.
 ALTER TABLE predictions ADD COLUMN IF NOT EXISTS elo_adjusted BOOLEAN DEFAULT FALSE;
 ALTER TABLE predictions ADD COLUMN IF NOT EXISTS elo_diff_used NUMERIC(8,2);
+
+-- Features ML: ELO + poziție clasament (populate de backfill-ml-features.sql).
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS home_elo NUMERIC(8,2);
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS away_elo NUMERIC(8,2);
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS elo_diff_ml NUMERIC(8,2);
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS home_win_prob_elo NUMERIC(5,4);
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS home_position INTEGER;
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS away_position INTEGER;
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS home_position_norm NUMERIC(5,4);
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS away_position_norm NUMERIC(5,4);

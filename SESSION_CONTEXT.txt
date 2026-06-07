@@ -778,6 +778,18 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+[04.06 ~19:00] - Features ML in predictions: ELO + pozitie clasament
+  PAS1 audit: predictions NU are home_team_id/away_team_id/season (doar home_team/
+  away_team TEXT + league_id) -> PASUL4 corectat sa faca punte via fixtures_history.
+  PAS2 add-prediction-features.sql (auto la startup): +8 coloane home_elo/away_elo/
+  elo_diff_ml/home_win_prob_elo/home_position/away_position/home/away_position_norm.
+  PAS3-6 scripts/migrations/backfill-ml-features.sql (NOU, manual): UPDATE ELO din
+  elo_history (pe fixture_id); UPDATE pozitii din standings via fixtures_history
+  (fh.home/away_team_id+season); normalizare (rank-1)/(MAX(rank)-1) [corectat de la
+  /MAX(rank) ca sa dea exact 0..1]; raport COUNT total/cu_elo/cu_pozitie/complete_ml.
+  Rulare manuala pe VPS. NEATINS: score1-7/calcConfidence*. (n-am rulat - sandbox fara DB)
+  | Commit: (vezi mai jos)
+
 [04.06 ~18:45] - build-elo: Temporal Decay + Rolling Window 100
   api/cron/build-elo.js DOAR. MOD1 decay: monthsAgo din match_date, decayFactor=
   exp(-0.03*max(0,monthsAgo)); K = kFactor*competitionWeight*decayFactor (meciuri
