@@ -778,7 +778,15 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - ML conștiență temporală + scor (TOATE 34 piețe)
+[07.06 ~now] - docs/DATABASE_SCHEMA.md (referință obligatorie la sesiuni noi)
+  Creat docs/DATABASE_SCHEMA.md din audit live (PASUL 2 coloane + PASUL 3 index)
+  + create-tables.sql. Documentate ~47 tabele grupate: CORE/ELO/STATS/STANDINGS/
+  CONFIG/CALIBRARE/SNAPSHOTS/LOGS/ALTELE — scop, coloane, index, relații logice.
+  ⚠ PASUL 1 (rânduri), PASUL 4 (FK), PASUL 5 (sample) NU au fost în paste →
+  rândurile marcate „⧗ PASUL 1"; FK = none (relații logice pe fixture/team/league).
+  Inclus query de regenerare. Doc-only, zero cod. | Commit: git
+
+[07.06 ~earlier] - ML conștiență temporală + scor (TOATE 34 piețe)
   train_model.py: FEATURES_PREMATCH += elapsed_norm, minutes_remaining,
   goals_home_current, goals_away_current, goal_diff_current (FEATURES_HT le
   moștenește). La antrenare = stare finală (elapsed_norm=1, min_rem=0, scor
