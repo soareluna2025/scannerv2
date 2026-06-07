@@ -1431,7 +1431,7 @@ function mdRenderML(d){
     +'.ml-oc-name{font-size:9px;color:#6b7a99;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}'
     +'.ml-oc-prob{font-size:16px;font-weight:800;line-height:1}'
     +'.ml-oc.active{background:#082820;border:2px solid #00e5b8;box-shadow:0 0 10px #00e5b830}.ml-oc.active .ml-oc-prob{color:#00e5b8;font-size:19px}'
-    +'.ml-oc.pending{background:#101820;opacity:.5}.ml-oc.pending .ml-oc-prob{color:#3a4a60;font-size:14px}'
+    +'.ml-oc.pending{background:#141c28;border:1px solid #1e2a38;opacity:1}.ml-oc.pending .ml-oc-prob{color:#8899aa;font-size:13px}.ml-oc.pending .ml-oc-name{color:#5a6a80}'
     +'.ml-oc.yes{background:#082015;border:1px solid #00e5b840}.ml-oc.yes .ml-oc-prob{color:#00e5b8}'
     +'.ml-oc.no{background:#201008;border:1px solid #ff555530}.ml-oc.no .ml-oc-prob{color:#ff7777}'
     +'.mc{background:#0f1620;border:1px solid #1e2a38;border-radius:8px;padding:8px;text-align:center}'
