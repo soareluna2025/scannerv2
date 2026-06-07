@@ -516,8 +516,6 @@ async function loadTopOpps(){
   panel.innerHTML='<div class="spinner"><div class="spin"></div></div>';
 
   try{
-    // Refresh cache BETS_ADDED ca sa vad bifele actualizate
-    await loadBetsAddedCache();
     // Asigura ca avem meciuri si enrich incarcat (fara await pe loadPM care e long-running)
     if(!_pmMatches.length){
       panel.innerHTML='<div style="padding:14px;text-align:center;color:var(--mu);font-size:12px">📥 Apas&#259; mai &icirc;nt&#226;i „&Icirc;ncarc&#259; Pre-meci" sus pentru a popula datele, apoi reia.</div>';

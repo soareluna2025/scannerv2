@@ -44,22 +44,6 @@ async function resolveOutcome(fixtureId, outcome, finalHome, finalAway) {
   );
 }
 
-async function leagueSnapshots(leagueId, limit = 200) {
-  try {
-    const r = leagueId
-      ? await query(
-          `SELECT * FROM match_snapshots
-           WHERE league_id=$1 AND outcome != 'LIVE'
-           ORDER BY created_at DESC LIMIT $2`,
-          [leagueId, limit])
-      : await query(
-          `SELECT * FROM match_snapshots
-           WHERE outcome != 'LIVE'
-           ORDER BY created_at DESC LIMIT $1`,
-          [limit]);
-    return r.rows;
-  } catch (_) { return []; }
-}
 
 async function saveLiveStats(m, f, status) {
   await query(

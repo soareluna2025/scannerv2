@@ -312,15 +312,6 @@ CREATE TABLE IF NOT EXISTS injuries (
     UNIQUE (fixture_id, player_id)
 );
 
--- ── 15. sidelined ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS sidelined (
-    id              SERIAL PRIMARY KEY,
-    player_id       INTEGER NOT NULL,
-    type            TEXT,
-    start_date      DATE,
-    end_date        DATE,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
 
 -- ── 16. coaches ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS coaches (
@@ -371,19 +362,6 @@ CREATE TABLE IF NOT EXISTS coach_stats (
     updated_at           TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ── 17. transfers ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS transfers (
-    id              SERIAL PRIMARY KEY,
-    player_id       INTEGER NOT NULL,
-    player_name     TEXT,
-    team_in_id      INTEGER,
-    team_in_name    TEXT,
-    team_out_id     INTEGER,
-    team_out_name   TEXT,
-    transfer_date   DATE,
-    type            TEXT,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
 
 -- ── 18. venues ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS venues (
@@ -415,18 +393,6 @@ CREATE TABLE IF NOT EXISTS odds (
 );
 CREATE INDEX IF NOT EXISTS idx_odds_fixture ON odds(fixture_id);
 
--- ── 20. live_odds ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS live_odds (
-    id              SERIAL PRIMARY KEY,
-    fixture_id      INTEGER NOT NULL,
-    elapsed         INTEGER,
-    bookmaker_id    INTEGER,
-    bet_id          INTEGER,
-    value_name      TEXT,
-    value_odd       NUMERIC(8,3),
-    recorded_at     TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_live_odds_fixture ON live_odds(fixture_id);
 
 -- ── 21. predictions ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS predictions (
@@ -559,37 +525,8 @@ CREATE TABLE IF NOT EXISTS bookmakers (
     active          BOOLEAN DEFAULT TRUE
 );
 
--- ── 28. bets ─────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS bets (
-    bet_id          INTEGER PRIMARY KEY,
-    name            TEXT NOT NULL,
-    description     TEXT
-);
 
--- ── 29. trophies ─────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS trophies (
-    id              SERIAL PRIMARY KEY,
-    team_id         INTEGER NOT NULL,
-    league_id       INTEGER,
-    league_name     TEXT,
-    country         TEXT,
-    season          TEXT,
-    place           TEXT,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
 
--- ── 30. fixture_status_log ───────────────────────────────────────
-CREATE TABLE IF NOT EXISTS fixture_status_log (
-    id              SERIAL PRIMARY KEY,
-    fixture_id      INTEGER NOT NULL,
-    status_short    TEXT,
-    status_long     TEXT,
-    elapsed         INTEGER,
-    home_goals      INTEGER,
-    away_goals      INTEGER,
-    recorded_at     TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_fixture_status_fixture ON fixture_status_log(fixture_id);
 
 -- ── 31. cron_logs ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS cron_logs (
@@ -1040,19 +977,6 @@ CREATE TABLE IF NOT EXISTS match_snapshots (
   updated_at    TIMESTAMP DEFAULT NOW()
 );
 
--- ── 40. league_patterns ──────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS league_patterns (
-  league_id   INTEGER PRIMARY KEY,
-  sample_size INTEGER DEFAULT 0,
-  avg_ng      NUMERIC(5,2),
-  avg_over15  NUMERIC(5,2),
-  avg_goals   NUMERIC(4,2),
-  avg_cards   NUMERIC(4,2),
-  avg_corners NUMERIC(4,2),
-  over15_pct  NUMERIC(5,2),
-  gg_pct      NUMERIC(5,2),
-  updated_at  TIMESTAMP DEFAULT NOW()
-);
 
 -- ── 41. calibration_tables ───────────────────────────────────────
 -- IDENTIC cu api/cron/recalibrate-tables.js (L46-54). PK compus (module, league_group).

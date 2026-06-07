@@ -778,7 +778,20 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - Curățare cod + tabele inutile
+[07.06 ~now] - Eliminare completă „Bilete + ROI" + curățare schema
+  app-live.js: șters tot clusterul bilete (BETS_ADDED/getSelections/
+  setSelections/loadBetsAddedCache, toggleBetFromPick, switchFavSub,
+  toggleFavPicker, addFavMarketToSelections, renderSelectionsSection, stake
+  helpers, createSingles/createCombinat, loadBets, showAddBetForm/submitBet/
+  resolveBet/deleteBet) + butonul „+ Adaugă pe bilet" din favCard. app-ui.js:
+  scos apelul loadBetsAddedCache() (linia 519-520, altfel ReferenceError).
+  index.html: scos sub-tab switcher + #fav-sub-bets + #bets-body (rămâne doar
+  fav-body „Meciuri preferate"). create-tables.sql: șterse 7 def (sidelined,
+  live_odds, fixture_status_log, trophies, transfers, bets, league_patterns;
+  venue_weather nu era în fișier). scan.js: șters leagueSnapshots() nefolosit.
+  node --check ×3 OK, zero referințe reziduale. | Commit: git
+
+[07.06 ~earlier] - Curățare cod + tabele inutile
   Șters: api/bets.js (fișier complet) + 'bets' din apiFiles (server.js, altfel
   ruta 500-ea) + endpoint /bets-aggregate (admin.js) + în scan.js
   upsertLeaguePattern() + CREATE TABLE league_patterns + blocul de recalcul
