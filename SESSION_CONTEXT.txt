@@ -778,7 +778,17 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - scripts/migrations/resolve-prediction-log.sql
+[07.06 ~now] - ml/train_live.py (modele ML LIVE pe prediction_log)
+  Script NOU: antrenează 4 modele live (live_ngp/over15/gg/confidence) pe
+  prediction_log (outcome WIN/LOSS). Features live din live_stats la momentul
+  predicției (LATERAL JOIN elapsed<=minute) + ELO + derivate (elapsed_norm,
+  minutes_remaining, goal_diff, total_goals_now). GroupShuffleSplit pe
+  fixture_id (anti-leakage), sample_weight exp(-0.001*days), StandardScaler+LR,
+  Brier+Accuracy, top5 features. Export ml/model_live_export.json (gitignored).
+  Același _load_env_file/get_conn ca train_model.py. py_compile OK. NEATINS
+  train_model.py / scoring. | Commit: git
+
+[07.06 ~earlier] - scripts/migrations/resolve-prediction-log.sql
   Script SQL MANUAL (nu auto-aplicat) care rezolvă outcome PENDING/NULL din
   prediction_log din fixtures_history: OVER15/CONFIDENCE (total>=2), GG (ambele
   marchează), NGP (gol după minut via snapshot live_stats <= minute). PASUL 1+6
