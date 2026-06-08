@@ -360,36 +360,41 @@ def main():
     df["y_over15_away"] = (df["away_goals"] >= 2).astype(int)
     df["y_over25_away"] = (df["away_goals"] >= 3).astype(int)
 
-    # GRUP 3 — Cornere total (din corners_home/away)
-    df["y_corners_over85"]  = ((df["corners_home"] + df["corners_away"]) >= 9).astype(int)
-    df["y_corners_over95"]  = ((df["corners_home"] + df["corners_away"]) >= 10).astype(int)
-    df["y_corners_over105"] = ((df["corners_home"] + df["corners_away"]) >= 11).astype(int)
+    # GRUP 3 — Cornere total (din corners_home/away). ⚠ .where(notna): meciurile
+    # FĂRĂ match_stats (corners NaN) devin NaN → EXCLUSE din antrenare (nu false-0
+    # care deflatează base-rate-ul și fac modelul să prezică ~0%).
+    _ct = df["corners_home"] + df["corners_away"]
+    df["y_corners_over85"]  = (_ct >= 9).astype(int).where(_ct.notna())
+    df["y_corners_over95"]  = (_ct >= 10).astype(int).where(_ct.notna())
+    df["y_corners_over105"] = (_ct >= 11).astype(int).where(_ct.notna())
 
-    # GRUP 3b — Cornere per echipă
-    df["y_corners_home_over35"] = (df["corners_home"] >= 4).astype(int)
-    df["y_corners_home_over45"] = (df["corners_home"] >= 5).astype(int)
-    df["y_corners_home_over55"] = (df["corners_home"] >= 6).astype(int)
-    df["y_corners_home_over65"] = (df["corners_home"] >= 7).astype(int)
-    df["y_corners_home_over75"] = (df["corners_home"] >= 8).astype(int)
-    df["y_corners_home_over85"] = (df["corners_home"] >= 9).astype(int)
-    df["y_corners_away_over35"] = (df["corners_away"] >= 4).astype(int)
-    df["y_corners_away_over45"] = (df["corners_away"] >= 5).astype(int)
-    df["y_corners_away_over55"] = (df["corners_away"] >= 6).astype(int)
-    df["y_corners_away_over65"] = (df["corners_away"] >= 7).astype(int)
-    df["y_corners_away_over75"] = (df["corners_away"] >= 8).astype(int)
-    df["y_corners_away_over85"] = (df["corners_away"] >= 9).astype(int)
+    # GRUP 3b — Cornere per echipă (gated pe corners_home/away notna)
+    _ch, _ca = df["corners_home"], df["corners_away"]
+    df["y_corners_home_over35"] = (_ch >= 4).astype(int).where(_ch.notna())
+    df["y_corners_home_over45"] = (_ch >= 5).astype(int).where(_ch.notna())
+    df["y_corners_home_over55"] = (_ch >= 6).astype(int).where(_ch.notna())
+    df["y_corners_home_over65"] = (_ch >= 7).astype(int).where(_ch.notna())
+    df["y_corners_home_over75"] = (_ch >= 8).astype(int).where(_ch.notna())
+    df["y_corners_home_over85"] = (_ch >= 9).astype(int).where(_ch.notna())
+    df["y_corners_away_over35"] = (_ca >= 4).astype(int).where(_ca.notna())
+    df["y_corners_away_over45"] = (_ca >= 5).astype(int).where(_ca.notna())
+    df["y_corners_away_over55"] = (_ca >= 6).astype(int).where(_ca.notna())
+    df["y_corners_away_over65"] = (_ca >= 7).astype(int).where(_ca.notna())
+    df["y_corners_away_over75"] = (_ca >= 8).astype(int).where(_ca.notna())
+    df["y_corners_away_over85"] = (_ca >= 9).astype(int).where(_ca.notna())
 
-    # GRUP 5 — Cartonașe galbene (TOTAL + per echipă, din yc_home/yc_away)
-    df["y_cards_over35"] = ((df["yc_home"] + df["yc_away"]) >= 4).astype(int)
-    df["y_cards_over45"] = ((df["yc_home"] + df["yc_away"]) >= 5).astype(int)
-    df["y_cards_over55"] = ((df["yc_home"] + df["yc_away"]) >= 6).astype(int)
-    df["y_cards_over65"] = ((df["yc_home"] + df["yc_away"]) >= 7).astype(int)
-    df["y_cards_home_over15"] = (df["yc_home"] >= 2).astype(int)
-    df["y_cards_home_over25"] = (df["yc_home"] >= 3).astype(int)
-    df["y_cards_home_over35"] = (df["yc_home"] >= 4).astype(int)
-    df["y_cards_away_over15"] = (df["yc_away"] >= 2).astype(int)
-    df["y_cards_away_over25"] = (df["yc_away"] >= 3).astype(int)
-    df["y_cards_away_over35"] = (df["yc_away"] >= 4).astype(int)
+    # GRUP 5 — Cartonașe galbene (gated pe yc_home/yc_away notna, idem corners).
+    _yt, _yh, _ya = df["yc_home"] + df["yc_away"], df["yc_home"], df["yc_away"]
+    df["y_cards_over35"] = (_yt >= 4).astype(int).where(_yt.notna())
+    df["y_cards_over45"] = (_yt >= 5).astype(int).where(_yt.notna())
+    df["y_cards_over55"] = (_yt >= 6).astype(int).where(_yt.notna())
+    df["y_cards_over65"] = (_yt >= 7).astype(int).where(_yt.notna())
+    df["y_cards_home_over15"] = (_yh >= 2).astype(int).where(_yh.notna())
+    df["y_cards_home_over25"] = (_yh >= 3).astype(int).where(_yh.notna())
+    df["y_cards_home_over35"] = (_yh >= 4).astype(int).where(_yh.notna())
+    df["y_cards_away_over15"] = (_ya >= 2).astype(int).where(_ya.notna())
+    df["y_cards_away_over25"] = (_ya >= 3).astype(int).where(_ya.notna())
+    df["y_cards_away_over35"] = (_ya >= 4).astype(int).where(_ya.notna())
 
     # PASUL 5 — antrenează modele. Cu argumente CLI → DOAR piețele cerute (merge
     # în model_export.json, nu suprascrie tot). Fără argumente → toate (ca înainte).

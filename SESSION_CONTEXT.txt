@@ -778,7 +778,17 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - UI tab ML BLOC 1 PRE-MECI: cornere + cartonașe + stil
+[07.06 ~now] - FIX cornere/cartonașe ML 0% — label pollution
+  CAUZĂ: labels y_corners_*/y_cards_* foloseau .astype(int) → meciurile fără
+  match_stats (corners/yc NaN) deveneau FALSE-0 → base-rate deflatat → model
+  prezice ~0% (golurile veneau din fixtures_history, mereu prezente → curate).
+  ml-predict.js/enrich.js VERIFICATE CORECTE (predictAllMarkets iterează toate
+  cele 63, buildFeatures dă toate features, fără allowlist) → fără modificare.
+  FIX (train_model.py): toate 25 labels corners/cards → .where(source.notna())
+  → NaN când lipsește match_stats → EXCLUSE din antrenare (mask notna). Necesită
+  RE-ANTRENARE pe VPS. py_compile OK. | Commit: git
+
+[07.06 ~earlier] - UI tab ML BLOC 1 PRE-MECI: cornere + cartonașe + stil
   app-ui.js mdRenderML BLOC1: titlu „⏱ PRE-MECI" stilizat (15px/border-left);
   CSS mărit (ml-sub 11px #8b9bb4, oc/mc-prob 17px, oc/mc-name 10px). Goluri per
   echipă: over15/25_home/away cu prob reală (scos Over3.5). + secțiuni Cornere
