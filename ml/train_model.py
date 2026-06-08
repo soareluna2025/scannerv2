@@ -217,6 +217,31 @@ MARKETS = {
     "r2_home_win": ("y_r2_home_win", FEATURES_HT, "R2 Gazde câștigă"),
     "r2_draw":     ("y_r2_draw",     FEATURES_HT, "R2 Egal"),
     "r2_away_win": ("y_r2_away_win", FEATURES_HT, "R2 Oaspeți câștigă"),
+    # Goluri per echipă pre-meci
+    "over15_home": ("y_over15_home", FEATURES_PREMATCH, "Gazde Over 1.5"),
+    "over25_home": ("y_over25_home", FEATURES_PREMATCH, "Gazde Over 2.5"),
+    "over35_home": ("y_over35_home", FEATURES_PREMATCH, "Gazde Over 3.5"),
+    "over15_away": ("y_over15_away", FEATURES_PREMATCH, "Oaspeți Over 1.5"),
+    "over25_away": ("y_over25_away", FEATURES_PREMATCH, "Oaspeți Over 2.5"),
+    "over35_away": ("y_over35_away", FEATURES_PREMATCH, "Oaspeți Over 3.5"),
+    # Par/Impar
+    "odd_total": ("y_odd_total", FEATURES_PREMATCH, "Impar Total"),
+    "odd_ht":    ("y_odd_ht",    FEATURES_PREMATCH, "Impar HT"),
+    "odd_r2":    ("y_odd_r2",    FEATURES_HT, "Impar R2"),
+    # Cornere
+    "corners_over85":  ("y_corners_over85",  FEATURES_PREMATCH, "Cornere Over 8.5"),
+    "corners_over95":  ("y_corners_over95",  FEATURES_PREMATCH, "Cornere Over 9.5"),
+    "corners_over105": ("y_corners_over105", FEATURES_PREMATCH, "Cornere Over 10.5"),
+    # Pauză/Final
+    "htft_11": ("y_htft_11", FEATURES_PREMATCH, "Pauză/Final 1/1"),
+    "htft_1x": ("y_htft_1x", FEATURES_PREMATCH, "Pauză/Final 1/X"),
+    "htft_12": ("y_htft_12", FEATURES_PREMATCH, "Pauză/Final 1/2"),
+    "htft_x1": ("y_htft_x1", FEATURES_PREMATCH, "Pauză/Final X/1"),
+    "htft_xx": ("y_htft_xx", FEATURES_PREMATCH, "Pauză/Final X/X"),
+    "htft_x2": ("y_htft_x2", FEATURES_PREMATCH, "Pauză/Final X/2"),
+    "htft_21": ("y_htft_21", FEATURES_PREMATCH, "Pauză/Final 2/1"),
+    "htft_2x": ("y_htft_2x", FEATURES_PREMATCH, "Pauză/Final 2/X"),
+    "htft_22": ("y_htft_22", FEATURES_PREMATCH, "Pauză/Final 2/2"),
 }
 
 ACTUAL_COL = {"y_over15": "over15_prob", "y_over25": "over25_prob",
@@ -317,6 +342,35 @@ def main():
     df["y_r2_home_win"] = (df["home_r2"] > df["away_r2"]).astype(int)
     df["y_r2_draw"]     = (df["home_r2"] == df["away_r2"]).astype(int)
     df["y_r2_away_win"] = (df["away_r2"] > df["home_r2"]).astype(int)
+
+    # GRUP 1 — Goluri per echipă (labels noi din scorul final)
+    df["y_over15_home"] = (df["home_goals"] >= 2).astype(int)
+    df["y_over25_home"] = (df["home_goals"] >= 3).astype(int)
+    df["y_over35_home"] = (df["home_goals"] >= 4).astype(int)
+    df["y_over15_away"] = (df["away_goals"] >= 2).astype(int)
+    df["y_over25_away"] = (df["away_goals"] >= 3).astype(int)
+    df["y_over35_away"] = (df["away_goals"] >= 4).astype(int)
+
+    # GRUP 2 — Par/Impar (total / HT / R2)
+    df["y_odd_total"] = ((df["home_goals"] + df["away_goals"]) % 2 == 1).astype(int)
+    df["y_odd_ht"]    = ((df["home_ht_final"] + df["away_ht_final"]) % 2 == 1).astype(int)
+    df["y_odd_r2"]    = (((df["home_goals"] - df["home_ht_final"]) + (df["away_goals"] - df["away_ht_final"])) % 2 == 1).astype(int)
+
+    # GRUP 3 — Cornere total (din corners_home/away)
+    df["y_corners_over85"]  = ((df["corners_home"] + df["corners_away"]) >= 9).astype(int)
+    df["y_corners_over95"]  = ((df["corners_home"] + df["corners_away"]) >= 10).astype(int)
+    df["y_corners_over105"] = ((df["corners_home"] + df["corners_away"]) >= 11).astype(int)
+
+    # GRUP 4 — Pauză/Final (9 combinații HT×FT)
+    df["y_htft_11"] = ((df["home_ht_final"] > df["away_ht_final"]) & (df["home_goals"] > df["away_goals"])).astype(int)
+    df["y_htft_1x"] = ((df["home_ht_final"] > df["away_ht_final"]) & (df["home_goals"] == df["away_goals"])).astype(int)
+    df["y_htft_12"] = ((df["home_ht_final"] > df["away_ht_final"]) & (df["away_goals"] > df["home_goals"])).astype(int)
+    df["y_htft_x1"] = ((df["home_ht_final"] == df["away_ht_final"]) & (df["home_goals"] > df["away_goals"])).astype(int)
+    df["y_htft_xx"] = ((df["home_ht_final"] == df["away_ht_final"]) & (df["home_goals"] == df["away_goals"])).astype(int)
+    df["y_htft_x2"] = ((df["home_ht_final"] == df["away_ht_final"]) & (df["away_goals"] > df["home_goals"])).astype(int)
+    df["y_htft_21"] = ((df["away_ht_final"] > df["home_ht_final"]) & (df["home_goals"] > df["away_goals"])).astype(int)
+    df["y_htft_2x"] = ((df["away_ht_final"] > df["home_ht_final"]) & (df["home_goals"] == df["away_goals"])).astype(int)
+    df["y_htft_22"] = ((df["away_ht_final"] > df["home_ht_final"]) & (df["away_goals"] > df["home_goals"])).astype(int)
 
     # PASUL 5 — antrenează modele. Cu argumente CLI → DOAR piețele cerute (merge
     # în model_export.json, nu suprascrie tot). Fără argumente → toate (ca înainte).

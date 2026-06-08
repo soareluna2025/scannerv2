@@ -778,7 +778,15 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - ml/test_accuracy.py (test precizie + calibrare ML)
+[07.06 ~now] - train_model.py: +21 piețe noi (labels din date existente)
+  PASUL4 +21 labels: GRUP1 over15/25/35 home&away (6), GRUP2 odd_total/ht/r2
+  (3), GRUP3 corners_over85/95/105 (3), GRUP4 htft_11..22 (9 combinații HT×FT).
+  MARKETS 34→55. Features NESCHIMBATE (PREMATCH/HT). corners_*/home_ht_final deja
+  coerce numeric. ⚠ odd_ht/htft_* pe meciuri fără HT (home_ht_final NaN) → label
+  0 (formula explicită a userului). py_compile OK. Necesită re-antrenare VPS.
+  | Commit: git
+
+[07.06 ~earlier] - ml/test_accuracy.py (test precizie + calibrare ML)
   Script NOU: ultimele 2000 meciuri cu rezultat (cele mai recente) ⋈ ml_features,
   aplică LR din model_export.json EXACT ca ml-predict.js (standardizare +
   lipsă→mean + sigmoid), pe over15/25/btts/home_win/away_win: Brier + acuratețe@50
