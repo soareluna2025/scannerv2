@@ -778,12 +778,14 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - admin trigger-cron trimite x-cron-secret
+[07.06 ~now] - admin /stabilize trimite x-cron-secret
+  admin.js /stabilize: fetch-ul pașilor (~486) adaugă header x-cron-secret →
+  trece de guard-ul cron. (Completează fix-ul de la trigger-cron.) node --check OK.
+
+[07.06 ~earlier] - admin trigger-cron trimite x-cron-secret
   admin.js /trigger-cron: fetch-ul fire-and-forget (linia 435) adaugă header
   x-cron-secret: process.env.CRON_SECRET||'' → trece de guard-ul cron nou.
-  node --check OK. ⚠ Rămâne neatins (per instrucțiuni) al 2-lea fetch din
-  /stabilize (~481) care cheamă /api/cron/* fără header → va da 401 sub
-  CRON_SECRET. | Commit: git
+  node --check OK. | Commit: git
 
 [07.06 ~earlier] - Auth pe toate /api/cron/* (server.js)
   Loader cronFiles: guard `if (CRON_SECRET)` → verifică x-cron-secret header sau
