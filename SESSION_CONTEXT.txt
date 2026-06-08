@@ -778,7 +778,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - admin /stabilize trimite x-cron-secret
+[07.06 ~now] - setup-crontab.sh complet automat (cu x-cron-secret)
+  Rescris: sursează .env (fail-fast dacă CRON_SECRET lipsește), injectează
+  headerul x-cron-secret în TOATE liniile curl /api/cron/* (HDR var). Lista
+  canonică ~23 joburi (prematch/cazarma/auto-predict/update-results/collect-*/
+  league/coach/referee-stats/venues/coaches/learning-analysis(POST)/recalibrate/
+  calibrate-live/build-elo/national-history/backfill-stats×3/cleanup/train_model).
+  REPLACE total `echo|crontab -`. ⚠ secretul ajunge în crontab -l (nu în repo).
+  bash -n OK. NU include scan (scanner e intern PM2) + alte croane on-demand.
+
+[07.06 ~earlier] - admin /stabilize trimite x-cron-secret
   admin.js /stabilize: fetch-ul pașilor (~486) adaugă header x-cron-secret →
   trece de guard-ul cron. (Completează fix-ul de la trigger-cron.) node --check OK.
 
