@@ -778,7 +778,15 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - train_model.py: +10 piețe cartonașe galbene (=63)
+[07.06 ~now] - UI tab ML BLOC 1 PRE-MECI: cornere + cartonașe + stil
+  app-ui.js mdRenderML BLOC1: titlu „⏱ PRE-MECI" stilizat (15px/border-left);
+  CSS mărit (ml-sub 11px #8b9bb4, oc/mc-prob 17px, oc/mc-name 10px). Goluri per
+  echipă: over15/25_home/away cu prob reală (scos Over3.5). + secțiuni Cornere
+  (total Ov8.5/9.5/10.5 + per echipă Ov3.5-8.5) și Cartonașe (total Ov3.5-6.5 +
+  per echipă Ov1.5-3.5). MOD5: șters „Combinații R1&R2" din BLOC3. BLOC0/2
+  neatinse. node --check OK. | Commit: git
+
+[07.06 ~earlier] - train_model.py: +10 piețe cartonașe galbene (=63)
   yc_home/yc_away adăugate în SELECT (ms_*.yellow_cards) + lista coerce numeric.
   +10 labels: y_cards_over35/45/55/65 (total ≥4..≥7), y_cards_home/away_over15/
   25/35. MARKETS 53→63. Features neschimbate. py_compile OK, 63 intrări verificat.

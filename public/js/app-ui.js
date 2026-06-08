@@ -1426,19 +1426,19 @@ function mdRenderML(d){
   var out='';
   out+='<style>'
     +'.ml-oc{border-radius:8px;padding:8px 6px;border:1px solid #1e2a38;text-align:center}'
-    +'.ml-oc-name{font-size:9px;color:#6b7a99;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}'
-    +'.ml-oc-prob{font-size:16px;font-weight:800;line-height:1}'
+    +'.ml-oc-name{font-size:10px;color:#6b7a99;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}'
+    +'.ml-oc-prob{font-size:17px;font-weight:800;line-height:1}'
     +'.ml-oc.active{background:#082820;border:2px solid #00e5b8;box-shadow:0 0 10px #00e5b830}.ml-oc.active .ml-oc-prob{color:#00e5b8;font-size:19px}'
     +'.ml-oc.pending{background:#141c28;border:1px solid #1e2a38;opacity:1}.ml-oc.pending .ml-oc-prob{color:#8899aa;font-size:13px}.ml-oc.pending .ml-oc-name{color:#5a6a80}'
     +'.ml-oc.yes{background:#082015;border:1px solid #00e5b840}.ml-oc.yes .ml-oc-prob{color:#00e5b8}'
     +'.ml-oc.no{background:#201008;border:1px solid #ff555530}.ml-oc.no .ml-oc-prob{color:#ff7777}'
     +'.mc{background:#0f1620;border:1px solid #1e2a38;border-radius:8px;padding:8px;text-align:center}'
-    +'.mc-name{font-size:9px;color:#6b7a99;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}'
-    +'.mc-prob{font-size:16px;font-weight:800}'
+    +'.mc-name{font-size:10px;color:#6b7a99;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}'
+    +'.mc-prob{font-size:17px;font-weight:800}'
     +'.mc.green .mc-prob{color:#00e5b8}.mc.yellow .mc-prob{color:#ffcc44}.mc.red .mc-prob{color:#ff7777}'
     +'.ml-team-label{background:#111827;border-radius:8px;padding:6px 8px;text-align:center;font-size:10px;font-weight:700;margin-bottom:6px}'
     +'.ml-team-label.home{color:#00e5b8;border:1px solid #00e5b830}.ml-team-label.away{color:#3b82f6;border:1px solid #3b82f630}'
-    +'.ml-sub{font-size:10px;color:#6b7a99;margin:10px 0 6px;font-weight:700}'
+    +'.ml-sub{font-size:11px;color:#8b9bb4;margin:10px 0 6px;font-weight:700}'
     +'</style>';
   out+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:10px 12px;margin-bottom:12px">';
   out+='<span style="font-weight:800;color:#a5b4fc">🤖 ML</span>';
@@ -1461,7 +1461,7 @@ function mdRenderML(d){
   }
 
   // ════ BLOC 1 — PRE-MECI ════
-  out+='<div class="md-section"><div class="md-section-title">PRE-MECI</div>';
+  out+='<div class="md-section"><div class="md-section-title" style="font-size:15px;font-weight:800;color:#a5b4fc;border-left:3px solid #6366f1;padding-left:8px">⏱ PRE-MECI</div>';
   out+='<div class="ml-sub">Total goluri meci</div>';
   out+='<div style="'+grid(5)+'">'
     +oc('Ov 0.5',1,tg,false,matchLive,prob('over05_total'))
@@ -1481,11 +1481,44 @@ function mdRenderML(d){
   out+='<div class="ml-sub">Goluri per echipă (tot meciul)</div>';
   out+='<div style="'+grid(2)+'">';
   out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-    +oc('Over 0.5',1,hg,false,matchLive,prob('over05_home'))+oc('Over 1.5',2,hg,false,matchLive,null)
-    +oc('Over 2.5',3,hg,false,matchLive,null)+oc('Over 3.5',4,hg,false,matchLive,null)+'</div></div>';
+    +oc('Over 0.5',1,hg,false,matchLive,prob('over05_home'))+oc('Over 1.5',2,hg,false,matchLive,prob('over15_home'))
+    +oc('Over 2.5',3,hg,false,matchLive,prob('over25_home'))+'</div></div>';
   out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-    +oc('Over 0.5',1,ag,false,matchLive,prob('over05_away'))+oc('Over 1.5',2,ag,false,matchLive,null)
-    +oc('Over 2.5',3,ag,false,matchLive,null)+oc('Over 3.5',4,ag,false,matchLive,null)+'</div></div>';
+    +oc('Over 0.5',1,ag,false,matchLive,prob('over05_away'))+oc('Over 1.5',2,ag,false,matchLive,prob('over15_away'))
+    +oc('Over 2.5',3,ag,false,matchLive,prob('over25_away'))+'</div></div>';
+  out+='</div>';
+  // ── Cornere ──
+  out+='<div class="ml-sub">Cornere total meci</div>';
+  out+='<div style="'+grid(3)+'">'
+    +mc('Ov 8.5',prob('corners_over85'))
+    +mc('Ov 9.5',prob('corners_over95'))
+    +mc('Ov 10.5',prob('corners_over105'))+'</div>';
+  out+='<div class="ml-sub">Cornere per echipă</div>';
+  out+='<div style="'+grid(2)+'">';
+  out+='<div><div class="ml-team-label home">🚩 '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
+    +mc('Over 3.5',prob('corners_home_over35'))+mc('Over 4.5',prob('corners_home_over45'))
+    +mc('Over 5.5',prob('corners_home_over55'))+mc('Over 6.5',prob('corners_home_over65'))
+    +mc('Over 7.5',prob('corners_home_over75'))+mc('Over 8.5',prob('corners_home_over85'))+'</div></div>';
+  out+='<div><div class="ml-team-label away">🚩 '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
+    +mc('Over 3.5',prob('corners_away_over35'))+mc('Over 4.5',prob('corners_away_over45'))
+    +mc('Over 5.5',prob('corners_away_over55'))+mc('Over 6.5',prob('corners_away_over65'))
+    +mc('Over 7.5',prob('corners_away_over75'))+mc('Over 8.5',prob('corners_away_over85'))+'</div></div>';
+  out+='</div>';
+  // ── Cartonașe ──
+  out+='<div class="ml-sub">Cartonașe galbene total</div>';
+  out+='<div style="'+grid(4)+'">'
+    +mc('Ov 3.5',prob('cards_over35'))
+    +mc('Ov 4.5',prob('cards_over45'))
+    +mc('Ov 5.5',prob('cards_over55'))
+    +mc('Ov 6.5',prob('cards_over65'))+'</div>';
+  out+='<div class="ml-sub">Cartonașe per echipă</div>';
+  out+='<div style="'+grid(2)+'">';
+  out+='<div><div class="ml-team-label home">🟨 '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
+    +mc('Over 1.5',prob('cards_home_over15'))+mc('Over 2.5',prob('cards_home_over25'))
+    +mc('Over 3.5',prob('cards_home_over35'))+'</div></div>';
+  out+='<div><div class="ml-team-label away">🟨 '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
+    +mc('Over 1.5',prob('cards_away_over15'))+mc('Over 2.5',prob('cards_away_over25'))
+    +mc('Over 3.5',prob('cards_away_over35'))+'</div></div>';
   out+='</div></div>';
 
   // ════ BLOC 2 — REPRIZA 1 ════
@@ -1536,17 +1569,6 @@ function mdRenderML(d){
     out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
       +oc('Over 0.5',1,ar2,false,true,prob('r2_away'))+oc('Over 1.5',2,ar2,false,true,prob('r2_away_over15'))+oc('Over 2.5',3,ar2,false,true,prob('r2_away_over25'))+'</div></div>';
     out+='</div>';
-    // Combinații R1 & R2 (produs probabilități, asumând independență)
-    var a05=r1Done?((thh>=1)?1:0):(prob('ht_over05')!=null?prob('ht_over05')/100:null);
-    var a15=r1Done?((thh>=2)?1:0):(prob('ht_over15')!=null?prob('ht_over15')/100:null);
-    var b05=prob('r2_over05')!=null?prob('r2_over05')/100:null;
-    var b15=prob('r2_over15')!=null?prob('r2_over15')/100:null;
-    out+='<div class="ml-sub">Combinații R1 &amp; R2</div>';
-    out+='<div style="'+grid(2)+'">'
-      +combo('Ov0.5 R1 & Ov0.5 R2',a05,b05)
-      +combo('Ov1.5 R1 & Ov0.5 R2',a15,b05)
-      +combo('Ov0.5 R1 & Ov1.5 R2',a05,b15)
-      +combo('Gol în ambele reprize',a05,b05)+'</div>';
     out+='</div>';
   }
 
