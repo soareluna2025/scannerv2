@@ -94,17 +94,19 @@ SELECT
     ms_away.shots_on_goal   AS shots_on_target_away,
     ms_away.corner_kicks    AS corners_away,
     ms_away.ball_possession AS possession_away,
-    -- Medii istorice (ultimele 10 meciuri ANTERIOARE ale echipei — fără lookahead)
-    msh.sot_avg     AS home_sot_avg,   msh.corners_avg AS home_corners_avg,
-    msh.xg_avg      AS home_xg_avg,    msh.yc_avg      AS home_yc_avg,
-    msh.rc_avg      AS home_rc_avg,    msh.fouls_avg   AS home_fouls_avg,
-    msa.sot_avg     AS away_sot_avg,   msa.corners_avg AS away_corners_avg,
-    msa.xg_avg      AS away_xg_avg,    msa.yc_avg      AS away_yc_avg,
-    msa.rc_avg      AS away_rc_avg,    msa.fouls_avg   AS away_fouls_avg,
-    msh.insidebox_avg AS home_insidebox_avg, msh.possession_avg AS home_possession_avg,
-    msa.insidebox_avg AS away_insidebox_avg, msa.possession_avg AS away_possession_avg,
-    meh.goals_r1_avg AS home_goals_r1_avg, meh.goals_r2_avg AS home_goals_r2_avg, meh.subs_avg AS home_subs_avg,
-    mea.goals_r1_avg AS away_goals_r1_avg, mea.goals_r2_avg AS away_goals_r2_avg, mea.subs_avg AS away_subs_avg,
+    -- Medii istorice MATERIALIZATE (ml_features, rolling 100, point-in-time).
+    -- Sursă canonică de calcul: api/cron/build-ml-features.js (aceleași LATERAL).
+    mlf.home_sot_avg, mlf.away_sot_avg,
+    mlf.home_corners_avg, mlf.away_corners_avg,
+    mlf.home_xg_avg, mlf.away_xg_avg,
+    mlf.home_yc_avg, mlf.away_yc_avg,
+    mlf.home_rc_avg, mlf.away_rc_avg,
+    mlf.home_fouls_avg, mlf.away_fouls_avg,
+    mlf.home_insidebox_avg, mlf.away_insidebox_avg,
+    mlf.home_possession_avg, mlf.away_possession_avg,
+    mlf.home_goals_r1_avg, mlf.away_goals_r1_avg,
+    mlf.home_goals_r2_avg, mlf.away_goals_r2_avg,
+    mlf.home_subs_avg, mlf.away_subs_avg,
     rs.pct_over_25  AS ref_pct_over25,
     CASE WHEN rs.referee_style = 'open' THEN 1 ELSE 0 END AS ref_style_open,
     p.created_at
@@ -127,69 +129,10 @@ LEFT JOIN (
 ) ht ON ht.fixture_id = p.fixture_id
 LEFT JOIN match_stats ms_home ON ms_home.fixture_id = p.fixture_id AND ms_home.team_id = fh.home_team_id
 LEFT JOIN match_stats ms_away ON ms_away.fixture_id = p.fixture_id AND ms_away.team_id = fh.away_team_id
--- Medii istorice GAZDE (ultimele 100 meciuri cu match_date < meciul curent)
-LEFT JOIN LATERAL (
-    SELECT AVG(ms.shots_on_goal) AS sot_avg, AVG(ms.corner_kicks) AS corners_avg,
-           AVG(ms.expected_goals) AS xg_avg, AVG(ms.yellow_cards) AS yc_avg,
-           AVG(ms.red_cards) AS rc_avg, AVG(ms.fouls) AS fouls_avg,
-           AVG(ms.shots_insidebox) AS insidebox_avg, AVG(ms.ball_possession) AS possession_avg
-    FROM (
-        SELECT ms.* FROM match_stats ms
-        JOIN fixtures_history fhx ON fhx.fixture_id = ms.fixture_id
-        WHERE ms.team_id = fh.home_team_id AND fhx.match_date < fh.match_date
-        ORDER BY fhx.match_date DESC LIMIT 100
-    ) ms
-) msh ON true
--- Medii istorice OASPEȚI
-LEFT JOIN LATERAL (
-    SELECT AVG(ms.shots_on_goal) AS sot_avg, AVG(ms.corner_kicks) AS corners_avg,
-           AVG(ms.expected_goals) AS xg_avg, AVG(ms.yellow_cards) AS yc_avg,
-           AVG(ms.red_cards) AS rc_avg, AVG(ms.fouls) AS fouls_avg,
-           AVG(ms.shots_insidebox) AS insidebox_avg, AVG(ms.ball_possession) AS possession_avg
-    FROM (
-        SELECT ms.* FROM match_stats ms
-        JOIN fixtures_history fhx ON fhx.fixture_id = ms.fixture_id
-        WHERE ms.team_id = fh.away_team_id AND fhx.match_date < fh.match_date
-        ORDER BY fhx.match_date DESC LIMIT 100
-    ) ms
-) msa ON true
--- Medii istorice GOLURI R1/R2 + substituiri (match_events, rolling 100, fără lookahead)
-LEFT JOIN LATERAL (
-    SELECT
-        AVG(CASE WHEN g.r1_goals IS NOT NULL THEN g.r1_goals ELSE 0 END) AS goals_r1_avg,
-        AVG(CASE WHEN g.r2_goals IS NOT NULL THEN g.r2_goals ELSE 0 END) AS goals_r2_avg,
-        AVG(g.subs) AS subs_avg
-    FROM (
-        SELECT fhx.fixture_id,
-            SUM(CASE WHEN me.type='Goal' AND me.elapsed<=45 AND me.team_id=fh.home_team_id THEN 1 ELSE 0 END) AS r1_goals,
-            SUM(CASE WHEN me.type='Goal' AND me.elapsed>45 AND me.team_id=fh.home_team_id THEN 1 ELSE 0 END) AS r2_goals,
-            SUM(CASE WHEN me.type='subst' AND me.team_id=fh.home_team_id THEN 1 ELSE 0 END) AS subs
-        FROM fixtures_history fhx
-        JOIN match_events me ON me.fixture_id=fhx.fixture_id
-        WHERE (fhx.home_team_id=fh.home_team_id OR fhx.away_team_id=fh.home_team_id)
-        AND fhx.match_date < fh.match_date
-        GROUP BY fhx.fixture_id
-        ORDER BY MAX(fhx.match_date) DESC LIMIT 100
-    ) g
-) meh ON true
-LEFT JOIN LATERAL (
-    SELECT
-        AVG(CASE WHEN g.r1_goals IS NOT NULL THEN g.r1_goals ELSE 0 END) AS goals_r1_avg,
-        AVG(CASE WHEN g.r2_goals IS NOT NULL THEN g.r2_goals ELSE 0 END) AS goals_r2_avg,
-        AVG(g.subs) AS subs_avg
-    FROM (
-        SELECT fhx.fixture_id,
-            SUM(CASE WHEN me.type='Goal' AND me.elapsed<=45 AND me.team_id=fh.away_team_id THEN 1 ELSE 0 END) AS r1_goals,
-            SUM(CASE WHEN me.type='Goal' AND me.elapsed>45 AND me.team_id=fh.away_team_id THEN 1 ELSE 0 END) AS r2_goals,
-            SUM(CASE WHEN me.type='subst' AND me.team_id=fh.away_team_id THEN 1 ELSE 0 END) AS subs
-        FROM fixtures_history fhx
-        JOIN match_events me ON me.fixture_id=fhx.fixture_id
-        WHERE (fhx.home_team_id=fh.away_team_id OR fhx.away_team_id=fh.away_team_id)
-        AND fhx.match_date < fh.match_date
-        GROUP BY fhx.fixture_id
-        ORDER BY MAX(fhx.match_date) DESC LIMIT 100
-    ) g
-) mea ON true
+-- Medii istorice MATERIALIZATE (rolling 100, point-in-time) — calculate O DATĂ de
+-- api/cron/build-ml-features.js. Înlocuiește 4 LATERAL grele → antrenare instant.
+-- Lipsă rând → coloane NULL → fillna(median) mai jos.
+LEFT JOIN ml_features mlf ON mlf.fixture_id = p.fixture_id
 LEFT JOIN referee_stats rs ON rs.referee_name = fh.referee
 WHERE p.result_winner IS NOT NULL
   AND p.score1 IS NOT NULL

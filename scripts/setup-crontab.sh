@@ -39,6 +39,7 @@ NEW_CRONTAB=$(cat <<EOF
 */5 * * * * curl -sf -H "${HDR}" ${BASE}/api/cron/prematch-enrichment >> ${LOG} 2>&1
 */5 * * * * curl -sf -H "${HDR}" ${BASE}/api/cron/cazarma-router >> ${LOG} 2>&1
 30 0 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/auto-predict >> ${LOG} 2>&1
+0 3 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/build-ml-features >> ${LOG} 2>&1
 0 2 * * * curl -sf -H "${HDR}" ${BASE}/api/update-results >> ${LOG} 2>&1
 5 2 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/collect-squads >> ${LOG} 2>&1
 0 23 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/collect-finished >> ${LOG} 2>&1

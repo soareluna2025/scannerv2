@@ -1054,6 +1054,29 @@ CREATE TABLE IF NOT EXISTS elo_history (
 );
 CREATE INDEX IF NOT EXISTS idx_elo_history_fixture ON elo_history(fixture_id);
 
+-- ── 47. ml_features ──────────────────────────────────────────────
+-- Feature store ML: medii ISTORICE (rolling 100, point-in-time, fără lookahead)
+-- materializate O DATĂ de api/cron/build-ml-features.js (sursă canonică =
+-- LATERAL-urile din ml/train_model.py). train_model citește direct de aici
+-- (SELECT simplu, antrenare instant). Lipsă rând → train face fillna(median).
+CREATE TABLE IF NOT EXISTS ml_features (
+    fixture_id INTEGER PRIMARY KEY,
+    -- match_stats medii istorice (rolling 100, point-in-time)
+    home_sot_avg NUMERIC, away_sot_avg NUMERIC,
+    home_corners_avg NUMERIC, away_corners_avg NUMERIC,
+    home_xg_avg NUMERIC, away_xg_avg NUMERIC,
+    home_yc_avg NUMERIC, away_yc_avg NUMERIC,
+    home_rc_avg NUMERIC, away_rc_avg NUMERIC,
+    home_fouls_avg NUMERIC, away_fouls_avg NUMERIC,
+    home_insidebox_avg NUMERIC, away_insidebox_avg NUMERIC,
+    home_possession_avg NUMERIC, away_possession_avg NUMERIC,
+    -- match_events medii istorice (rolling 100)
+    home_goals_r1_avg NUMERIC, away_goals_r1_avg NUMERIC,
+    home_goals_r2_avg NUMERIC, away_goals_r2_avg NUMERIC,
+    home_subs_avg NUMERIC, away_subs_avg NUMERIC,
+    computed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ================================================================
 --  VERIFICARE
 -- ================================================================
