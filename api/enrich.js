@@ -1116,26 +1116,58 @@ async function getLiveStatsFromDB(fixtureId) {
   } catch (_) { return null; }
 }
 
-// Medii istorice match_stats — ultimele 10 meciuri ALE echipei cu match_date <
-// matchDate (FĂRĂ lookahead). Furnizate ca features ML (homeXgAvg etc.) către
-// api/ml-predict.js. Silent-fail → null (ml-predict cade pe mediană).
+// Medii istorice match_stats — ultimele 100 meciuri ALE echipei cu match_date <
+// matchDate (FĂRĂ lookahead, ALINIAT cu build-ml-features.js / train_model.py).
+// Furnizate ca features ML (homeXgAvg etc.) către api/ml-predict.js.
+// Silent-fail → null (ml-predict cade pe mediană).
 async function getMatchStatsAvg(teamId, matchDate) {
   if (!teamId || !matchDate) return null;
   try {
     const { rows } = await query(
       `SELECT
-          AVG(ms.shots_on_goal)  AS sot_avg,
-          AVG(ms.corner_kicks)   AS corners_avg,
-          AVG(ms.expected_goals) AS xg_avg,
-          AVG(ms.yellow_cards)   AS yc_avg,
-          AVG(ms.red_cards)      AS rc_avg,
-          AVG(ms.fouls)          AS fouls_avg
+          AVG(ms.shots_on_goal)   AS sot_avg,
+          AVG(ms.corner_kicks)    AS corners_avg,
+          AVG(ms.expected_goals)  AS xg_avg,
+          AVG(ms.yellow_cards)    AS yc_avg,
+          AVG(ms.red_cards)       AS rc_avg,
+          AVG(ms.fouls)           AS fouls_avg,
+          AVG(ms.shots_insidebox) AS insidebox_avg,
+          AVG(ms.ball_possession) AS possession_avg
        FROM (
           SELECT ms.* FROM match_stats ms
           JOIN fixtures_history fhx ON fhx.fixture_id = ms.fixture_id
           WHERE ms.team_id = $1 AND fhx.match_date < $2
-          ORDER BY fhx.match_date DESC LIMIT 10
+          ORDER BY fhx.match_date DESC LIMIT 100
        ) ms`,
+      [Number(teamId), matchDate]
+    );
+    return rows[0] || null;
+  } catch (_) { return null; }
+}
+
+// Medii istorice match_events — goluri R1/R2 + substituiri, ultimele 100 meciuri
+// ANTERIOARE ale echipei (FĂRĂ lookahead). Query IDENTIC cu LATERAL meh/mea din
+// api/cron/build-ml-features.js (sursă canonică). Silent-fail → null.
+async function getMatchEventsAvg(teamId, matchDate) {
+  if (!teamId || !matchDate) return null;
+  try {
+    const { rows } = await query(
+      `SELECT
+          AVG(CASE WHEN g.r1_goals IS NOT NULL THEN g.r1_goals ELSE 0 END) AS goals_r1_avg,
+          AVG(CASE WHEN g.r2_goals IS NOT NULL THEN g.r2_goals ELSE 0 END) AS goals_r2_avg,
+          AVG(g.subs) AS subs_avg
+       FROM (
+          SELECT fhx.fixture_id,
+              SUM(CASE WHEN me.type='Goal' AND me.elapsed<=45 AND me.team_id=$1 THEN 1 ELSE 0 END) AS r1_goals,
+              SUM(CASE WHEN me.type='Goal' AND me.elapsed>45 AND me.team_id=$1 THEN 1 ELSE 0 END) AS r2_goals,
+              SUM(CASE WHEN me.type='subst' AND me.team_id=$1 THEN 1 ELSE 0 END) AS subs
+          FROM fixtures_history fhx
+          JOIN match_events me ON me.fixture_id=fhx.fixture_id
+          WHERE (fhx.home_team_id=$1 OR fhx.away_team_id=$1)
+            AND fhx.match_date < $2
+          GROUP BY fhx.fixture_id
+          ORDER BY MAX(fhx.match_date) DESC LIMIT 100
+       ) g`,
       [Number(teamId), matchDate]
     );
     return rows[0] || null;
@@ -1175,7 +1207,7 @@ export default async function handler(req, res) {
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats + venue in parallel ---
     const _avgDate = dt || new Date().toISOString();
-    const [sbHForm, sbAForm, sbH2H, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA, lineupFactor, dbLambda, mshAvg, msaAvg] = await Promise.all([
+    const [sbHForm, sbAForm, sbH2H, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA, lineupFactor, dbLambda, mshAvg, msaAvg, mehAvg, meaAvg] = await Promise.all([
       getHomeForm(hId),
       getAwayForm(aId),
       getH2HFromDB(hId, aId),
@@ -1196,6 +1228,8 @@ export default async function handler(req, res) {
       getLambdaFromPredictions(fid),
       getMatchStatsAvg(hId, _avgDate),
       getMatchStatsAvg(aId, _avgDate),
+      getMatchEventsAvg(hId, _avgDate),
+      getMatchEventsAvg(aId, _avgDate),
     ]);
 
     // [C4] Dacă predictions DB are λ (collect-daily) → NU mai re-fetch-uim formă
@@ -1689,20 +1723,34 @@ export default async function handler(req, res) {
     // ml-predict.js; lipsă/null → mediană default, fără crash).
     const _r2v = (v) => { const n = Number(v); return Number.isFinite(n) ? +n.toFixed(2) : null; };
     if (mshAvg) {
-      result.homeSotAvg     = _r2v(mshAvg.sot_avg);
-      result.homeCornersAvg = _r2v(mshAvg.corners_avg);
-      result.homeXgAvg      = _r2v(mshAvg.xg_avg);
-      result.homeYcAvg      = _r2v(mshAvg.yc_avg);
-      result.homeRcAvg      = _r2v(mshAvg.rc_avg);
-      result.homeFoulsAvg   = _r2v(mshAvg.fouls_avg);
+      result.homeSotAvg       = _r2v(mshAvg.sot_avg);
+      result.homeCornersAvg   = _r2v(mshAvg.corners_avg);
+      result.homeXgAvg        = _r2v(mshAvg.xg_avg);
+      result.homeYcAvg        = _r2v(mshAvg.yc_avg);
+      result.homeRcAvg        = _r2v(mshAvg.rc_avg);
+      result.homeFoulsAvg     = _r2v(mshAvg.fouls_avg);
+      result.homeInsideboxAvg = _r2v(mshAvg.insidebox_avg);
+      result.homePossessionAvg = _r2v(mshAvg.possession_avg);
     }
     if (msaAvg) {
-      result.awaySotAvg     = _r2v(msaAvg.sot_avg);
-      result.awayCornersAvg = _r2v(msaAvg.corners_avg);
-      result.awayXgAvg      = _r2v(msaAvg.xg_avg);
-      result.awayYcAvg      = _r2v(msaAvg.yc_avg);
-      result.awayRcAvg      = _r2v(msaAvg.rc_avg);
-      result.awayFoulsAvg   = _r2v(msaAvg.fouls_avg);
+      result.awaySotAvg       = _r2v(msaAvg.sot_avg);
+      result.awayCornersAvg   = _r2v(msaAvg.corners_avg);
+      result.awayXgAvg        = _r2v(msaAvg.xg_avg);
+      result.awayYcAvg        = _r2v(msaAvg.yc_avg);
+      result.awayRcAvg        = _r2v(msaAvg.rc_avg);
+      result.awayFoulsAvg     = _r2v(msaAvg.fouls_avg);
+      result.awayInsideboxAvg = _r2v(msaAvg.insidebox_avg);
+      result.awayPossessionAvg = _r2v(msaAvg.possession_avg);
+    }
+    if (mehAvg) {
+      result.homeGoalsR1Avg = _r2v(mehAvg.goals_r1_avg);
+      result.homeGoalsR2Avg = _r2v(mehAvg.goals_r2_avg);
+      result.homeSubsAvg    = _r2v(mehAvg.subs_avg);
+    }
+    if (meaAvg) {
+      result.awayGoalsR1Avg = _r2v(meaAvg.goals_r1_avg);
+      result.awayGoalsR2Avg = _r2v(meaAvg.goals_r2_avg);
+      result.awaySubsAvg    = _r2v(meaAvg.subs_avg);
     }
     if (refereeStats) {
       result.refPctOver25 = _r2v(refereeStats.pct_over_25);

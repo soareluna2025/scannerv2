@@ -778,7 +778,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - Scos class_weight='balanced' din LR (train_model.py)
+[07.06 ~now] - enrich.js aliniat cu ml_features (LIMIT 100 + 5 features noi)
+  getMatchStatsAvg: LIMIT 10→100 + insidebox_avg/possession_avg. + funcție nouă
+  getMatchEventsAvg (goals_r1/r2/subs, rolling 100, query IDENTIC cu meh/mea din
+  build-ml-features.js). Promise.all + mehAvg/meaAvg. Payload: home/away
+  Insidebox/Possession/GoalsR1/GoalsR2/Subs Avg. node --check OK. ⚠ ml-predict.js
+  buildFeatures NU citește încă insidebox/possession/goals_r1/r2/subs → la
+  inferență cad pe mean (cele 6 vechi sot/corners/xg/yc/rc/fouls SUNT aliniate
+  acum). Follow-up: extinde buildFeatures. | Commit: git
+
+[07.06 ~earlier] - Scos class_weight='balanced' din LR (train_model.py)
   LR → LogisticRegression(C=1.0, max_iter=1000, random_state=42). balanced
   de-calibra probabilitățile → strica Brier (handicapa LR vs GB). py_compile OK.
   Necesită re-antrenare ca să vezi dacă LR bate baseline acum. | Commit: git
