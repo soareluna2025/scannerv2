@@ -778,7 +778,17 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - Fix autogoluri în subquery `ht` (train_model.py)
+[07.06 ~now] - train_model.py: rolling 100 + features noi match_stats/events
+  MOD1: LIMIT 10→100 în ambele LATERAL match_stats. MOD2: +insidebox_avg,
+  possession_avg în msh/msa (rc_avg DEJA exista → NU dublat). MOD3: 2 LATERAL
+  NOI (meh/mea) din match_events — goals_r1_avg/goals_r2_avg/subs_avg, rolling
+  100, fără lookahead. MOD4: +10 features în FEATURES_PREMATCH (insidebox/
+  possession/goals_r1/goals_r2/subs ×home/away; rc SKIP, deja prezent). MOD5:
+  fillna median pe cele 10. py_compile OK. ⚠ enrich.js NU furnizează încă aceste
+  features → la inferență cad pe mean până extind enrich. ⚠ LATERAL match_events
+  GREU (2.26M) → necesită index. Necesită re-antrenare VPS. | Commit: git
+
+[07.06 ~earlier] - Fix autogoluri în subquery `ht` (train_model.py)
   HT calc din match_events: autogolurile NU mai sunt dropate, ci RE-ATRIBUITE
   adversarului (detail IS DISTINCT FROM 'Own Goal' pt golul propriu + detail=
   'Own Goal' pt autogolul adversarului → creditat). WHERE doar type='Goal'.
