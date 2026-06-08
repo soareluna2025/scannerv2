@@ -102,12 +102,6 @@ async function saveH2H(matches) {
   }
 }
 
-async function saveFormStats(matches, teamId) {
-  // form_stats schema uses UNIQUE(team_id, league_id, season) with aggregate columns,
-  // not per-match rows — skip silently
-  return;
-}
-
 async function saveAlert(fixtureId, alertType, market, message, confidence) {
   await query(
     `INSERT INTO alerts (fixture_id, alert_type, message, ngp_value, telegram_ok)
