@@ -360,9 +360,9 @@ def main():
         X_train_s = scaler.fit_transform(X_train)
         X_test_s = scaler.transform(X_test)
 
-        # class_weight='balanced' — compensează dezechilibrul de clasă (ex. over05/
-        # over15 ~95% DA) ca modelul să nu prezică leneș doar clasa majoritară.
-        lr = LogisticRegression(class_weight="balanced", C=1.0, max_iter=1000, random_state=42)
+        # FĂRĂ class_weight='balanced': balanced de-calibrează probabilitățile →
+        # strică Brier (care premiază calibrarea). LR rămâne modelul din producție.
+        lr = LogisticRegression(C=1.0, max_iter=1000, random_state=42)
         lr.fit(X_train_s, y_train, sample_weight=w_train)
 
         # HistGradientBoosting — 10-50× mai rapid decât GradientBoosting clasic,
