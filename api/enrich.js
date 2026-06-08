@@ -1116,6 +1116,32 @@ async function getLiveStatsFromDB(fixtureId) {
   } catch (_) { return null; }
 }
 
+// Medii istorice match_stats — ultimele 10 meciuri ALE echipei cu match_date <
+// matchDate (FĂRĂ lookahead). Furnizate ca features ML (homeXgAvg etc.) către
+// api/ml-predict.js. Silent-fail → null (ml-predict cade pe mediană).
+async function getMatchStatsAvg(teamId, matchDate) {
+  if (!teamId || !matchDate) return null;
+  try {
+    const { rows } = await query(
+      `SELECT
+          AVG(ms.shots_on_goal)  AS sot_avg,
+          AVG(ms.corner_kicks)   AS corners_avg,
+          AVG(ms.expected_goals) AS xg_avg,
+          AVG(ms.yellow_cards)   AS yc_avg,
+          AVG(ms.red_cards)      AS rc_avg,
+          AVG(ms.fouls)          AS fouls_avg
+       FROM (
+          SELECT ms.* FROM match_stats ms
+          JOIN fixtures_history fhx ON fhx.fixture_id = ms.fixture_id
+          WHERE ms.team_id = $1 AND fhx.match_date < $2
+          ORDER BY fhx.match_date DESC LIMIT 10
+       ) ms`,
+      [Number(teamId), matchDate]
+    );
+    return rows[0] || null;
+  } catch (_) { return null; }
+}
+
 // Transform h2h rows → API-Football-like format expected by calcPoisson
 function h2hToFixtures(rows) {
   return rows.map(row => ({
@@ -1148,7 +1174,8 @@ export default async function handler(req, res) {
 
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats + venue in parallel ---
-    const [sbHForm, sbAForm, sbH2H, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA, lineupFactor, dbLambda] = await Promise.all([
+    const _avgDate = dt || new Date().toISOString();
+    const [sbHForm, sbAForm, sbH2H, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA, lineupFactor, dbLambda, mshAvg, msaAvg] = await Promise.all([
       getHomeForm(hId),
       getAwayForm(aId),
       getH2HFromDB(hId, aId),
@@ -1167,6 +1194,8 @@ export default async function handler(req, res) {
       getSquadCount(aId),
       fid ? getLineupStrengthFactor(Number(fid), hId, aId) : Promise.resolve({ home: 1.0, away: 1.0 }),
       getLambdaFromPredictions(fid),
+      getMatchStatsAvg(hId, _avgDate),
+      getMatchStatsAvg(aId, _avgDate),
     ]);
 
     // [C4] Dacă predictions DB are λ (collect-daily) → NU mai re-fetch-uim formă
@@ -1655,6 +1684,30 @@ export default async function handler(req, res) {
     const _lineupsReal = !!(lineupFactor && lineupFactor.hasData);
     const playerIntelActive = _strBoth && _lineupsReal;
     const dataCompleteness  = playerIntelActive ? 'complete' : 'partial';
+
+    // Medii istorice (match_stats) + arbitru → features ML (citite de
+    // ml-predict.js; lipsă/null → mediană default, fără crash).
+    const _r2v = (v) => { const n = Number(v); return Number.isFinite(n) ? +n.toFixed(2) : null; };
+    if (mshAvg) {
+      result.homeSotAvg     = _r2v(mshAvg.sot_avg);
+      result.homeCornersAvg = _r2v(mshAvg.corners_avg);
+      result.homeXgAvg      = _r2v(mshAvg.xg_avg);
+      result.homeYcAvg      = _r2v(mshAvg.yc_avg);
+      result.homeRcAvg      = _r2v(mshAvg.rc_avg);
+      result.homeFoulsAvg   = _r2v(mshAvg.fouls_avg);
+    }
+    if (msaAvg) {
+      result.awaySotAvg     = _r2v(msaAvg.sot_avg);
+      result.awayCornersAvg = _r2v(msaAvg.corners_avg);
+      result.awayXgAvg      = _r2v(msaAvg.xg_avg);
+      result.awayYcAvg      = _r2v(msaAvg.yc_avg);
+      result.awayRcAvg      = _r2v(msaAvg.rc_avg);
+      result.awayFoulsAvg   = _r2v(msaAvg.fouls_avg);
+    }
+    if (refereeStats) {
+      result.refPctOver25 = _r2v(refereeStats.pct_over_25);
+      result.refStyleOpen = refereeStats.referee_style === 'open' ? 1 : 0;
+    }
 
     const payload = { ...result, ...confData,
       playerIntelActive, dataCompleteness,
