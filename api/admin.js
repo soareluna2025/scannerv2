@@ -485,6 +485,7 @@ async function runStabilize() {
     try {
       const r = await fetch(`http://localhost:${port}${step.path}`, {
         method: step.method || 'POST',                 // default POST; auto-predict = GET
+        headers: { 'x-cron-secret': process.env.CRON_SECRET || '' },
         signal: AbortSignal.timeout(15 * 60 * 1000), // 15 min/pas (auto-predict inclus)
       });
       ok = r.ok;
