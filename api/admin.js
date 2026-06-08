@@ -432,7 +432,12 @@ router.post('/trigger-cron', async (req, res) => {
   const url  = `http://localhost:${port}${ALLOWED_JOBS[job]}`;
   try {
     // Fire-and-forget — răspuns imediat (POST pentru compatibilitate cu toate cron-urile)
-    fetch(url, { method: 'POST' }).catch(() => {});
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'x-cron-secret': process.env.CRON_SECRET || '',
+      },
+    }).catch(() => {});
     res.json({ ok: true, job, url, triggered_at: new Date().toISOString() });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
