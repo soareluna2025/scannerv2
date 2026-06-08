@@ -108,11 +108,17 @@ FROM predictions p
 JOIN fixtures_history fh ON fh.fixture_id = p.fixture_id
 LEFT JOIN (
     SELECT me.fixture_id,
-        SUM(CASE WHEN me.elapsed <= 45 AND me.team_id = fh2.home_team_id THEN 1 ELSE 0 END) AS home_ht_calc,
-        SUM(CASE WHEN me.elapsed <= 45 AND me.team_id = fh2.away_team_id THEN 1 ELSE 0 END) AS away_ht_calc
+        SUM(CASE
+            WHEN me.elapsed <= 45 AND me.team_id = fh2.home_team_id AND me.detail IS DISTINCT FROM 'Own Goal' THEN 1
+            WHEN me.elapsed <= 45 AND me.team_id = fh2.away_team_id AND me.detail = 'Own Goal' THEN 1
+            ELSE 0 END) AS home_ht_calc,
+        SUM(CASE
+            WHEN me.elapsed <= 45 AND me.team_id = fh2.away_team_id AND me.detail IS DISTINCT FROM 'Own Goal' THEN 1
+            WHEN me.elapsed <= 45 AND me.team_id = fh2.home_team_id AND me.detail = 'Own Goal' THEN 1
+            ELSE 0 END) AS away_ht_calc
     FROM match_events me
     JOIN fixtures_history fh2 ON fh2.fixture_id = me.fixture_id
-    WHERE me.type = 'Goal' AND (me.detail IS NULL OR me.detail <> 'Own Goal')
+    WHERE me.type = 'Goal'
     GROUP BY me.fixture_id
 ) ht ON ht.fixture_id = p.fixture_id
 LEFT JOIN match_stats ms_home ON ms_home.fixture_id = p.fixture_id AND ms_home.team_id = fh.home_team_id

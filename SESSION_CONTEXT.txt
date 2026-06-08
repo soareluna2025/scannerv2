@@ -778,7 +778,14 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - Șters no-op saveFormStats din scan.js
+[07.06 ~now] - Fix autogoluri în subquery `ht` (train_model.py)
+  HT calc din match_events: autogolurile NU mai sunt dropate, ci RE-ATRIBUITE
+  adversarului (detail IS DISTINCT FROM 'Own Goal' pt golul propriu + detail=
+  'Own Goal' pt autogolul adversarului → creditat). WHERE doar type='Goal'.
+  Acuratețe ~93.8% (validat VPS). COALESCE(fh.home_ht, ht.home_ht_calc) neatins.
+  py_compile OK. Necesită re-antrenare pe VPS. | Commit: git
+
+[07.06 ~earlier] - Șters no-op saveFormStats din scan.js
   api/cron/scan.js: șters saveFormStats(matches, teamId) (era `return;` no-op,
   zero apeluri în fișier — cod mort). node --check OK. ⚠ NEATINS scanner.js:
   saveFormStats(m) de acolo e ALTĂ funcție, REALĂ (salvează FT→fixtures_history+
