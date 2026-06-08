@@ -778,7 +778,12 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - HistGradientBoosting (antrenare rapidă) în train_model.py
+[07.06 ~now] - Scos class_weight='balanced' din LR (train_model.py)
+  LR → LogisticRegression(C=1.0, max_iter=1000, random_state=42). balanced
+  de-calibra probabilitățile → strica Brier (handicapa LR vs GB). py_compile OK.
+  Necesită re-antrenare ca să vezi dacă LR bate baseline acum. | Commit: git
+
+[07.06 ~earlier] - HistGradientBoosting (antrenare rapidă) în train_model.py
   GradientBoostingClassifier(n_estimators=200) → HistGradientBoostingClassifier
   (max_iter=200, max_depth=4, lr=0.1) — 10-50× mai rapid (era ~5min/piață). GB
   doar pt comparație Brier; LR producție identic. feature_importances din
