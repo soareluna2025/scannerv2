@@ -778,7 +778,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - enrich.js furnizează mediile istorice + arbitru pt ML
+[07.06 ~now] - Auth pe toate /api/cron/* (server.js)
+  Loader cronFiles: guard `if (CRON_SECRET)` → verifică x-cron-secret header sau
+  ?_secret query; mismatch → 401. Activ DOAR dacă CRON_SECRET e setat în .env.
+  Admin neatins (auth propriu). setup-crontab.sh: linia cleanup sursează .env la
+  run + trimite header (\${CRON_SECRET} expandat de cron, NU baked în crontab).
+  ⚠ CRITIC OPERAȚIONAL: celelalte ~26 linii curl /api/cron/* din crontab-ul VPS
+  (setate manual, nu în repo) TREBUIE actualizate cu același header ALTFEL dau
+  401 → croanele se opresc. node --check + bash -n OK. | Commit: git
+
+[07.06 ~earlier] - enrich.js furnizează mediile istorice + arbitru pt ML
   + getMatchStatsAvg(teamId, matchDate): AVG ultimele 10 meciuri ANTERIOARE
   (match_date<dt → fără lookahead) sot/corners/xg/yc/rc/fouls. Apelat în
   Promise.all (home/away, _avgDate=dt||now). Payload: homeSotAvg/CornersAvg/

@@ -21,8 +21,16 @@ echo "Crontab ML setat (antrenare zilnică 05:30):"
 crontab -l | grep 'ml/train_model.py'
 
 # Curățare lunară app_settings — prima zi a lunii la 03:00 (markeri bloat).
-CLEANUP_CMD="0 3 1 * * curl -sf http://localhost:3000/api/cron/cleanup-settings >> ${APP_DIR}/ml/cleanup.log 2>&1"
+# Sursează .env la RUN time → header x-cron-secret cu valoarea reală (secretul NU
+# se scrie în crontab; ${CRON_SECRET} e expandat de shell-ul cron-ului, nu aici).
+CLEANUP_CMD="0 3 1 * * set -a && . ${APP_DIR}/.env && set +a && curl -sf -H \"x-cron-secret: \${CRON_SECRET}\" http://localhost:3000/api/cron/cleanup-settings >> ${APP_DIR}/ml/cleanup.log 2>&1"
 ( crontab -l 2>/dev/null | grep -v 'api/cron/cleanup-settings'; echo "$CLEANUP_CMD" ) | crontab -
 
 echo "Crontab cleanup-settings setat (lunar, ziua 1 la 03:00):"
 crontab -l | grep 'api/cron/cleanup-settings'
+
+# ⚠ TOATE celelalte linii curl /api/cron/* din crontab (collect-daily, scan,
+# build-elo, backfill-*, etc. — setate MANUAL pe VPS, NU în acest repo) TREBUIE
+# actualizate să trimită ACELAȘI header, altfel vor primi 401 după deploy:
+#   set -a && . ${APP_DIR}/.env && set +a && \
+#     curl -sf -H "x-cron-secret: \${CRON_SECRET}" http://localhost:3000/api/cron/<nume>

@@ -62,6 +62,15 @@ for (const name of apiFiles) {
 const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'learning-analysis', 'recalibrate-tables', 'calibrate-live', 'collect-venues', 'collect-coaches', 'coach-stats', 'referee-extended', 'collect-team-stats', 'collect-top-scorers', 'collect-players-season', 'collect-squads', 'cazarma-router', 'auto-predict', 'backfill-pass-shots', 'backfill-players', 'extract-team', 'collect-national-history', 'backfill-stats-cron', 'collect-wc-qualifiers', 'build-elo', 'backfill-predictions', 'cleanup-settings'];
 for (const name of cronFiles) {
   app.all(`/api/cron/${name}`, async (req, res) => {
+    // Auth cron — blochează apelurile externe neautorizate (cotă API / DELETE-uri).
+    // Crontab-ul local trimite header x-cron-secret (vezi scripts/setup-crontab.sh).
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+      const provided = req.headers['x-cron-secret'] || req.query._secret;
+      if (provided !== cronSecret) {
+        return res.status(401).json({ ok: false, error: 'Unauthorized' });
+      }
+    }
     try {  // catch-block jos logheaza in cron_logs
       const mod = await import(`./api/cron/${name}.js`);
       await mod.default(req, res);
