@@ -83,6 +83,7 @@ SELECT
     p.result_winner, p.result_over15, p.result_over25, p.result_gg,
     fh.home_goals, fh.away_goals,
     fh.home_ht, fh.away_ht,
+    fh.match_date, fh.home_team_id, fh.away_team_id, fh.referee,
     COALESCE(fh.home_ht, ht.home_ht_calc) AS home_ht_final,
     COALESCE(fh.away_ht, ht.away_ht_calc) AS away_ht_final,
     ms_home.shots_total     AS shots_home,
@@ -93,6 +94,15 @@ SELECT
     ms_away.shots_on_goal   AS shots_on_target_away,
     ms_away.corner_kicks    AS corners_away,
     ms_away.ball_possession AS possession_away,
+    -- Medii istorice (ultimele 10 meciuri ANTERIOARE ale echipei — fără lookahead)
+    msh.sot_avg     AS home_sot_avg,   msh.corners_avg AS home_corners_avg,
+    msh.xg_avg      AS home_xg_avg,    msh.yc_avg      AS home_yc_avg,
+    msh.rc_avg      AS home_rc_avg,    msh.fouls_avg   AS home_fouls_avg,
+    msa.sot_avg     AS away_sot_avg,   msa.corners_avg AS away_corners_avg,
+    msa.xg_avg      AS away_xg_avg,    msa.yc_avg      AS away_yc_avg,
+    msa.rc_avg      AS away_rc_avg,    msa.fouls_avg   AS away_fouls_avg,
+    rs.pct_over_25  AS ref_pct_over25,
+    CASE WHEN rs.referee_style = 'open' THEN 1 ELSE 0 END AS ref_style_open,
     p.created_at
 FROM predictions p
 JOIN fixtures_history fh ON fh.fixture_id = p.fixture_id
@@ -107,6 +117,31 @@ LEFT JOIN (
 ) ht ON ht.fixture_id = p.fixture_id
 LEFT JOIN match_stats ms_home ON ms_home.fixture_id = p.fixture_id AND ms_home.team_id = fh.home_team_id
 LEFT JOIN match_stats ms_away ON ms_away.fixture_id = p.fixture_id AND ms_away.team_id = fh.away_team_id
+-- Medii istorice GAZDE (ultimele 10 meciuri cu match_date < meciul curent)
+LEFT JOIN LATERAL (
+    SELECT AVG(ms.shots_on_goal) AS sot_avg, AVG(ms.corner_kicks) AS corners_avg,
+           AVG(ms.expected_goals) AS xg_avg, AVG(ms.yellow_cards) AS yc_avg,
+           AVG(ms.red_cards) AS rc_avg, AVG(ms.fouls) AS fouls_avg
+    FROM (
+        SELECT ms.* FROM match_stats ms
+        JOIN fixtures_history fhx ON fhx.fixture_id = ms.fixture_id
+        WHERE ms.team_id = fh.home_team_id AND fhx.match_date < fh.match_date
+        ORDER BY fhx.match_date DESC LIMIT 10
+    ) ms
+) msh ON true
+-- Medii istorice OASPEȚI
+LEFT JOIN LATERAL (
+    SELECT AVG(ms.shots_on_goal) AS sot_avg, AVG(ms.corner_kicks) AS corners_avg,
+           AVG(ms.expected_goals) AS xg_avg, AVG(ms.yellow_cards) AS yc_avg,
+           AVG(ms.red_cards) AS rc_avg, AVG(ms.fouls) AS fouls_avg
+    FROM (
+        SELECT ms.* FROM match_stats ms
+        JOIN fixtures_history fhx ON fhx.fixture_id = ms.fixture_id
+        WHERE ms.team_id = fh.away_team_id AND fhx.match_date < fh.match_date
+        ORDER BY fhx.match_date DESC LIMIT 10
+    ) ms
+) msa ON true
+LEFT JOIN referee_stats rs ON rs.referee_name = fh.referee
 WHERE p.result_winner IS NOT NULL
   AND p.score1 IS NOT NULL
   AND fh.home_goals IS NOT NULL
@@ -121,6 +156,16 @@ FEATURES_PREMATCH = [
     "home_elo", "away_elo", "elo_diff_ml", "home_win_prob_elo", "elo_sum",
     "home_position_norm", "away_position_norm",
     "confidence",
+    # Medii ISTORICE (ultimele 10 meciuri anterioare) din match_stats + arbitru.
+    # Pre-meci, fără lookahead (match_date < meciul curent). FEATURES_HT le
+    # moștenește automat (sunt valide și pentru R2). NULL → fillna median.
+    "home_sot_avg", "away_sot_avg",
+    "home_corners_avg", "away_corners_avg",
+    "home_xg_avg", "away_xg_avg",
+    "home_yc_avg", "away_yc_avg",
+    "home_rc_avg", "away_rc_avg",
+    "home_fouls_avg", "away_fouls_avg",
+    "ref_pct_over25", "ref_style_open",
 ]
 # ⚠ ANTI-LEAKAGE: goals_*_current / goal_diff_current NU mai sunt în PREMATCH —
 # la antrenare valorau scorul FINAL → determinau direct label-ul (Brier 0.0000
@@ -199,6 +244,17 @@ def main():
               "shots_home", "shots_away", "shots_on_target_home", "shots_on_target_away",
               "corners_home", "corners_away", "possession_home", "possession_away"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    # Features istorice noi (match_stats medii + arbitru): coerce + fillna median.
+    _new_feats = [
+        "home_sot_avg", "away_sot_avg", "home_corners_avg", "away_corners_avg",
+        "home_xg_avg", "away_xg_avg", "home_yc_avg", "away_yc_avg",
+        "home_rc_avg", "away_rc_avg", "home_fouls_avg", "away_fouls_avg",
+        "ref_pct_over25", "ref_style_open",
+    ]
+    for c in _new_feats:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    df[_new_feats] = df[_new_feats].fillna(df[_new_feats].median())
 
     df["home_ht"] = df["home_ht_final"].fillna(0)
     df["away_ht"] = df["away_ht_final"].fillna(0)

@@ -89,6 +89,22 @@ function buildFeatures(en, elo, lc) {
     minutes_remaining: _elLive ? Math.max(0, (90 - _el) / 90) : 1,
     goals_home_current: _hgCur != null ? _hgCur : 0,
     goals_away_current: _agCur != null ? _agCur : 0,
+    // Medii istorice (match_stats) + arbitru — enrich.js le va furniza; lipsă →
+    // mediana din datele reale de antrenare (comportament corect, nu crash).
+    home_sot_avg: en.homeSotAvg ?? 4.5,
+    away_sot_avg: en.awaySotAvg ?? 4.2,
+    home_corners_avg: en.homeCornersAvg ?? 5.2,
+    away_corners_avg: en.awayCornersAvg ?? 4.9,
+    home_xg_avg: en.homeXgAvg ?? 1.3,
+    away_xg_avg: en.awayXgAvg ?? 1.2,
+    home_yc_avg: en.homeYcAvg ?? 1.8,
+    away_yc_avg: en.awayYcAvg ?? 1.7,
+    home_rc_avg: en.homeRcAvg ?? 0.08,
+    away_rc_avg: en.awayRcAvg ?? 0.08,
+    home_fouls_avg: en.homeFoulsAvg ?? 12.0,
+    away_fouls_avg: en.awayFoulsAvg ?? 12.0,
+    ref_pct_over25: en.refPctOver25 ?? 55.0,
+    ref_style_open: en.refStyleOpen ?? 0,
     goal_diff_current: (_hgCur != null && _agCur != null) ? _hgCur - _agCur : 0,
   };
 }

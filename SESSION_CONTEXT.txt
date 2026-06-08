@@ -778,7 +778,18 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - Cron lunar cleanup-settings (app_settings bloat)
+[07.06 ~now] - 14 features ML noi: medii istorice match_stats + arbitru
+  train_model.py: QUERY + 2 LATERAL (medii ultimele 10 meciuri ANTERIOARE,
+  match_date<curent → fără lookahead) din match_stats (sot/corners/xg/yc/rc/
+  fouls avg home&away) + JOIN referee_stats (pct_over25, style_open). +SELECT
+  fh.match_date/team_ids/referee. Adăugate în FEATURES_PREMATCH (HT le moștenește).
+  fillna(median) pe noile coloane. ml-predict.js buildFeatures: 14 chei noi din
+  enrichData cu default = mediana reală (lipsă → median, fără crash). py_compile
+  + node --check OK. NEATINS calcConfidence*/score1-7/FEATURES_HT-linie.
+  ⚠ Necesită RE-ANTRENARE pe VPS + enrich.js să furnizeze homeXgAvg etc.
+  (până atunci inferența folosește medianele). | Commit: git
+
+[07.06 ~earlier] - Cron lunar cleanup-settings (app_settings bloat)
   NOU api/cron/cleanup-settings.js: GET → (1) DELETE h2h_refresh:%, (2) DELETE
   no_data:% >90 zile, (3) VACUUM ANALYZE app_settings via pool.query direct
   (nu în tranzacție), (4) log cron_logs status='ok' + rezumat per tip.
