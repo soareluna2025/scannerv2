@@ -19,3 +19,10 @@ CRON_CMD="30 5 * * * cd ${APP_DIR} && set -a && . ${APP_DIR}/.env && set +a && p
 
 echo "Crontab ML setat (antrenare zilnică 05:30):"
 crontab -l | grep 'ml/train_model.py'
+
+# Curățare lunară app_settings — prima zi a lunii la 03:00 (markeri bloat).
+CLEANUP_CMD="0 3 1 * * curl -sf http://localhost:3000/api/cron/cleanup-settings >> ${APP_DIR}/ml/cleanup.log 2>&1"
+( crontab -l 2>/dev/null | grep -v 'api/cron/cleanup-settings'; echo "$CLEANUP_CMD" ) | crontab -
+
+echo "Crontab cleanup-settings setat (lunar, ziua 1 la 03:00):"
+crontab -l | grep 'api/cron/cleanup-settings'

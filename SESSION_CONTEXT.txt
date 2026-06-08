@@ -778,7 +778,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - Fix LEAKAGE + calitate train_model.py
+[07.06 ~now] - Cron lunar cleanup-settings (app_settings bloat)
+  NOU api/cron/cleanup-settings.js: GET → (1) DELETE h2h_refresh:%, (2) DELETE
+  no_data:% >90 zile, (3) VACUUM ANALYZE app_settings via pool.query direct
+  (nu în tranzacție), (4) log cron_logs status='ok' + rezumat per tip.
+  Silent-fail per pas, răspuns JSON cu contoare. Înregistrat în server.js
+  cronFiles. setup-crontab.sh: + linie '0 3 1 * * curl ...cleanup-settings'
+  (idempotent). Cheile config (fără prefix) NEatinse. node --check ×2 OK,
+  bash -n OK. | Commit: git
+
+[07.06 ~earlier] - Fix LEAKAGE + calitate train_model.py
   FIX1: scos goals_home/away_current, goal_diff_current, elapsed_norm,
   minutes_remaining din FEATURES_PREMATCH (la antrenare = scor FINAL →
   determinau label-ul, Brier 0.0000 fals). goals_*_current rămân DOAR în
