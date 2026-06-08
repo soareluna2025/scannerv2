@@ -121,19 +121,20 @@ FEATURES_PREMATCH = [
     "home_elo", "away_elo", "elo_diff_ml", "home_win_prob_elo", "elo_sum",
     "home_position_norm", "away_position_norm",
     "confidence",
-    # Conștiență temporală + scor curent. La ANTRENARE = starea finală a meciului
-    # (terminat → elapsed=90, scor final). La INFERENȚĂ LIVE, api/ml-predict.js
-    # suprascrie cu minutul și scorul curent (pre-meci → elapsed_norm=0, goals=0).
-    "elapsed_norm", "minutes_remaining",
-    "goals_home_current", "goals_away_current", "goal_diff_current",
 ]
-# FEATURES_HT moștenește cele 5 features live de mai sus + adaugă stările R1/stats.
+# ⚠ ANTI-LEAKAGE: goals_*_current / goal_diff_current NU mai sunt în PREMATCH —
+# la antrenare valorau scorul FINAL → determinau direct label-ul (Brier 0.0000
+# fals pe over/1X2). elapsed_norm / minutes_remaining eliminate (constante la
+# meci terminat → varianță zero, inutile). goals_*_current rămân DOAR în
+# FEATURES_HT (piețele r2_*), recalculate ca scorul la PAUZĂ — cunoscut CORECT
+# înainte de repriza 2, deci NON-leaky pentru R2.
 FEATURES_HT = FEATURES_PREMATCH + [
     "home_ht", "away_ht", "goals_ht",
     "shots_home", "shots_away",
     "shots_on_target_home", "shots_on_target_away",
     "corners_home", "corners_away",
     "possession_home", "possession_away",
+    "goals_home_current", "goals_away_current", "goal_diff_current",
 ]
 
 MARKETS = {
@@ -209,15 +210,13 @@ def main():
     df["lambda_ratio"] = df["lambda_home"].fillna(0) / df["lambda_away"].replace(0, 1).fillna(1)
     df["elo_sum"] = df["home_elo"].fillna(1500) + df["away_elo"].fillna(1500)
 
-    # Conștiență temporală + scor curent. Datele istorice sunt meciuri TERMINATE →
-    # snapshot la final (elapsed=90 → elapsed_norm=1, minutes_remaining=0, scor final).
-    # predictions NU are coloana `elapsed`, deci o derivăm: meci terminat = 90'.
-    # La inferență LIVE, api/ml-predict.js trimite minutul/scorul real curent.
-    df["elapsed_norm"] = 1.0                      # 90/90 (meci terminat)
-    df["minutes_remaining"] = 0.0                 # (90-90)/90
-    df["goals_home_current"] = df["home_goals"]
-    df["goals_away_current"] = df["away_goals"]
-    df["goal_diff_current"] = df["home_goals"] - df["away_goals"]
+    # Scor „curent" pentru piețele R2 = scorul la PAUZĂ (home_ht/away_ht),
+    # cunoscut CORECT înainte de repriza 2 → NU scorul final (ANTI-LEAKAGE).
+    # Folosit DOAR de FEATURES_HT (r2_*); pre-meci/HT nu le mai folosesc.
+    # elapsed_norm / minutes_remaining eliminate (constante → varianță zero).
+    df["goals_home_current"] = df["home_ht"]
+    df["goals_away_current"] = df["away_ht"]
+    df["goal_diff_current"] = df["home_ht"] - df["away_ht"]
 
     # Probabilitățile modelului actual pot lipsi pe unele predicții → fillna(50)
     # ca brier_actual (comparația cu modelul curent) să nu primească NaN.
@@ -287,15 +286,24 @@ def main():
             print(f"  Date insuficiente: {len(y)} rânduri (sau o singură clasă)")
             continue
 
-        X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(
-            X, y, w, test_size=0.2, random_state=42
-        )
+        # Split TEMPORAL: df e sortat cronologic (QUERY ORDER BY created_at ASC),
+        # deci ultimele 20% = cele mai recente meciuri → estimare Brier ONESTĂ
+        # (fără scurgere din viitor ca la split-ul random anterior).
+        split_idx = int(len(y) * 0.8)
+        X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+        y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
+        w_train, w_test = w.iloc[:split_idx], w.iloc[split_idx:]
+        if y_train.nunique() < 2 or len(y_test) < 1:
+            print("  Skip: o singură clasă în train după split temporal")
+            continue
 
         scaler = StandardScaler()
         X_train_s = scaler.fit_transform(X_train)
         X_test_s = scaler.transform(X_test)
 
-        lr = LogisticRegression(max_iter=1000, random_state=42)
+        # class_weight='balanced' — compensează dezechilibrul de clasă (ex. over05/
+        # over15 ~95% DA) ca modelul să nu prezică leneș doar clasa majoritară.
+        lr = LogisticRegression(class_weight="balanced", C=1.0, max_iter=1000, random_state=42)
         lr.fit(X_train_s, y_train, sample_weight=w_train)
 
         gb = GradientBoostingClassifier(n_estimators=200, max_depth=4,
@@ -310,7 +318,14 @@ def main():
         if actual_col:
             brier_actual = brier_score_loss(y_test, df.loc[X_test.index, actual_col] / 100.0)
 
-        line = f"  N={len(y)} | LR: {brier_lr:.4f} | GB: {brier_gb:.4f}"
+        # Base rate + Brier baseline (a prezice mereu media). brier_lr >= baseline
+        # ⇒ modelul NU aduce skill peste „prezice rata medie".
+        base_rate = float(y_test.mean())
+        brier_baseline = base_rate * (1 - base_rate)
+        line = (f"  N={len(y)} | Base rate: {base_rate:.3f} | "
+                f"Brier baseline: {brier_baseline:.4f} | LR: {brier_lr:.4f} | GB: {brier_gb:.4f}")
+        if brier_lr >= brier_baseline:
+            line += " | ⚠ LR NU bate baseline"
         if brier_actual is not None:
             line += f" | Actual: {brier_actual:.4f} | {'✅ ML CÂȘTIGĂ' if brier_gb < brier_actual else '❌ Model actual mai bun'}"
         print(line)
@@ -322,6 +337,8 @@ def main():
         results[market_key] = {
             "description": desc,
             "n_samples": int(len(y)),
+            "base_rate": base_rate,
+            "brier_baseline": float(brier_baseline),
             "brier_lr": float(brier_lr),
             "brier_gb": float(brier_gb),
             "brier_actual": float(brier_actual) if brier_actual is not None else None,
