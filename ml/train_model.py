@@ -94,6 +94,8 @@ SELECT
     ms_away.shots_on_goal   AS shots_on_target_away,
     ms_away.corner_kicks    AS corners_away,
     ms_away.ball_possession AS possession_away,
+    ms_home.yellow_cards    AS yc_home,
+    ms_away.yellow_cards    AS yc_away,
     -- Medii istorice MATERIALIZATE (ml_features, rolling 100, point-in-time).
     -- Sursă canonică de calcul: api/cron/build-ml-features.js (aceleași LATERAL).
     mlf.home_sot_avg, mlf.away_sot_avg,
@@ -239,6 +241,17 @@ MARKETS = {
     "corners_away_over65": ("y_corners_away_over65", FEATURES_PREMATCH, "Cornere Oaspeți Over 6.5"),
     "corners_away_over75": ("y_corners_away_over75", FEATURES_PREMATCH, "Cornere Oaspeți Over 7.5"),
     "corners_away_over85": ("y_corners_away_over85", FEATURES_PREMATCH, "Cornere Oaspeți Over 8.5"),
+    # Cartonașe galbene
+    "cards_over35": ("y_cards_over35", FEATURES_PREMATCH, "Cartonașe Over 3.5"),
+    "cards_over45": ("y_cards_over45", FEATURES_PREMATCH, "Cartonașe Over 4.5"),
+    "cards_over55": ("y_cards_over55", FEATURES_PREMATCH, "Cartonașe Over 5.5"),
+    "cards_over65": ("y_cards_over65", FEATURES_PREMATCH, "Cartonașe Over 6.5"),
+    "cards_home_over15": ("y_cards_home_over15", FEATURES_PREMATCH, "Cartonașe Gazde Over 1.5"),
+    "cards_home_over25": ("y_cards_home_over25", FEATURES_PREMATCH, "Cartonașe Gazde Over 2.5"),
+    "cards_home_over35": ("y_cards_home_over35", FEATURES_PREMATCH, "Cartonașe Gazde Over 3.5"),
+    "cards_away_over15": ("y_cards_away_over15", FEATURES_PREMATCH, "Cartonașe Oaspeți Over 1.5"),
+    "cards_away_over25": ("y_cards_away_over25", FEATURES_PREMATCH, "Cartonașe Oaspeți Over 2.5"),
+    "cards_away_over35": ("y_cards_away_over35", FEATURES_PREMATCH, "Cartonașe Oaspeți Over 3.5"),
 }
 
 ACTUAL_COL = {"y_over15": "over15_prob", "y_over25": "over25_prob",
@@ -262,7 +275,8 @@ def main():
     for c in ["home_goals", "away_goals", "home_ht_final", "away_ht_final",
               "lambda_home", "lambda_away", "home_elo", "away_elo",
               "shots_home", "shots_away", "shots_on_target_home", "shots_on_target_away",
-              "corners_home", "corners_away", "possession_home", "possession_away"]:
+              "corners_home", "corners_away", "possession_home", "possession_away",
+              "yc_home", "yc_away"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
     # Features istorice noi (match_stats medii + arbitru): coerce + fillna median.
@@ -364,6 +378,18 @@ def main():
     df["y_corners_away_over65"] = (df["corners_away"] >= 7).astype(int)
     df["y_corners_away_over75"] = (df["corners_away"] >= 8).astype(int)
     df["y_corners_away_over85"] = (df["corners_away"] >= 9).astype(int)
+
+    # GRUP 5 — Cartonașe galbene (TOTAL + per echipă, din yc_home/yc_away)
+    df["y_cards_over35"] = ((df["yc_home"] + df["yc_away"]) >= 4).astype(int)
+    df["y_cards_over45"] = ((df["yc_home"] + df["yc_away"]) >= 5).astype(int)
+    df["y_cards_over55"] = ((df["yc_home"] + df["yc_away"]) >= 6).astype(int)
+    df["y_cards_over65"] = ((df["yc_home"] + df["yc_away"]) >= 7).astype(int)
+    df["y_cards_home_over15"] = (df["yc_home"] >= 2).astype(int)
+    df["y_cards_home_over25"] = (df["yc_home"] >= 3).astype(int)
+    df["y_cards_home_over35"] = (df["yc_home"] >= 4).astype(int)
+    df["y_cards_away_over15"] = (df["yc_away"] >= 2).astype(int)
+    df["y_cards_away_over25"] = (df["yc_away"] >= 3).astype(int)
+    df["y_cards_away_over35"] = (df["yc_away"] >= 4).astype(int)
 
     # PASUL 5 — antrenează modele. Cu argumente CLI → DOAR piețele cerute (merge
     # în model_export.json, nu suprascrie tot). Fără argumente → toate (ca înainte).

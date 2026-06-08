@@ -778,7 +778,13 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - train_model.py: -14 piețe slabe / +12 cornere per echipă (=53)
+[07.06 ~now] - train_model.py: +10 piețe cartonașe galbene (=63)
+  yc_home/yc_away adăugate în SELECT (ms_*.yellow_cards) + lista coerce numeric.
+  +10 labels: y_cards_over35/45/55/65 (total ≥4..≥7), y_cards_home/away_over15/
+  25/35. MARKETS 53→63. Features neschimbate. py_compile OK, 63 intrări verificat.
+  Necesită re-antrenare VPS. | Commit: git
+
+[07.06 ~earlier] - train_model.py: -14 piețe slabe / +12 cornere per echipă (=53)
   ȘTERS labels+MARKETS: odd_total/ht/r2 (3), over35_home/away (2), htft_11..22
   (9) = 14. ADĂUGAT: y_corners_home/away_over35..85 (12) ≥4..≥9. MARKETS 55→53.
   Features neschimbate. py_compile OK; verificat 53 intrări, 0 reziduuri din
