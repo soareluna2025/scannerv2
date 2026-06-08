@@ -778,7 +778,14 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - ml-predict buildFeatures citește cele 10 features noi
+[07.06 ~now] - ml/test_accuracy.py (test precizie + calibrare ML)
+  Script NOU: ultimele 2000 meciuri cu rezultat (cele mai recente) ⋈ ml_features,
+  aplică LR din model_export.json EXACT ca ml-predict.js (standardizare +
+  lipsă→mean + sigmoid), pe over15/25/btts/home_win/away_win: Brier + acuratețe@50
+  + calibrare pe bucket-uri 10% (% real vs mijloc bucket). READ-ONLY DB, env din
+  .env. py_compile OK. NEATINS scoring. Rulează pe VPS. | Commit: git
+
+[07.06 ~earlier] - ml-predict buildFeatures citește cele 10 features noi
   + home/away insidebox/possession/goals_r1/goals_r2/subs _avg din enrich
   (en.homeInsideboxAvg ?? default etc.). ACUM toate cele 22 medii istorice sunt
   furnizate la inferență → aliniere COMPLETĂ train↔ml_features↔enrich↔ml-predict.
