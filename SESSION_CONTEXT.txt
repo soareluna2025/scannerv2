@@ -778,7 +778,13 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - enrich.js aliniat cu ml_features (LIMIT 100 + 5 features noi)
+[07.06 ~now] - ml-predict buildFeatures citește cele 10 features noi
+  + home/away insidebox/possession/goals_r1/goals_r2/subs _avg din enrich
+  (en.homeInsideboxAvg ?? default etc.). ACUM toate cele 22 medii istorice sunt
+  furnizate la inferență → aliniere COMPLETĂ train↔ml_features↔enrich↔ml-predict.
+  node --check OK. NEATINS calcConfidence/score1-7. | Commit: git
+
+[07.06 ~earlier] - enrich.js aliniat cu ml_features (LIMIT 100 + 5 features noi)
   getMatchStatsAvg: LIMIT 10→100 + insidebox_avg/possession_avg. + funcție nouă
   getMatchEventsAvg (goals_r1/r2/subs, rolling 100, query IDENTIC cu meh/mea din
   build-ml-features.js). Promise.all + mehAvg/meaAvg. Payload: home/away

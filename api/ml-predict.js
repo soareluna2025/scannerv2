@@ -105,6 +105,17 @@ function buildFeatures(en, elo, lc) {
     away_fouls_avg: en.awayFoulsAvg ?? 12.0,
     ref_pct_over25: en.refPctOver25 ?? 55.0,
     ref_style_open: en.refStyleOpen ?? 0,
+    // Features noi (rolling 100): insidebox/posesie medii + goluri R1/R2 + substituiri.
+    home_insidebox_avg: en.homeInsideboxAvg ?? 5.5,
+    away_insidebox_avg: en.awayInsideboxAvg ?? 5.0,
+    home_possession_avg: en.homePossessionAvg ?? 50.0,
+    away_possession_avg: en.awayPossessionAvg ?? 50.0,
+    home_goals_r1_avg: en.homeGoalsR1Avg ?? 0.6,
+    away_goals_r1_avg: en.awayGoalsR1Avg ?? 0.5,
+    home_goals_r2_avg: en.homeGoalsR2Avg ?? 0.8,
+    away_goals_r2_avg: en.awayGoalsR2Avg ?? 0.7,
+    home_subs_avg: en.homeSubsAvg ?? 3.0,
+    away_subs_avg: en.awaySubsAvg ?? 3.0,
     goal_diff_current: (_hgCur != null && _agCur != null) ? _hgCur - _agCur : 0,
   };
 }
