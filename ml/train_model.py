@@ -3,7 +3,7 @@ AlohaScan — Antrenare model ML complet (pre-meci + repriza 1 + repriza 2).
 
 Citește din `predictions` (features pre-meci) + `fixtures_history` (scor final/HT)
 + `match_events` (HT calculat fallback) + `match_stats` (statistici totale), apoi
-antrenează LogisticRegression + GradientBoosting pe MULTE piețe (total / HT / R2),
+antrenează LogisticRegression + HistGradientBoosting pe MULTE piețe (total / HT / R2),
 raportează Brier vs modelul actual și exportă totul în ml/model_export.json.
 
 ⚠ SECURITATE: conexiunea DB se ia din VARIABILE DE MEDIU (nu hardcodăm parola):
@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 import psycopg2
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import brier_score_loss, accuracy_score
 from sklearn.preprocessing import StandardScaler
@@ -365,8 +365,10 @@ def main():
         lr = LogisticRegression(class_weight="balanced", C=1.0, max_iter=1000, random_state=42)
         lr.fit(X_train_s, y_train, sample_weight=w_train)
 
-        gb = GradientBoostingClassifier(n_estimators=200, max_depth=4,
-                                        learning_rate=0.05, random_state=42)
+        # HistGradientBoosting — 10-50× mai rapid decât GradientBoosting clasic,
+        # rezultate similare. Folosit DOAR pt comparația Brier (LR = producție).
+        gb = HistGradientBoostingClassifier(max_iter=200, max_depth=4,
+                                            learning_rate=0.1, random_state=42)
         gb.fit(X_train, y_train, sample_weight=w_train)
 
         brier_lr = brier_score_loss(y_test, lr.predict_proba(X_test_s)[:, 1], sample_weight=w_test)
@@ -389,7 +391,10 @@ def main():
             line += f" | Actual: {brier_actual:.4f} | {'✅ ML CÂȘTIGĂ' if brier_gb < brier_actual else '❌ Model actual mai bun'}"
         print(line)
 
-        fi = pd.DataFrame({"feature": features, "importance": gb.feature_importances_})
+        # Importanță features = |coef| LR (HistGB nu expune feature_importances_;
+        # coeficienții LR pe features standardizate sunt comparabili și instant).
+        lr_importance = np.abs(lr.coef_[0])
+        fi = pd.DataFrame({"feature": features, "importance": lr_importance})
         fi = fi.sort_values("importance", ascending=False).head(5)
         print(f"  Top features: {', '.join(fi['feature'].tolist())}")
 
@@ -407,7 +412,7 @@ def main():
             "lr_intercept": float(lr.intercept_[0]),
             "scaler_mean": scaler.mean_.tolist(),
             "scaler_scale": scaler.scale_.tolist(),
-            "feature_importances": dict(zip(features, gb.feature_importances_.tolist())),
+            "feature_importances": dict(zip(features, lr_importance.tolist())),
         }
 
         joblib.dump(gb, os.path.join(ML_DIR, f"model_gb_{market_key}.pkl"))
