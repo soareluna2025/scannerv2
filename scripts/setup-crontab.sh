@@ -59,6 +59,7 @@ NEW_CRONTAB=$(cat <<EOF
 0 14 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/backfill-stats-cron >> ${LOG} 2>&1
 0 20 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/backfill-stats-cron >> ${LOG} 2>&1
 0 3 1 * * curl -sf -H "${HDR}" ${BASE}/api/cron/cleanup-settings >> ${APP_DIR}/ml/cleanup.log 2>&1
+15 4 * * * /root/scripts/backup-db.sh >> /var/log/alohascan-backup.log 2>&1
 30 5 * * * cd ${APP_DIR} && set -a && . ${APP_DIR}/.env && set +a && python3 ml/train_model.py >> ${APP_DIR}/ml/train.log 2>&1
 EOF
 )

@@ -778,7 +778,16 @@ ATENȚIE: Nu committa niciodată chei, token-uri, sau .env în repo!
 12. ISTORIC ACȚIUNI — SESIUNEA 17.05.2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[07.06 ~now] - setup-crontab.sh complet automat (cu x-cron-secret)
+[07.06 ~now] - deploy.yml persistă CRON_SECRET + folosește setup-crontab.sh
+  FIX A: în deploy.yml, înainte de printf .env, EXISTING_CRON din .env vechi;
+  lipsă → openssl rand -hex 32; adăugat CRON_SECRET=%s în printf (acum 6 chei).
+  → CRON_SECRET supraviețuiește deploy-urilor (ca ADMIN_API_KEY).
+  FIX B: blocul crontab inline (C0-C21, fără header) ȘTERS → înlocuit cu
+  `bash /root/scannerv2/scripts/setup-crontab.sh` (sursă unică, cu x-cron-secret).
+  FIX C: setup-crontab.sh + linia backup-db.sh (15 4 * * *) ca să nu se piardă.
+  YAML OK, bash -n OK. Rezolvă: guard cron nu mai cade la deploy. | Commit: git
+
+[07.06 ~earlier] - setup-crontab.sh complet automat (cu x-cron-secret)
   Rescris: sursează .env (fail-fast dacă CRON_SECRET lipsește), injectează
   headerul x-cron-secret în TOATE liniile curl /api/cron/* (HDR var). Lista
   canonică ~23 joburi (prematch/cazarma/auto-predict/update-results/collect-*/

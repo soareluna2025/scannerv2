@@ -35,10 +35,19 @@ jobs:
               NEW_KEY="$EXISTING_KEY"
               KEY_STATUS="existent"
             fi
-            printf 'API_FOOTBALL_KEY=%s\nPOSTGRES_URL=%s\nANTHROPIC_API_KEY=%s\nXAI_API_KEY=%s\nADMIN_API_KEY=%s\n' \
-              "$API_FOOTBALL_KEY" "$POSTGRES_URL" "$ANTHROPIC_API_KEY" "$XAI_API_KEY" "$NEW_KEY" \
+            # Persistă CRON_SECRET între deploy-uri (același pattern ca ADMIN_API_KEY)
+            EXISTING_CRON=$(grep '^CRON_SECRET=' /root/scannerv2/.env 2>/dev/null | cut -d= -f2-)
+            if [ -z "$EXISTING_CRON" ]; then
+              CRON_VAL=$(openssl rand -hex 32)
+              CRON_STATUS="generat nou"
+            else
+              CRON_VAL="$EXISTING_CRON"
+              CRON_STATUS="existent"
+            fi
+            printf 'API_FOOTBALL_KEY=%s\nPOSTGRES_URL=%s\nANTHROPIC_API_KEY=%s\nXAI_API_KEY=%s\nADMIN_API_KEY=%s\nCRON_SECRET=%s\n' \
+              "$API_FOOTBALL_KEY" "$POSTGRES_URL" "$ANTHROPIC_API_KEY" "$XAI_API_KEY" "$NEW_KEY" "$CRON_VAL" \
               > /root/scannerv2/.env
-            echo "ENV scris: 5 chei, ADMIN_API_KEY: $KEY_STATUS"
+            echo "ENV scris: 6 chei, ADMIN_API_KEY: $KEY_STATUS, CRON_SECRET: $CRON_STATUS"
             chmod 600 /root/scannerv2/.env
             echo "ENV OK: $(wc -l < /root/scannerv2/.env) chei"
 
@@ -55,77 +64,10 @@ jobs:
             chmod +x /root/scripts/backup-db.sh
             echo "BACKUP SCRIPT: instalat"
 
-            # Crontab-uri — idempotent (fiecare linie înlocuiește versiunea veche)
-            LOG="/var/log/alohascan-cron.log"
-
-            C0="*/5 * * * * curl -sf http://localhost:3000/api/cron/prematch-enrichment >> $LOG 2>&1"
-            C2="0 2 * * * curl -sf http://localhost:3000/api/update-results >> $LOG 2>&1"
-            # Backfill eliminat din crontab — controlat 100% manual din admin panel.
-            C4="0 6 * * * curl -sf http://localhost:3000/api/cron/collect-daily >> $LOG 2>&1"
-            C5="0 23 * * * curl -sf http://localhost:3000/api/cron/collect-finished >> $LOG 2>&1"
-            C6="0 4 * * * curl -sf http://localhost:3000/api/cron/league-stats >> $LOG 2>&1"
-            C7="30 4 * * * curl -sf http://localhost:3000/api/cron/referee-stats >> $LOG 2>&1"
-            C8="30 3 * * * curl -s -X POST http://localhost:3000/api/cron/learning-analysis >> /root/scannerv2/logs/learning.log 2>&1"
-            C9="15 4 * * * /root/scripts/backup-db.sh >> /var/log/alohascan-backup.log 2>&1"
-            C10="0 5 * * 0 curl -sf http://localhost:3000/api/cron/recalibrate-tables >> /root/scannerv2/logs/recalibrate.log 2>&1"
-            C11="30 5 * * 0 curl -sf http://localhost:3000/api/cron/calibrate-live >> /root/scannerv2/logs/calibrate-live.log 2>&1"
-            C12="0 1 * * * curl -sf http://localhost:3000/api/cron/collect-top-scorers >> $LOG 2>&1"
-            C13="30 1 * * * curl -sf http://localhost:3000/api/cron/collect-players-season >> $LOG 2>&1"
-            C14="5 2 * * * curl -sf http://localhost:3000/api/cron/collect-squads >> $LOG 2>&1"
-            C15="*/5 * * * * curl -sf http://localhost:3000/api/cron/cazarma-router >> $LOG 2>&1"
-            C16="30 0 * * * curl -sf http://localhost:3000/api/cron/auto-predict >> $LOG 2>&1"
-            C17="0 3 * * 1 curl -sf http://localhost:3000/api/cron/collect-national-history >> $LOG 2>&1"
-            C18="0 9 * * * curl -sf http://localhost:3000/api/cron/backfill-stats-cron >> $LOG 2>&1"
-            C19="0 14 * * * curl -sf http://localhost:3000/api/cron/backfill-stats-cron >> $LOG 2>&1"
-            C20="0 20 * * * curl -sf http://localhost:3000/api/cron/backfill-stats-cron >> $LOG 2>&1"
-            C21="0 6 * * 1 curl -sf http://localhost:3000/api/cron/build-elo >> $LOG 2>&1"
-
-            (
-              crontab -l 2>/dev/null \
-                | grep -v 'api/cron/scan' \
-                | grep -v 'api/cron/prematch-enrichment' \
-                | grep -v 'api/update-results' \
-                | grep -v 'api/backfill/start' \
-                | grep -v 'api/cron/collect-daily' \
-                | grep -v 'api/cron/collect-finished' \
-                | grep -v 'api/cron/league-stats' \
-                | grep -v 'api/cron/referee-stats' \
-                | grep -v 'api/cron/learning-analysis' \
-                | grep -v 'api/cron/recalibrate-tables' \
-                | grep -v 'api/cron/calibrate-live' \
-                | grep -v 'api/cron/collect-top-scorers' \
-                | grep -v 'api/cron/collect-players-season' \
-                | grep -v 'api/cron/collect-squads' \
-                | grep -v 'backup-db.sh' \
-                | grep -v 'api/cron/cazarma-router' \
-                | grep -v 'api/cron/auto-predict' \
-                | grep -v 'api/cron/collect-national-history' \
-                | grep -v 'api/cron/backfill-stats-cron' \
-                | grep -v 'api/cron/build-elo'
-              echo "$C0"
-              echo "$C2"
-              echo "$C4"
-              echo "$C5"
-              echo "$C6"
-              echo "$C7"
-              echo "$C8"
-              echo "$C9"
-              echo "$C10"
-              echo "$C11"
-              echo "$C12"
-              echo "$C13"
-              echo "$C14"
-              echo "$C15"
-              echo "$C16"
-              echo "$C17"
-              echo "$C18"
-              echo "$C19"
-              echo "$C20"
-              echo "$C21"
-            ) | crontab -
-
-            echo "CRONTAB ACTIV:"
-            crontab -l | grep 'localhost:3000'
+            # Crontab — sursă UNICĂ de adevăr: scripts/setup-crontab.sh
+            # (citește CRON_SECRET din .env scris mai sus + injectează headerul
+            #  x-cron-secret pe toate apelurile /api/cron/*).
+            bash /root/scannerv2/scripts/setup-crontab.sh
 
             # Asigură că portul 3000 e deschis în firewall
             ufw allow 3000/tcp 2>/dev/null || true
