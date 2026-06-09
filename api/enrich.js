@@ -1,5 +1,5 @@
 import { calcPoisson6x6 } from './calc-utils.js';
-import { predictAllMarkets } from './ml-predict.js';
+import { predictAllMarkets, predictLiveMarketsV2 } from './ml-predict.js';
 import { query } from './db.js';
 import { logPrediction } from './log-prediction.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
@@ -1853,6 +1853,53 @@ export default async function handler(req, res) {
         payload.mlAvailable = true;
       }
     } catch (_) { /* ML indisponibil → fără tab ML */ }
+
+    // ── ML LIVE v2 (model_live_export.json) — DOAR meciuri în desfășurare ──────
+    // Construiește starea live brută (scor + cartonașe/substituiri din
+    // match_events până la minutul curent) și rulează predictLiveMarketsV2.
+    // Silent-fail; NU atinge scoringul / predictAllMarkets / v1.
+    try {
+      const _elapsedLive = parseInt(elapsed) || 0;
+      if (_elapsedLive > 0 && LIVE_STATUSES.has(status_short)) {
+        // Numără cartonașe (galben/roșu, al 2-lea galben = roșu) + substituiri
+        // per echipă din match_events, până la elapsed curent.
+        let hyc = 0, ayc = 0, hrc = 0, arc = 0, hsub = 0, asub = 0;
+        if (fid) {
+          try {
+            const evq = await query(
+              `SELECT team_id, type, detail FROM match_events
+                 WHERE fixture_id = $1 AND elapsed IS NOT NULL AND elapsed <= $2`,
+              [Number(fid), _elapsedLive]
+            );
+            for (const ev of (evq.rows || [])) {
+              const isHome = Number(ev.team_id) === hId;
+              const isAway = Number(ev.team_id) === aId;
+              if (!isHome && !isAway) continue;
+              const t = (ev.type || '').toLowerCase();
+              const d = (ev.detail || '').toLowerCase();
+              if (t === 'card') {
+                if (d.includes('red') || d.includes('second yellow')) {
+                  if (isHome) hrc++; else arc++;
+                } else if (d.includes('yellow')) {
+                  if (isHome) hyc++; else ayc++;
+                }
+              } else if (t === 'subst') {
+                if (isHome) hsub++; else asub++;
+              }
+            }
+          } catch (_) { /* fără evenimente live → contoare 0 */ }
+        }
+        const liveState = {
+          elapsed: _elapsedLive,
+          home_goals: parseInt(hg) || 0,
+          away_goals: parseInt(ag) || 0,
+          home_yc: hyc, away_yc: ayc, home_rc: hrc, away_rc: arc,
+          home_subs: hsub, away_subs: asub,
+        };
+        payload.mlLive = predictLiveMarketsV2(liveState);
+        payload.mlLiveAvailable = true;   // liveState valid (elapsed > 0, status live)
+      }
+    } catch (_) { /* ML live indisponibil → fără secțiune live */ }
 
     // Fire-and-forget: colectare injuries + prediction save + pre_match snapshot
     if (fid) {
