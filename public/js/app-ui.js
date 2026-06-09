@@ -1522,33 +1522,124 @@ function mdRenderML(d){
   out+='</div></div>';
 
   // ════ BLOC 2 — REPRIZA 1 ════
-  var r1Live=(lc.status==='1H'), r1Done=lc.r1Done;
-  var r1H=r1Done?(lc.homeHT||0):hg, r1A=r1Done?(lc.awayHT||0):ag, thh=r1H+r1A;
-  var r1Badge=r1Done?('✅ Rezultat final R1 · HT '+(lc.homeHT!=null?lc.homeHT:'?')+'-'+(lc.awayHT!=null?lc.awayHT:'?')):'⏱ Predicție pre-meci';
-  out+='<div class="md-section"><div class="md-section-title">REPRIZA 1'+(lc.status==='1H'?' <span style="font-size:9px;color:#ff7777;font-weight:700">🔴 live</span>':'')+'</div>';
-  out+='<div style="font-size:10px;color:var(--mu);margin-bottom:8px">'+r1Badge+'</div>';
-  out+='<div class="ml-sub">Total goluri R1</div>';
-  var r1BttsDone=r1Done?((lc.homeHT||0)>0&&(lc.awayHT||0)>0):(hg>0&&ag>0);
-  out+='<div style="'+grid(4)+'">'
-    +oc('Ov 0.5',1,thh,r1Done,r1Live,prob('ht_over05'))
-    +oc('Ov 1.5',2,thh,r1Done,r1Live,prob('ht_over15'))
-    +oc('Ov 2.5',3,thh,r1Done,r1Live,prob('ht_over25'))
-    +res('BTTS',r1BttsDone,r1Done,prob('ht_btts'))+'</div>';
-  out+='<div class="ml-sub">Rezultat R1</div>';
-  out+='<div style="'+grid(3)+'">'
-    +res('1 Gazde', r1H>r1A, r1Done, null)
-    +res('X Egal',  r1H===r1A && r1Done, r1Done, null)
-    +res('2 Oaspeți',r1A>r1H, r1Done, null)+'</div>';
-  out+='<div class="ml-sub">Goluri per echipă R1</div>';
-  out+='<div style="'+grid(2)+'">';
-  out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-    +oc('Over 0.5',1,r1H,r1Done,r1Live,prob('ht_home'))+oc('Over 1.5',2,r1H,r1Done,r1Live,prob('ht_home_over15'))+'</div></div>';
-  out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-    +oc('Over 0.5',1,r1A,r1Done,r1Live,prob('ht_away'))+oc('Over 1.5',2,r1A,r1Done,r1Live,prob('ht_away_over15'))+'</div></div>';
-  out+='</div></div>';
+  // Date model LIVE v2 (payload.mlLive) — disponibile doar pe meci live.
+  var mlLive=(d&&d.mlLive)||en.mlLive||null;
+  var mlLiveAvail=!!((d&&d.mlLiveAvailable)||en.mlLiveAvailable);
+  var elapsedNum=lc.elapsed||0;
+  // lp = piață binară live (număr); lp3 = piață 3-clase live (obiect {cls:%}).
+  var lp=function(k){ return (mlLive&&typeof mlLive[k]==='number')?mlLive[k]:null; };
+  var lp3=function(k){ return (mlLive&&mlLive[k]&&typeof mlLive[k]==='object')?mlLive[k]:null; };
+  // Celulă binară live: prag atins (100 din model) → ✅ 100%; altfel prob colorat.
+  var ocl=function(label,p){
+    if(p===100) return '<div class="mc"><div class="mc-name">'+label+'</div><div class="mc-prob" style="color:#00e5b8">✅ 100%</div></div>';
+    return mc(label,p);
+  };
+
+  if(mlLiveAvail && mlLive && elapsedNum>0 && elapsedNum<=45 && lp3('result_r1')){
+    // ── BLOC 2 LIVE v2 (model_live_export.json) ──
+    out+='<div class="md-section"><div class="md-section-title" style="color:#ff7777">⏱ REPRIZA 1 — LIVE <span style="font-size:9px;font-weight:700">🔴 min '+elapsedNum+'</span></div>';
+    var rr1=lp3('result_r1')||{};
+    out+='<div class="ml-sub">Rezultat R1</div>';
+    out+='<div style="'+grid(3)+'">'+mc('1 Gazde',rr1['1'])+mc('X Egal',rr1['X'])+mc('2 Oaspeți',rr1['2'])+'</div>';
+    // Total goluri R1 — oc() cu scorul curent tg (prag atins → DA ✓).
+    out+='<div class="ml-sub">Total goluri R1</div>';
+    out+='<div style="'+grid(3)+'">'
+      +oc('Ov 0.5',1,tg,false,true,lp('goals_r1_over05'))
+      +oc('Ov 1.5',2,tg,false,true,lp('goals_r1_over15'))
+      +oc('Ov 2.5',3,tg,false,true,lp('goals_r1_over25'))+'</div>';
+    // Goluri per echipă R1 — oc() cu hg/ag curent.
+    out+='<div class="ml-sub">Goluri per echipă R1</div>';
+    out+='<div style="'+grid(2)+'">';
+    out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
+      +oc('Over 0.5',1,hg,false,true,lp('home_goals_r1_over05'))+oc('Over 1.5',2,hg,false,true,lp('home_goals_r1_over15'))+oc('Over 2.5',3,hg,false,true,lp('home_goals_r1_over25'))+'</div></div>';
+    out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
+      +oc('Over 0.5',1,ag,false,true,lp('away_goals_r1_over05'))+oc('Over 1.5',2,ag,false,true,lp('away_goals_r1_over15'))+oc('Over 2.5',3,ag,false,true,lp('away_goals_r1_over25'))+'</div></div>';
+    out+='</div>';
+    // Cartonașe R1 — prag atins → server a setat 100 → ocl() ✅.
+    out+='<div class="ml-sub">Cartonașe R1</div>';
+    out+='<div style="'+grid(3)+'">'
+      +ocl('Ov 1.5',lp('cards_r1_over15'))
+      +ocl('Ov 2.5',lp('cards_r1_over25'))
+      +ocl('Ov 3.5',lp('cards_r1_over35'))+'</div>';
+    // BTTS R1.
+    var bttsR1Done=(hg>0&&ag>0);
+    out+='<div class="ml-sub">Ambele marchează R1</div>';
+    out+='<div style="'+grid(1)+'">'+res('BTTS R1',bttsR1Done,bttsR1Done,lp('btts_r1'))+'</div>';
+    // Next Goal R1 (3 clase: home/none/away).
+    var ng1=lp3('next_goal_r1')||{};
+    out+='<div class="ml-sub">Următorul gol R1</div>';
+    out+='<div style="'+grid(3)+'">'+mc('⚽ '+htmlEsc(hn),ng1.home)+mc('Niciun gol',ng1.none)+mc('⚽ '+htmlEsc(an),ng1.away)+'</div>';
+    out+='</div>';
+  } else {
+    // ── BLOC 2 existent (pre-meci / fallback) — NESCHIMBAT ──
+    var r1Live=(lc.status==='1H'), r1Done=lc.r1Done;
+    var r1H=r1Done?(lc.homeHT||0):hg, r1A=r1Done?(lc.awayHT||0):ag, thh=r1H+r1A;
+    var r1Badge=r1Done?('✅ Rezultat final R1 · HT '+(lc.homeHT!=null?lc.homeHT:'?')+'-'+(lc.awayHT!=null?lc.awayHT:'?')):'⏱ Predicție pre-meci';
+    out+='<div class="md-section"><div class="md-section-title">REPRIZA 1'+(lc.status==='1H'?' <span style="font-size:9px;color:#ff7777;font-weight:700">🔴 live</span>':'')+'</div>';
+    out+='<div style="font-size:10px;color:var(--mu);margin-bottom:8px">'+r1Badge+'</div>';
+    out+='<div class="ml-sub">Total goluri R1</div>';
+    var r1BttsDone=r1Done?((lc.homeHT||0)>0&&(lc.awayHT||0)>0):(hg>0&&ag>0);
+    out+='<div style="'+grid(4)+'">'
+      +oc('Ov 0.5',1,thh,r1Done,r1Live,prob('ht_over05'))
+      +oc('Ov 1.5',2,thh,r1Done,r1Live,prob('ht_over15'))
+      +oc('Ov 2.5',3,thh,r1Done,r1Live,prob('ht_over25'))
+      +res('BTTS',r1BttsDone,r1Done,prob('ht_btts'))+'</div>';
+    out+='<div class="ml-sub">Rezultat R1</div>';
+    out+='<div style="'+grid(3)+'">'
+      +res('1 Gazde', r1H>r1A, r1Done, null)
+      +res('X Egal',  r1H===r1A && r1Done, r1Done, null)
+      +res('2 Oaspeți',r1A>r1H, r1Done, null)+'</div>';
+    out+='<div class="ml-sub">Goluri per echipă R1</div>';
+    out+='<div style="'+grid(2)+'">';
+    out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
+      +oc('Over 0.5',1,r1H,r1Done,r1Live,prob('ht_home'))+oc('Over 1.5',2,r1H,r1Done,r1Live,prob('ht_home_over15'))+'</div></div>';
+    out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
+      +oc('Over 0.5',1,r1A,r1Done,r1Live,prob('ht_away'))+oc('Over 1.5',2,r1A,r1Done,r1Live,prob('ht_away_over15'))+'</div></div>';
+    out+='</div></div>';
+  }
 
   // ════ BLOC 3 — REPRIZA 2 ════
-  if(r1Done && lc.homeHT!=null){
+  if(mlLiveAvail && mlLive && elapsedNum>45 && lp3('result_final')){
+    // ── BLOC 3 LIVE v2 (model_live_export.json) ──
+    out+='<div class="md-section"><div class="md-section-title" style="color:#ff7777">⏱ REPRIZA 2 — LIVE <span style="font-size:9px;font-weight:700">🔴 min '+elapsedNum+'</span></div>';
+    var rf=lp3('result_final')||{};
+    out+='<div class="ml-sub">Rezultat final</div>';
+    out+='<div style="'+grid(3)+'">'+mc('1 Gazde',rf['1'])+mc('X Egal',rf['X'])+mc('2 Oaspeți',rf['2'])+'</div>';
+    // Total goluri meci — oc() cu tg (prag atins → DA ✓).
+    out+='<div class="ml-sub">Total goluri meci</div>';
+    out+='<div style="'+grid(4)+'">'
+      +oc('Ov 1.5',2,tg,false,true,lp('goals_total_over15'))
+      +oc('Ov 2.5',3,tg,false,true,lp('goals_total_over25'))
+      +oc('Ov 3.5',4,tg,false,true,lp('goals_total_over35'))
+      +oc('Ov 4.5',5,tg,false,true,lp('goals_total_over45'))+'</div>';
+    // Goluri R2 (după min 45) — predicție model, fără count R2 disponibil.
+    out+='<div class="ml-sub">Goluri R2 (după min 45)</div>';
+    out+='<div style="'+grid(2)+'">'+mc('Ov 0.5',lp('goals_r2_over05'))+mc('Ov 1.5',lp('goals_r2_over15'))+'</div>';
+    // Goluri per echipă R2 — predicție model.
+    out+='<div class="ml-sub">Goluri per echipă R2</div>';
+    out+='<div style="'+grid(2)+'">';
+    out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
+      +mc('Over 0.5',lp('home_goals_r2_over05'))+mc('Over 1.5',lp('home_goals_r2_over15'))+'</div></div>';
+    out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
+      +mc('Over 0.5',lp('away_goals_r2_over05'))+mc('Over 1.5',lp('away_goals_r2_over15'))+'</div></div>';
+    out+='</div>';
+    // BTTS final.
+    var bttsFinDone=(hg>0&&ag>0);
+    out+='<div class="ml-sub">Ambele marchează (final)</div>';
+    out+='<div style="'+grid(1)+'">'+res('BTTS',bttsFinDone,bttsFinDone,lp('btts_final'))+'</div>';
+    // Next Goal R2 (3 clase).
+    var ng2=lp3('next_goal_r2')||{};
+    out+='<div class="ml-sub">Următorul gol</div>';
+    out+='<div style="'+grid(3)+'">'+mc('⚽ '+htmlEsc(hn),ng2.home)+mc('Niciun gol',ng2.none)+mc('⚽ '+htmlEsc(an),ng2.away)+'</div>';
+    // Cartonașe total meci — prag atins → server 100 → ocl() ✅.
+    out+='<div class="ml-sub">Cartonașe total meci</div>';
+    out+='<div style="'+grid(3)+'">'
+      +ocl('Ov 3.5',lp('cards_total_over35'))
+      +ocl('Ov 4.5',lp('cards_total_over45'))
+      +ocl('Ov 5.5',lp('cards_total_over55'))+'</div>';
+    out+='</div>';
+  } else if(r1Done && lc.homeHT!=null){
+    // ── BLOC 3 existent (pre-meci / fallback) — NESCHIMBAT ──
     var hr2=Math.max(0,hg-(lc.homeHT||0)), ar2=Math.max(0,ag-(lc.awayHT||0)), gr2=hr2+ar2;
     var r2Badge=lc.isHT?('⏸ Pauză · HT '+lc.homeHT+'-'+lc.awayHT):('🔴 LIVE · min '+lc.elapsed+' · scor HT '+lc.homeHT+'-'+lc.awayHT);
     var r2BttsDone=(hr2>0&&ar2>0);
