@@ -458,6 +458,10 @@ const STABILIZE_STEPS = [
   { name: 'referee-extended',   path: '/api/cron/referee-extended' },
   { name: 'coach-stats',        path: '/api/cron/coach-stats' },
   { name: 'update-results',     path: '/api/update-results' },
+  // Feature store + antrenare ML (timeout 20 min — train_*.py durează).
+  { name: 'build-ml-features',          path: '/api/cron/build-ml-features', timeoutMs: 20 * 60 * 1000 },
+  { name: 'train-model (ML pre-meci)',  path: '/api/cron/train-model',       timeoutMs: 20 * 60 * 1000 },
+  { name: 'train-live (ML live)',       path: '/api/cron/train-live',        timeoutMs: 20 * 60 * 1000 },
   { name: 'learning-analysis',  path: '/api/cron/learning-analysis' },
   { name: 'recalibrate-tables', path: '/api/cron/recalibrate-tables' },
   { name: 'calibrate-live',     path: '/api/cron/calibrate-live' },
@@ -486,7 +490,7 @@ async function runStabilize() {
       const r = await fetch(`http://localhost:${port}${step.path}`, {
         method: step.method || 'POST',                 // default POST; auto-predict = GET
         headers: { 'x-cron-secret': process.env.CRON_SECRET || '' },
-        signal: AbortSignal.timeout(15 * 60 * 1000), // 15 min/pas (auto-predict inclus)
+        signal: AbortSignal.timeout(step.timeoutMs || 15 * 60 * 1000), // 15 min/pas; 20 min pt ML
       });
       ok = r.ok;
       if (!r.ok) errMsg = `HTTP ${r.status}`;
