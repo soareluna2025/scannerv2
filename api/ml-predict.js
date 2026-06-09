@@ -139,6 +139,39 @@ function lrProb(model, feat) {
   return Math.round(Math.max(0, Math.min(100, p * 100)));
 }
 
+// Softmax multinomial pentru modelele LIVE v2 cu 3 clase (result_r1/result_final/
+// next_goal_r1/next_goal_r2). model.lr_coef = matrice (n_clase × n_feat),
+// lr_intercept = vector (n_clase), classes = etichete. Feature lipsă/NaN →
+// scaler_mean (z=0, neutru) — exact ca lrProb. Întoarce { [clasă]: prob_int }
+// (0-100, sumă ≈ 100). NU modifică lrProb existent.
+function lrProbMulti(model, feat) {
+  const { features, lr_coef, lr_intercept, scaler_mean, scaler_scale, classes } = model;
+  if (!Array.isArray(features) || !Array.isArray(lr_coef) || !Array.isArray(classes)) return null;
+  if (!Array.isArray(scaler_mean) || !Array.isArray(scaler_scale) || !classes.length) return null;
+  // standardizează vectorul o singură dată (împărtășit între clase)
+  const z = new Array(features.length);
+  for (let i = 0; i < features.length; i++) {
+    const mean = Number(scaler_mean[i]) || 0;
+    let raw = feat[features[i]];
+    if (raw == null || !Number.isFinite(raw)) raw = mean;   // neutru
+    const sc = Number(scaler_scale[i]) || 1;
+    z[i] = (raw - mean) / (sc === 0 ? 1 : sc);
+  }
+  const logits = new Array(classes.length);
+  for (let c = 0; c < classes.length; c++) {
+    const coefRow = Array.isArray(lr_coef[c]) ? lr_coef[c] : [];
+    let lg = Number(Array.isArray(lr_intercept) ? lr_intercept[c] : lr_intercept) || 0;
+    for (let i = 0; i < features.length; i++) lg += (Number(coefRow[i]) || 0) * z[i];
+    logits[c] = lg;
+  }
+  const mx = Math.max(...logits);          // softmax stabil numeric
+  let sum = 0;
+  const exps = logits.map((l) => { const e = Math.exp(l - mx); sum += e; return e; });
+  const out = {};
+  for (let c = 0; c < classes.length; c++) out[classes[c]] = Math.round((exps[c] / (sum || 1)) * 100);
+  return out;
+}
+
 // Vectorul de 31 features pentru modelele LIVE — ORDINE IDENTICĂ cu
 // ml/train_live.py FEATURES. ELO: enrichData prioritar, fallback la eloData.
 function buildLiveFeatures(en, lc, elo) {
@@ -296,4 +329,91 @@ export function applyLiveContext(markets, lc) {
     setF('r2_away', ar2 >= 1);
   }
   return markets;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MODEL LIVE v2 (ml/train_live_v2.py → ml/model_live_export.json) — SEPARAT.
+//  Integrare ADITIVĂ: NU atinge buildFeatures/lrProb/predictAllMarkets, NU
+//  atinge buildLiveFeatures/predictLiveMarkets (v1) de mai sus. Funcții noi cu
+//  sufix V2 ca să nu suprascrie nimic existent. Refolosește lrProb + lrProbMulti.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Cele 16 features din ml/train_live_v2.py FEATURES — nume + ordine IDENTICE.
+// Input liveState = starea curentă brută a meciului:
+//   { elapsed, home_goals, away_goals, home_yc, away_yc, home_rc, away_rc,
+//     home_subs, away_subs }
+// Derivatele (elapsed_norm, is_r2, goal_diff, goals_total_now, total_yc_now,
+// total_rc_now, minutes_remaining, score_state) se calculează aici.
+function buildLiveFeaturesV2(liveState) {
+  const s = liveState || {};
+  const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
+  const elapsed = n(s.elapsed);
+  const hg = n(s.home_goals), ag = n(s.away_goals);
+  const hyc = n(s.home_yc), ayc = n(s.away_yc);
+  const hrc = n(s.home_rc), arc = n(s.away_rc);
+  const hsub = n(s.home_subs), asub = n(s.away_subs);
+  return {
+    elapsed_norm: Math.min(1, elapsed / 90),
+    is_r2: elapsed > 45 ? 1 : 0,
+    home_goals_now: hg,
+    away_goals_now: ag,
+    goal_diff: hg - ag,
+    goals_total_now: hg + ag,
+    home_yc_now: hyc,
+    away_yc_now: ayc,
+    home_rc_now: hrc,
+    away_rc_now: arc,
+    total_yc_now: hyc + ayc,
+    total_rc_now: hrc + arc,
+    home_subs_now: hsub,
+    away_subs_now: asub,
+    minutes_remaining: Math.max(0, 90 - elapsed),
+    score_state: hg > ag ? 1 : (ag > hg ? -1 : 0),
+  };
+}
+
+// Rulează TOATE cele 31 piețe din model_live_export.json pe starea live curentă.
+//   • binare        → lrProb existent           → out[key] = procent (0-100)
+//   • 3 clase (au .classes) → lrProbMulti        → out[key] = { [clasă]: procent }
+// CRUCIAL — praguri deja atinse de scorul curent = 100% AUTOMAT (fapt, nu model).
+// Silent-fail: model lipsă/eroare → {} (integrarea live e dezactivată curat).
+export function predictLiveMarketsV2(liveState) {
+  try {
+    const lm = loadLiveModel();
+    if (!lm || typeof lm !== 'object') return {};
+    const feat = buildLiveFeaturesV2(liveState);
+    const out = {};
+    for (const key of Object.keys(lm)) {
+      const m = lm[key];
+      if (!m || !Array.isArray(m.features)) continue;
+      if (Array.isArray(m.classes) && m.classes.length > 0) {
+        const probs = lrProbMulti(m, feat);   // piață cu 3 clase
+        if (probs) out[key] = probs;
+      } else {
+        const p = lrProb(m, feat);             // piață binară (ACELAȘI lrProb)
+        if (p != null) out[key] = p;
+      }
+    }
+    // ── Praguri deja depășite de scorul curent → 100% (NU din model) ──
+    const s = liveState || {};
+    const hg = Number(s.home_goals) || 0, ag = Number(s.away_goals) || 0, tg = hg + ag;
+    const cardsNow = (Number(s.home_yc) || 0) + (Number(s.away_yc) || 0)
+                   + (Number(s.home_rc) || 0) + (Number(s.away_rc) || 0);
+    const hit = (k, cond) => { if (cond && k in out) out[k] = 100; };
+    // goluri total
+    hit('goals_r1_over05', tg >= 1); hit('goals_r1_over15', tg >= 2); hit('goals_r1_over25', tg >= 3);
+    hit('goals_total_over15', tg >= 2); hit('goals_total_over25', tg >= 3);
+    hit('goals_total_over35', tg >= 4); hit('goals_total_over45', tg >= 5);
+    // goluri per echipă
+    hit('home_goals_r1_over05', hg >= 1); hit('home_goals_r1_over15', hg >= 2); hit('home_goals_r1_over25', hg >= 3);
+    hit('away_goals_r1_over05', ag >= 1); hit('away_goals_r1_over15', ag >= 2); hit('away_goals_r1_over25', ag >= 3);
+    // BTTS (ambele au marcat = fapt, valabil R1 și final)
+    hit('btts_r1', hg > 0 && ag > 0); hit('btts_final', hg > 0 && ag > 0);
+    // cartonașe (total galbene+roșii curent)
+    hit('cards_r1_over15', cardsNow >= 2); hit('cards_r1_over25', cardsNow >= 3); hit('cards_r1_over35', cardsNow >= 4);
+    hit('cards_total_over35', cardsNow >= 4); hit('cards_total_over45', cardsNow >= 5); hit('cards_total_over55', cardsNow >= 6);
+    // Notă: piețele R2-split (goals_r2_*, home/away_goals_r2_*) NU pot fi marcate
+    // ca atinse din scorul total fără scorul HT → rămân pe predicția modelului.
+    return out;
+  } catch (_) { return {}; }
 }
