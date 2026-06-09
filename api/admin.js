@@ -2,9 +2,30 @@
 // Toate endpoint-urile sunt protejate cu X-Api-Key header
 
 import express      from 'express';
+import http         from 'node:http';
 import { query }    from './db.js';
 import { getScannerPaused, setScannerPaused } from './cron/scanner.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
+
+// Apel HTTP local cu timeout EFECTIV pe inactivitate (node:http), NU fetch global
+// (undici) — care are headersTimeout implicit de 300s și ar aborta pașii lungi
+// (train-model/train-live) la ~5 min, ignorând timeoutMs. Întoarce {ok,status}.
+function _stabilizeHttp(urlStr, method, headers, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(urlStr);
+    const req = http.request(
+      { hostname: u.hostname, port: u.port, path: u.pathname + u.search, method, headers },
+      (res) => {
+        res.resume();   // drenează corpul → eliberează socketul
+        res.on('end', () => resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode }));
+        res.on('error', reject);
+      }
+    );
+    req.setTimeout(timeoutMs, () => req.destroy(new Error(`Timeout după ${Math.round(timeoutMs / 60000)} min`)));
+    req.on('error', reject);
+    req.end();
+  });
+}
 
 const router = express.Router();
 
@@ -487,11 +508,12 @@ async function runStabilize() {
     const t0 = Date.now();
     let ok = false, errMsg = null;
     try {
-      const r = await fetch(`http://localhost:${port}${step.path}`, {
-        method: step.method || 'POST',                 // default POST; auto-predict = GET
-        headers: { 'x-cron-secret': process.env.CRON_SECRET || '' },
-        signal: AbortSignal.timeout(step.timeoutMs || 15 * 60 * 1000), // 15 min/pas; 20 min pt ML
-      });
+      const r = await _stabilizeHttp(
+        `http://localhost:${port}${step.path}`,
+        step.method || 'POST',                          // default POST; auto-predict = GET
+        { 'x-cron-secret': process.env.CRON_SECRET || '' },
+        step.timeoutMs || 15 * 60 * 1000                // 15 min/pas; 20 min pt ML (efectiv)
+      );
       ok = r.ok;
       if (!r.ok) errMsg = `HTTP ${r.status}`;
     } catch (e) {
