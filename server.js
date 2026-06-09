@@ -32,7 +32,17 @@ app.use(express.urlencoded({ extended: true }));
 // Static files (index.html, icons, manifest, service-worker)
 app.use(express.static(__dirname, { index: 'index.html' }));
 // Public static (CSS extras, future JS modules)
-app.use(express.static(join(__dirname, 'public')));
+// Forțează browserul să reîncarce mereu modulele JS din public/js/ (fără cache)
+// — restul fișierelor din public/ păstrează caching-ul implicit serve-static.
+app.use(express.static(join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js') && /[\\/]js[\\/]/.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  },
+}));
 
 // API routes — mapate direct la handler-ele Vercel
 import { logError } from './api/db.js';
