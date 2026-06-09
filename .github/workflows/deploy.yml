@@ -22,8 +22,19 @@ jobs:
 
             # Pull latest code (reset hard to avoid divergent branches issues)
             cd /root/scannerv2
+
+            # Păstrează artefactele ML (gitignored) peste git reset --hard:
+            # model_export.json (pre-meci) + model_live_export.json (live v2).
+            cp ml/model_live_export.json /tmp/model_live_export.json.bak 2>/dev/null || true
+            cp ml/model_export.json /tmp/model_export.json.bak 2>/dev/null || true
+
             git fetch origin
             git reset --hard origin/main
+
+            # Restaurează artefactele ML după reset (dacă existau înainte).
+            cp /tmp/model_live_export.json.bak ml/model_live_export.json 2>/dev/null || true
+            cp /tmp/model_export.json.bak ml/model_export.json 2>/dev/null || true
+
             npm install --silent
 
             # Write .env with secrets from GitHub
