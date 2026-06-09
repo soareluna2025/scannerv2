@@ -1860,7 +1860,9 @@ export default async function handler(req, res) {
     // Silent-fail; NU atinge scoringul / predictAllMarkets / v1.
     try {
       const _elapsedLive = parseInt(elapsed) || 0;
-      if (_elapsedLive > 0 && LIVE_STATUSES.has(status_short)) {
+      // elapsed>0 = singurul semnal live trimis de enrichUrl() din frontend
+      // (status_short NU e trimis niciodată) → garda pe elapsed e suficientă.
+      if (_elapsedLive > 0) {
         // Numără cartonașe (galben/roșu, al 2-lea galben = roșu) + substituiri
         // per echipă din match_events, până la elapsed curent.
         let hyc = 0, ayc = 0, hrc = 0, arc = 0, hsub = 0, asub = 0;
