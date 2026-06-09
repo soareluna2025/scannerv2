@@ -1638,8 +1638,11 @@ function mdRenderML(d){
       +ocl('Ov 4.5',lp('cards_total_over45'))
       +ocl('Ov 5.5',lp('cards_total_over55'))+'</div>';
     out+='</div>';
-  } else if(r1Done && lc.homeHT!=null){
+  } else if(lc.r1Done && lc.homeHT!=null){
     // ── BLOC 3 existent (pre-meci / fallback) — NESCHIMBAT ──
+    // NB: folosim lc.r1Done (mereu disponibil), NU `r1Done` care se atribuie
+    // doar în ramura `else` a BLOC 2 — altfel la HT (BLOC 2 LIVE) ar fi undefined
+    // și secțiunea R2 ar dispărea.
     var hr2=Math.max(0,hg-(lc.homeHT||0)), ar2=Math.max(0,ag-(lc.awayHT||0)), gr2=hr2+ar2;
     var r2Badge=lc.isHT?('⏸ Pauză · HT '+lc.homeHT+'-'+lc.awayHT):('🔴 LIVE · min '+lc.elapsed+' · scor HT '+lc.homeHT+'-'+lc.awayHT);
     var r2BttsDone=(hr2>0&&ar2>0);
