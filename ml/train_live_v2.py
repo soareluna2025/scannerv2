@@ -153,16 +153,21 @@ SELECT
   mlf.home_goals_r2_avg, mlf.away_goals_r2_avg,
   mlf.home_subs_avg, mlf.away_subs_avg,
   eh.home_elo, eh.away_elo, eh.elo_diff,
-  CASE WHEN sh.rank IS NOT NULL AND mr.max_rank > 1
-       THEN (sh.rank - 1.0) / (mr.max_rank - 1.0) END AS home_position_norm,
-  CASE WHEN sa.rank IS NOT NULL AND mr.max_rank > 1
-       THEN (sa.rank - 1.0) / (mr.max_rank - 1.0) END AS away_position_norm,
+  -- Poziție ISTORICĂ point-in-time (fixture_positions) cu fallback pe standings
+  -- curent (sh/sa/mr) când lipsește. Inferența (enrich) rămâne pe standings curent.
+  COALESCE(fp.home_position_norm,
+    CASE WHEN sh.rank IS NOT NULL AND mr.max_rank > 1
+         THEN (sh.rank - 1.0) / (mr.max_rank - 1.0) END) AS home_position_norm,
+  COALESCE(fp.away_position_norm,
+    CASE WHEN sa.rank IS NOT NULL AND mr.max_rank > 1
+         THEN (sa.rank - 1.0) / (mr.max_rank - 1.0) END) AS away_position_norm,
   rs.avg_yellow_cards AS ref_yc_avg,
   CASE WHEN rs.referee_name IS NULL THEN NULL
        WHEN rs.referee_style = 'open' THEN 1 ELSE 0 END AS ref_style_open
 FROM fixtures_history fh
 LEFT JOIN ml_features mlf ON mlf.fixture_id = fh.fixture_id
 LEFT JOIN elo_history  eh  ON eh.fixture_id = fh.fixture_id
+LEFT JOIN fixture_positions fp ON fp.fixture_id = fh.fixture_id
 LEFT JOIN (SELECT league_id, season, team_id, MIN(rank) AS rank
              FROM standings GROUP BY league_id, season, team_id) sh
        ON sh.league_id = fh.league_id AND sh.season = fh.season AND sh.team_id = fh.home_team_id
