@@ -338,21 +338,22 @@ export function applyLiveContext(markets, lc) {
 //  sufix V2 ca să nu suprascrie nimic existent. Refolosește lrProb + lrProbMulti.
 // ════════════════════════════════════════════════════════════════════════════
 
-// Cele 16 features din ml/train_live_v2.py FEATURES — nume + ordine IDENTICE.
-// Input liveState = starea curentă brută a meciului:
-//   { elapsed, home_goals, away_goals, home_yc, away_yc, home_rc, away_rc,
-//     home_subs, away_subs }
-// Derivatele (elapsed_norm, is_r2, goal_diff, goals_total_now, total_yc_now,
-// total_rc_now, minutes_remaining, score_state) se calculează aici.
-function buildLiveFeaturesV2(liveState) {
-  const s = liveState || {};
+// Cele 41 features din ml/train_live_v2.py FEATURES — nume + ORDINE IDENTICE
+// (16 base din liveState + 25 pre-meci din payload enrich `en` și ELO `elo`).
+// liveState = { elapsed, home_goals, away_goals, home_yc, away_yc, home_rc,
+//   away_rc, home_subs, away_subs }. Cele 25 pre-meci: lipsă → null → înlocuite
+// cu mediana din export (vezi predictLiveMarketsV2). Ordinea = contract cu training.
+function buildLiveFeaturesV2(liveState, en, elo) {
+  const s = liveState || {}; en = en || {}; elo = elo || {};
   const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
+  const nn = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
   const elapsed = n(s.elapsed);
   const hg = n(s.home_goals), ag = n(s.away_goals);
   const hyc = n(s.home_yc), ayc = n(s.away_yc);
   const hrc = n(s.home_rc), arc = n(s.away_rc);
   const hsub = n(s.home_subs), asub = n(s.away_subs);
   return {
+    // ── 16 base (din snapshot live) ──
     elapsed_norm: Math.min(1, elapsed / 90),
     is_r2: elapsed > 45 ? 1 : 0,
     home_goals_now: hg,
@@ -369,6 +370,25 @@ function buildLiveFeaturesV2(liveState) {
     away_subs_now: asub,
     minutes_remaining: Math.max(0, 90 - elapsed),
     score_state: hg > ag ? 1 : (ag > hg ? -1 : 0),
+    // ── 25 pre-meci (ordine EXACTĂ ca NEW_FEATURES din train_live_v2.py) ──
+    // A) ml_features (18) — din payload enrich
+    home_yc_avg: nn(en.homeYcAvg), away_yc_avg: nn(en.awayYcAvg),
+    home_fouls_avg: nn(en.homeFoulsAvg), away_fouls_avg: nn(en.awayFoulsAvg),
+    home_corners_avg: nn(en.homeCornersAvg), away_corners_avg: nn(en.awayCornersAvg),
+    home_possession_avg: nn(en.homePossessionAvg), away_possession_avg: nn(en.awayPossessionAvg),
+    home_sot_avg: nn(en.homeSotAvg), away_sot_avg: nn(en.awaySotAvg),
+    home_xg_avg: nn(en.homeXgAvg), away_xg_avg: nn(en.awayXgAvg),
+    home_goals_r1_avg: nn(en.homeGoalsR1Avg), away_goals_r1_avg: nn(en.awayGoalsR1Avg),
+    home_goals_r2_avg: nn(en.homeGoalsR2Avg), away_goals_r2_avg: nn(en.awayGoalsR2Avg),
+    home_subs_avg: nn(en.homeSubsAvg), away_subs_avg: nn(en.awaySubsAvg),
+    // B) elo_history (3) — din eloResult (sau payload)
+    home_elo: nn(elo.home_elo != null ? elo.home_elo : en.homeElo),
+    away_elo: nn(elo.away_elo != null ? elo.away_elo : en.awayElo),
+    elo_diff: nn(elo.elo_diff != null ? elo.elo_diff : en.eloDiffUsed),
+    // C) standings (2) — poziție normalizată din payload
+    home_position_norm: nn(en.homePositionNorm), away_position_norm: nn(en.awayPositionNorm),
+    // D) referee_stats (2) — din payload
+    ref_yc_avg: nn(en.refYcAvg), ref_style_open: nn(en.refStyleOpen),
   };
 }
 
@@ -377,13 +397,20 @@ function buildLiveFeaturesV2(liveState) {
 //   • 3 clase (au .classes) → lrProbMulti        → out[key] = { [clasă]: procent }
 // CRUCIAL — praguri deja atinse de scorul curent = 100% AUTOMAT (fapt, nu model).
 // Silent-fail: model lipsă/eroare → {} (integrarea live e dezactivată curat).
-export function predictLiveMarketsV2(liveState) {
+export function predictLiveMarketsV2(liveState, enrichData, eloData) {
   try {
     const lm = loadLiveModel();
     if (!lm || typeof lm !== 'object') return {};
-    const feat = buildLiveFeaturesV2(liveState);
+    const feat = buildLiveFeaturesV2(liveState, enrichData, eloData);
+    // Feature absent (null/NaN) → mediana din export (exact ca fillna(median) la
+    // antrenare). Acoperă cele 25 pre-meci când payload-ul nu le are.
+    const med = lm._feature_medians || {};
+    for (const k of Object.keys(med)) {
+      if (feat[k] == null || !Number.isFinite(feat[k])) feat[k] = med[k];
+    }
     const out = {};
     for (const key of Object.keys(lm)) {
+      if (key.charCodeAt(0) === 95) continue;   // chei meta (_feature_medians/_coverage)
       const m = lm[key];
       if (!m || !Array.isArray(m.features)) continue;
       if (Array.isArray(m.classes) && m.classes.length > 0) {

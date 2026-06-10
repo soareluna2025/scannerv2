@@ -31,6 +31,7 @@ Rulare:  python3 ml/train_live_v2.py        (NU rulează automat din cron)
 
 import os
 import json
+import shutil
 import numpy as np
 import pandas as pd
 import psycopg2
@@ -106,12 +107,74 @@ ORDER BY me.fixture_id, me.elapsed, COALESCE(me.elapsed_extra, 0), me.id
 
 
 # ── Vectorul de features (IDENTIC pentru toate piețele) ──────────────────────
-FEATURES = [
+# 16 base (din snapshot, reconstrucție live) + 25 pre-meci (din DB, point-in-time).
+# ORDINEA E CONTRACT cu inferența (api/ml-predict.js buildLiveFeaturesV2).
+BASE_FEATURES = [
     "elapsed_norm", "is_r2", "home_goals_now", "away_goals_now", "goal_diff",
     "goals_total_now", "home_yc_now", "away_yc_now", "home_rc_now", "away_rc_now",
     "total_yc_now", "total_rc_now", "home_subs_now", "away_subs_now",
     "minutes_remaining", "score_state",
 ]
+# 25 features pre-meci, ÎN ORDINEA EXACTĂ cerută (A ml_features, B elo, C standings, D referee).
+NEW_FEATURES = [
+    # A) ml_features (18) — medii istorice rolling-100 point-in-time
+    "home_yc_avg", "away_yc_avg",
+    "home_fouls_avg", "away_fouls_avg",
+    "home_corners_avg", "away_corners_avg",
+    "home_possession_avg", "away_possession_avg",
+    "home_sot_avg", "away_sot_avg",
+    "home_xg_avg", "away_xg_avg",
+    "home_goals_r1_avg", "away_goals_r1_avg",
+    "home_goals_r2_avg", "away_goals_r2_avg",
+    "home_subs_avg", "away_subs_avg",
+    # B) elo_history (3) — snapshot ELO pre-meci (fără lookahead)
+    "home_elo", "away_elo", "elo_diff",
+    # C) standings (2) — poziție normalizată (rank-1)/(max_rank-1)
+    "home_position_norm", "away_position_norm",
+    # D) referee_stats (2) — avg galbene + stil deschis
+    "ref_yc_avg", "ref_style_open",
+]
+FEATURES = BASE_FEATURES + NEW_FEATURES   # 16 + 25 = 41
+
+# Query per-fixture pentru cele 25 features pre-meci (LEFT JOIN, point-in-time pe
+# fixture_id; standings/referee = snapshot CURENT, aproximare documentată).
+FEATURE_QUERY = """
+SELECT
+  fh.fixture_id,
+  mlf.home_yc_avg, mlf.away_yc_avg,
+  mlf.home_fouls_avg, mlf.away_fouls_avg,
+  mlf.home_corners_avg, mlf.away_corners_avg,
+  mlf.home_possession_avg, mlf.away_possession_avg,
+  mlf.home_sot_avg, mlf.away_sot_avg,
+  mlf.home_xg_avg, mlf.away_xg_avg,
+  mlf.home_goals_r1_avg, mlf.away_goals_r1_avg,
+  mlf.home_goals_r2_avg, mlf.away_goals_r2_avg,
+  mlf.home_subs_avg, mlf.away_subs_avg,
+  eh.home_elo, eh.away_elo, eh.elo_diff,
+  CASE WHEN sh.rank IS NOT NULL AND mr.max_rank > 1
+       THEN (sh.rank - 1.0) / (mr.max_rank - 1.0) END AS home_position_norm,
+  CASE WHEN sa.rank IS NOT NULL AND mr.max_rank > 1
+       THEN (sa.rank - 1.0) / (mr.max_rank - 1.0) END AS away_position_norm,
+  rs.avg_yellow_cards AS ref_yc_avg,
+  CASE WHEN rs.referee_name IS NULL THEN NULL
+       WHEN rs.referee_style = 'open' THEN 1 ELSE 0 END AS ref_style_open
+FROM fixtures_history fh
+LEFT JOIN ml_features mlf ON mlf.fixture_id = fh.fixture_id
+LEFT JOIN elo_history  eh  ON eh.fixture_id = fh.fixture_id
+LEFT JOIN (SELECT league_id, season, team_id, MIN(rank) AS rank
+             FROM standings GROUP BY league_id, season, team_id) sh
+       ON sh.league_id = fh.league_id AND sh.season = fh.season AND sh.team_id = fh.home_team_id
+LEFT JOIN (SELECT league_id, season, team_id, MIN(rank) AS rank
+             FROM standings GROUP BY league_id, season, team_id) sa
+       ON sa.league_id = fh.league_id AND sa.season = fh.season AND sa.team_id = fh.away_team_id
+LEFT JOIN (SELECT league_id, season, MAX(rank) AS max_rank
+             FROM standings GROUP BY league_id, season) mr
+       ON mr.league_id = fh.league_id AND mr.season = fh.season
+LEFT JOIN referee_stats rs ON rs.referee_name = fh.referee
+WHERE fh.match_date >= '2023-01-01'
+  AND fh.home_goals IS NOT NULL AND fh.away_goals IS NOT NULL
+  AND fh.home_team_id IS NOT NULL AND fh.away_team_id IS NOT NULL
+"""
 
 
 def _goal_side(ev_type, detail, team_id, home_id, away_id):
@@ -310,8 +373,24 @@ def build_snapshots(events, home_id, away_id, final_home, final_away, ht_home, h
     return rows
 
 
+def load_feature_map(conn):
+    """{fixture_id: {feat_name: value|None}} pentru cele 25 features pre-meci."""
+    cur = conn.cursor()
+    cur.execute(FEATURE_QUERY)
+    names = [d[0] for d in cur.description][1:]   # fără fixture_id
+    fmap = {}
+    for row in cur:
+        fid = int(row[0])
+        fmap[fid] = {names[i]: (None if row[i + 1] is None else float(row[i + 1]))
+                     for i in range(len(names))}
+    cur.close()
+    return fmap
+
+
 def load_dataset():
     conn = get_conn()
+    fmap = load_feature_map(conn)                 # 25 features pre-meci per fixture
+    empty_ff = {k: None for k in NEW_FEATURES}    # fixture fără date → toate None
     cur = conn.cursor()
     cur.execute(QUERY)
     all_rows = []
@@ -326,6 +405,9 @@ def load_dataset():
             return
         snaps = build_snapshots(events, *meta)
         if snaps:
+            ff = fmap.get(int(cur_fid), empty_ff)   # cele 25 features pre-meci
+            for row in snaps:
+                row.update(ff)
             all_rows.extend(snaps)
             n_matches += 1
 
@@ -481,6 +563,22 @@ def main():
         print("⚠ Niciun snapshot generat — verifică match_events / fixtures_history.")
         return
 
+    # ── Coverage % per sursă (ÎNAINTE de fillna) ─────────────────────────────
+    def cov(col):
+        return 100.0 * df[col].notna().mean() if col in df.columns else 0.0
+    print("\n=== Coverage features pre-meci (snapshots cu date, înainte de fillna) ===")
+    print(f"  ml_features (home_sot_avg):     {cov('home_sot_avg'):.1f}%")
+    print(f"  elo_history (home_elo):         {cov('home_elo'):.1f}%")
+    print(f"  standings   (home_position_norm):{cov('home_position_norm'):.1f}%")
+    print(f"  referee     (ref_yc_avg):       {cov('ref_yc_avg'):.1f}%")
+
+    # ── fillna cu MEDIANA coloanei (pe setul de antrenare) + salvează medianele ──
+    med = df[NEW_FEATURES].median(numeric_only=True)
+    df[NEW_FEATURES] = df[NEW_FEATURES].fillna(med)
+    df[NEW_FEATURES] = df[NEW_FEATURES].fillna(0.0)   # coloană integral NaN → 0
+    feature_medians = {k: (round(float(med[k]), 6) if pd.notna(med[k]) else 0.0)
+                       for k in NEW_FEATURES}
+
     final = {}
     print("\n=== Rezultate per piață ===")
     print("--- Reprize 1 (snapshots elapsed<=45) ---")
@@ -494,9 +592,29 @@ def main():
         if model is not None:
             final[key] = model
 
+    # Salvează copia veche ÎNAINTE de a scrie noul export (comparație Brier înainte/după).
+    if os.path.exists(EXPORT_PATH):
+        prev = EXPORT_PATH.replace(".json", ".prev.json")
+        try:
+            shutil.copy(EXPORT_PATH, prev)
+            print(f"\n↩ Backup export vechi → {prev}")
+        except Exception as e:
+            print(f"\n⚠ Nu am putut salva backup-ul vechi: {e}")
+
+    # Medianele (pt inferență: feature absent → mediană) + coverage — chei meta (_).
+    final["_feature_medians"] = feature_medians
+    final["_coverage"] = {
+        "ml_features": round(cov("home_sot_avg"), 1),
+        "elo_history": round(cov("home_elo"), 1),
+        "standings": round(cov("home_position_norm"), 1),
+        "referee": round(cov("ref_yc_avg"), 1),
+        "n_features": len(FEATURES),
+    }
+
     with open(EXPORT_PATH, "w") as f:
         json.dump(final, f, indent=2)
-    print(f"\n✅ Export: {EXPORT_PATH}  ({len(final)} piețe antrenate)")
+    n_markets = sum(1 for k in final if not k.startswith("_"))
+    print(f"\n✅ Export: {EXPORT_PATH}  ({n_markets} piețe, {len(FEATURES)} features)")
     print("Notă: model SEPARAT — NU atinge model_export.json (pre-meci).")
 
 

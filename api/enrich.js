@@ -1019,6 +1019,32 @@ async function getStandingsForTeam(teamId, leagueId) {
   } catch (_) { return null; }
 }
 
+// Poziție normalizată (rank-1)/(max_rank-1) per echipă din standings (sezonul
+// cel mai recent al ligii). Snapshot CURENT (aproximare; standings nu e istoric).
+// Folosit DOAR ca feature ML (live v2 + pre-meci). NU atinge scoring/lambda.
+async function getPositionNorms(hId, aId, leagueId) {
+  if (!leagueId || !hId || !aId) return { home: null, away: null };
+  try {
+    const { rows } = await query(
+      `SELECT team_id, MIN(rank) AS rank, MAX(MIN(rank)) OVER () AS max_rank
+         FROM standings
+        WHERE league_id = $1
+          AND season = (SELECT MAX(season) FROM standings WHERE league_id = $1)
+        GROUP BY team_id`,
+      [Number(leagueId)]
+    );
+    const norm = (rank, mx) =>
+      (rank != null && mx != null && mx > 1) ? +(((rank - 1) / (mx - 1)).toFixed(4)) : null;
+    let home = null, away = null;
+    for (const r of rows) {
+      const v = norm(Number(r.rank), Number(r.max_rank));
+      if (Number(r.team_id) === Number(hId)) home = v;
+      if (Number(r.team_id) === Number(aId)) away = v;
+    }
+    return { home, away };
+  } catch (_) { return { home: null, away: null }; }
+}
+
 async function getPrematchPredictions(fixtureId) {
   if (!fixtureId) return null;
   try {
@@ -1755,7 +1781,15 @@ export default async function handler(req, res) {
     if (refereeStats) {
       result.refPctOver25 = _r2v(refereeStats.pct_over_25);
       result.refStyleOpen = refereeStats.referee_style === 'open' ? 1 : 0;
+      result.refYcAvg     = _r2v(refereeStats.avg_yellow_cards);   // feature ML live v2
     }
+
+    // Poziție normalizată (feature ML: live v2 + pre-meci). ADITIV, fără scoring.
+    try {
+      const _pos = await getPositionNorms(hId, aId, lgid);
+      result.homePositionNorm = _pos.home;
+      result.awayPositionNorm = _pos.away;
+    } catch (_) { /* poziție indisponibilă → null → mediană la inferență */ }
 
     const payload = { ...result, ...confData,
       playerIntelActive, dataCompleteness,
@@ -1898,7 +1932,7 @@ export default async function handler(req, res) {
           home_yc: hyc, away_yc: ayc, home_rc: hrc, away_rc: arc,
           home_subs: hsub, away_subs: asub,
         };
-        payload.mlLive = predictLiveMarketsV2(liveState);
+        payload.mlLive = predictLiveMarketsV2(liveState, payload, eloResult);
         payload.mlLiveAvailable = true;   // liveState valid (elapsed > 0, status live)
       }
     } catch (_) { /* ML live indisponibil → fără secțiune live */ }
