@@ -32,8 +32,10 @@ Rulare:  python3 ml/train_live_v2.py        (NU rulează automat din cron)
 import os
 import json
 import shutil
+import gc
+import resource
+from array import array
 import numpy as np
-import pandas as pd
 import psycopg2
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
@@ -102,7 +104,7 @@ WHERE fh.match_date >= '2023-01-01'
   AND fh.away_goals IS NOT NULL
   AND fh.home_team_id IS NOT NULL
   AND fh.away_team_id IS NOT NULL
-ORDER BY me.fixture_id, me.elapsed, COALESCE(me.elapsed_extra, 0), me.id
+ORDER BY fh.match_date, me.fixture_id, me.elapsed, COALESCE(me.elapsed_extra, 0), me.id
 """
 
 
@@ -373,57 +375,122 @@ def build_snapshots(events, home_id, away_id, final_home, final_away, ht_home, h
     return rows
 
 
+# ════════ MANAGEMENT MEMORIE (OOM-safe pe VPS 2GB) ════════════════════════════
+# Snapshot-urile NU se mai acumulează ca liste de dicturi (overhead ~20x), ci
+# direct în buffere compacte: X = array('f') float32, labels = array('b') int8.
+# Procesare SECVENȚIALĂ: R1 complet (generare→antrenare→free) apoi R2. Niciodată
+# ambele seturi în memorie. build_snapshots (logica de etichetare) e NEATINSĂ.
+
+# Encodare compactă a label-urilor 3-clase (storage int8); decodate la string
+# ÎNAINTE de antrenare → `classes` din export rămân identice ('1'/'X'/'2',
+# 'home'/'away'/'none'). Doar STORAGE-ul e compact; logica e neschimbată.
+RESULT_DECODE = ["1", "X", "2"]
+RESULT_CODE = {"1": 0, "X": 1, "2": 2}
+NG_DECODE = ["home", "away", "none"]
+NG_CODE = {"home": 0, "away": 1, "none": 2}
+
+COV_KEYS = ["ml_features", "elo_history", "standings", "referee"]
+_COV_IDX = [
+    NEW_FEATURES.index("home_sot_avg"),        # ml_features
+    NEW_FEATURES.index("home_elo"),            # elo_history
+    NEW_FEATURES.index("home_position_norm"),  # standings
+    NEW_FEATURES.index("ref_yc_avg"),          # referee
+]
+
+
+def _rss_mb():
+    # ru_maxrss e în KB pe Linux → MB.
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
+
+
 def load_feature_map(conn):
-    """{fixture_id: {feat_name: value|None}} pentru cele 25 features pre-meci."""
+    """{fixture_id: np.float32[25]} (NaN pt lipsă) — cele 25 features pre-meci."""
     cur = conn.cursor()
     cur.execute(FEATURE_QUERY)
-    names = [d[0] for d in cur.description][1:]   # fără fixture_id
+    names = [d[0] for d in cur.description][1:]
+    assert names == NEW_FEATURES, f"FEATURE_QUERY != NEW_FEATURES:\n{names}\n{NEW_FEATURES}"
     fmap = {}
     for row in cur:
-        fid = int(row[0])
-        fmap[fid] = {names[i]: (None if row[i + 1] is None else float(row[i + 1]))
-                     for i in range(len(names))}
+        fmap[int(row[0])] = np.array(
+            [np.nan if v is None else float(v) for v in row[1:]], dtype=np.float32)
     cur.close()
     return fmap
 
 
-def load_dataset():
-    conn = get_conn()
-    fmap = load_feature_map(conn)                 # 25 features pre-meci per fixture
-    empty_ff = {k: None for k in NEW_FEATURES}    # fixture fără date → toate None
-    cur = conn.cursor()
-    cur.execute(QUERY)
-    all_rows = []
-    cur_fid = None
-    events = []
-    meta = None  # (home_id, away_id, final_home, final_away, ht_home, ht_away)
-    n_matches = 0
+def process_feature_map(fmap):
+    """Calculează medianele (nanmedian pe fixtures), pre-umple NaN → mediană, și
+    precalculează flag-urile de coverage per fixture. Întoarce
+    (proc{fid:(filled_np25, flags)}, medians_np25, default_ff)."""
+    if fmap:
+        M = np.vstack(list(fmap.values()))
+        med = np.nanmedian(M, axis=0)
+        del M
+    else:
+        med = np.zeros(len(NEW_FEATURES), dtype=np.float32)
+    med = np.where(np.isnan(med), 0.0, med).astype(np.float32)
+    proc = {}
+    for fid, arr in fmap.items():
+        flags = tuple(bool(not np.isnan(arr[i])) for i in _COV_IDX)
+        proc[fid] = (np.where(np.isnan(arr), med, arr).astype(np.float32), flags)
+    return proc, med, (med.copy(), (False, False, False, False))
+
+
+def generate_half(conn, half, fmap_proc, default_ff, cov_counts):
+    """Generează snapshot-urile UNEI reprize în buffere compacte (X float32 +
+    label int8 per piață + fixture_id). build_snapshots e apelat per fixture și
+    rândurile sunt filtrate pe is_r2 — celelalte aruncate imediat."""
+    is_r2_target = 1 if half == "r2" else 0
+    markets_h = [m for m in MARKETS if m[1] == half]
+    nfeat = len(FEATURES)
+    Xbuf = array('f')
+    fid_list = []
+    lbufs = {m[0]: array('b') for m in markets_h}
+    state = {"n": 0, "cur_fid": None, "events": [], "meta": None}
 
     def flush():
-        nonlocal n_matches
-        if cur_fid is None or meta is None or not events:
+        cf, meta, events = state["cur_fid"], state["meta"], state["events"]
+        if cf is None or meta is None or not events:
             return
-        snaps = build_snapshots(events, *meta)
-        if snaps:
-            ff = fmap.get(int(cur_fid), empty_ff)   # cele 25 features pre-meci
-            for row in snaps:
-                row.update(ff)
-            all_rows.extend(snaps)
-            n_matches += 1
+        rows = build_snapshots(events, *meta)          # LOGICĂ NEATINSĂ
+        if not rows:
+            return
+        filled, flags = fmap_proc.get(int(cf), default_ff)
+        filled_list = filled.tolist()
+        for row in rows:
+            if row["is_r2"] != is_r2_target:
+                continue
+            for f in BASE_FEATURES:
+                Xbuf.append(float(row[f]))             # 16 base
+            Xbuf.extend(filled_list)                   # 25 pre-meci (pre-umplute)
+            fid_list.append(int(cf))
+            for (mkey, _h, kind, label_col) in markets_h:
+                if kind == "multi":
+                    code = (NG_CODE[row["next_goal_side"]] if label_col == "next_goal_side"
+                            else RESULT_CODE[row[label_col]])
+                    lbufs[mkey].append(code)
+                else:
+                    lbufs[mkey].append(int(row[label_col]))
+            cov_counts["total"] += 1
+            for i, k in enumerate(COV_KEYS):
+                if flags[i]:
+                    cov_counts[k] += 1
+            state["n"] += 1
 
+    cur = conn.cursor()
+    cur.execute(QUERY)
     for r in cur:
         (fid, elapsed, ee, etype, detail, team_id,
          home_id, away_id, fhg, fag, hht, aht) = r
-        if fid != cur_fid:
+        if fid != state["cur_fid"]:
             flush()
-            cur_fid = fid
-            events = []
-            meta = (
+            state["cur_fid"] = fid
+            state["events"] = []
+            state["meta"] = (
                 int(home_id), int(away_id), int(fhg), int(fag),
                 None if hht is None else int(hht),
                 None if aht is None else int(aht),
             )
-        events.append({
+        state["events"].append({
             "elapsed": int(elapsed),
             "elapsed_extra": int(ee or 0),
             "type": etype,
@@ -432,9 +499,15 @@ def load_dataset():
         })
     flush()
     cur.close()
-    conn.close()
-    print(f"Meciuri procesate: {n_matches} | snapshot-uri generate: {len(all_rows)}")
-    return pd.DataFrame(all_rows), n_matches
+
+    n = state["n"]
+    if n:
+        X = np.frombuffer(Xbuf, dtype=np.float32).reshape(-1, nfeat)
+    else:
+        X = np.zeros((0, nfeat), dtype=np.float32)
+    fid = np.asarray(fid_list, dtype=np.int32)
+    labels = {k: np.frombuffer(v, dtype=np.int8) for k, v in lbufs.items()}
+    return X, fid, labels, n, markets_h
 
 
 # ── Definiția piețelor: (key, half, kind, label_col) ─────────────────────────
@@ -487,14 +560,12 @@ def _multiclass_brier(y_labels, proba, classes):
     return float(np.mean(np.sum((proba - Y) ** 2, axis=1)))
 
 
-def train_market(key, half, kind, label_col, df):
-    sub = df[df["is_r2"] == (1 if half == "r2" else 0)]
-    n = len(sub)
+def train_market(key, kind, X, y, n):
+    """X = matricea (deja filtrată pe reprize) float32; y = labels (int pt binar,
+    string pt 3-clase, deja DECODAT). Logica train/test + scaler + LR + Brier e
+    IDENTICĂ cu versiunea pandas (doar sursa datelor diferă: numpy, nu DataFrame)."""
     if n < MIN_SAMPLES:
         return None, f"  {key:<22} SKIP — doar {n} snapshot-uri (<{MIN_SAMPLES})"
-
-    X = sub[FEATURES].to_numpy(dtype=float)
-    y = sub[label_col].to_numpy()
 
     if kind == "bin":
         y = y.astype(int)
@@ -524,10 +595,9 @@ def train_market(key, half, kind, label_col, df):
         return out, line
 
     # ── multiclass (3 clase) ──
-    classes = sorted(pd.unique(y).tolist())
-    if len(classes) < 2:
+    uniq, counts = np.unique(y, return_counts=True)
+    if len(uniq) < 2:
         return None, f"  {key:<22} SKIP — o singură clasă în label"
-    counts = pd.Series(y).value_counts()
     base_rate = float(counts.max() / n)   # frecvența clasei majoritare
     strat = y if counts.min() >= 2 else None
     Xtr, Xte, ytr, yte = train_test_split(
@@ -556,65 +626,97 @@ def train_market(key, half, kind, label_col, df):
     return out, line
 
 
+def _train_half(half_name, X, fid, labels, markets_h, n, final):
+    """Antrenează toate piețele unei reprize din buffere numpy. Decodează
+    label-urile 3-clase (int8→string) ÎNAINTE de antrenare → `classes` neschimbate."""
+    print(f"--- {half_name} (snapshots {'>45' if markets_h and markets_h[0][1]=='r2' else '<=45'}) ---")
+    for (mkey, _half, kind, label_col) in markets_h:
+        yc = labels[mkey]
+        if kind == "multi":
+            decode = NG_DECODE if label_col == "next_goal_side" else RESULT_DECODE
+            y = np.asarray(decode, dtype=object)[yc.astype(int)]   # int8 → string
+        else:
+            y = yc
+        model, line = train_market(mkey, kind, X, y, n)
+        print(line)
+        if model is not None:
+            final[mkey] = model
+
+
 def main():
     print("AlohaScan — antrenare model LIVE (minut-cu-minut)\n")
-    df, n_matches = load_dataset()
-    if df.empty or n_matches == 0:
+    conn = get_conn()
+
+    # Feature map (25 pre-meci) + mediane + flags coverage — memorie mică (per-fixture).
+    fmap = load_feature_map(conn)
+    fmap_proc, med, default_ff = process_feature_map(fmap)
+    del fmap
+    gc.collect()
+    feature_medians = {NEW_FEATURES[i]: round(float(med[i]), 6) for i in range(len(NEW_FEATURES))}
+    print(f"[mem] după feature map: RSS={_rss_mb():.0f}MB  fixturi={len(fmap_proc)}")
+
+    cov_counts = {"total": 0, "ml_features": 0, "elo_history": 0, "standings": 0, "referee": 0}
+    final = {}
+    print("\n=== Rezultate per piață ===")
+
+    # ── REPRIZA 1 (generare → antrenare → eliberare) ─────────────────────────
+    Xr1, fidr1, labr1, nr1, mk_r1 = generate_half(conn, "r1", fmap_proc, default_ff, cov_counts)
+    print(f"[mem] după generare R1: RSS={_rss_mb():.0f}MB  rows={nr1}")
+    _train_half("Repriza 1", Xr1, fidr1, labr1, mk_r1, nr1, final)
+    del Xr1, fidr1, labr1
+    gc.collect()
+    print(f"[mem] după antrenare R1: RSS={_rss_mb():.0f}MB")
+
+    # ── REPRIZA 2 / final (generare → antrenare → eliberare) ─────────────────
+    Xr2, fidr2, labr2, nr2, mk_r2 = generate_half(conn, "r2", fmap_proc, default_ff, cov_counts)
+    # Plasă de siguranță OPȚIONALĂ: păstrează doar cele mai RECENTE N snapshots R2
+    # (QUERY e ordonat pe match_date → „recent" = ultimele rânduri). Default: off.
+    _maxr2 = os.getenv("MAX_SNAPSHOTS_R2")
+    if _maxr2:
+        _maxr2 = int(_maxr2)
+        if nr2 > _maxr2:
+            Xr2 = np.ascontiguousarray(Xr2[-_maxr2:])
+            fidr2 = fidr2[-_maxr2:]
+            labr2 = {k: v[-_maxr2:] for k, v in labr2.items()}
+            nr2 = _maxr2
+            gc.collect()
+            print(f"[cap] R2 limitat la {_maxr2} cele mai recente snapshots")
+    print(f"[mem] după generare R2: RSS={_rss_mb():.0f}MB  rows={nr2}")
+    _train_half("Repriza 2 / final", Xr2, fidr2, labr2, mk_r2, nr2, final)
+    del Xr2, fidr2, labr2
+    gc.collect()
+    conn.close()
+
+    if cov_counts["total"] == 0:
         print("⚠ Niciun snapshot generat — verifică match_events / fixtures_history.")
         return
 
-    # ── Coverage % per sursă (ÎNAINTE de fillna) ─────────────────────────────
-    def cov(col):
-        return 100.0 * df[col].notna().mean() if col in df.columns else 0.0
-    print("\n=== Coverage features pre-meci (snapshots cu date, înainte de fillna) ===")
-    print(f"  ml_features (home_sot_avg):     {cov('home_sot_avg'):.1f}%")
-    print(f"  elo_history (home_elo):         {cov('home_elo'):.1f}%")
-    print(f"  standings   (home_position_norm):{cov('home_position_norm'):.1f}%")
-    print(f"  referee     (ref_yc_avg):       {cov('ref_yc_avg'):.1f}%")
+    # ── Coverage % per sursă (pe snapshots, în timpul generării) ─────────────
+    tot = max(1, cov_counts["total"])
+    coverage = {k: round(100.0 * cov_counts[k] / tot, 1) for k in COV_KEYS}
+    print("\n=== Coverage features pre-meci (snapshots cu date reale, pre-fillna) ===")
+    print(f"  ml_features:  {coverage['ml_features']:.1f}%")
+    print(f"  elo_history:  {coverage['elo_history']:.1f}%")
+    print(f"  standings:    {coverage['standings']:.1f}%")
+    print(f"  referee:      {coverage['referee']:.1f}%")
 
-    # ── fillna cu MEDIANA coloanei (pe setul de antrenare) + salvează medianele ──
-    med = df[NEW_FEATURES].median(numeric_only=True)
-    df[NEW_FEATURES] = df[NEW_FEATURES].fillna(med)
-    df[NEW_FEATURES] = df[NEW_FEATURES].fillna(0.0)   # coloană integral NaN → 0
-    feature_medians = {k: (round(float(med[k]), 6) if pd.notna(med[k]) else 0.0)
-                       for k in NEW_FEATURES}
-
-    final = {}
-    print("\n=== Rezultate per piață ===")
-    print("--- Reprize 1 (snapshots elapsed<=45) ---")
-    half_printed_r2 = False
-    for key, half, kind, label_col in MARKETS:
-        if half == "r2" and not half_printed_r2:
-            print("--- Repriza 2 / final (snapshots elapsed>45) ---")
-            half_printed_r2 = True
-        model, line = train_market(key, half, kind, label_col, df)
-        print(line)
-        if model is not None:
-            final[key] = model
-
-    # Salvează copia veche ÎNAINTE de a scrie noul export (comparație Brier înainte/după).
+    # Backup export vechi ÎNAINTE de scriere (comparație Brier înainte/după).
     if os.path.exists(EXPORT_PATH):
         prev = EXPORT_PATH.replace(".json", ".prev.json")
         try:
             shutil.copy(EXPORT_PATH, prev)
-            print(f"\n↩ Backup export vechi → {prev}")
+            print(f"↩ Backup export vechi → {prev}")
         except Exception as e:
-            print(f"\n⚠ Nu am putut salva backup-ul vechi: {e}")
+            print(f"⚠ Nu am putut salva backup-ul vechi: {e}")
 
-    # Medianele (pt inferență: feature absent → mediană) + coverage — chei meta (_).
     final["_feature_medians"] = feature_medians
-    final["_coverage"] = {
-        "ml_features": round(cov("home_sot_avg"), 1),
-        "elo_history": round(cov("home_elo"), 1),
-        "standings": round(cov("home_position_norm"), 1),
-        "referee": round(cov("ref_yc_avg"), 1),
-        "n_features": len(FEATURES),
-    }
+    final["_coverage"] = {**coverage, "n_features": len(FEATURES)}
 
     with open(EXPORT_PATH, "w") as f:
         json.dump(final, f, indent=2)
     n_markets = sum(1 for k in final if not k.startswith("_"))
     print(f"\n✅ Export: {EXPORT_PATH}  ({n_markets} piețe, {len(FEATURES)} features)")
+    print(f"[mem] final: RSS={_rss_mb():.0f}MB (țintă < 1200MB)")
     print("Notă: model SEPARAT — NU atinge model_export.json (pre-meci).")
 
 
