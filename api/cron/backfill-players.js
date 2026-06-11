@@ -42,7 +42,7 @@ async function setSetting(key, value) {
   } catch (_) {}
 }
 async function logCron(status, msg = '') {
-  try { await query(`INSERT INTO cron_logs (job_name, status, error_msg) VALUES ('backfill-players', $1, $2)`, [status, msg || null]); }
+  try { await Promise.resolve(/* cron_logs → dispecer */); }
   catch (_) {}
 }
 

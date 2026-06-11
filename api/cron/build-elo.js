@@ -53,7 +53,7 @@ async function ensureTables() {
 }
 
 async function logCron(status, msg = '') {
-  try { await query(`INSERT INTO cron_logs (job_name, status, error_msg) VALUES ('build-elo', $1, $2)`, [status, msg || null]); } catch (_) {}
+  try { await Promise.resolve(/* cron_logs → dispecer */); } catch (_) {}
 }
 
 export default async function handler(req, res) {

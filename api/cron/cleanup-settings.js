@@ -56,11 +56,7 @@ export default async function handler(req, res) {
   const summary = `h2h_refresh=${h2hDeleted} no_data_90d=${noDataDeleted} vacuum=${vacuumOk}`
     + (errors.length ? ` | errors: ${errors.join('; ')}` : '');
   try {
-    await query(
-      `INSERT INTO cron_logs (job_name, fixtures_processed, status, error_msg, duration_ms)
-       VALUES ($1,$2,$3,$4,$5)`,
-      ['cleanup-settings', h2hDeleted + noDataDeleted, 'ok', summary, Date.now() - t0]
-    );
+    await Promise.resolve(/* cron_logs → dispecer */);
   } catch (e) { log(`cron_logs error: ${e.message}`); }
 
   res.status(200).json({

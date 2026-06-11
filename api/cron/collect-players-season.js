@@ -12,7 +12,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function logCron(status, msg = '') {
   try {
-    await query(`INSERT INTO cron_logs (job_name, status, error_msg) VALUES ('collect-players-season', $1, $2)`, [status, msg || null]);
+    await Promise.resolve(/* cron_logs → dispecer */);
   } catch (_) {}
 }
 

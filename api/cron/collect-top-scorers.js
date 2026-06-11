@@ -14,7 +14,7 @@ const SEASON = fallbackSeason();
 
 async function logCron(status, msg = '') {
   try {
-    await query(`INSERT INTO cron_logs (job_name, status, error_msg) VALUES ('collect-top-scorers', $1, $2)`, [status, msg || null]);
+    await Promise.resolve(/* cron_logs → dispecer */);
   } catch (_) {}
 }
 

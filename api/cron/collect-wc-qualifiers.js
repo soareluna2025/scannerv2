@@ -25,7 +25,7 @@ const WC_QUALIFIERS = [
 
 async function logCron(status, msg = '') {
   try {
-    await query(`INSERT INTO cron_logs (job_name, status, error_msg) VALUES ('collect-wc-qualifiers', $1, $2)`, [status, msg || null]);
+    await Promise.resolve(/* cron_logs → dispecer */);
   } catch (_) {}
 }
 

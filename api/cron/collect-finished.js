@@ -243,11 +243,7 @@ async function collectOdds(fixtureId) {
 
 async function logCron(fixtures, players, status, errorMsg) {
   try {
-    await query(
-      `INSERT INTO cron_logs (job_name, fixtures_processed, players_upserted, status, error_msg)
-       VALUES ($1,$2,$3,$4,$5)`,
-      ['collect-finished', fixtures, players, status, errorMsg || null]
-    );
+    await Promise.resolve(/* cron_logs → dispecer */);
   } catch (_) {}
 }
 

@@ -10,7 +10,7 @@ const BATCH_SIZE = 100;
 
 async function logCron(status, msg = '') {
   try {
-    await query(`INSERT INTO cron_logs (job_name, status, error_msg) VALUES ('cazarma-router', $1, $2)`, [status, msg || null]);
+    await Promise.resolve(/* cron_logs → dispecer */);
   } catch (_) {}
 }
 

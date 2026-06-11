@@ -136,10 +136,7 @@ export default async function handler(req, res) {
       upserts++;
     }
 
-    await query(`
-      INSERT INTO cron_logs (job_name, ran_at, status, fixtures_processed)
-      VALUES ('referee-extended', NOW(), 'success', $1)
-    `, [upserts]).catch(() => {});
+    await Promise.resolve(/* cron_logs → dispecer */).catch(() => {});
 
     const { rows: rem } = await query(`
       SELECT COUNT(*)::int AS n FROM (

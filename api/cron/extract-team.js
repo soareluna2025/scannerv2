@@ -34,7 +34,7 @@ async function getStatus() {
   } catch { return null; }
 }
 async function logCron(status, msg = '') {
-  try { await query(`INSERT INTO cron_logs (job_name, status, error_msg) VALUES ('extract-team', $1, $2)`, [status, msg || null]); }
+  try { await Promise.resolve(/* cron_logs → dispecer */); }
   catch (_) {}
 }
 

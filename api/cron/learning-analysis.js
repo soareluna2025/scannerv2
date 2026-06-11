@@ -270,10 +270,7 @@ export default async function handler(req, res) {
     }
 
     // ── PASUL 5: Log în cron_logs ────────────────────────────────
-    await query(
-      `INSERT INTO cron_logs (job_name, status, error_msg)
-       VALUES ('learning-analysis', 'success', NULL)`
-    ).catch(() => {});
+    await Promise.resolve(/* cron_logs → dispecer */).catch(() => {});
 
     const elapsed = ((Date.now() - started) / 1000).toFixed(1);
     return res.json({
@@ -284,11 +281,7 @@ export default async function handler(req, res) {
       log: log.slice(0, 50),
     });
   } catch (e) {
-    await query(
-      `INSERT INTO cron_logs (job_name, ran_at, status, error_msg)
-       VALUES ('learning-analysis', NOW(), 'error', $1)`,
-      [e.message]
-    ).catch(() => {});
+    await Promise.resolve(/* cron_logs → dispecer */).catch(() => {});
     return res.status(500).json({ ok: false, error: e.message });
   }
 }

@@ -138,10 +138,7 @@ export default async function handler(req, res) {
       }
     }
 
-    await query(`
-      INSERT INTO cron_logs (job_name, ran_at, status, fixtures_processed)
-      VALUES ('calibrate-live', NOW(), 'success', $1)
-    `, [upserts]).catch(() => {});
+    await Promise.resolve(/* cron_logs → dispecer */).catch(() => {});
 
     return res.status(200).json({
       ok: true,

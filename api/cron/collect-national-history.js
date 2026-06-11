@@ -13,7 +13,7 @@ const DONE = ['FT', 'AET', 'PEN'];
 
 async function logCron(status, msg = '') {
   try {
-    await query(`INSERT INTO cron_logs (job_name, status, error_msg) VALUES ('collect-national-history', $1, $2)`, [status, msg || null]);
+    await Promise.resolve(/* cron_logs → dispecer */);
   } catch (_) {}
 }
 

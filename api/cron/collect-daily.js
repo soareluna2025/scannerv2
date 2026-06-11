@@ -263,11 +263,7 @@ async function computeUpcomingPredictions(stats) {
 
 async function logCron(stats, status, errorMsg) {
   try {
-    await query(
-      `INSERT INTO cron_logs (job_name, fixtures_processed, players_upserted, status, error_msg)
-       VALUES ($1,$2,$3,$4,$5)`,
-      ['collect-daily', stats.standings, stats.teams, status, errorMsg || null]
-    );
+    await Promise.resolve(/* cron_logs → dispecer */);
   } catch (_) {}
 }
 

@@ -185,10 +185,7 @@ export default async function handler(req, res) {
       const rs = await recalibrateModule(moduleKey, probCol, marketKey);
       results.push(...rs);
     }
-    await query(`
-      INSERT INTO cron_logs (job_name, ran_at, status, fixtures_processed)
-      VALUES ('recalibrate-tables', NOW(), $1, $2)
-    `, [results.length ? 'success' : 'no_data', results.length]).catch(() => {});
+    await Promise.resolve(/* cron_logs → dispecer */).catch(() => {});
 
     return res.status(200).json({
       ok: true,

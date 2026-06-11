@@ -107,10 +107,7 @@ export default async function handler(req, res) {
       await new Promise(r => setTimeout(r, 100));
     }
 
-    await query(`
-      INSERT INTO cron_logs (job_name, ran_at, status, fixtures_processed)
-      VALUES ('collect-coaches', NOW(), 'success', $1)
-    `, [collected.length]).catch(() => {});
+    await Promise.resolve(/* cron_logs → dispecer */).catch(() => {});
 
     const { rows: totalRows } = await query(`
       SELECT COUNT(DISTINCT coach_id)::int AS coaches, COUNT(*)::int AS rows

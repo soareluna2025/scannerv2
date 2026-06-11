@@ -143,10 +143,7 @@ async function processVenues(LIMIT) {
     }
     console.log(`[collect-venues] done: ${collected.length}/${toProcess.length} venues procesate`);
 
-    await query(`
-      INSERT INTO cron_logs (job_name, ran_at, status, fixtures_processed)
-      VALUES ('collect-venues', NOW(), 'success', $1)
-    `, [collected.length]).catch(() => {});
+    await Promise.resolve(/* cron_logs → dispecer */).catch(() => {});
 
     console.log(`[collect-venues] done: ${collected.length} venues procesate`);
 }

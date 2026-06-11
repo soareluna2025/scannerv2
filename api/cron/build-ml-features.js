@@ -136,20 +136,12 @@ export default async function handler(req, res) {
     const durMs = Date.now() - t0;
 
     log(`inserted=${inserted} remaining=${remaining} (${durMs}ms)`);
-    await query(
-      `INSERT INTO cron_logs (job_name, fixtures_processed, status, error_msg, duration_ms)
-       VALUES ($1,$2,$3,$4,$5)`,
-      ['build-ml-features', inserted, 'ok', `inserted=${inserted} remaining=${remaining}`, durMs]
-    ).catch(() => {});
+    await Promise.resolve(/* cron_logs → dispecer */).catch(() => {});
 
     res.status(200).json({ ok: true, inserted, remaining, batch_size: BATCH_SIZE, duration_ms: durMs });
   } catch (e) {
     log(`error: ${e.message}`);
-    await query(
-      `INSERT INTO cron_logs (job_name, fixtures_processed, status, error_msg)
-       VALUES ('build-ml-features', 0, 'error', $1)`,
-      [String(e.message).slice(0, 1000)]
-    ).catch(() => {});
+    await Promise.resolve(/* cron_logs → dispecer */).catch(() => {});
     res.status(500).json({ ok: false, error: e.message });
   }
 }
