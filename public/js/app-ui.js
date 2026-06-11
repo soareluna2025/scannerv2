@@ -1335,6 +1335,35 @@ function _mdLiveCtx(d){
   lc.minutesRemaining=Math.max(0,90-lc.elapsed);
   return lc;
 }
+var _mlxPrev={};   // istoric procente per fixture pt count-up + flash live (verde/roșu)
+function _mlxCountUp(el,from,to,ms){
+  var t0=null;
+  function step(ts){ if(t0==null)t0=ts; var k=Math.min(1,(ts-t0)/ms); el.textContent=Math.round(from+(to-from)*k)+'%'; if(k<1)requestAnimationFrame(step); }
+  requestAnimationFrame(step);
+}
+// Animații post-render: umple barele (transition width), count-up procente, flash
+// pe schimbare live, puls pe contorul DECONTATE când crește. prefers-reduced-motion → instant.
+function _mlxInit(root,fid){
+  if(!root) return;
+  var reduce=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var bars=root.querySelectorAll('.mlx-bar i[data-w]');
+  var fill=function(){ for(var i=0;i<bars.length;i++){ bars[i].style.width=bars[i].getAttribute('data-w')+'%'; } };
+  if(reduce) fill(); else requestAnimationFrame(fill);
+  var store=_mlxPrev[fid]||(_mlxPrev[fid]={});
+  var pcts=root.querySelectorAll('.pct[data-v]');
+  for(var j=0;j<pcts.length;j++){ (function(el){
+    var raw=el.getAttribute('data-v'); if(raw==='') return; var tv=Number(raw);
+    var key=el.getAttribute('data-k'), prev=store[key];
+    if(reduce){ el.textContent=tv+'%'; } else { _mlxCountUp(el,(prev!=null?prev:0),tv,500); }
+    if(!reduce && prev!=null && prev!==tv){ var cls=tv>prev?'mlx-flash-up':'mlx-flash-dn'; el.classList.add(cls); setTimeout(function(){ el.classList.remove('mlx-flash-up','mlx-flash-dn'); },850); }
+    store[key]=tv;
+  })(pcts[j]); }
+  var sumEl=root.querySelector('.mlx-acc>summary');
+  if(sumEl){ var n=Number(sumEl.getAttribute('data-n')||0), pn=store.__set||0;
+    if(!reduce && pn && n>pn){ sumEl.classList.add('mlx-pulse'); setTimeout(function(){ sumEl.classList.remove('mlx-pulse'); },900); }
+    store.__set=n;
+  }
+}
 function mdRenderML(d){
   var body=document.getElementById('md-body');
   var en=_mdEnMerged(d);
@@ -1368,32 +1397,43 @@ function mdRenderML(d){
   var lp=function(k){ return (mlLive&&typeof mlLive[k]==='number')?pc(mlLive[k]):null; };
   var lp3=function(k){ return (mlLive&&mlLive[k]&&typeof mlLive[k]==='object')?mlLive[k]:null; };
   var dc=function(a,b){ return (a!=null&&b!=null)?Math.min(100,a+b):null; };
+  // FIX 1 — normalizare multiclass la suma 100% (largest-remainder), aplicată ÎNAINTE
+  // de afișare ȘI înainte de derivarea șansei duble. Doar când toate clasele există.
+  function norm3(a){
+    var v=a.map(function(x){ var n=Number(x); return Number.isFinite(n)?n:null; });
+    if(v.indexOf(null)>=0) return v.map(function(x){ return x==null?null:Math.round(x); });
+    var s=v[0]+v[1]+v[2];
+    if(s<=0) return [0,0,0];
+    var sc=v.map(function(x){ return x/s*100; });
+    var r=sc.map(function(x){ return Math.floor(x); });
+    var rem=100-(r[0]+r[1]+r[2]);
+    var idx=[0,1,2].sort(function(i,j){ return (sc[j]-r[j])-(sc[i]-r[i]); });
+    for(var i=0;i<rem;i++){ r[idx[i%3]]++; }
+    return r;
+  }
 
   // ════════════════════════════════════════════════════════════════════════
-  //  MOTOR DE DECONTARE UNIC — decide(market, stareCurentă)
+  //  MOTOR DE DECONTARE UNIC — decide(market, stareCurentă)  [NEATINS]
   //   → { status:'in_joc'|'decontat', rezultat:'DA'|'NU'|'imposibil', context }
-  //  Aplicat UNIFORM tuturor piețelor (total/R1/R2/per echipă/BTTS/rezultat/
-  //  cornere/cartonașe). Probabilitatea rămâne a modelului; aici doar decidem
-  //  dacă piața s-a închis pe baza FAPTELOR (scor curent, scor HT, fază).
   // ════════════════════════════════════════════════════════════════════════
   function tallyCount(tally, s){
     switch(tally){
       case 'total':   return s.tg;
       case 'home':    return s.hg;
       case 'away':    return s.ag;
-      case 'r1total': return s.r1Done?s.r1tg:s.tg;     // în 1H golurile curente = R1
+      case 'r1total': return s.r1Done?s.r1tg:s.tg;
       case 'r1home':  return s.r1Done?s.hh:s.hg;
       case 'r1away':  return s.r1Done?s.ah:s.ag;
-      case 'r2total': return s.htKnown?s.gr2:null;     // R2 cunoscut doar cu scor HT
+      case 'r2total': return s.htKnown?s.gr2:null;
       case 'r2home':  return s.htKnown?s.hr2:null;
       case 'r2away':  return s.htKnown?s.ar2:null;
       default: return null;
     }
   }
   function phaseEnded(scope, s){
-    if(scope==='r1') return s.r1Done;                  // R1 închis la pauză
-    if(scope==='r2') return s.ft && s.htKnown;         // R2 închis la final
-    return s.ft;                                        // meci închis la FT
+    if(scope==='r1') return s.r1Done;
+    if(scope==='r2') return s.ft && s.htKnown;
+    return s.ft;
   }
   function scoreCtx(scope, s){
     if(scope==='r1') return 'HT '+s.hh+'-'+s.ah;
@@ -1418,7 +1458,7 @@ function mdRenderML(d){
       if(ended)        return {status:'decontat',rezultat:'NU',context:scoreCtx(it.scope,s)};
       return {status:'in_joc',rezultat:null,context:hsc>0?'gazdele au marcat':(asc>0?'oaspeții au marcat':'niciuna încă')};
     }
-    if(k==='bttsno'){                                   // derivată: NU = complementul logic al lui DA
+    if(k==='bttsno'){
       var src=decide(it.src,s);
       if(src.status==='decontat'){
         if(src.rezultat==='DA') return {status:'decontat',rezultat:'imposibil',context:'ambele au marcat'};
@@ -1434,7 +1474,7 @@ function mdRenderML(d){
       }
       return {status:'in_joc',rezultat:null,context:''};
     }
-    if(k==='dc'){                                       // șansă dublă derivată din 1X2
+    if(k==='dc'){
       if(phaseEnded(it.scope,s)){
         var hg2=it.scope==='r1'?s.hh:s.hg, ag2=it.scope==='r1'?s.ah:s.ag;
         var oc=hg2>ag2?'1':(hg2===ag2?'X':'2');
@@ -1444,7 +1484,7 @@ function mdRenderML(d){
       return {status:'in_joc',rezultat:null,context:'derivată din 1X2'};
     }
     if(k==='next') return {status:'in_joc',rezultat:null,context:'live'};
-    if(k==='plain'){                                    // cornere/cartonașe — fără count live: 100% = prag atins
+    if(k==='plain'){
       if(it.p===100) return {status:'decontat',rezultat:'DA',context:'prag atins'};
       return {status:'in_joc',rezultat:null,context:''};
     }
@@ -1461,11 +1501,10 @@ function mdRenderML(d){
   function result(label,group,scope,labels,classes){ return {kind:'result',label:label,group:group,scope:scope,labels:labels,classes:classes}; }
   function nextg(label,group,classes){ return {kind:'next',label:label,group:group,classes:classes}; }
 
-  // 1X2 — sursa unică pentru rezultat ȘI șansă dublă (coerență garantată)
+  // 1X2 — sursă unică, NORMALIZAT la 100% înainte de afișare ȘI de derivarea șansei duble
   var rfLive=_preLive?lp3('result_final'):null;
-  var p1=rfLive?pc(rfLive['1']):sp('home_win');
-  var px=rfLive?pc(rfLive['X']):sp('draw');
-  var p2=rfLive?pc(rfLive['2']):sp('away_win');
+  var _r=norm3([ rfLive?rfLive['1']:sp('home_win'), rfLive?rfLive['X']:sp('draw'), rfLive?rfLive['2']:sp('away_win') ]);
+  var p1=_r[0], px=_r[1], p2=_r[2];
 
   // ── MECI (total) ──
   add(over('Peste 0.5 goluri','Total meci','match','total',1, sp('over05_total')));
@@ -1473,27 +1512,20 @@ function mdRenderML(d){
   add(over('Peste 2.5 goluri','Total meci','match','total',3, _preLive?lp('goals_total_over25'):sp('over25_total')));
   add(over('Peste 3.5 goluri','Total meci','match','total',4, _preLive?lp('goals_total_over35'):sp('over35_total')));
   add(over('Peste 4.5 goluri','Total meci','match','total',5, _preLive?lp('goals_total_over45'):sp('over45_total')));
-  add(result('Rezultat final','Rezultat','match',['1 '+hn,'X Egal','2 '+an],
-       [['1 '+hn,p1],['X Egal',px],['2 '+an,p2]]));
-  add({kind:'dc',label:'Șansă dublă 1X',group:'Rezultat',scope:'match',covers:['1','X'],p:dc(p1,px)});
-  add({kind:'dc',label:'Șansă dublă X2',group:'Rezultat',scope:'match',covers:['X','2'],p:dc(px,p2)});
-  add({kind:'dc',label:'Șansă dublă 12',group:'Rezultat',scope:'match',covers:['1','2'],p:dc(p1,p2)});
-  var bttsM=btts('Ambele marchează (DA)','BTTS','match','', _preLive?lp('btts_final'):sp('btts_total'));
-  add(bttsM);
-  add({kind:'bttsno',label:'Ambele marchează (NU)',group:'BTTS',src:bttsM,p:(bttsM.p!=null?100-bttsM.p:null)});
   add(team('Peste 0.5 — '+hn,'Goluri '+hn,'match','home',1, sp('over05_home')));
   add(team('Peste 1.5 — '+hn,'Goluri '+hn,'match','home',2, sp('over15_home')));
   add(team('Peste 2.5 — '+hn,'Goluri '+hn,'match','home',3, sp('over25_home')));
   add(team('Peste 0.5 — '+an,'Goluri '+an,'match','away',1, sp('over05_away')));
   add(team('Peste 1.5 — '+an,'Goluri '+an,'match','away',2, sp('over15_away')));
   add(team('Peste 2.5 — '+an,'Goluri '+an,'match','away',3, sp('over25_away')));
-  add(plain('Cornere peste 8.5','Cornere total',sp('corners_over85')));
-  add(plain('Cornere peste 9.5','Cornere total',sp('corners_over95')));
-  add(plain('Cornere peste 10.5','Cornere total',sp('corners_over105')));
-  add(plain('Cornere '+hn+' peste 4.5','Cornere '+hn,sp('corners_home_over45')));
-  add(plain('Cornere '+hn+' peste 5.5','Cornere '+hn,sp('corners_home_over55')));
-  add(plain('Cornere '+an+' peste 4.5','Cornere '+an,sp('corners_away_over45')));
-  add(plain('Cornere '+an+' peste 5.5','Cornere '+an,sp('corners_away_over55')));
+  var bttsM=btts('Ambele marchează (DA)','BTTS','match','', _preLive?lp('btts_final'):sp('btts_total'));
+  add(bttsM);
+  add({kind:'bttsno',label:'Ambele marchează (NU)',group:'BTTS',src:bttsM,p:(bttsM.p!=null?100-bttsM.p:null)});
+  add(result('Rezultat final','Rezultat','match',['1 '+hn,'X Egal','2 '+an],
+       [['1 '+hn,p1],['X Egal',px],['2 '+an,p2]]));
+  add({kind:'dc',label:'Șansă dublă 1X',group:'Rezultat',scope:'match',covers:['1','X'],p:dc(p1,px)});
+  add({kind:'dc',label:'Șansă dublă X2',group:'Rezultat',scope:'match',covers:['X','2'],p:dc(px,p2)});
+  add({kind:'dc',label:'Șansă dublă 12',group:'Rezultat',scope:'match',covers:['1','2'],p:dc(p1,p2)});
   add(plain('Cartonașe peste 3.5','Cartonașe total',sp('cards_over35')));
   add(plain('Cartonașe peste 4.5','Cartonașe total',sp('cards_over45')));
   add(plain('Cartonașe peste 5.5','Cartonașe total',sp('cards_over55')));
@@ -1501,50 +1533,76 @@ function mdRenderML(d){
   add(plain('Cartonașe '+hn+' peste 2.5','Cartonașe '+hn,sp('cards_home_over25')));
   add(plain('Cartonașe '+an+' peste 1.5','Cartonașe '+an,sp('cards_away_over15')));
   add(plain('Cartonașe '+an+' peste 2.5','Cartonașe '+an,sp('cards_away_over25')));
+  add(plain('Cornere peste 8.5','Cornere total',sp('corners_over85')));
+  add(plain('Cornere peste 9.5','Cornere total',sp('corners_over95')));
+  add(plain('Cornere peste 10.5','Cornere total',sp('corners_over105')));
+  add(plain('Cornere '+hn+' peste 4.5','Cornere '+hn,sp('corners_home_over45')));
+  add(plain('Cornere '+hn+' peste 5.5','Cornere '+hn,sp('corners_home_over55')));
+  add(plain('Cornere '+an+' peste 4.5','Cornere '+an,sp('corners_away_over45')));
+  add(plain('Cornere '+an+' peste 5.5','Cornere '+an,sp('corners_away_over55')));
 
-  // ── REPRIZA 1 (predicții pre-meci via ht_*; upgrade live când e disponibil) ──
+  // ── REPRIZA 1 ──
   var r1Live=!!(_preLive && elapsedNum<=45 && lp3('result_r1'));
   add(over('R1 peste 0.5','Repriza 1','r1','r1total',1, r1Live?lp('goals_r1_over05'):sp('ht_over05')));
   add(over('R1 peste 1.5','Repriza 1','r1','r1total',2, r1Live?lp('goals_r1_over15'):sp('ht_over15')));
   add(over('R1 peste 2.5','Repriza 1','r1','r1total',3, r1Live?lp('goals_r1_over25'):sp('ht_over25')));
-  add(btts('Ambele marchează R1','Repriza 1','r1','r1', r1Live?lp('btts_r1'):sp('ht_btts')));
   add(team('R1 '+hn+' peste 0.5','Repriza 1 · '+hn,'r1','r1home',1, r1Live?lp('home_goals_r1_over05'):sp('ht_home')));
   add(team('R1 '+hn+' peste 1.5','Repriza 1 · '+hn,'r1','r1home',2, r1Live?lp('home_goals_r1_over15'):sp('ht_home_over15')));
   add(team('R1 '+an+' peste 0.5','Repriza 1 · '+an,'r1','r1away',1, r1Live?lp('away_goals_r1_over05'):sp('ht_away')));
   add(team('R1 '+an+' peste 1.5','Repriza 1 · '+an,'r1','r1away',2, r1Live?lp('away_goals_r1_over15'):sp('ht_away_over15')));
+  add(btts('Ambele marchează R1','Repriza 1','r1','r1', r1Live?lp('btts_r1'):sp('ht_btts')));
   var rr1=r1Live?lp3('result_r1'):null;
   if(rr1||r1Done){
+    var r1c=rr1?norm3([rr1['1'],rr1['X'],rr1['2']]):[null,null,null];
     add(result('Rezultat R1','Repriza 1','r1',['1 '+hn,'X Egal','2 '+an],
-       rr1?[['1 '+hn,pc(rr1['1'])],['X Egal',pc(rr1['X'])],['2 '+an,pc(rr1['2'])]]:[['1 '+hn,null],['X Egal',null],['2 '+an,null]]));
+       [['1 '+hn,r1c[0]],['X Egal',r1c[1]],['2 '+an,r1c[2]]]));
   }
   if(r1Live){
     add(plain('Cartonașe R1 peste 1.5','Cartonașe R1',lp('cards_r1_over15')));
     add(plain('Cartonașe R1 peste 2.5','Cartonașe R1',lp('cards_r1_over25')));
     var ng1=lp3('next_goal_r1');
-    if(ng1) add(nextg('Următorul gol R1','Repriza 1',[['⚽ '+hn,pc(ng1.home)],['Niciun gol',pc(ng1.none)],['⚽ '+an,pc(ng1.away)]]));
+    if(ng1){ var n1=norm3([ng1.home,ng1.none,ng1.away]); add(nextg('Următorul gol R1','Repriza 1',[['⚽ '+hn,n1[0]],['Niciun gol',n1[1]],['⚽ '+an,n1[2]]])); }
   }
 
-  // ── REPRIZA 2 (doar după ce R1 s-a închis sau model live R2) ──
+  // ── REPRIZA 2 (mereu colectată: pre-kickoff toate 3 grupele apar 1-2-3) ──
   var r2Live=!!(_preLive && elapsedNum>45 && lp3('result_final'));
-  if(r1Done || r2Live){
-    add(over('R2 peste 0.5','Repriza 2','r2','r2total',1, r2Live?lp('goals_r2_over05'):sp('r2_over05')));
-    add(over('R2 peste 1.5','Repriza 2','r2','r2total',2, r2Live?lp('goals_r2_over15'):sp('r2_over15')));
-    if(!r2Live) add(over('R2 peste 2.5','Repriza 2','r2','r2total',3, sp('r2_over25')));
-    add(btts('Ambele marchează R2','Repriza 2','r2','r2', r2Live?lp('btts_final'):sp('r2_btts')));
-    add(team('R2 '+hn+' peste 0.5','Repriza 2 · '+hn,'r2','r2home',1, r2Live?lp('home_goals_r2_over05'):sp('r2_home')));
-    add(team('R2 '+hn+' peste 1.5','Repriza 2 · '+hn,'r2','r2home',2, r2Live?lp('home_goals_r2_over15'):sp('r2_home_over15')));
-    add(team('R2 '+an+' peste 0.5','Repriza 2 · '+an,'r2','r2away',1, r2Live?lp('away_goals_r2_over05'):sp('r2_away')));
-    add(team('R2 '+an+' peste 1.5','Repriza 2 · '+an,'r2','r2away',2, r2Live?lp('away_goals_r2_over15'):sp('r2_away_over15')));
-    var rp2=[['1 '+hn,sp('r2_home_win')],['X Egal',sp('r2_draw')],['2 '+an,sp('r2_away_win')]];
-    if(rp2[0][1]!=null||rp2[1][1]!=null||rp2[2][1]!=null||r1Done)
-      add(result('Rezultat R2','Repriza 2','r2',['1 '+hn,'X Egal','2 '+an],rp2));
-    if(r2Live){
-      var ng2=lp3('next_goal_r2');
-      if(ng2) add(nextg('Următorul gol','Repriza 2',[['⚽ '+hn,pc(ng2.home)],['Niciun gol',pc(ng2.none)],['⚽ '+an,pc(ng2.away)]]));
-    }
+  add(over('R2 peste 0.5','Repriza 2','r2','r2total',1, r2Live?lp('goals_r2_over05'):sp('r2_over05')));
+  add(over('R2 peste 1.5','Repriza 2','r2','r2total',2, r2Live?lp('goals_r2_over15'):sp('r2_over15')));
+  if(!r2Live) add(over('R2 peste 2.5','Repriza 2','r2','r2total',3, sp('r2_over25')));
+  add(team('R2 '+hn+' peste 0.5','Repriza 2 · '+hn,'r2','r2home',1, r2Live?lp('home_goals_r2_over05'):sp('r2_home')));
+  add(team('R2 '+hn+' peste 1.5','Repriza 2 · '+hn,'r2','r2home',2, r2Live?lp('home_goals_r2_over15'):sp('r2_home_over15')));
+  add(team('R2 '+an+' peste 0.5','Repriza 2 · '+an,'r2','r2away',1, r2Live?lp('away_goals_r2_over05'):sp('r2_away')));
+  add(team('R2 '+an+' peste 1.5','Repriza 2 · '+an,'r2','r2away',2, r2Live?lp('away_goals_r2_over15'):sp('r2_away_over15')));
+  add(btts('Ambele marchează R2','Repriza 2','r2','r2', r2Live?lp('btts_final'):sp('r2_btts')));
+  var rp2raw=[sp('r2_home_win'),sp('r2_draw'),sp('r2_away_win')], rp2n=norm3(rp2raw);
+  if(rp2raw[0]!=null||rp2raw[1]!=null||rp2raw[2]!=null||r1Done)
+    add(result('Rezultat R2','Repriza 2','r2',['1 '+hn,'X Egal','2 '+an],[['1 '+hn,rp2n[0]],['X Egal',rp2n[1]],['2 '+an,rp2n[2]]]));
+  if(r2Live){
+    var ng2=lp3('next_goal_r2');
+    if(ng2){ var n2=norm3([ng2.home,ng2.none,ng2.away]); add(nextg('Următorul gol','Repriza 2',[['⚽ '+hn,n2[0]],['Niciun gol',n2[1]],['⚽ '+an,n2[2]]])); }
   }
 
-  // ════════ DECONTARE + SORTARE ════════
+  // ════════ DECONTARE + FAZĂ + PRIORITATE ════════
+  function phaseOf(it){ return it.scope==='r1'?'r1':(it.scope==='r2'?'r2':'match'); }
+  // Ordine FIXĂ de prioritate în grupă: GOLURI (total cresc → echipă → BTTS → 1X2 →
+  // șansă dublă) → CARTONAȘE (total → echipă) → CORNERE (total → echipă).
+  function prioOf(it){
+    var lab=it.label||'', grp=it.group||'';
+    if(it.kind==='over')   return 100+(it.need||0);
+    if(it.kind==='team')   return 120+((it.tally&&it.tally.indexOf('away')>=0)?10:0)+(it.need||0);
+    if(it.kind==='btts')   return 150;
+    if(it.kind==='bttsno') return 151;
+    if(it.kind==='result') return 160;
+    if(it.kind==='next')   return 165;
+    if(it.kind==='dc')     return 170+(/12/.test(lab)?2:(/X2/.test(lab)?1:0));
+    if(it.kind==='plain'){
+      var isCard=/Cartona/i.test(grp)||/Cartona/i.test(lab);
+      var thr=parseInt((lab.match(/(\d+)\.5/)||[])[1]||0,10);
+      var off=/total/i.test(grp)?0:(grp.indexOf(an)>=0?40:20);
+      return (isCard?300:400)+off+thr;
+    }
+    return 250;
+  }
   function conv(it){
     if(it.kind==='result'||it.kind==='next'){
       var cls=it.classes; if(!cls) return -1;
@@ -1553,15 +1611,24 @@ function mdRenderML(d){
     }
     return it.p!=null?Math.abs(it.p-50):-1;
   }
-  items.forEach(function(it){ it.dec=decide(it,st); it.c=conv(it); });
+  items.forEach(function(it){ it.dec=decide(it,st); it.c=conv(it); it.phase=phaseOf(it); it.prio=prioOf(it); });
   var multiKind=function(it){ return it.kind==='result'||it.kind==='next'; };
   var inplay=items.filter(function(it){
     if(it.dec.status!=='in_joc') return false;
-    if(multiKind(it)) return true;                 // multiclass: păstrăm chiar parțial
-    return it.p!=null;                              // binare fără date → ascunse (fără "—")
+    if(multiKind(it)) return true;
+    return it.p!=null;
   });
   var settled=items.filter(function(it){ return it.dec.status==='decontat'; });
-  inplay.sort(function(a,b){ return b.c-a.c; });
+
+  // grupare pe faze; faza curentă urcă prima; grupă goală → omisă (rămâne în acordeon)
+  var byPhase={match:[],r1:[],r2:[]};
+  inplay.forEach(function(it){ (byPhase[it.phase]||byPhase.match).push(it); });
+  Object.keys(byPhase).forEach(function(ph){ byPhase[ph].sort(function(a,b){ return a.prio-b.prio; }); });
+  var order;
+  if(lc.status==='1H') order=['r1','match','r2'];
+  else if(lc.status==='2H'||lc.status==='HT'||lc.status==='ET') order=['r2','match','r1'];
+  else order=['match','r1','r2'];
+  var GROUP_T={ match:'🏟 MECI ÎNTREG', r1:'⏱ REPRIZA 1', r2:'⏱ REPRIZA 2' };
 
   // ════════ RANDARE (identitatea grafică existentă: tokens + glassmorphism) ════════
   var semClr=function(p){ return p==null?'#6b7a99':p>=70?'#00e5b8':p>=50?'#ffcc44':'#ff7777'; };
@@ -1573,15 +1640,16 @@ function mdRenderML(d){
         +'<div class="mc-prob" style="color:'+col+';font-weight:'+(lead?900:700)+'">'+(v!=null?v+'%':'—')+'</div></div>';
     }).join('')+'</div>';
   }
-  function rowBar(it){
-    var p=it.p, col=semClr(p);
-    return '<div class="mlx-row"><div class="nm"><b>'+htmlEsc(it.label)+'</b>'
+  function rowBar(it,delay){
+    var p=it.p, col=semClr(p), key=htmlEsc(it.phase+'|'+it.label);
+    return '<div class="mlx-row mlx-anim" style="animation-delay:'+delay+'ms">'
+      +'<div class="nm"><b>'+htmlEsc(it.label)+'</b>'
       +'<small>'+htmlEsc(it.group)+(it.dec.context?(' · '+htmlEsc(it.dec.context)):'')+'</small>'
-      +'<div class="mlx-bar"><i style="width:'+(p!=null?p:0)+'%;background:'+col+'"></i></div></div>'
-      +'<div class="pct" style="color:'+col+'">'+(p!=null?p+'%':'—')+'</div></div>';
+      +'<div class="mlx-bar"><i data-w="'+(p!=null?p:0)+'" style="width:0;background:'+col+'"></i></div></div>'
+      +'<div class="pct" data-k="'+key+'" data-v="'+(p!=null?p:'')+'" style="color:'+col+'">'+(p!=null?'0%':'—')+'</div></div>';
   }
-  function rowMulti(it){
-    return '<div style="margin-bottom:8px"><div class="ml-sub" style="margin:8px 0 4px">'+htmlEsc(it.label)+'</div>'+triCells(it.classes)+'</div>';
+  function rowMulti(it,delay){
+    return '<div class="mlx-anim" style="animation-delay:'+delay+'ms;margin-bottom:8px"><div class="ml-sub" style="margin:8px 0 4px">'+htmlEsc(it.label)+'</div>'+triCells(it.classes)+'</div>';
   }
   function rowSettled(it){
     var r=it.dec.rezultat||'—', g=r==='DA'?'✓':(r==='NU'?'✗':'⊘');
@@ -1590,26 +1658,29 @@ function mdRenderML(d){
       +'<span style="color:#5a6a80">'+htmlEsc(it.dec.context||'')+'</span></div>';
   }
 
-  // status text pentru header
+  // status header
   var minTxt, minClr;
   if(lc.isHT){ minTxt='Pauză · HT '+(htKnown?hh+'-'+ah:'?'); minClr='#ffcc44'; }
   else if(lc.status==='2H'||lc.status==='ET'){ minTxt='min '+elapsedNum+' · R2'; minClr='#ff7777'; }
   else if(lc.status==='1H'){ minTxt='min '+elapsedNum+' · R1'; minClr='#ff7777'; }
   else if(ft){ minTxt='Final'; minClr='var(--mu)'; }
   else { minTxt='Pre-meci'; minClr='var(--mu)'; }
-  var liveDot=lc.isLive?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff7777;animation:livePulse 1s infinite;margin-right:6px"></span>':'';
+  var liveDot=lc.isLive?'<span class="mlx-dot"></span>':'';
 
-  // hero — convingerea cea mai puternică (sau rezultatul final dacă meciul s-a închis)
+  // FIX 2 — HERO doar dintre piețele primare de GOLURI și REZULTAT (exclude șansa
+  // dublă, cartonașe, cornere). Formulare: numele pieței + procentul.
   var finalRes=null; settled.forEach(function(it){ if(it.kind==='result'&&it.scope==='match') finalRes=it; });
+  var heroPool=inplay.filter(function(it){ return it.kind==='over'||it.kind==='team'||it.kind==='btts'||it.kind==='result'; });
+  heroPool.sort(function(a,b){ return b.c-a.c; });
   var heroHtml;
   if(ft && finalRes){ heroHtml='🏁 Final '+hg+'-'+ag+': <b>'+htmlEsc(finalRes.dec.rezultat)+'</b>'; }
-  else if(inplay.length){
-    var h=inplay[0];
+  else if(heroPool.length){
+    var h=heroPool[0];
     if(multiKind(h)){
       var mx=-1,mlab=''; (h.classes||[]).forEach(function(c){ if(c[1]!=null&&c[1]>mx){mx=c[1];mlab=c[0];} });
-      heroHtml='Cel mai puternic semnal — <b>'+htmlEsc(h.label)+'</b>: înclină spre <b>'+htmlEsc(mlab)+'</b> ('+(mx<0?'—':mx+'%')+')';
+      heroHtml='<b>'+htmlEsc(h.label)+'</b> — <b style="color:'+semClr(mx)+'">'+htmlEsc(mlab)+' '+(mx<0?'—':mx+'%')+'</b>';
     } else {
-      heroHtml='Cel mai puternic semnal — <b>'+htmlEsc(h.label)+'</b>: <b style="color:'+semClr(h.p)+'">'+(h.p!=null?h.p+'%':'—')+'</b>';
+      heroHtml='<b>'+htmlEsc(h.label)+'</b> — <b style="color:'+semClr(h.p)+'">'+(h.p!=null?h.p+'%':'—')+'</b>';
     }
   } else { heroHtml='Niciun semnal puternic momentan.'; }
 
@@ -1623,20 +1694,36 @@ function mdRenderML(d){
     +'.ml-sub{font-size:11px;color:#8b9bb4;font-weight:700}'
     +'.mlx-head{display:flex;align-items:center;gap:10px;background:rgba(8,13,24,.6);border:1px solid var(--bor);border-radius:12px;padding:10px 12px;margin-bottom:10px}'
     +'.mlx-head .sc{font-size:20px;font-weight:900;color:var(--tx)}'
-    +'.mlx-hero{background:rgba(99,102,241,.10);border:1px solid rgba(99,102,241,.30);border-radius:12px;padding:13px 14px;margin-bottom:14px;font-size:13px;color:#c7d2fe;line-height:1.4}'
+    +'.mlx-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff7777;animation:livePulse 1s infinite;margin-right:6px}'
+    +'.mlx-hero{position:relative;overflow:hidden;background:rgba(99,102,241,.10);border:1px solid rgba(99,102,241,.30);border-radius:12px;padding:13px 14px;margin-bottom:14px;font-size:13px;color:#c7d2fe;line-height:1.4}'
+    +'.mlx-hero::after{content:"";position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);transform:skewX(-20deg);animation:mlxShim 5s ease-in-out infinite;pointer-events:none}'
     +'.mlx-zone{font-size:12px;font-weight:800;color:#a5b4fc;letter-spacing:.4px;margin:4px 0 8px}'
+    +'.mlx-grp{font-size:11px;font-weight:800;color:#8b9bb4;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;display:flex;align-items:center;gap:8px}'
+    +'.mlx-grp .gn{font-size:10px;font-weight:700;color:#6b7a99;background:rgba(255,255,255,.05);border-radius:10px;padding:1px 7px}'
     +'.mlx-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--bor);border-radius:10px;background:rgba(255,255,255,.02);margin-bottom:6px}'
     +'.mlx-row .nm{flex:1;min-width:0}'
     +'.mlx-row .nm b{font-size:12px;font-weight:700;color:var(--tx);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
     +'.mlx-row .nm small{font-size:10px;color:var(--mu)}'
     +'.mlx-row .pct{font-size:18px;font-weight:800;min-width:50px;text-align:right}'
     +'.mlx-bar{height:3px;border-radius:2px;background:rgba(255,255,255,.06);margin-top:5px;overflow:hidden}'
-    +'.mlx-bar i{display:block;height:100%;border-radius:2px}'
+    +'.mlx-bar i{display:block;height:100%;border-radius:2px;width:0;transition:width .6s ease-out}'
     +'details.mlx-acc{margin-top:14px;border:1px solid var(--bor);border-radius:10px;overflow:hidden}'
-    +'details.mlx-acc>summary{cursor:pointer;padding:10px 12px;font-size:12px;font-weight:800;color:#8b9bb4;list-style:none;background:rgba(255,255,255,.02)}'
+    +'details.mlx-acc>summary{cursor:pointer;padding:10px 12px;font-size:12px;font-weight:800;color:#8b9bb4;list-style:none;background:rgba(255,255,255,.02);display:inline-block}'
     +'details.mlx-acc>summary::-webkit-details-marker{display:none}'
     +'.mlx-set{display:flex;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid var(--bor);font-size:11px;color:#6b7a99}'
     +'.mlx-set .sg{min-width:86px;font-weight:800;color:#8b9bb4}'
+    +'@keyframes mlxIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}'
+    +'.mlx-anim{animation:mlxIn .32s ease-out both}'
+    +'@keyframes mlxShim{0%,68%{left:-60%}84%,100%{left:130%}}'
+    +'@keyframes mlxFlashUp{0%{color:#00e5b8;text-shadow:0 0 8px rgba(0,229,184,.7)}100%{text-shadow:none}}'
+    +'@keyframes mlxFlashDn{0%{color:#ff7777;text-shadow:0 0 8px rgba(255,119,119,.7)}100%{text-shadow:none}}'
+    +'.mlx-flash-up{animation:mlxFlashUp .85s ease-out}'
+    +'.mlx-flash-dn{animation:mlxFlashDn .85s ease-out}'
+    +'@keyframes mlxPulse{0%{transform:scale(1)}50%{transform:scale(1.07)}100%{transform:scale(1)}}'
+    +'.mlx-pulse{display:inline-block;animation:mlxPulse .9s ease-out;color:#00e5b8 !important}'
+    +'@media (prefers-reduced-motion: reduce){'
+      +'.mlx-anim{animation:none}.mlx-bar i{transition:none}.mlx-hero::after{display:none}'
+      +'.mlx-flash-up,.mlx-flash-dn,.mlx-pulse{animation:none}}'
     +'</style>';
 
   // 1. Header viu
@@ -1645,20 +1732,28 @@ function mdRenderML(d){
     +'<span class="sc">'+hg+'-'+ag+'</span>'
     +'<span style="font-size:11px;font-weight:700;color:'+minClr+'">'+minTxt+'</span></div>';
 
-  // 2. Hero
+  // 2. Hero (shimmer via CSS)
   out+='<div class="mlx-hero">'+heroHtml+'</div>';
 
-  // 3. ÎN JOC (sortat după convingere)
-  out+='<div class="mlx-zone">🎯 ÎN JOC ('+inplay.length+')</div>';
+  // 3. ÎN JOC — trei grupe fixe, prioritate fixă în interior
+  out+='<div class="mlx-zone mlx-anim" style="animation-delay:0ms">🎯 ÎN JOC ('+inplay.length+')</div>';
   if(inplay.length){
-    inplay.forEach(function(it){ out+=multiKind(it)?rowMulti(it):rowBar(it); });
+    var aidx=1;
+    order.forEach(function(ph){
+      var arr=byPhase[ph]; if(!arr||!arr.length) return;
+      out+='<div class="mlx-grp mlx-anim" style="animation-delay:'+Math.min(aidx*30,400)+'ms">'+GROUP_T[ph]+'<span class="gn">'+arr.length+'</span></div>'; aidx++;
+      arr.forEach(function(it){
+        var delay=Math.min(aidx*30,400); aidx++;
+        out+= multiKind(it)?rowMulti(it,delay):rowBar(it,delay);
+      });
+    });
   } else {
     out+='<div style="font-size:11px;color:var(--mu);padding:8px 2px">Toate piețele relevante sunt decontate.</div>';
   }
 
-  // 4. Acordeon DECONTATE (pliat implicit, gri/neutru)
+  // 4. Acordeon DECONTATE (UNUL global, pliat implicit, gri/neutru)
   if(settled.length){
-    out+='<details class="mlx-acc"><summary>✓ DECONTATE ('+settled.length+')</summary><div>';
+    out+='<details class="mlx-acc"><summary data-n="'+settled.length+'">✓ DECONTATE ('+settled.length+')</summary><div>';
     settled.forEach(function(it){ out+=rowSettled(it); });
     out+='</div></details>';
   }
@@ -1669,6 +1764,7 @@ function mdRenderML(d){
     +(trainedK?(' · antrenat pe '+trainedK):'')+'</div>';
 
   body.innerHTML=out;
+  try{ _mlxInit(body, (_md&&_md.fixtureId)||0); }catch(_){}
 }
 
 // ── PROBABILITATE MARCARE — secțiune NOUĂ, complet independentă ──────────────
