@@ -1317,7 +1317,6 @@ function _mdHasML(d){
     return !!(ml && ml.markets && Object.keys(ml.markets).length);
   }catch(_){ return false; }
 }
-var _ML_ACTUAL_FIELD={ over15_total:'over15Prob', over25_total:'over25Prob', btts_total:'ggProb', home_win:'homeWin' };
 // Context live din d.fixture (frontend îl are; ml-predict rulează server-side).
 function _mdLiveCtx(d){
   var fx=(d&&d.fixture)||{};
@@ -1336,361 +1335,339 @@ function _mdLiveCtx(d){
   lc.minutesRemaining=Math.max(0,90-lc.elapsed);
   return lc;
 }
-// Aplică contextul live pe markets (echivalentul client al applyLiveContext din
-// ml-predict.js — care rulează server-side și nu primește încă liveCtx). Mutează copia.
-function _mlApplyLive(markets, lc){
-  var hg=lc.homeGoals||0, ag=lc.awayGoals||0, tg=hg+ag;
-  var setF=function(k,c){ if(markets[k]&&c){ markets[k].prob=100; markets[k].fulfilled=true; } };
-  setF('over05_total',tg>=1); setF('over15_total',tg>=2); setF('over25_total',tg>=3); setF('over35_total',tg>=4); setF('over45_total',tg>=5);
-  setF('btts_total',hg>0&&ag>0);
-  // Home/Away score: dacă echipa a marcat → relabel "Gol 2" (prob ML ca proxy).
-  if(hg>=1 && markets.over05_home){ markets.over05_home.relabel='Gol 2 Gazde'; }
-  if(ag>=1 && markets.over05_away){ markets.over05_away.relabel='Gol 2 Oaspeți'; }
-  if(lc.r1Done && lc.homeHT!=null && lc.awayHT!=null){
-    var hh=lc.homeHT||0, ah=lc.awayHT||0, thh=hh+ah;
-    var setFinal=function(k,c){ if(markets[k]){ markets[k].final=true; markets[k].fulfilled=!!c; markets[k].prob=c?100:0; } };
-    setFinal('ht_over05',thh>=1); setFinal('ht_over15',thh>=2); setFinal('ht_over25',thh>=3);
-    setFinal('ht_btts',hh>0&&ah>0); setFinal('ht_home',hh>=1); setFinal('ht_away',ah>=1);
-    // Piețe R2 deja îndeplinite (goluri repriza 2 = curent − HT).
-    var hr2=Math.max(0,hg-hh), ar2=Math.max(0,ag-ah), gr2=hr2+ar2;
-    setF('r2_over05',gr2>=1); setF('r2_over15',gr2>=2); setF('r2_over25',gr2>=3);
-    setF('r2_btts',hr2>0&&ar2>0);
-    if(hr2>=1 && markets.r2_home){ markets.r2_home.relabel='R2 Gol 2 Gazde'; }
-    if(ar2>=1 && markets.r2_away){ markets.r2_away.relabel='R2 Gol 2 Oaspeți'; }
-  }
-  // Ladder collapse: o linie Over îndeplinită cu un succesor încă DESCHIS se ascunde
-  // → în grid apare automat linia următoare (cardul ei propriu, cu prob ML).
-  function ladderHide(keys){
-    for(var i=0;i<keys.length;i++){
-      var k=keys[i]; if(!markets[k]||!markets[k].fulfilled) continue;
-      for(var j=i+1;j<keys.length;j++){ if(markets[keys[j]]&&!markets[keys[j]].fulfilled){ markets[k].hidden=true; break; } }
-    }
-  }
-  ladderHide(['over05_total','over15_total','over25_total','over35_total','over45_total']);
-  ladderHide(['r2_over05','r2_over15','r2_over25']);
-}
 function mdRenderML(d){
   var body=document.getElementById('md-body');
   var en=_mdEnMerged(d);
   var ml=(d&&d.mlPredictions)||en.mlPredictions;
   if(!ml||!ml.markets){ body.innerHTML='<div class="empty"><div class="empty-icon">🤖</div><div class="empty-t">ML indisponibil</div><div class="empty-s">Modelul nu e încă antrenat pentru acest meci</div></div>'; return; }
+
   var lc=_mdLiveCtx(d);
-  lc.liveStats=(d&&d.liveStats)||null;
-  var M={}; Object.keys(ml.markets).forEach(function(k){ M[k]=Object.assign({},ml.markets[k]); });
-  _mlApplyLive(M, lc);   // păstrăm logica existentă
-
-  var hn=(d.fixture&&d.fixture.teams&&d.fixture.teams.home&&d.fixture.teams.home.name)||'Gazde';
-  var an=(d.fixture&&d.fixture.teams&&d.fixture.teams.away&&d.fixture.teams.away.name)||'Oaspeți';
-  var hg=lc.homeGoals||0, ag=lc.awayGoals||0, tg=hg+ag;
-  var prob=function(k){ return (M[k]&&typeof M[k].prob==='number')?M[k].prob:null; };
-  var clr=function(p){return p==null?'#6b7a99':p>=70?'#00e5b8':p>=50?'#ffcc44':'#ff7777';};
-  var clsByProb=function(p){return p==null?'':p>=70?'green':p>=50?'yellow':'red';};
-
-  // ── Celulă Over (ladder/echipă): yes/no/active/pending/norm ──
-  function oc(label,n,scored,phaseDone,live,p){
-    var cls, val, pcol='';
-    if(scored>=n){ cls='ml-oc yes'; val='DA ✓'; }
-    else if(phaseDone){ cls='ml-oc no'; val='NU ✗'; }
-    else if(live){ var act=(n===scored+1); cls='ml-oc '+(act?'active':'pending'); val=(p!=null?p+'%':'—'); }
-    else { cls='ml-oc'+(p==null?' pending':''); val=(p!=null?p+'%':'—'); if(p!=null)pcol=clr(p); }
-    var ps=pcol?(' style="color:'+pcol+'"'):'';
-    return '<div class="'+cls+'"><div class="ml-oc-name">'+label+'</div><div class="ml-oc-prob"'+ps+'>'+val+'</div></div>';
-  }
-  // ── Card standard colorat după prob ──
-  function mc(label,p){
-    var cls='mc '+clsByProb(p);
-    return '<div class="'+cls+'"><div class="mc-name">'+label+'</div><div class="mc-prob">'+(p!=null?p+'%':'—')+'</div></div>';
-  }
-  // ── Rezultat (1X2 / DA-NU): decis → DA/NU; altfel prob (sau —) ──
-  function res(label,cond,decided,p){
-    if(decided){
-      var c=cond?'#00e5b8':'#ff7777';
-      return '<div class="mc"><div class="mc-name">'+label+'</div><div class="mc-prob" style="color:'+c+'">'+(cond?'DA ✓':'NU ✗')+'</div></div>';
-    }
-    return mc(label,p);
-  }
-  function grid(cols){ return 'display:grid;grid-template-columns:repeat('+cols+',1fr);gap:6px'; }
-  // produs probabilități (independență) pt combinații; a,b în 0..1
-  function combo(label,a,b){ if(a==null||b==null)return mc(label,null); return mc(label, Math.round(a*b*100)); }
-
-  // [Ziua 3] Model LIVE (payload.mlLive) — declarat SUS ca să-l folosească ȘI BLOC 1
-  // (PRE-MECI dinamic). lp = piață binară live (număr); lp3 = piață 3-clase (obiect).
+  var Mk=ml.markets;
   var mlLive=(d&&d.mlLive)||en.mlLive||null;
   var mlLiveAvail=!!((d&&d.mlLiveAvailable)||en.mlLiveAvailable);
   var elapsedNum=lc.elapsed||0;
-  var _preLive=!!(mlLiveAvail && mlLive && elapsedNum>0);   // kickoff trecut + model live
-  var pc=function(v){ v=Number(v); return Number.isFinite(v)?v:null; };  // FIX3: NaN/invalid → null → "—"
+  var _preLive=!!(mlLiveAvail&&mlLive&&elapsedNum>0);   // garda Ziua 3: model live doar după kickoff
+
+  var hn=(d.fixture&&d.fixture.teams&&d.fixture.teams.home&&d.fixture.teams.home.name)||'Gazde';
+  var an=(d.fixture&&d.fixture.teams&&d.fixture.teams.away&&d.fixture.teams.away.name)||'Oaspeți';
+
+  // ── STAREA CURENTĂ a meciului (singura sursă pentru decontare) ──
+  var hg=lc.homeGoals||0, ag=lc.awayGoals||0, tg=hg+ag;
+  var ft=(['FT','AET','PEN'].indexOf(lc.status)>=0);
+  var htKnown=(lc.homeHT!=null&&lc.awayHT!=null);
+  var hh=htKnown?(lc.homeHT||0):0, ah=htKnown?(lc.awayHT||0):0;
+  var r1Done=lc.r1Done;
+  var hr2=Math.max(0,hg-hh), ar2=Math.max(0,ag-ah), gr2=hr2+ar2;
+  var st={status:lc.status,elapsed:elapsedNum,isLive:lc.isLive,isHT:lc.isHT,ft:ft,
+          hg:hg,ag:ag,tg:tg,htKnown:htKnown,hh:hh,ah:ah,r1Done:r1Done,
+          r1tg:(hh+ah),hr2:hr2,ar2:ar2,gr2:gr2};
+
+  // ── accesori probabilitate (NESCHIMBATE din modele — strat de prezentare) ──
+  var pc=function(v){ v=Number(v); return Number.isFinite(v)?Math.round(v):null; };
+  var sp=function(k){ return (Mk[k]&&typeof Mk[k].prob==='number')?pc(Mk[k].prob):null; };
   var lp=function(k){ return (mlLive&&typeof mlLive[k]==='number')?pc(mlLive[k]):null; };
   var lp3=function(k){ return (mlLive&&mlLive[k]&&typeof mlLive[k]==='object')?mlLive[k]:null; };
-  var ocl=function(label,p){
-    if(p===100) return '<div class="mc"><div class="mc-name">'+label+'</div><div class="mc-prob" style="color:#00e5b8">✅ 100%</div></div>';
-    return mc(label,pc(p));
-  };
-  // FIX2: rând 3-clase (1/X/2 sau home/none/away) cu LIDERUL evidențiat; invalid → "—".
-  function triRow(items){
-    var vals=items.map(function(it){return pc(it[1]);});
-    var maxi=-1,maxv=-1; vals.forEach(function(v,i){ if(v!=null&&v>maxv){maxv=v;maxi=i;} });
-    return '<div style="'+grid(items.length)+'">'+items.map(function(it,i){
-      var v=vals[i], lead=(i===maxi&&v!=null);
-      var col=lead?'#00e5b8':(v==null?'#6b7a99':'#cdd8e6');
-      return '<div class="mc" style="'+(lead?'border:1px solid #00e5b855;':'')+'"><div class="mc-name">'+it[0]+'</div>'
+  var dc=function(a,b){ return (a!=null&&b!=null)?Math.min(100,a+b):null; };
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  MOTOR DE DECONTARE UNIC — decide(market, stareCurentă)
+  //   → { status:'in_joc'|'decontat', rezultat:'DA'|'NU'|'imposibil', context }
+  //  Aplicat UNIFORM tuturor piețelor (total/R1/R2/per echipă/BTTS/rezultat/
+  //  cornere/cartonașe). Probabilitatea rămâne a modelului; aici doar decidem
+  //  dacă piața s-a închis pe baza FAPTELOR (scor curent, scor HT, fază).
+  // ════════════════════════════════════════════════════════════════════════
+  function tallyCount(tally, s){
+    switch(tally){
+      case 'total':   return s.tg;
+      case 'home':    return s.hg;
+      case 'away':    return s.ag;
+      case 'r1total': return s.r1Done?s.r1tg:s.tg;     // în 1H golurile curente = R1
+      case 'r1home':  return s.r1Done?s.hh:s.hg;
+      case 'r1away':  return s.r1Done?s.ah:s.ag;
+      case 'r2total': return s.htKnown?s.gr2:null;     // R2 cunoscut doar cu scor HT
+      case 'r2home':  return s.htKnown?s.hr2:null;
+      case 'r2away':  return s.htKnown?s.ar2:null;
+      default: return null;
+    }
+  }
+  function phaseEnded(scope, s){
+    if(scope==='r1') return s.r1Done;                  // R1 închis la pauză
+    if(scope==='r2') return s.ft && s.htKnown;         // R2 închis la final
+    return s.ft;                                        // meci închis la FT
+  }
+  function scoreCtx(scope, s){
+    if(scope==='r1') return 'HT '+s.hh+'-'+s.ah;
+    if(scope==='r2') return 'R2 '+s.hr2+'-'+s.ar2;
+    return s.hg+'-'+s.ag;
+  }
+  function decide(it, s){
+    var k=it.kind;
+    if(k==='over'||k==='team'){
+      var c=tallyCount(it.tally,s);
+      if(c==null) return {status:'in_joc',rezultat:null,context:''};
+      var ended=phaseEnded(it.scope,s);
+      if(c>=it.need) return {status:'decontat',rezultat:'DA',context:c+' marcate'};
+      if(ended)      return {status:'decontat',rezultat:'NU',context:c+' marcate · final'};
+      return {status:'in_joc',rezultat:null,context:'are '+c+' · mai trebuie '+(it.need-c)};
+    }
+    if(k==='btts'){
+      var hsc=tallyCount(it.tally+'home', s), asc=tallyCount(it.tally+'away', s);
+      if(hsc==null||asc==null) return {status:'in_joc',rezultat:null,context:''};
+      var ended=phaseEnded(it.scope,s);
+      if(hsc>0&&asc>0) return {status:'decontat',rezultat:'DA',context:'ambele au marcat'};
+      if(ended)        return {status:'decontat',rezultat:'NU',context:scoreCtx(it.scope,s)};
+      return {status:'in_joc',rezultat:null,context:hsc>0?'gazdele au marcat':(asc>0?'oaspeții au marcat':'niciuna încă')};
+    }
+    if(k==='bttsno'){                                   // derivată: NU = complementul logic al lui DA
+      var src=decide(it.src,s);
+      if(src.status==='decontat'){
+        if(src.rezultat==='DA') return {status:'decontat',rezultat:'imposibil',context:'ambele au marcat'};
+        return {status:'decontat',rezultat:'DA',context:src.context};
+      }
+      return {status:'in_joc',rezultat:null,context:src.context};
+    }
+    if(k==='result'){
+      if(phaseEnded(it.scope,s)){
+        var hgs=it.scope==='r1'?s.hh:s.hg, ags=it.scope==='r1'?s.ah:s.ag;
+        var w=hgs>ags?it.labels[0]:(hgs===ags?it.labels[1]:it.labels[2]);
+        return {status:'decontat',rezultat:w,context:scoreCtx(it.scope,s)};
+      }
+      return {status:'in_joc',rezultat:null,context:''};
+    }
+    if(k==='dc'){                                       // șansă dublă derivată din 1X2
+      if(phaseEnded(it.scope,s)){
+        var hg2=it.scope==='r1'?s.hh:s.hg, ag2=it.scope==='r1'?s.ah:s.ag;
+        var oc=hg2>ag2?'1':(hg2===ag2?'X':'2');
+        var win=it.covers.indexOf(oc)>=0;
+        return {status:'decontat',rezultat:win?'DA':'imposibil',context:scoreCtx(it.scope,s)};
+      }
+      return {status:'in_joc',rezultat:null,context:'derivată din 1X2'};
+    }
+    if(k==='next') return {status:'in_joc',rezultat:null,context:'live'};
+    if(k==='plain'){                                    // cornere/cartonașe — fără count live: 100% = prag atins
+      if(it.p===100) return {status:'decontat',rezultat:'DA',context:'prag atins'};
+      return {status:'in_joc',rezultat:null,context:''};
+    }
+    return {status:'in_joc',rezultat:null,context:''};
+  }
+
+  // ════════ COLECTAREA PIEȚELOR (sursă live când există, altfel static) ════════
+  var items=[];
+  function add(it){ if(it){ items.push(it); } }
+  function over(label,group,scope,tally,need,p){ return {kind:'over',label:label,group:group,scope:scope,tally:tally,need:need,p:pc(p)}; }
+  function team(label,group,scope,tally,need,p){ var o=over(label,group,scope,tally,need,p); o.kind='team'; return o; }
+  function btts(label,group,scope,tally,p){ return {kind:'btts',label:label,group:group,scope:scope,tally:tally,p:pc(p)}; }
+  function plain(label,group,p){ return {kind:'plain',label:label,group:group,p:pc(p)}; }
+  function result(label,group,scope,labels,classes){ return {kind:'result',label:label,group:group,scope:scope,labels:labels,classes:classes}; }
+  function nextg(label,group,classes){ return {kind:'next',label:label,group:group,classes:classes}; }
+
+  // 1X2 — sursa unică pentru rezultat ȘI șansă dublă (coerență garantată)
+  var rfLive=_preLive?lp3('result_final'):null;
+  var p1=rfLive?pc(rfLive['1']):sp('home_win');
+  var px=rfLive?pc(rfLive['X']):sp('draw');
+  var p2=rfLive?pc(rfLive['2']):sp('away_win');
+
+  // ── MECI (total) ──
+  add(over('Peste 0.5 goluri','Total meci','match','total',1, sp('over05_total')));
+  add(over('Peste 1.5 goluri','Total meci','match','total',2, _preLive?lp('goals_total_over15'):sp('over15_total')));
+  add(over('Peste 2.5 goluri','Total meci','match','total',3, _preLive?lp('goals_total_over25'):sp('over25_total')));
+  add(over('Peste 3.5 goluri','Total meci','match','total',4, _preLive?lp('goals_total_over35'):sp('over35_total')));
+  add(over('Peste 4.5 goluri','Total meci','match','total',5, _preLive?lp('goals_total_over45'):sp('over45_total')));
+  add(result('Rezultat final','Rezultat','match',['1 '+hn,'X Egal','2 '+an],
+       [['1 '+hn,p1],['X Egal',px],['2 '+an,p2]]));
+  add({kind:'dc',label:'Șansă dublă 1X',group:'Rezultat',scope:'match',covers:['1','X'],p:dc(p1,px)});
+  add({kind:'dc',label:'Șansă dublă X2',group:'Rezultat',scope:'match',covers:['X','2'],p:dc(px,p2)});
+  add({kind:'dc',label:'Șansă dublă 12',group:'Rezultat',scope:'match',covers:['1','2'],p:dc(p1,p2)});
+  var bttsM=btts('Ambele marchează (DA)','BTTS','match','', _preLive?lp('btts_final'):sp('btts_total'));
+  add(bttsM);
+  add({kind:'bttsno',label:'Ambele marchează (NU)',group:'BTTS',src:bttsM,p:(bttsM.p!=null?100-bttsM.p:null)});
+  add(team('Peste 0.5 — '+hn,'Goluri '+hn,'match','home',1, sp('over05_home')));
+  add(team('Peste 1.5 — '+hn,'Goluri '+hn,'match','home',2, sp('over15_home')));
+  add(team('Peste 2.5 — '+hn,'Goluri '+hn,'match','home',3, sp('over25_home')));
+  add(team('Peste 0.5 — '+an,'Goluri '+an,'match','away',1, sp('over05_away')));
+  add(team('Peste 1.5 — '+an,'Goluri '+an,'match','away',2, sp('over15_away')));
+  add(team('Peste 2.5 — '+an,'Goluri '+an,'match','away',3, sp('over25_away')));
+  add(plain('Cornere peste 8.5','Cornere total',sp('corners_over85')));
+  add(plain('Cornere peste 9.5','Cornere total',sp('corners_over95')));
+  add(plain('Cornere peste 10.5','Cornere total',sp('corners_over105')));
+  add(plain('Cornere '+hn+' peste 4.5','Cornere '+hn,sp('corners_home_over45')));
+  add(plain('Cornere '+hn+' peste 5.5','Cornere '+hn,sp('corners_home_over55')));
+  add(plain('Cornere '+an+' peste 4.5','Cornere '+an,sp('corners_away_over45')));
+  add(plain('Cornere '+an+' peste 5.5','Cornere '+an,sp('corners_away_over55')));
+  add(plain('Cartonașe peste 3.5','Cartonașe total',sp('cards_over35')));
+  add(plain('Cartonașe peste 4.5','Cartonașe total',sp('cards_over45')));
+  add(plain('Cartonașe peste 5.5','Cartonașe total',sp('cards_over55')));
+  add(plain('Cartonașe '+hn+' peste 1.5','Cartonașe '+hn,sp('cards_home_over15')));
+  add(plain('Cartonașe '+hn+' peste 2.5','Cartonașe '+hn,sp('cards_home_over25')));
+  add(plain('Cartonașe '+an+' peste 1.5','Cartonașe '+an,sp('cards_away_over15')));
+  add(plain('Cartonașe '+an+' peste 2.5','Cartonașe '+an,sp('cards_away_over25')));
+
+  // ── REPRIZA 1 (predicții pre-meci via ht_*; upgrade live când e disponibil) ──
+  var r1Live=!!(_preLive && elapsedNum<=45 && lp3('result_r1'));
+  add(over('R1 peste 0.5','Repriza 1','r1','r1total',1, r1Live?lp('goals_r1_over05'):sp('ht_over05')));
+  add(over('R1 peste 1.5','Repriza 1','r1','r1total',2, r1Live?lp('goals_r1_over15'):sp('ht_over15')));
+  add(over('R1 peste 2.5','Repriza 1','r1','r1total',3, r1Live?lp('goals_r1_over25'):sp('ht_over25')));
+  add(btts('Ambele marchează R1','Repriza 1','r1','r1', r1Live?lp('btts_r1'):sp('ht_btts')));
+  add(team('R1 '+hn+' peste 0.5','Repriza 1 · '+hn,'r1','r1home',1, r1Live?lp('home_goals_r1_over05'):sp('ht_home')));
+  add(team('R1 '+hn+' peste 1.5','Repriza 1 · '+hn,'r1','r1home',2, r1Live?lp('home_goals_r1_over15'):sp('ht_home_over15')));
+  add(team('R1 '+an+' peste 0.5','Repriza 1 · '+an,'r1','r1away',1, r1Live?lp('away_goals_r1_over05'):sp('ht_away')));
+  add(team('R1 '+an+' peste 1.5','Repriza 1 · '+an,'r1','r1away',2, r1Live?lp('away_goals_r1_over15'):sp('ht_away_over15')));
+  var rr1=r1Live?lp3('result_r1'):null;
+  if(rr1||r1Done){
+    add(result('Rezultat R1','Repriza 1','r1',['1 '+hn,'X Egal','2 '+an],
+       rr1?[['1 '+hn,pc(rr1['1'])],['X Egal',pc(rr1['X'])],['2 '+an,pc(rr1['2'])]]:[['1 '+hn,null],['X Egal',null],['2 '+an,null]]));
+  }
+  if(r1Live){
+    add(plain('Cartonașe R1 peste 1.5','Cartonașe R1',lp('cards_r1_over15')));
+    add(plain('Cartonașe R1 peste 2.5','Cartonașe R1',lp('cards_r1_over25')));
+    var ng1=lp3('next_goal_r1');
+    if(ng1) add(nextg('Următorul gol R1','Repriza 1',[['⚽ '+hn,pc(ng1.home)],['Niciun gol',pc(ng1.none)],['⚽ '+an,pc(ng1.away)]]));
+  }
+
+  // ── REPRIZA 2 (doar după ce R1 s-a închis sau model live R2) ──
+  var r2Live=!!(_preLive && elapsedNum>45 && lp3('result_final'));
+  if(r1Done || r2Live){
+    add(over('R2 peste 0.5','Repriza 2','r2','r2total',1, r2Live?lp('goals_r2_over05'):sp('r2_over05')));
+    add(over('R2 peste 1.5','Repriza 2','r2','r2total',2, r2Live?lp('goals_r2_over15'):sp('r2_over15')));
+    if(!r2Live) add(over('R2 peste 2.5','Repriza 2','r2','r2total',3, sp('r2_over25')));
+    add(btts('Ambele marchează R2','Repriza 2','r2','r2', r2Live?lp('btts_final'):sp('r2_btts')));
+    add(team('R2 '+hn+' peste 0.5','Repriza 2 · '+hn,'r2','r2home',1, r2Live?lp('home_goals_r2_over05'):sp('r2_home')));
+    add(team('R2 '+hn+' peste 1.5','Repriza 2 · '+hn,'r2','r2home',2, r2Live?lp('home_goals_r2_over15'):sp('r2_home_over15')));
+    add(team('R2 '+an+' peste 0.5','Repriza 2 · '+an,'r2','r2away',1, r2Live?lp('away_goals_r2_over05'):sp('r2_away')));
+    add(team('R2 '+an+' peste 1.5','Repriza 2 · '+an,'r2','r2away',2, r2Live?lp('away_goals_r2_over15'):sp('r2_away_over15')));
+    var rp2=[['1 '+hn,sp('r2_home_win')],['X Egal',sp('r2_draw')],['2 '+an,sp('r2_away_win')]];
+    if(rp2[0][1]!=null||rp2[1][1]!=null||rp2[2][1]!=null||r1Done)
+      add(result('Rezultat R2','Repriza 2','r2',['1 '+hn,'X Egal','2 '+an],rp2));
+    if(r2Live){
+      var ng2=lp3('next_goal_r2');
+      if(ng2) add(nextg('Următorul gol','Repriza 2',[['⚽ '+hn,pc(ng2.home)],['Niciun gol',pc(ng2.none)],['⚽ '+an,pc(ng2.away)]]));
+    }
+  }
+
+  // ════════ DECONTARE + SORTARE ════════
+  function conv(it){
+    if(it.kind==='result'||it.kind==='next'){
+      var cls=it.classes; if(!cls) return -1;
+      var mx=-1; cls.forEach(function(c){ if(c[1]!=null&&c[1]>mx)mx=c[1]; });
+      return mx<0?-1:(mx-100/cls.length);
+    }
+    return it.p!=null?Math.abs(it.p-50):-1;
+  }
+  items.forEach(function(it){ it.dec=decide(it,st); it.c=conv(it); });
+  var multiKind=function(it){ return it.kind==='result'||it.kind==='next'; };
+  var inplay=items.filter(function(it){
+    if(it.dec.status!=='in_joc') return false;
+    if(multiKind(it)) return true;                 // multiclass: păstrăm chiar parțial
+    return it.p!=null;                              // binare fără date → ascunse (fără "—")
+  });
+  var settled=items.filter(function(it){ return it.dec.status==='decontat'; });
+  inplay.sort(function(a,b){ return b.c-a.c; });
+
+  // ════════ RANDARE (identitatea grafică existentă: tokens + glassmorphism) ════════
+  var semClr=function(p){ return p==null?'#6b7a99':p>=70?'#00e5b8':p>=50?'#ffcc44':'#ff7777'; };
+  function triCells(cls){
+    var mi=-1,mv=-1; cls.forEach(function(c,i){ if(c[1]!=null&&c[1]>mv){mv=c[1];mi=i;} });
+    return '<div style="display:grid;grid-template-columns:repeat('+cls.length+',1fr);gap:6px">'+cls.map(function(c,i){
+      var v=c[1],lead=(i===mi&&v!=null),col=lead?'#00e5b8':(v==null?'#6b7a99':'#cdd8e6');
+      return '<div class="mc"'+(lead?' style="border:1px solid #00e5b855"':'')+'><div class="mc-name">'+htmlEsc(c[0])+'</div>'
         +'<div class="mc-prob" style="color:'+col+';font-weight:'+(lead?900:700)+'">'+(v!=null?v+'%':'—')+'</div></div>';
     }).join('')+'</div>';
   }
-  // Badge „· actualizat live · min X" (PRE-MECI dinamic, doar după kickoff).
-  var liveBadge=function(){ return _preLive?(' <span style="font-size:9px;color:#ff7777;font-weight:700">· actualizat live · min '+elapsedNum+'</span>'):''; };
+  function rowBar(it){
+    var p=it.p, col=semClr(p);
+    return '<div class="mlx-row"><div class="nm"><b>'+htmlEsc(it.label)+'</b>'
+      +'<small>'+htmlEsc(it.group)+(it.dec.context?(' · '+htmlEsc(it.dec.context)):'')+'</small>'
+      +'<div class="mlx-bar"><i style="width:'+(p!=null?p:0)+'%;background:'+col+'"></i></div></div>'
+      +'<div class="pct" style="color:'+col+'">'+(p!=null?p+'%':'—')+'</div></div>';
+  }
+  function rowMulti(it){
+    return '<div style="margin-bottom:8px"><div class="ml-sub" style="margin:8px 0 4px">'+htmlEsc(it.label)+'</div>'+triCells(it.classes)+'</div>';
+  }
+  function rowSettled(it){
+    var r=it.dec.rezultat||'—', g=r==='DA'?'✓':(r==='NU'?'✗':'⊘');
+    return '<div class="mlx-set"><span class="sg">'+g+' '+htmlEsc(String(r).toUpperCase())+'</span>'
+      +'<span style="flex:1">'+htmlEsc(it.label)+'</span>'
+      +'<span style="color:#5a6a80">'+htmlEsc(it.dec.context||'')+'</span></div>';
+  }
 
-  // Status header
-  var stTxt, stClr;
-  if(lc.status==='HT'){ stTxt='⏸ Pauză · HT '+(lc.homeHT!=null?lc.homeHT:'?')+'-'+(lc.awayHT!=null?lc.awayHT:'?'); stClr='#ffcc44'; }
-  else if(lc.status==='2H'||lc.status==='ET'){ stTxt='🔴 LIVE · R2 · min '+lc.elapsed; stClr='#ff7777'; }
-  else if(lc.status==='1H'){ stTxt='🔴 LIVE · R1 · min '+lc.elapsed; stClr='#ff7777'; }
-  else { stTxt='⏱ Pre-meci'; stClr='var(--mu)'; }
-  var trained=ml.trainedOn?(Math.round(ml.trainedOn/1000)+'k'):'—';
-  var bestBrier=(ml.bestBrier!=null)?Number(ml.bestBrier).toFixed(4):'—';
-  var matchLive=(lc.isLive||lc.isHT);
+  // status text pentru header
+  var minTxt, minClr;
+  if(lc.isHT){ minTxt='Pauză · HT '+(htKnown?hh+'-'+ah:'?'); minClr='#ffcc44'; }
+  else if(lc.status==='2H'||lc.status==='ET'){ minTxt='min '+elapsedNum+' · R2'; minClr='#ff7777'; }
+  else if(lc.status==='1H'){ minTxt='min '+elapsedNum+' · R1'; minClr='#ff7777'; }
+  else if(ft){ minTxt='Final'; minClr='var(--mu)'; }
+  else { minTxt='Pre-meci'; minClr='var(--mu)'; }
+  var liveDot=lc.isLive?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff7777;animation:livePulse 1s infinite;margin-right:6px"></span>':'';
+
+  // hero — convingerea cea mai puternică (sau rezultatul final dacă meciul s-a închis)
+  var finalRes=null; settled.forEach(function(it){ if(it.kind==='result'&&it.scope==='match') finalRes=it; });
+  var heroHtml;
+  if(ft && finalRes){ heroHtml='🏁 Final '+hg+'-'+ag+': <b>'+htmlEsc(finalRes.dec.rezultat)+'</b>'; }
+  else if(inplay.length){
+    var h=inplay[0];
+    if(multiKind(h)){
+      var mx=-1,mlab=''; (h.classes||[]).forEach(function(c){ if(c[1]!=null&&c[1]>mx){mx=c[1];mlab=c[0];} });
+      heroHtml='Cel mai puternic semnal — <b>'+htmlEsc(h.label)+'</b>: înclină spre <b>'+htmlEsc(mlab)+'</b> ('+(mx<0?'—':mx+'%')+')';
+    } else {
+      heroHtml='Cel mai puternic semnal — <b>'+htmlEsc(h.label)+'</b>: <b style="color:'+semClr(h.p)+'">'+(h.p!=null?h.p+'%':'—')+'</b>';
+    }
+  } else { heroHtml='Niciun semnal puternic momentan.'; }
+
+  var trainedK=ml.trainedOn?('~'+Math.round(ml.trainedOn/1000)+'k meciuri'):null;
 
   var out='';
   out+='<style>'
-    +'.ml-oc{border-radius:8px;padding:8px 6px;border:1px solid #1e2a38;text-align:center}'
-    +'.ml-oc-name{font-size:10px;color:#6b7a99;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}'
-    +'.ml-oc-prob{font-size:17px;font-weight:800;line-height:1}'
-    +'.ml-oc.active{background:#082820;border:2px solid #00e5b8;box-shadow:0 0 10px #00e5b830}.ml-oc.active .ml-oc-prob{color:#00e5b8;font-size:19px}'
-    +'.ml-oc.pending{background:#141c28;border:1px solid #1e2a38;opacity:1}.ml-oc.pending .ml-oc-prob{color:#8899aa;font-size:13px}.ml-oc.pending .ml-oc-name{color:#5a6a80}'
-    +'.ml-oc.yes{background:#082015;border:1px solid #00e5b840}.ml-oc.yes .ml-oc-prob{color:#00e5b8}'
-    +'.ml-oc.no{background:#201008;border:1px solid #ff555530}.ml-oc.no .ml-oc-prob{color:#ff7777}'
-    +'.mc{background:#0f1620;border:1px solid #1e2a38;border-radius:8px;padding:8px;text-align:center}'
+    +'.mc{background:#0f1620;border:1px solid var(--bor);border-radius:8px;padding:8px;text-align:center}'
     +'.mc-name{font-size:10px;color:#6b7a99;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}'
     +'.mc-prob{font-size:17px;font-weight:800}'
-    +'.mc.green .mc-prob{color:#00e5b8}.mc.yellow .mc-prob{color:#ffcc44}.mc.red .mc-prob{color:#ff7777}'
-    +'.ml-team-label{background:#111827;border-radius:8px;padding:6px 8px;text-align:center;font-size:10px;font-weight:700;margin-bottom:6px}'
-    +'.ml-team-label.home{color:#00e5b8;border:1px solid #00e5b830}.ml-team-label.away{color:#3b82f6;border:1px solid #3b82f630}'
-    +'.ml-sub{font-size:11px;color:#8b9bb4;margin:10px 0 6px;font-weight:700}'
+    +'.ml-sub{font-size:11px;color:#8b9bb4;font-weight:700}'
+    +'.mlx-head{display:flex;align-items:center;gap:10px;background:rgba(8,13,24,.6);border:1px solid var(--bor);border-radius:12px;padding:10px 12px;margin-bottom:10px}'
+    +'.mlx-head .sc{font-size:20px;font-weight:900;color:var(--tx)}'
+    +'.mlx-hero{background:rgba(99,102,241,.10);border:1px solid rgba(99,102,241,.30);border-radius:12px;padding:13px 14px;margin-bottom:14px;font-size:13px;color:#c7d2fe;line-height:1.4}'
+    +'.mlx-zone{font-size:12px;font-weight:800;color:#a5b4fc;letter-spacing:.4px;margin:4px 0 8px}'
+    +'.mlx-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--bor);border-radius:10px;background:rgba(255,255,255,.02);margin-bottom:6px}'
+    +'.mlx-row .nm{flex:1;min-width:0}'
+    +'.mlx-row .nm b{font-size:12px;font-weight:700;color:var(--tx);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    +'.mlx-row .nm small{font-size:10px;color:var(--mu)}'
+    +'.mlx-row .pct{font-size:18px;font-weight:800;min-width:50px;text-align:right}'
+    +'.mlx-bar{height:3px;border-radius:2px;background:rgba(255,255,255,.06);margin-top:5px;overflow:hidden}'
+    +'.mlx-bar i{display:block;height:100%;border-radius:2px}'
+    +'details.mlx-acc{margin-top:14px;border:1px solid var(--bor);border-radius:10px;overflow:hidden}'
+    +'details.mlx-acc>summary{cursor:pointer;padding:10px 12px;font-size:12px;font-weight:800;color:#8b9bb4;list-style:none;background:rgba(255,255,255,.02)}'
+    +'details.mlx-acc>summary::-webkit-details-marker{display:none}'
+    +'.mlx-set{display:flex;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid var(--bor);font-size:11px;color:#6b7a99}'
+    +'.mlx-set .sg{min-width:86px;font-weight:800;color:#8b9bb4}'
     +'</style>';
-  out+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:10px 12px;margin-bottom:12px">';
-  out+='<span style="font-weight:800;color:#a5b4fc">🤖 ML</span>';
-  out+='<span style="font-size:11px;font-weight:700;color:'+stClr+'">'+stTxt+'</span>';
-  out+='<span style="font-size:10px;color:var(--mu);margin-left:auto">'+trained+' meciuri · LR</span></div>';
 
-  // ════ BLOC 0 — 🔴 LIVE ACUM (modele live, doar în repriză) ════
-  if(lc.isLive){
-    var pLiveGoal=prob('live_any_goal'), pLiveOv15=prob('live_over15_updated');
-    if(pLiveGoal!=null||pLiveOv15!=null){
-      out+='<div class="md-section">';
-      out+='<div class="md-section-title" style="color:#ff7777">🔴 LIVE ACUM</div>';
-      out+='<div style="'+grid(3)+'">'
-        +mc('Mai cad goluri?',pLiveGoal)
-        +mc('Over 1.5?',pLiveOv15)
-        +mc('Min '+lc.elapsed,null)+'</div>';
-      out+='<div style="font-size:9px;color:#6b7a99;margin-top:6px">Bazat pe statistici live · actualizat la fiecare minut</div>';
-      out+='</div>';
-    }
-  }
+  // 1. Header viu
+  out+='<div class="mlx-head">'+liveDot
+    +'<span style="flex:1;font-size:12px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+htmlEsc(hn)+' — '+htmlEsc(an)+'</span>'
+    +'<span class="sc">'+hg+'-'+ag+'</span>'
+    +'<span style="font-size:11px;font-weight:700;color:'+minClr+'">'+minTxt+'</span></div>';
 
-  // ════ BLOC 1 — PRE-MECI ════
-  out+='<div class="md-section"><div class="md-section-title" style="font-size:15px;font-weight:800;color:#a5b4fc;border-left:3px solid #6366f1;padding-left:8px">⏱ PRE-MECI</div>';
-  // PRE-MECI DINAMIC: după kickoff, piețele full-match se reactualizează din
-  // modelul live cu starea curentă (scor/minut). Pre-kickoff = modelul static.
-  out+='<div class="ml-sub">Total goluri meci'+liveBadge()+'</div>';
-  out+='<div style="'+grid(5)+'">'
-    +oc('Ov 0.5',1,tg,false,matchLive,prob('over05_total'))
-    +oc('Ov 1.5',2,tg,false,matchLive,_preLive?lp('goals_total_over15'):prob('over15_total'))
-    +oc('Ov 2.5',3,tg,false,matchLive,_preLive?lp('goals_total_over25'):prob('over25_total'))
-    +oc('Ov 3.5',4,tg,false,matchLive,_preLive?lp('goals_total_over35'):prob('over35_total'))
-    +oc('Ov 4.5',5,tg,false,matchLive,_preLive?lp('goals_total_over45'):prob('over45_total'))+'</div>';
-  // Rezultat final (multiclass, lider evidențiat): live → result_final; pre → 1X2 static.
-  out+='<div class="ml-sub">Rezultat final'+liveBadge()+'</div>';
-  var rfPre=_preLive?lp3('result_final'):null;
-  if(rfPre){ out+=triRow([['1 Gazde',rfPre['1']],['X Egal',rfPre['X']],['2 Oaspeți',rfPre['2']]]); }
-  else { out+=triRow([['1 Gazde',prob('home_win')],['X Egal',prob('draw')],['2 Oaspeți',prob('away_win')]]); }
-  var p1=prob('home_win'),px=prob('draw'),p2=prob('away_win');
-  var dc=function(a,b){ return (a!=null&&b!=null)?Math.min(100,a+b):null; };
-  out+='<div class="ml-sub">Șansă dublă</div>';
-  out+='<div style="'+grid(3)+'">'+mc('1X',dc(p1,px))+mc('X2',dc(px,p2))+mc('12',dc(p1,p2))+'</div>';
-  var bt=_preLive?lp('btts_final'):prob('btts_total'); var btDone=(hg>0&&ag>0);
-  out+='<div class="ml-sub">Ambele marchează'+liveBadge()+'</div>';
-  out+='<div style="'+grid(2)+'">'+res('BTTS DA',btDone,btDone,bt)+mc('BTTS NU',bt!=null?(100-bt):null)+'</div>';
-  out+='<div class="ml-sub">Goluri per echipă (tot meciul)</div>';
-  out+='<div style="'+grid(2)+'">';
-  out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-    +oc('Over 0.5',1,hg,false,matchLive,prob('over05_home'))+oc('Over 1.5',2,hg,false,matchLive,prob('over15_home'))
-    +oc('Over 2.5',3,hg,false,matchLive,prob('over25_home'))+'</div></div>';
-  out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-    +oc('Over 0.5',1,ag,false,matchLive,prob('over05_away'))+oc('Over 1.5',2,ag,false,matchLive,prob('over15_away'))
-    +oc('Over 2.5',3,ag,false,matchLive,prob('over25_away'))+'</div></div>';
-  out+='</div>';
-  // ── Cornere ──
-  out+='<div class="ml-sub">Cornere total meci</div>';
-  out+='<div style="'+grid(3)+'">'
-    +mc('Ov 8.5',prob('corners_over85'))
-    +mc('Ov 9.5',prob('corners_over95'))
-    +mc('Ov 10.5',prob('corners_over105'))+'</div>';
-  out+='<div class="ml-sub">Cornere per echipă</div>';
-  out+='<div style="'+grid(2)+'">';
-  out+='<div><div class="ml-team-label home">🚩 '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-    +mc('Over 3.5',prob('corners_home_over35'))+mc('Over 4.5',prob('corners_home_over45'))
-    +mc('Over 5.5',prob('corners_home_over55'))+mc('Over 6.5',prob('corners_home_over65'))
-    +mc('Over 7.5',prob('corners_home_over75'))+mc('Over 8.5',prob('corners_home_over85'))+'</div></div>';
-  out+='<div><div class="ml-team-label away">🚩 '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-    +mc('Over 3.5',prob('corners_away_over35'))+mc('Over 4.5',prob('corners_away_over45'))
-    +mc('Over 5.5',prob('corners_away_over55'))+mc('Over 6.5',prob('corners_away_over65'))
-    +mc('Over 7.5',prob('corners_away_over75'))+mc('Over 8.5',prob('corners_away_over85'))+'</div></div>';
-  out+='</div>';
-  // ── Cartonașe ──
-  out+='<div class="ml-sub">Cartonașe galbene total</div>';
-  out+='<div style="'+grid(4)+'">'
-    +mc('Ov 3.5',prob('cards_over35'))
-    +mc('Ov 4.5',prob('cards_over45'))
-    +mc('Ov 5.5',prob('cards_over55'))
-    +mc('Ov 6.5',prob('cards_over65'))+'</div>';
-  out+='<div class="ml-sub">Cartonașe per echipă</div>';
-  out+='<div style="'+grid(2)+'">';
-  out+='<div><div class="ml-team-label home">🟨 '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-    +mc('Over 1.5',prob('cards_home_over15'))+mc('Over 2.5',prob('cards_home_over25'))
-    +mc('Over 3.5',prob('cards_home_over35'))+'</div></div>';
-  out+='<div><div class="ml-team-label away">🟨 '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-    +mc('Over 1.5',prob('cards_away_over15'))+mc('Over 2.5',prob('cards_away_over25'))
-    +mc('Over 3.5',prob('cards_away_over35'))+'</div></div>';
-  out+='</div></div>';
+  // 2. Hero
+  out+='<div class="mlx-hero">'+heroHtml+'</div>';
 
-  // ════ BLOC 2 — REPRIZA 1 ════ (mlLive/lp/lp3/ocl declarate sus, lângă helpers)
-  if(mlLiveAvail && mlLive && elapsedNum>0 && elapsedNum<=45 && lp3('result_r1')){
-    // ── BLOC 2 LIVE v2 (model_live_export.json) ──
-    out+='<div class="md-section"><div class="md-section-title" style="color:#ff7777">⏱ REPRIZA 1 — LIVE <span style="font-size:9px;font-weight:700">🔴 min '+elapsedNum+'</span></div>';
-    var rr1=lp3('result_r1')||{};
-    out+='<div class="ml-sub">Rezultat R1</div>';
-    out+=triRow([['1 Gazde',rr1['1']],['X Egal',rr1['X']],['2 Oaspeți',rr1['2']]]);
-    // Total goluri R1 — oc() cu scorul curent tg (prag atins → DA ✓).
-    out+='<div class="ml-sub">Total goluri R1</div>';
-    out+='<div style="'+grid(3)+'">'
-      +oc('Ov 0.5',1,tg,false,true,lp('goals_r1_over05'))
-      +oc('Ov 1.5',2,tg,false,true,lp('goals_r1_over15'))
-      +oc('Ov 2.5',3,tg,false,true,lp('goals_r1_over25'))+'</div>';
-    // Goluri per echipă R1 — oc() cu hg/ag curent.
-    out+='<div class="ml-sub">Goluri per echipă R1</div>';
-    out+='<div style="'+grid(2)+'">';
-    out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-      +oc('Over 0.5',1,hg,false,true,lp('home_goals_r1_over05'))+oc('Over 1.5',2,hg,false,true,lp('home_goals_r1_over15'))+oc('Over 2.5',3,hg,false,true,lp('home_goals_r1_over25'))+'</div></div>';
-    out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-      +oc('Over 0.5',1,ag,false,true,lp('away_goals_r1_over05'))+oc('Over 1.5',2,ag,false,true,lp('away_goals_r1_over15'))+oc('Over 2.5',3,ag,false,true,lp('away_goals_r1_over25'))+'</div></div>';
-    out+='</div>';
-    // Cartonașe R1 — prag atins → server a setat 100 → ocl() ✅.
-    out+='<div class="ml-sub">Cartonașe R1</div>';
-    out+='<div style="'+grid(3)+'">'
-      +ocl('Ov 1.5',lp('cards_r1_over15'))
-      +ocl('Ov 2.5',lp('cards_r1_over25'))
-      +ocl('Ov 3.5',lp('cards_r1_over35'))+'</div>';
-    // BTTS R1.
-    var bttsR1Done=(hg>0&&ag>0);
-    out+='<div class="ml-sub">Ambele marchează R1</div>';
-    out+='<div style="'+grid(1)+'">'+res('BTTS R1',bttsR1Done,bttsR1Done,lp('btts_r1'))+'</div>';
-    // Next Goal R1 (3 clase: home/none/away).
-    var ng1=lp3('next_goal_r1')||{};
-    out+='<div class="ml-sub">Următorul gol R1</div>';
-    out+='<div style="'+grid(3)+'">'+mc('⚽ '+htmlEsc(hn),ng1.home)+mc('Niciun gol',ng1.none)+mc('⚽ '+htmlEsc(an),ng1.away)+'</div>';
-    out+='</div>';
+  // 3. ÎN JOC (sortat după convingere)
+  out+='<div class="mlx-zone">🎯 ÎN JOC ('+inplay.length+')</div>';
+  if(inplay.length){
+    inplay.forEach(function(it){ out+=multiKind(it)?rowMulti(it):rowBar(it); });
   } else {
-    // ── BLOC 2 existent (pre-meci / fallback) — NESCHIMBAT ──
-    var r1Live=(lc.status==='1H'), r1Done=lc.r1Done;
-    var r1H=r1Done?(lc.homeHT||0):hg, r1A=r1Done?(lc.awayHT||0):ag, thh=r1H+r1A;
-    var r1Badge=r1Done?('✅ Rezultat final R1 · HT '+(lc.homeHT!=null?lc.homeHT:'?')+'-'+(lc.awayHT!=null?lc.awayHT:'?')):'⏱ Predicție pre-meci';
-    out+='<div class="md-section"><div class="md-section-title">REPRIZA 1'+(lc.status==='1H'?' <span style="font-size:9px;color:#ff7777;font-weight:700">🔴 live</span>':'')+'</div>';
-    out+='<div style="font-size:10px;color:var(--mu);margin-bottom:8px">'+r1Badge+'</div>';
-    out+='<div class="ml-sub">Total goluri R1</div>';
-    var r1BttsDone=r1Done?((lc.homeHT||0)>0&&(lc.awayHT||0)>0):(hg>0&&ag>0);
-    out+='<div style="'+grid(4)+'">'
-      +oc('Ov 0.5',1,thh,r1Done,r1Live,prob('ht_over05'))
-      +oc('Ov 1.5',2,thh,r1Done,r1Live,prob('ht_over15'))
-      +oc('Ov 2.5',3,thh,r1Done,r1Live,prob('ht_over25'))
-      +res('BTTS',r1BttsDone,r1Done,prob('ht_btts'))+'</div>';
-    out+='<div class="ml-sub">Rezultat R1</div>';
-    if(r1Done){
-      out+='<div style="'+grid(3)+'">'
-        +res('1 Gazde', r1H>r1A, true, null)
-        +res('X Egal',  r1H===r1A, true, null)
-        +res('2 Oaspeți',r1A>r1H, true, null)+'</div>';
-    } else {
-      // REGULA DE AUR: rezultatul R1 e piață LIVE-only → pre-kickoff NU folosim modelul live.
-      out+='<div class="mc" style="text-align:center;color:#6b7a99;font-size:11px;padding:10px">— disponibil la kickoff</div>';
-    }
-    out+='<div class="ml-sub">Goluri per echipă R1</div>';
-    out+='<div style="'+grid(2)+'">';
-    out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-      +oc('Over 0.5',1,r1H,r1Done,r1Live,prob('ht_home'))+oc('Over 1.5',2,r1H,r1Done,r1Live,prob('ht_home_over15'))+'</div></div>';
-    out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-      +oc('Over 0.5',1,r1A,r1Done,r1Live,prob('ht_away'))+oc('Over 1.5',2,r1A,r1Done,r1Live,prob('ht_away_over15'))+'</div></div>';
-    out+='</div></div>';
+    out+='<div style="font-size:11px;color:var(--mu);padding:8px 2px">Toate piețele relevante sunt decontate.</div>';
   }
 
-  // ════ BLOC 3 — REPRIZA 2 ════
-  if(mlLiveAvail && mlLive && elapsedNum>45 && lp3('result_final')){
-    // ── BLOC 3 LIVE v2 (model_live_export.json) ──
-    out+='<div class="md-section"><div class="md-section-title" style="color:#ff7777">⏱ REPRIZA 2 — LIVE <span style="font-size:9px;font-weight:700">🔴 min '+elapsedNum+'</span></div>';
-    var rf=lp3('result_final')||{};
-    out+='<div class="ml-sub">Rezultat final</div>';
-    out+=triRow([['1 Gazde',rf['1']],['X Egal',rf['X']],['2 Oaspeți',rf['2']]]);
-    // Total goluri meci — oc() cu tg (prag atins → DA ✓).
-    out+='<div class="ml-sub">Total goluri meci</div>';
-    out+='<div style="'+grid(4)+'">'
-      +oc('Ov 1.5',2,tg,false,true,lp('goals_total_over15'))
-      +oc('Ov 2.5',3,tg,false,true,lp('goals_total_over25'))
-      +oc('Ov 3.5',4,tg,false,true,lp('goals_total_over35'))
-      +oc('Ov 4.5',5,tg,false,true,lp('goals_total_over45'))+'</div>';
-    // Goluri R2 (după min 45) — predicție model, fără count R2 disponibil.
-    out+='<div class="ml-sub">Goluri R2 (după min 45)</div>';
-    out+='<div style="'+grid(2)+'">'+mc('Ov 0.5',lp('goals_r2_over05'))+mc('Ov 1.5',lp('goals_r2_over15'))+'</div>';
-    // Goluri per echipă R2 — predicție model.
-    out+='<div class="ml-sub">Goluri per echipă R2</div>';
-    out+='<div style="'+grid(2)+'">';
-    out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-      +mc('Over 0.5',lp('home_goals_r2_over05'))+mc('Over 1.5',lp('home_goals_r2_over15'))+'</div></div>';
-    out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-      +mc('Over 0.5',lp('away_goals_r2_over05'))+mc('Over 1.5',lp('away_goals_r2_over15'))+'</div></div>';
-    out+='</div>';
-    // BTTS final.
-    var bttsFinDone=(hg>0&&ag>0);
-    out+='<div class="ml-sub">Ambele marchează (final)</div>';
-    out+='<div style="'+grid(1)+'">'+res('BTTS',bttsFinDone,bttsFinDone,lp('btts_final'))+'</div>';
-    // Next Goal R2 (3 clase).
-    var ng2=lp3('next_goal_r2')||{};
-    out+='<div class="ml-sub">Următorul gol</div>';
-    out+='<div style="'+grid(3)+'">'+mc('⚽ '+htmlEsc(hn),ng2.home)+mc('Niciun gol',ng2.none)+mc('⚽ '+htmlEsc(an),ng2.away)+'</div>';
-    // Cartonașe total meci — prag atins → server 100 → ocl() ✅.
-    out+='<div class="ml-sub">Cartonașe total meci</div>';
-    out+='<div style="'+grid(3)+'">'
-      +ocl('Ov 3.5',lp('cards_total_over35'))
-      +ocl('Ov 4.5',lp('cards_total_over45'))
-      +ocl('Ov 5.5',lp('cards_total_over55'))+'</div>';
-    out+='</div>';
-  } else if(lc.r1Done && lc.homeHT!=null){
-    // ── BLOC 3 existent (pre-meci / fallback) — NESCHIMBAT ──
-    // NB: folosim lc.r1Done (mereu disponibil), NU `r1Done` care se atribuie
-    // doar în ramura `else` a BLOC 2 — altfel la HT (BLOC 2 LIVE) ar fi undefined
-    // și secțiunea R2 ar dispărea.
-    var hr2=Math.max(0,hg-(lc.homeHT||0)), ar2=Math.max(0,ag-(lc.awayHT||0)), gr2=hr2+ar2;
-    var r2Badge=lc.isHT?('⏸ Pauză · HT '+lc.homeHT+'-'+lc.awayHT):('🔴 LIVE · min '+lc.elapsed+' · scor HT '+lc.homeHT+'-'+lc.awayHT);
-    var r2BttsDone=(hr2>0&&ar2>0);
-    out+='<div class="md-section"><div class="md-section-title">REPRIZA 2'+(lc.status==='2H'?' <span style="font-size:9px;color:#ff7777;font-weight:700">🔴 live</span>':'')+'</div>';
-    out+='<div style="font-size:10px;color:var(--mu);margin-bottom:8px">'+r2Badge+'</div>';
-    out+='<div class="ml-sub">Total goluri R2</div>';
-    out+='<div style="'+grid(4)+'">'
-      +oc('Ov 0.5',1,gr2,false,true,prob('r2_over05'))
-      +oc('Ov 1.5',2,gr2,false,true,prob('r2_over15'))
-      +oc('Ov 2.5',3,gr2,false,true,prob('r2_over25'))
-      +res('BTTS',r2BttsDone,false,prob('r2_btts'))+'</div>';
-    out+='<div class="ml-sub">Rezultat R2</div>';
-    out+='<div style="'+grid(3)+'">'+mc('1 Gazde',prob('r2_home_win'))+mc('X Egal',prob('r2_draw'))+mc('2 Oaspeți',prob('r2_away_win'))+'</div>';
-    out+='<div class="ml-sub">Goluri per echipă R2</div>';
-    out+='<div style="'+grid(2)+'">';
-    out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-      +oc('Over 0.5',1,hr2,false,true,prob('r2_home'))+oc('Over 1.5',2,hr2,false,true,prob('r2_home_over15'))+oc('Over 2.5',3,hr2,false,true,prob('r2_home_over25'))+'</div></div>';
-    out+='<div><div class="ml-team-label away">⚽ '+htmlEsc(an)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
-      +oc('Over 0.5',1,ar2,false,true,prob('r2_away'))+oc('Over 1.5',2,ar2,false,true,prob('r2_away_over15'))+oc('Over 2.5',3,ar2,false,true,prob('r2_away_over25'))+'</div></div>';
-    out+='</div>';
-    out+='</div>';
+  // 4. Acordeon DECONTATE (pliat implicit, gri/neutru)
+  if(settled.length){
+    out+='<details class="mlx-acc"><summary>✓ DECONTATE ('+settled.length+')</summary><div>';
+    settled.forEach(function(it){ out+=rowSettled(it); });
+    out+='</div></details>';
   }
 
-  out+='<div style="font-size:10px;color:var(--mu);margin-top:10px;line-height:1.4">🤖 Model antrenat pe '+trained+' meciuri reale · Logistic Regression · Brier '+bestBrier+'</div>';
+  // 6. Footer onest
+  out+='<div style="font-size:10px;color:var(--mu);margin-top:14px;line-height:1.5">'
+    +'🤖 Model: <b>HistGradientBoosting</b> · '+items.length+' piețe'
+    +(trainedK?(' · antrenat pe '+trainedK):'')+'</div>';
+
   body.innerHTML=out;
 }
 
