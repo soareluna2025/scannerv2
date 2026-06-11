@@ -36,10 +36,20 @@ export default async function handler(req, res) {
 
   // 3. VACUUM ANALYZE — pool.query DIRECT (NU în tranzacție; VACUUM nu rulează
   //    într-un bloc tranzacțional).
+  // 2b. api_markers (tabelul nou): no_data:% >90 zile, h2h_refresh >30 zile.
+  let markersDeleted = 0;
+  try {
+    const r1 = await query(`DELETE FROM api_markers WHERE kind LIKE 'no_data:%' AND created_at < NOW() - INTERVAL '90 days'`);
+    const r2 = await query(`DELETE FROM api_markers WHERE kind = 'h2h_refresh' AND created_at < NOW() - INTERVAL '30 days'`);
+    markersDeleted = (r1.rowCount || 0) + (r2.rowCount || 0);
+    log(`api_markers șterse: ${markersDeleted}`);
+  } catch (e) { errors.push(`api_markers: ${e.message}`); log(`api_markers error: ${e.message}`); }
+
   try {
     await pool.query(`VACUUM ANALYZE app_settings`);
+    await pool.query(`VACUUM ANALYZE api_markers`).catch(() => {});
     vacuumOk = true;
-    log(`VACUUM ANALYZE app_settings OK`);
+    log(`VACUUM ANALYZE app_settings + api_markers OK`);
   } catch (e) { errors.push(`vacuum: ${e.message}`); log(`vacuum error: ${e.message}`); }
 
   // 4. cron_logs — status 'ok' + rezumat per tip în error_msg (singurul câmp text).

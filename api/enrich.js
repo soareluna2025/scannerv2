@@ -17,6 +17,27 @@ const enrichCache = new Map();
 const ENRICH_TTL_LIVE   =  60_000;
 const ENRICH_TTL_STATIC = 600_000;
 
+// [SPEED A] Cache memorie pentru date FIXE intra-zi/intra-meci — rezultate
+// IDENTICE cu calculul direct, doar fără re-rularea LATERAL-urilor grele:
+//  • _avgStatsCache / _avgEventsCache: medii rolling-100 per (teamId, ziua
+//    matchDate). Se schimbă doar la finalul unui meci al echipei → cheia pe
+//    zi + invalidare zilnică e suficientă. (TĂIETURA 3)
+//  • _h2hCache: H2H per pereche (min-max), TTL 3h — fix după kickoff. (TĂIETURA 4)
+const _avgStatsCache  = new Map();   // `${teamId}|${YYYY-MM-DD}` → row|null
+const _avgEventsCache = new Map();
+const _h2hCache       = new Map();   // `${min}-${max}` → { v, ts }
+const _AVG_CACHE_MAX  = 6000;
+const _H2H_TTL        = 3 * 3600_000;
+let   _avgCacheDay    = '';
+function _dayOf(md) { return String(md || '').slice(0, 10) || new Date().toISOString().slice(0, 10); }
+function _avgCachePrune() {
+  // Invalidare zilnică (UTC) — la prima cerere a zilei noi golim cache-urile pe zi.
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== _avgCacheDay) { _avgStatsCache.clear(); _avgEventsCache.clear(); _avgCacheDay = today; }
+  if (_avgStatsCache.size  > _AVG_CACHE_MAX) _avgStatsCache.clear();
+  if (_avgEventsCache.size > _AVG_CACHE_MAX) _avgEventsCache.clear();
+}
+
 // [C4] λ pre-calculat din tabela predictions (populat de collect-daily / enrich
 // anterior). Folosit pentru a EVITA re-fetch-ul duplicat de formă + H2H din API
 // (match.js le aduce deja). Returnează {lambda_home, lambda_away} sau null.
@@ -770,6 +791,9 @@ async function getAwayForm(teamId) {
 }
 
 async function getH2HFromDB(homeId, awayId) {
+  // [SPEED A T4] H2H e fix după kickoff → cache per pereche (TTL 3h). Rezultat identic.
+  const _hk = (homeId && awayId) ? `${Math.min(homeId, awayId)}-${Math.max(homeId, awayId)}` : null;
+  if (_hk) { const e = _h2hCache.get(_hk); if (e && Date.now() - e.ts < _H2H_TTL) return e.v; }
   // Sursa primară: tabelul h2h (populat de scanner.js din meciuri FT live)
   let h2hRows = [];
   try {
@@ -864,6 +888,7 @@ async function getH2HFromDB(homeId, awayId) {
     } catch (_) { /* păstrează h2hRows existent */ }
   }
 
+  if (_hk) { if (_h2hCache.size > 2000) _h2hCache.clear(); _h2hCache.set(_hk, { v: h2hRows, ts: Date.now() }); }
   return h2hRows;
 }
 
@@ -1148,6 +1173,9 @@ async function getLiveStatsFromDB(fixtureId) {
 // Silent-fail → null (ml-predict cade pe mediană).
 async function getMatchStatsAvg(teamId, matchDate) {
   if (!teamId || !matchDate) return null;
+  _avgCachePrune();
+  const _ck = `${teamId}|${_dayOf(matchDate)}`;
+  if (_avgStatsCache.has(_ck)) return _avgStatsCache.get(_ck);
   try {
     const { rows } = await query(
       `SELECT
@@ -1167,7 +1195,9 @@ async function getMatchStatsAvg(teamId, matchDate) {
        ) ms`,
       [Number(teamId), matchDate]
     );
-    return rows[0] || null;
+    const _v = rows[0] || null;
+    _avgStatsCache.set(_ck, _v);
+    return _v;
   } catch (_) { return null; }
 }
 
@@ -1176,6 +1206,9 @@ async function getMatchStatsAvg(teamId, matchDate) {
 // api/cron/build-ml-features.js (sursă canonică). Silent-fail → null.
 async function getMatchEventsAvg(teamId, matchDate) {
   if (!teamId || !matchDate) return null;
+  _avgCachePrune();
+  const _ck = `${teamId}|${_dayOf(matchDate)}`;
+  if (_avgEventsCache.has(_ck)) return _avgEventsCache.get(_ck);
   try {
     const { rows } = await query(
       `SELECT
@@ -1196,7 +1229,9 @@ async function getMatchEventsAvg(teamId, matchDate) {
        ) g`,
       [Number(teamId), matchDate]
     );
-    return rows[0] || null;
+    const _v = rows[0] || null;
+    _avgEventsCache.set(_ck, _v);
+    return _v;
   } catch (_) { return null; }
 }
 
@@ -1224,9 +1259,11 @@ export default async function handler(req, res) {
   // `force=1` ocolește DOAR cache-ul (re-enrich țintit) — NU schimbă scoringul.
   const _force = req.query?.force === '1' || req.query?.force === 1;
   const _isLiveReq = (parseInt(elapsed) || 0) > 0 || LIVE_STATUSES.has(status_short);
+  const _tEnrich = Date.now();   // [SPEED A] cronometrare enrich (vizibil în pm2 logs)
   const cacheKey = `${hId}-${aId}-${fid || 0}`;
   const _cached = enrichCache.get(cacheKey);
   if (!_force && _cached && Date.now() - _cached.ts < (_isLiveReq ? ENRICH_TTL_LIVE : ENRICH_TTL_STATIC)) {
+    if (_isLiveReq) console.log(`[enrich] fid=${fid || '-'} CACHE-HIT ${Date.now() - _tEnrich}ms`);
     return res.status(200).json(_cached.data);
   }
 
@@ -2081,6 +2118,7 @@ export default async function handler(req, res) {
       [...enrichCache.keys()].slice(0, 100).forEach(k => enrichCache.delete(k));
     }
     enrichCache.set(cacheKey, { data: payload, ts: Date.now() });
+    if (_isLiveReq) console.log(`[enrich] fid=${fid || '-'} MISS total=${Date.now() - _tEnrich}ms live=${!!_isLiveReq}`);
 
     res.status(200).json(payload);
   } catch (e) {

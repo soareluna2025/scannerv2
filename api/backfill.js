@@ -6,6 +6,7 @@ import { query } from './db.js';
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
 import { calcPlayerScore } from './calc-utils.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
+import { setMarker, hasMarker, isMarkerFresh, markersForKind, ensureMarkerTable } from './utils/markers.js';
 import { isAllowedLeague } from './utils/league-filter.js';
 
 const SEASONS    = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018];
@@ -96,6 +97,7 @@ async function initAppSettings() {
   await query(`ALTER TABLE backfill_progress ADD COLUMN IF NOT EXISTS current_season INTEGER`);
   await query(`ALTER TABLE backfill_progress ADD COLUMN IF NOT EXISTS current_fixture_index INTEGER DEFAULT 0`);
   await query(`ALTER TABLE backfill_progress ADD COLUMN IF NOT EXISTS total_fixtures INTEGER DEFAULT 0`);
+  await ensureMarkerTable();   // tabelul api_markers (înlocuiește markerii no_data/h2h din app_settings)
 }
 
 async function getSetting(key) {
@@ -198,7 +200,7 @@ async function collectStats(fixtureId) {
   const teams = data.response || [];
   if (!teams.length) {
     // FIX 2: marker no-data → evită retry infinit
-    await setSetting(`no_data:stats:${fixtureId}`, String(Date.now()));
+    await setMarker('no_data:stats', fixtureId);
     return;
   }
   for (const t of teams) {
@@ -258,7 +260,7 @@ async function collectEvents(fixtureId) {
   const data   = await apiFetch(`/fixtures/events?fixture=${fixtureId}`);
   const events = data.response || [];
   if (!events.length) {
-    await setSetting(`no_data:events:${fixtureId}`, String(Date.now()));
+    await setMarker('no_data:events', fixtureId);
     return;
   }
   await dbQuery('DELETE FROM match_events WHERE fixture_id=$1', [fixtureId]);
@@ -289,7 +291,7 @@ async function collectPlayers(fixtureId) {
   const data  = await apiFetch(`/fixtures/players?fixture=${fixtureId}`);
   const teams = data.response || [];
   if (!teams.length) {
-    await setSetting(`no_data:players:${fixtureId}`, String(Date.now()));
+    await setMarker('no_data:players', fixtureId);
     return;
   }
   for (const team of teams) {
@@ -361,9 +363,8 @@ async function buildH2H(homeId, awayId) {
   const team1 = Math.min(homeId, awayId);
   const team2 = Math.max(homeId, awayId);
 
-  const refreshKey = `h2h_refresh:${team1}:${team2}`;
-  const lastRefresh = await getSetting(refreshKey);
-  if (lastRefresh && Date.now() - Number(lastRefresh) < 30 * 86400 * 1000) return;
+  const refreshRef = `${team1}:${team2}`;
+  if (await isMarkerFresh('h2h_refresh', refreshRef, 30)) return;
 
   const { rows } = await dbQuery(
     `SELECT fixture_id, home_team_id, away_team_id, home_goals, away_goals,
@@ -381,7 +382,7 @@ async function buildH2H(homeId, awayId) {
 
   if (!rows.length) {
     // Marchez refresh-ul ca să nu mai rulez aceleași query-uri imediat
-    await setSetting(refreshKey, String(Date.now()));
+    await setMarker('h2h_refresh', refreshRef);
     return;
   }
 
@@ -406,7 +407,7 @@ async function buildH2H(homeId, awayId) {
     );
   }
 
-  await setSetting(refreshKey, String(Date.now()));
+  await setMarker('h2h_refresh', refreshRef);
 }
 
 // Scrie meciul curent ca rând în h2h, direct din fixtures_history (row-per-fixture).
@@ -481,13 +482,13 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
     const fids = batch
       .map(fx => fx?.fixture?.id)
       .filter(Boolean);
-    const [statsSet, eventsSet, playersSet, nodataSet] = await Promise.all([
+    const [statsSet, eventsSet, playersSet, ndStats, ndEvents, ndPlayers] = await Promise.all([
       dbQuery('SELECT DISTINCT fixture_id FROM match_stats  WHERE fixture_id = ANY($1)', [fids]).then(r => new Set(r.rows.map(x => x.fixture_id))).catch(() => new Set()),
       dbQuery('SELECT DISTINCT fixture_id FROM match_events WHERE fixture_id = ANY($1)', [fids]).then(r => new Set(r.rows.map(x => x.fixture_id))).catch(() => new Set()),
       dbQuery('SELECT DISTINCT fixture_id FROM player_stats WHERE fixture_id = ANY($1)', [fids]).then(r => new Set(r.rows.map(x => x.fixture_id))).catch(() => new Set()),
-      dbQuery('SELECT key FROM app_settings WHERE key = ANY($1)',
-            [fids.flatMap(id => [`no_data:stats:${id}`, `no_data:events:${id}`, `no_data:players:${id}`])])
-        .then(r => new Set(r.rows.map(x => x.key))).catch(() => new Set()),
+      markersForKind('no_data:stats',   fids),   // Set de ref_key (string) din api_markers
+      markersForKind('no_data:events',  fids),
+      markersForKind('no_data:players', fids),
     ]);
 
     await Promise.all(batch.map(async (fx) => {
@@ -499,9 +500,9 @@ async function processLeagueSeason(leagueId, season, si, li, startFi) {
       const hid = fx?.teams?.home?.id;
       const aid = fx?.teams?.away?.id;
 
-      if (!statsSet.has(fid)   && !nodataSet.has(`no_data:stats:${fid}`))   { try { await collectStats(fid);   } catch (e) { log(`stats   ${fid}: ${e.message}`); } }
-      if (!eventsSet.has(fid)  && !nodataSet.has(`no_data:events:${fid}`))  { try { await collectEvents(fid);  } catch (e) { log(`events  ${fid}: ${e.message}`); } }
-      if (!playersSet.has(fid) && !nodataSet.has(`no_data:players:${fid}`)) { try { await collectPlayers(fid); } catch (e) { log(`players ${fid}: ${e.message}`); } }
+      if (!statsSet.has(fid)   && !ndStats.has(String(fid)))   { try { await collectStats(fid);   } catch (e) { log(`stats   ${fid}: ${e.message}`); } }
+      if (!eventsSet.has(fid)  && !ndEvents.has(String(fid)))  { try { await collectEvents(fid);  } catch (e) { log(`events  ${fid}: ${e.message}`); } }
+      if (!playersSet.has(fid) && !ndPlayers.has(String(fid))) { try { await collectPlayers(fid); } catch (e) { log(`players ${fid}: ${e.message}`); } }
 
       // TASK1 — UPSERT în fixtures_history (DUPĂ stats/events/players). Repară
       // lacuna structurală: backfill colecta date brute dar nu istoricul FT →

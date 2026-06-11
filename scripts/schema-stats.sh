@@ -58,7 +58,7 @@ if [ "$HAS" = "1" ]; then
   Q "top 15 după total_exec_time" "
   SELECT round(total_exec_time::numeric,0) AS total_ms, calls,
     round(mean_exec_time::numeric,2) AS mean_ms,
-    round(100.0*total_exec_time/SUM(total_exec_time) OVER (),1) AS pct,
+    round((100.0*total_exec_time/SUM(total_exec_time) OVER ())::numeric,1) AS pct,
     left(regexp_replace(query,'\s+',' ','g'),100) AS query
   FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 15;"
 else

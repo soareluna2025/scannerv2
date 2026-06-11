@@ -1077,6 +1077,40 @@ CREATE TABLE IF NOT EXISTS ml_features (
     computed_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ── 48. fixture_positions — poziție istorică point-in-time (feature ML live) ──
+CREATE TABLE IF NOT EXISTS fixture_positions (
+    fixture_id         INTEGER PRIMARY KEY,
+    home_position_norm REAL,
+    away_position_norm REAL,
+    computed_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── 49. stats_api_checked — checkpoint backfill API stats (anti-ardere cotă) ──
+CREATE TABLE IF NOT EXISTS stats_api_checked (
+    fixture_id   BIGINT PRIMARY KEY,
+    checked_at   TIMESTAMPTZ DEFAULT NOW(),
+    has_stats    BOOLEAN,
+    has_referee  BOOLEAN
+);
+
+-- ── 50. bulk_referee_checked — checkpoint backfill referee per ligă-sezon ──
+CREATE TABLE IF NOT EXISTS bulk_referee_checked (
+    league_id     INTEGER NOT NULL,
+    season        INTEGER NOT NULL,
+    checked_at    TIMESTAMPTZ DEFAULT NOW(),
+    updated_count INTEGER DEFAULT 0,
+    PRIMARY KEY (league_id, season)
+);
+
+-- ── 51. api_markers — markeri operaționali API (no_data/h2h_refresh) ──
+-- Înlocuiește markerii din app_settings (care creșteau la 763k rânduri).
+CREATE TABLE IF NOT EXISTS api_markers (
+    kind        TEXT NOT NULL,
+    ref_key     TEXT NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (kind, ref_key)
+);
+
 -- ================================================================
 --  VERIFICARE
 -- ================================================================

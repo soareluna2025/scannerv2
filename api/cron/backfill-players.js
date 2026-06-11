@@ -17,6 +17,7 @@
 import { query } from '../db.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
 import { writeToCazarma } from '../utils/cazarma.js';
+import { hasMarker, setMarker } from '../utils/markers.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -142,14 +143,13 @@ async function runLoop() {
       const { season, teamId } = work[i];
       state.season = season; state.teamIdx = i; state.lastTeam = teamId;
 
-      // no_data marker: sări echipele deja marcate fără date (idempotent).
-      const ndKey = `no_data:players:${teamId}:${season}`;
-      const nd = await getSetting(ndKey);
-      if (nd === '1') { state.teamsDone++; await setSetting('backfill_players_idx', String(i + 1)); continue; }
+      // no_data marker: sări echipele deja marcate fără date (idempotent) — api_markers.
+      const ndRef = `${teamId}:${season}`;
+      if (await hasMarker('no_data:players', ndRef)) { state.teamsDone++; await setSetting('backfill_players_idx', String(i + 1)); continue; }
 
       try {
         const n = await collectTeamSeason(teamId, season);
-        if (n === -1) { state.noData++; await setSetting(ndKey, '1'); }
+        if (n === -1) { state.noData++; await setMarker('no_data:players', ndRef); }
         else { state.inserted += n; }
       } catch (e) {
         // eroare tranzitorie (rate-limit etc.) — NU marca no_data, reia data viitoare.
