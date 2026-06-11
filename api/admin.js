@@ -465,6 +465,23 @@ router.post('/trigger-cron', async (req, res) => {
   }
 });
 
+// ── POST /api/admin/optimize-db ──────────────────────────────────────────────
+// Rulează AȘTEPTAT /api/cron/optimize-db (VACUUM ANALYZE rapid) și întoarce
+// durata per tabel. Așteaptă finalizarea (~2 min < headersTimeout 5 min undici).
+router.post('/optimize-db', async (req, res) => {
+  const port = process.env.PORT || 3000;
+  try {
+    const r = await fetch(`http://localhost:${port}/api/cron/optimize-db?mode=rapid`, {
+      method: 'POST',
+      headers: { 'x-cron-secret': process.env.CRON_SECRET || '' },
+    });
+    const data = await r.json().catch(() => ({ ok: false, error: 'răspuns invalid' }));
+    res.status(r.ok ? 200 : 500).json(data);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ── POST /api/admin/stabilize — rulează cele STABILIZE_STEPS.length cron-uri SECVENȚIAL ──
 // Ordine: brut → agregat → predicții → calibrare. Fiecare AȘTEAPTĂ finalizarea
 // celui anterior. Un pas eșuat NU oprește lanțul (continuă). Progres în memorie.

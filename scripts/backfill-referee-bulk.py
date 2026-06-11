@@ -173,6 +173,9 @@ def main():
     print(f"\n✅ Bulk referee: {len(pairs)} perechi · {calls} apeluri API · "
           f"referee scriși={total_written}")
     print(f"   fixtures_history cu referee acum: {have_ref}")
+    # Refresh statistici planner pe tabelele modificate (după bucla principală).
+    cur.execute("ANALYZE fixtures_history"); cur.execute("ANALYZE bulk_referee_checked")
+    conn.commit(); print("ANALYZE fixtures_history, bulk_referee_checked ✓")
     cur.close(); conn.close()
 
 

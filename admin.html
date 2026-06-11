@@ -1118,6 +1118,10 @@ body{
       <h2>Cron Jobs</h2>
     </div>
     <div id="cronList"><div class="empty">—</div></div>
+    <div style="margin-top:10px;border-top:1px solid var(--bd,#1e2a38);padding-top:10px">
+      <button id="optdb-btn" class="bf-start" onclick="optimizeDb()" style="width:100%">🧹 OPTIMIZARE DB (rapid, ~2 min)</button>
+      <div id="optdb-result" style="font-size:11px;color:var(--tx-2);margin-top:8px"></div>
+    </div>
   </section>
 
   <section class="card" id="cardErrors">
@@ -1649,6 +1653,32 @@ function statusBadge(s) {
   if (s === 'error') return '<span class="badge badge-er">✗ Eroare</span>';
   return '<span class="badge badge-yl">' + s + '</span>';
 }
+async function optimizeDb() {
+  var btn = document.getElementById('optdb-btn');
+  var out = document.getElementById('optdb-result');
+  if (!confirm('Rulează OPTIMIZARE DB (VACUUM ANALYZE pe tabelele mari, ~2 min)?')) return;
+  btn.disabled = true; var old = btn.textContent;
+  btn.textContent = '🧹 rulează… (nu închide)';
+  out.innerHTML = 'Se execută VACUUM ANALYZE…';
+  try {
+    var r = await fetch(BASE + '/api/admin/optimize-db', {
+      method: 'POST', headers: { 'X-Api-Key': _key, 'Content-Type': 'application/json' }, body: '{}'
+    });
+    var d = await r.json();
+    if (!d.ok) { out.innerHTML = '<span class="err">✗ ' + (d.error || 'eroare') + '</span>'; return; }
+    var rows = (d.results || []).map(function (x) {
+      return '<div>' + (x.ok ? '✓' : '✗') + ' ' + x.table + ' — ' + (x.ms / 1000).toFixed(1) + 's'
+        + (x.error ? ' (' + x.error + ')' : '') + '</div>';
+    }).join('');
+    out.innerHTML = '<div style="color:#00e5b8">✅ ' + d.tables + ' tabele · total '
+      + (d.total_ms / 1000).toFixed(1) + 's</div>' + rows;
+  } catch (e) {
+    out.innerHTML = '<span class="err">✗ ' + e.message + '</span>';
+  } finally {
+    btn.disabled = false; btn.textContent = old;
+  }
+}
+
 async function loadCron() {
   try {
     var d = await apiFetch('/api/admin/cron-status');

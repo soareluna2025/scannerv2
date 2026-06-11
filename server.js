@@ -69,7 +69,7 @@ for (const name of apiFiles) {
 }
 
 // Cron routes
-const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'learning-analysis', 'recalibrate-tables', 'calibrate-live', 'collect-venues', 'collect-coaches', 'coach-stats', 'referee-extended', 'collect-team-stats', 'collect-top-scorers', 'collect-players-season', 'collect-squads', 'cazarma-router', 'auto-predict', 'backfill-pass-shots', 'backfill-players', 'extract-team', 'collect-national-history', 'backfill-stats-cron', 'collect-wc-qualifiers', 'build-elo', 'backfill-predictions', 'cleanup-settings', 'build-ml-features', 'train-model', 'train-live'];
+const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'learning-analysis', 'recalibrate-tables', 'calibrate-live', 'collect-venues', 'collect-coaches', 'coach-stats', 'referee-extended', 'collect-team-stats', 'collect-top-scorers', 'collect-players-season', 'collect-squads', 'cazarma-router', 'auto-predict', 'backfill-pass-shots', 'backfill-players', 'extract-team', 'collect-national-history', 'backfill-stats-cron', 'collect-wc-qualifiers', 'build-elo', 'backfill-predictions', 'cleanup-settings', 'build-ml-features', 'train-model', 'train-live', 'optimize-db'];
 for (const name of cronFiles) {
   app.all(`/api/cron/${name}`, async (req, res) => {
     // Auth cron — blochează apelurile externe neautorizate (cotă API / DELETE-uri).

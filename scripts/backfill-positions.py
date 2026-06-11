@@ -133,6 +133,8 @@ def main():
             print(f"  [{idx}/{len(ls_pairs)}] lg={lg} season={season} "
                   f"meciuri={len(out)} | total scris={total_rows}")
     print(f"✅ fixture_positions complet: {total_rows} rânduri.")
+    cur.execute("ANALYZE fixture_positions"); conn.commit()
+    print("ANALYZE fixture_positions ✓")
     cur.close(); conn.close()
 
 

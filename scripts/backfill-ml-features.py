@@ -183,6 +183,8 @@ def main():
     cur.execute(REMAINING_SQL, (since,))
     rem = cur.fetchone()[0]
     print(f"✅ ml_features backfill complet: +{total} rânduri. Rămase (fără stats sursă): {rem}")
+    cur.execute("ANALYZE ml_features"); conn.commit()
+    print("ANALYZE ml_features ✓")
     cur.close(); conn.close()
 
 

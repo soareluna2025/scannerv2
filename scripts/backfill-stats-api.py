@@ -249,6 +249,10 @@ def main():
     tag = " (oprit anti-ardere)" if aborted else ""
     print(f"✅ API backfill{tag}: {processed} fixturi verificate · {calls} apeluri · "
           f"stats={stats_done} · referee={ref_done}")
+    # Refresh statistici planner pe tabelele modificate.
+    for _t in ("match_stats", "fixtures_history", "stats_api_checked"):
+        cur.execute(f"ANALYZE {_t}")
+    conn.commit(); print("ANALYZE match_stats, fixtures_history, stats_api_checked ✓")
     cur.close(); conn.close()
 
 
