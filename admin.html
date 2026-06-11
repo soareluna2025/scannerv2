@@ -1104,6 +1104,10 @@ body{
     <div style="font-size:12px;color:var(--tx-2);margin-bottom:8px">RAPIDĂ = 8 pași esențiali zilnici (~30 min). COMPLETĂ = <span id="stab-count">17</span> pași inclusiv antrenare ML (~40–50 min). Rulare secvențială; un pas eșuat nu oprește restul.</div>
     <button class="bf-start" onclick="startStabilize('rapid')" style="width:100%;margin-bottom:8px">⚡ STABILIZARE RAPIDĂ (8 pași, ~30 min)</button>
     <button id="stab-btn" class="bf-start" onclick="startStabilize('complet')" style="width:100%;background:#3a2a10;border-color:#5a4010">🛠 STABILIZARE COMPLETĂ (~40–50 min)</button>
+    <div style="margin-top:10px;border-top:1px solid var(--bd,#1e2a38);padding-top:10px">
+      <button id="optdb-btn" class="bf-start" onclick="optimizeDb()" style="width:100%">🧹 OPTIMIZARE DB (rapid, ~2 min)</button>
+      <div id="optdb-result" style="font-size:11px;color:var(--tx-2);margin-top:8px"></div>
+    </div>
     <div id="stab-progress" style="display:none;margin-top:12px">
       <div class="bf-label">Progres: <span id="stab-step">0</span>/<span id="stab-total">14</span> · Curent: <span id="stab-current">—</span></div>
       <div class="bf-bar"><div class="bf-bar-fill" id="stab-fill" style="width:0%"></div></div>
@@ -1118,10 +1122,6 @@ body{
       <h2>Cron Jobs</h2>
     </div>
     <div id="cronList"><div class="empty">—</div></div>
-    <div style="margin-top:10px;border-top:1px solid var(--bd,#1e2a38);padding-top:10px">
-      <button id="optdb-btn" class="bf-start" onclick="optimizeDb()" style="width:100%">🧹 OPTIMIZARE DB (rapid, ~2 min)</button>
-      <div id="optdb-result" style="font-size:11px;color:var(--tx-2);margin-top:8px"></div>
-    </div>
     <div style="margin-top:10px;border-top:1px solid var(--bd,#1e2a38);padding-top:10px">
       <button class="bf-start" onclick="loadCronHealth()" style="width:100%">📊 STATUS CRON-URI</button>
       <div id="cronhealth" style="font-size:11px;color:var(--tx-2);margin-top:8px"></div>
