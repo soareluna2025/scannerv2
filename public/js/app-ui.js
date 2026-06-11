@@ -1106,6 +1106,7 @@ function mdOpen(fid,hid,aid,srcEl){
 function mdClose(){
   document.getElementById('md-overlay').classList.remove('open');
   if(_mdRefreshTimer){clearInterval(_mdRefreshTimer);_mdRefreshTimer=null;}
+  _mlxEnteredFor=null;   // închiderea modalului → la redeschidere animația ML se rejoacă
   _scoringExpanded=null; // reset stare explicație la închidere
   // Golește cache-ul de cote CALIBRARE pt acest meci (userul a închis cartonașul).
   if(typeof _mevCache!=='undefined'&&_md&&_md.fixtureId!=null)delete _mevCache[String(_md.fixtureId)];
@@ -1176,6 +1177,8 @@ async function mdFetch(silent){
 
 function mdTab(idx){
   _md.tabIdx=idx;
+  // Părăsirea tabului ML resetează flag-ul de intrare → la revenire animația se rejoacă.
+  if(idx!==6) _mlxEnteredFor=null;
   document.querySelectorAll('.md-tab').forEach(function(t,i){t.classList.toggle('active',i===idx);});
   mdRender();
 }
@@ -1336,14 +1339,17 @@ function _mdLiveCtx(d){
   return lc;
 }
 var _mlxPrev={};   // istoric procente per fixture pt count-up + flash live (verde/roșu)
+var _mlxEnteredFor=null;   // fixture_id pt care animația de INTRARE s-a jucat deja (o singură dată)
 function _mlxCountUp(el,from,to,ms){
   var t0=null;
   function step(ts){ if(t0==null)t0=ts; var k=Math.min(1,(ts-t0)/ms); el.textContent=Math.round(from+(to-from)*k)+'%'; if(k<1)requestAnimationFrame(step); }
   requestAnimationFrame(step);
 }
-// Animații post-render: umple barele (transition width), count-up procente, flash
-// pe schimbare live, puls pe contorul DECONTATE când crește. prefers-reduced-motion → instant.
-function _mlxInit(root,fid){
+// Animații post-render. firstOpen=true (prima deschidere a tabului pt acel meci):
+// count-up de la 0 + barele 0→țintă. firstOpen=false (re-render WS/refresh): NIMIC nu se
+// reia de la 0 — barele alunecă de la valoarea curentă la cea nouă, cifrele primesc DOAR
+// flash verde/roșu la schimbare. prefers-reduced-motion → totul instant.
+function _mlxInit(root,fid,firstOpen){
   if(!root) return;
   var reduce=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   var bars=root.querySelectorAll('.mlx-bar i[data-w]');
@@ -1354,7 +1360,7 @@ function _mlxInit(root,fid){
   for(var j=0;j<pcts.length;j++){ (function(el){
     var raw=el.getAttribute('data-v'); if(raw==='') return; var tv=Number(raw);
     var key=el.getAttribute('data-k'), prev=store[key];
-    if(reduce){ el.textContent=tv+'%'; } else { _mlxCountUp(el,(prev!=null?prev:0),tv,500); }
+    if(reduce||!firstOpen){ el.textContent=tv+'%'; } else { _mlxCountUp(el,0,tv,500); }
     if(!reduce && prev!=null && prev!==tv){ var cls=tv>prev?'mlx-flash-up':'mlx-flash-dn'; el.classList.add(cls); setTimeout(function(){ el.classList.remove('mlx-flash-up','mlx-flash-dn'); },850); }
     store[key]=tv;
   })(pcts[j]); }
@@ -1390,6 +1396,13 @@ function mdRenderML(d){
   var st={status:lc.status,elapsed:elapsedNum,isLive:lc.isLive,isHT:lc.isHT,ft:ft,
           hg:hg,ag:ag,tg:tg,htKnown:htKnown,hh:hh,ah:ah,r1Done:r1Done,
           r1tg:(hh+ah),hr2:hr2,ar2:ar2,gr2:gr2};
+
+  // Animație de INTRARE o singură dată per meci+deschidere tab. Re-render-urile WS/refresh
+  // (același fixture, încă pe tab) NU reiau fade-ul → fără flash negru. _store0 = procentele
+  // de la render-ul anterior (pt ca barele să pornească de la valoarea curentă, nu de la 0).
+  var _fid=(_md&&_md.fixtureId)||0;
+  var _first=(_mlxEnteredFor!==_fid);
+  var _store0=_mlxPrev[_fid]||{};
 
   // ── accesori probabilitate (NESCHIMBATE din modele — strat de prezentare) ──
   var pc=function(v){ v=Number(v); return Number.isFinite(v)?Math.round(v):null; };
@@ -1641,15 +1654,19 @@ function mdRenderML(d){
     }).join('')+'</div>';
   }
   function rowBar(it,delay){
-    var p=it.p, col=semClr(p), key=htmlEsc(it.phase+'|'+it.label);
-    return '<div class="mlx-row mlx-anim" style="animation-delay:'+delay+'ms">'
+    var p=it.p, col=semClr(p), rawkey=it.phase+'|'+it.label, prev=_store0[rawkey];
+    var binit=_first?0:((prev!=null)?prev:(p!=null?p:0));   // re-render: pornește de la curent
+    var ptxt=(p==null)?'—':(_first?'0%':(p+'%'));
+    var rcls=_first?'mlx-row mlx-anim':'mlx-row', rsty=_first?(' style="animation-delay:'+delay+'ms"'):'';
+    return '<div class="'+rcls+'"'+rsty+'>'
       +'<div class="nm"><b>'+htmlEsc(it.label)+'</b>'
       +'<small>'+htmlEsc(it.group)+(it.dec.context?(' · '+htmlEsc(it.dec.context)):'')+'</small>'
-      +'<div class="mlx-bar"><i data-w="'+(p!=null?p:0)+'" style="width:0;background:'+col+'"></i></div></div>'
-      +'<div class="pct" data-k="'+key+'" data-v="'+(p!=null?p:'')+'" style="color:'+col+'">'+(p!=null?'0%':'—')+'</div></div>';
+      +'<div class="mlx-bar"><i data-w="'+(p!=null?p:0)+'" style="width:'+binit+'%;background:'+col+'"></i></div></div>'
+      +'<div class="pct" data-k="'+htmlEsc(rawkey)+'" data-v="'+(p!=null?p:'')+'" style="color:'+col+'">'+ptxt+'</div></div>';
   }
   function rowMulti(it,delay){
-    return '<div class="mlx-anim" style="animation-delay:'+delay+'ms;margin-bottom:8px"><div class="ml-sub" style="margin:8px 0 4px">'+htmlEsc(it.label)+'</div>'+triCells(it.classes)+'</div>';
+    var mcls=_first?' class="mlx-anim"':'', msty=_first?('animation-delay:'+delay+'ms;margin-bottom:8px'):'margin-bottom:8px';
+    return '<div'+mcls+' style="'+msty+'"><div class="ml-sub" style="margin:8px 0 4px">'+htmlEsc(it.label)+'</div>'+triCells(it.classes)+'</div>';
   }
   function rowSettled(it){
     var r=it.dec.rezultat||'—', g=r==='DA'?'✓':(r==='NU'?'✗':'⊘');
@@ -1736,12 +1753,12 @@ function mdRenderML(d){
   out+='<div class="mlx-hero">'+heroHtml+'</div>';
 
   // 3. ÎN JOC — trei grupe fixe, prioritate fixă în interior
-  out+='<div class="mlx-zone mlx-anim" style="animation-delay:0ms">🎯 ÎN JOC ('+inplay.length+')</div>';
+  out+='<div class="mlx-zone'+(_first?' mlx-anim':'')+'"'+(_first?' style="animation-delay:0ms"':'')+'>🎯 ÎN JOC ('+inplay.length+')</div>';
   if(inplay.length){
     var aidx=1;
     order.forEach(function(ph){
       var arr=byPhase[ph]; if(!arr||!arr.length) return;
-      out+='<div class="mlx-grp mlx-anim" style="animation-delay:'+Math.min(aidx*30,400)+'ms">'+GROUP_T[ph]+'<span class="gn">'+arr.length+'</span></div>'; aidx++;
+      out+='<div class="mlx-grp'+(_first?' mlx-anim':'')+'"'+(_first?(' style="animation-delay:'+Math.min(aidx*30,400)+'ms"'):'')+'>'+GROUP_T[ph]+'<span class="gn">'+arr.length+'</span></div>'; aidx++;
       arr.forEach(function(it){
         var delay=Math.min(aidx*30,400); aidx++;
         out+= multiKind(it)?rowMulti(it,delay):rowBar(it,delay);
@@ -1764,7 +1781,8 @@ function mdRenderML(d){
     +(trainedK?(' · antrenat pe '+trainedK):'')+'</div>';
 
   body.innerHTML=out;
-  try{ _mlxInit(body, (_md&&_md.fixtureId)||0); }catch(_){}
+  try{ _mlxInit(body, _fid, _first); }catch(_){}
+  _mlxEnteredFor=_fid;   // intrarea s-a jucat (sau a fost un re-render) → marchează meciul
 }
 
 // ── PROBABILITATE MARCARE — secțiune NOUĂ, complet independentă ──────────────
