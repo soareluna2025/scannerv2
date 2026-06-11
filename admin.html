@@ -1101,9 +1101,9 @@ body{
       <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg></span>
       <h2>Stabilizare completă DB</h2>
     </div>
-    <div style="font-size:12px;color:var(--tx-2);margin-bottom:4px">Rulează toate <span id="stab-count">17</span> cron-uri în ordine (brut → agregat → features ML → antrenare ML → predicții → calibrare).</div>
-    <div style="font-size:11px;color:var(--mu,#888);margin-bottom:10px">Timp estimat: 40–50 minute · rulare secvențială (un pas eșuat nu oprește restul)</div>
-    <button id="stab-btn" class="bf-start" onclick="startStabilize()" style="width:100%">🔄 PORNEȘTE STABILIZARE</button>
+    <div style="font-size:12px;color:var(--tx-2);margin-bottom:8px">RAPIDĂ = 8 pași esențiali zilnici (~30 min). COMPLETĂ = <span id="stab-count">17</span> pași inclusiv antrenare ML (~40–50 min). Rulare secvențială; un pas eșuat nu oprește restul.</div>
+    <button class="bf-start" onclick="startStabilize('rapid')" style="width:100%;margin-bottom:8px">⚡ STABILIZARE RAPIDĂ (8 pași, ~30 min)</button>
+    <button id="stab-btn" class="bf-start" onclick="startStabilize('complet')" style="width:100%;background:#3a2a10;border-color:#5a4010">🛠 STABILIZARE COMPLETĂ (~40–50 min)</button>
     <div id="stab-progress" style="display:none;margin-top:12px">
       <div class="bf-label">Progres: <span id="stab-step">0</span>/<span id="stab-total">14</span> · Curent: <span id="stab-current">—</span></div>
       <div class="bf-bar"><div class="bf-bar-fill" id="stab-fill" style="width:0%"></div></div>
@@ -1121,6 +1121,10 @@ body{
     <div style="margin-top:10px;border-top:1px solid var(--bd,#1e2a38);padding-top:10px">
       <button id="optdb-btn" class="bf-start" onclick="optimizeDb()" style="width:100%">🧹 OPTIMIZARE DB (rapid, ~2 min)</button>
       <div id="optdb-result" style="font-size:11px;color:var(--tx-2);margin-top:8px"></div>
+    </div>
+    <div style="margin-top:10px;border-top:1px solid var(--bd,#1e2a38);padding-top:10px">
+      <button class="bf-start" onclick="loadCronHealth()" style="width:100%">📊 STATUS CRON-URI</button>
+      <div id="cronhealth" style="font-size:11px;color:var(--tx-2);margin-top:8px"></div>
     </div>
   </section>
 
@@ -1262,9 +1266,9 @@ body{
     <div id="cal-results" style="margin-top:8px">
       <div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">Apasă „Reîncarcă"</div>
     </div>
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="hc-btn" onclick="triggerCalibration('recalibrate-tables')">▶ Recalibrează pre-meci</button>
-      <button class="hc-btn" onclick="triggerCalibration('calibrate-live')">▶ Recalibrează LIVE</button>
+    <div style="margin-top:12px;font-size:10px;color:var(--mu,#888)">
+      Recalibrarea se rulează din „Cron Jobs" (▶ RUN pe recalibrate-tables / calibrate-live)
+      sau din STABILIZARE COMPLETĂ — butoanele dedicate au fost eliminate (dublură).
     </div>
   </section>
 
@@ -1679,6 +1683,24 @@ async function optimizeDb() {
   }
 }
 
+async function loadCronHealth() {
+  var out = document.getElementById('cronhealth');
+  out.innerHTML = 'Se încarcă…';
+  try {
+    var r = await fetch(BASE + '/api/admin/cron-health', { headers: { 'X-Api-Key': _key } });
+    var d = await r.json();
+    if (!d.ok) { out.innerHTML = '<span class="err">✗ ' + (d.error || 'eroare') + '</span>'; return; }
+    var rows = (d.jobs || []).sort(function (a, b) { return (b.stale ? 1 : 0) - (a.stale ? 1 : 0); }).map(function (j) {
+      var col = j.stale ? '#ef4444' : (j.status === 'error' ? '#f59e0b' : (j.status === 'idle' ? '#888' : '#22c55e'));
+      var age = j.age_min == null ? '?' : (j.age_min < 90 ? j.age_min + 'm' : Math.round(j.age_min / 60) + 'h');
+      var dur = j.duration_ms == null ? '' : ' · ' + (j.duration_ms / 1000).toFixed(1) + 's';
+      return '<div style="color:' + col + '">' + (j.stale ? '⚠ ' : '') + j.job + ' — ' + (j.status || 'ok')
+        + ' · acum ' + age + dur + (j.items != null ? ' · ' + j.items + ' items' : '') + '</div>';
+    }).join('');
+    out.innerHTML = rows || '<div class="empty">— niciun log —</div>';
+  } catch (e) { out.innerHTML = '<span class="err">✗ ' + e.message + '</span>'; }
+}
+
 async function loadCron() {
   try {
     var d = await apiFetch('/api/admin/cron-status');
@@ -2045,11 +2067,14 @@ async function refreshETStatus() {
 
 
 function _stabDur(ms){var s=Math.floor((ms||0)/1000);var m=Math.floor(s/60);s=s%60;return m>0?(m+'m '+s+'s'):(s+'s');}
-async function startStabilize() {
-  var _n = (document.getElementById('stab-count')||{}).textContent || '17';
-  if (!confirm('Pornești stabilizarea completă (' + _n + ' cron-uri, 40–50 min)?')) return;
+async function startStabilize(mode) {
+  mode = (mode === 'rapid') ? 'rapid' : 'complet';
+  var msg = mode === 'rapid'
+    ? 'Pornești STABILIZAREA RAPIDĂ (8 pași esențiali, ~30 min)?'
+    : 'Pornești STABILIZAREA COMPLETĂ (17 pași, inclusiv antrenare ML, ~40–50 min)?';
+  if (!confirm(msg)) return;
   try {
-    var r = await fetch('/api/admin/stabilize', { method:'POST', headers:{'X-Api-Key':_key} });
+    var r = await fetch('/api/admin/stabilize?mode=' + mode, { method:'POST', headers:{'X-Api-Key':_key} });
     var d = await r.json();
     if (!d.ok) { toast('✗ ' + (d.error||'eroare'), 'var(--red)'); return; }
     toast('🔄 Stabilizare pornită');

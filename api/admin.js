@@ -287,7 +287,7 @@ router.get('/cron-status', async (req, res) => {
   const jobs = [
     'auto-predict', 'update-results', 'learning-analysis',
     'league-stats', 'referee-stats', 'collect-daily',
-    'collect-finished', 'prematch-enrichment', 'scan',
+    'collect-finished', 'prematch-enrichment',
   ];
   try {
     const { rows } = await query(`
@@ -431,7 +431,6 @@ const ALLOWED_JOBS = {
   'collect-daily':      '/api/cron/collect-daily',
   'collect-finished':   '/api/cron/collect-finished',
   'prematch-enrichment':'/api/cron/prematch-enrichment',
-  'scan':               '/api/cron/scan',
   'backfill':           '/api/backfill/start',
   'recalibrate-tables': '/api/cron/recalibrate-tables',
   'calibrate-live':     '/api/cron/calibrate-live',
@@ -509,17 +508,26 @@ const STABILIZE_STEPS = [
   { name: 'auto-predict',       path: '/api/cron/auto-predict', method: 'GET' },
 ];
 
+// STABILIZARE RAPIDĂ — 8 pași esențiali (~30 min): brut → rezultate → agregat →
+// features → calibrare statistică → predicții. FĂRĂ antrenare ML / colectări lente.
+const _RAPID_NAMES = new Set([
+  'collect-finished', 'collect-daily', 'update-results', 'league-stats',
+  'referee-stats', 'build-ml-features', 'learning-analysis', 'auto-predict',
+]);
+const RAPID_STEPS = STABILIZE_STEPS.filter(s => _RAPID_NAMES.has(s.name));
+
 // Stare partajată (un singur run global) — citită de /stabilize-status.
 let _stabilize = { running: false, currentStep: 0, total: STABILIZE_STEPS.length,
   currentName: null, startedAt: null, finishedAt: null, steps: [] };
 
-async function runStabilize() {
+async function runStabilize(steps) {
+  const STEPS = steps && steps.length ? steps : STABILIZE_STEPS;
   const port = process.env.PORT || 3000;
   globalThis._stabilizeActive = true; // flag citit de backfill → reduce concurența DB
-  _stabilize = { running: true, currentStep: 0, total: STABILIZE_STEPS.length,
+  _stabilize = { running: true, currentStep: 0, total: STEPS.length,
     currentName: null, startedAt: Date.now(), finishedAt: null, steps: [] };
-  for (let i = 0; i < STABILIZE_STEPS.length; i++) {
-    const step = STABILIZE_STEPS[i];
+  for (let i = 0; i < STEPS.length; i++) {
+    const step = STEPS[i];
     _stabilize.currentStep = i + 1;
     _stabilize.currentName = step.name;
     const t0 = Date.now();
@@ -538,7 +546,7 @@ async function runStabilize() {
     }
     const durMs = Date.now() - t0;
     _stabilize.steps.push({ step: i + 1, name: step.name, ok, error: errMsg, durMs });
-    console.log(`[stabilize] Pas ${i + 1}/${STABILIZE_STEPS.length}: ${step.name} → ${ok ? 'OK' : 'EROARE ' + errMsg} (${Math.round(durMs / 1000)}s)`);
+    console.log(`[stabilize] Pas ${i + 1}/${STEPS.length}: ${step.name} → ${ok ? 'OK' : 'EROARE ' + errMsg} (${Math.round(durMs / 1000)}s)`);
     // continuă chiar dacă pasul a eșuat
   }
   _stabilize.running = false;
@@ -551,8 +559,39 @@ router.post('/stabilize', async (req, res) => {
   if (_stabilize.running) {
     return res.status(409).json({ ok: false, error: 'Stabilizare deja în curs', progress: _stabilize });
   }
-  runStabilize().catch(e => { console.error('[stabilize] fatal:', e.message); _stabilize.running = false; });
-  res.json({ ok: true, started: true, total: STABILIZE_STEPS.length });
+  const mode = (req.query?.mode || req.body?.mode) === 'rapid' ? 'rapid' : 'complet';
+  const steps = mode === 'rapid' ? RAPID_STEPS : STABILIZE_STEPS;
+  runStabilize(steps).catch(e => { console.error('[stabilize] fatal:', e.message); _stabilize.running = false; });
+  res.json({ ok: true, started: true, mode, total: steps.length });
+});
+
+// ── GET /api/admin/cron-health — status TUTUROR joburilor (panou monitorizare) ──
+// Folosește logging-ul uniform: ultima rulare + status + durată + „stale" (roșu
+// dacă jobul programat n-a mai scris nimic de mult).
+router.get('/cron-health', async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT DISTINCT ON (job_name) job_name, ran_at, status, duration_ms, items_processed
+        FROM cron_logs
+       WHERE ran_at >= NOW() - INTERVAL '45 days'
+       ORDER BY job_name, ran_at DESC`);
+    const now = Date.now();
+    const jobs = rows.map(r => {
+      const ageMin = r.ran_at ? Math.round((now - new Date(r.ran_at).getTime()) / 60000) : null;
+      return {
+        job: (r.job_name || '').replace(/^cron-/, ''),
+        last_run: r.ran_at,
+        age_min: ageMin,
+        status: r.status || 'ok',
+        duration_ms: r.duration_ms,
+        items: r.items_processed,
+        stale: ageMin != null && ageMin > 48 * 60,   // >48h fără semnal = suspect
+      };
+    });
+    res.json({ ok: true, jobs });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 router.get('/stabilize-status', async (req, res) => {

@@ -46,6 +46,7 @@ app.use(express.static(join(__dirname, 'public'), {
 
 // API routes — mapate direct la handler-ele Vercel
 import { logError } from './api/db.js';
+import { logCronRun, ensureCronLogColumns } from './api/utils/cron-log.js';
 
 const apiFiles = [
   'football', 'today', 'enrich', 'match', 'players',
@@ -69,7 +70,7 @@ for (const name of apiFiles) {
 }
 
 // Cron routes
-const cronFiles = ['scan', 'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'learning-analysis', 'recalibrate-tables', 'calibrate-live', 'collect-venues', 'collect-coaches', 'coach-stats', 'referee-extended', 'collect-team-stats', 'collect-top-scorers', 'collect-players-season', 'collect-squads', 'cazarma-router', 'auto-predict', 'backfill-pass-shots', 'backfill-players', 'extract-team', 'collect-national-history', 'backfill-stats-cron', 'collect-wc-qualifiers', 'build-elo', 'backfill-predictions', 'cleanup-settings', 'build-ml-features', 'train-model', 'train-live', 'optimize-db'];
+const cronFiles = ['collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats', 'learning-analysis', 'recalibrate-tables', 'calibrate-live', 'collect-venues', 'collect-coaches', 'coach-stats', 'referee-extended', 'collect-top-scorers', 'collect-players-season', 'collect-squads', 'cazarma-router', 'auto-predict', 'backfill-pass-shots', 'backfill-players', 'extract-team', 'collect-national-history', 'collect-wc-qualifiers', 'build-elo', 'cleanup-settings', 'build-ml-features', 'train-model', 'train-live', 'optimize-db'];
 for (const name of cronFiles) {
   app.all(`/api/cron/${name}`, async (req, res) => {
     // Auth cron — blochează apelurile externe neautorizate (cotă API / DELETE-uri).
@@ -82,11 +83,15 @@ for (const name of cronFiles) {
       }
     }
     try {  // catch-block jos logheaza in cron_logs
+      const _t0 = Date.now();
       const mod = await import(`./api/cron/${name}.js`);
       await mod.default(req, res);
+      // Logging UNIFORM: fiecare execuție lasă urmă în cron_logs (status din HTTP).
+      logCronRun(name, _t0, { status: (res.statusCode && res.statusCode < 400) ? 'ok' : 'error' });
     } catch (e) {
       console.error(`[cron/${name}]`, e.message);
       logError(`cron-${name}`, e.message);  // vizibil in admin -> Erori Recente
+      logCronRun(name, Date.now(), { status: 'error', error: e.message });
       if (!res.headersSent) res.status(500).json({ error: e.message });
     }
   });
@@ -189,6 +194,7 @@ const httpServer = app.listen(PORT, '0.0.0.0', async () => {
   startScanner();
   ensureIndexes();
   ensureColumns();
+  ensureCronLogColumns();   // coloana items_processed pt logging-ul cron uniform
   loadModelWeights().catch(e => console.error('[weights] initial load failed:', e.message));
 });
 

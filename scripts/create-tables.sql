@@ -535,6 +535,7 @@ CREATE TABLE IF NOT EXISTS cron_logs (
     ran_at          TIMESTAMPTZ DEFAULT NOW(),
     fixtures_processed INTEGER DEFAULT 0,
     players_upserted   INTEGER DEFAULT 0,
+    items_processed    INTEGER,
     status          TEXT DEFAULT 'ok',
     error_msg       TEXT,
     duration_ms     INTEGER
