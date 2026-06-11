@@ -185,8 +185,8 @@ export default async function handler(req, res) {
       .map(m => ({
         fixture: { id: m.fixture.id, date: m.fixture.date, status: m.fixture.status },
         league:  { id: m.league.id, name: m.league.name, country: m.league.country, flag: m.league.flag },
-        teams:   { home: { id: m.teams.home.id, name: m.teams.home.name },
-                   away: { id: m.teams.away.id, name: m.teams.away.name } },
+        teams:   { home: { id: m.teams.home.id, name: m.teams.home.name, logo: m.teams.home.logo || null },
+                   away: { id: m.teams.away.id, name: m.teams.away.name, logo: m.teams.away.logo || null } },
         goals:   { home: m.goals.home, away: m.goals.away },
       }))
       .sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date));
@@ -196,6 +196,17 @@ export default async function handler(req, res) {
     // Salvează meciurile NS în fixtures table (pentru prematch-enrichment + scanner)
     if (result.length > 0) {
       for (const m of result) {
+        // FIX logo: UPSERT echipele (id/name/logo) → orice echipă obscură (cupe etc.)
+        // intră în teams cu sigla ei din prima zi. COALESCE păstrează logo existent.
+        for (const side of ['home', 'away']) {
+          const t = m.teams[side];
+          if (t && t.id) query(
+            `INSERT INTO teams (team_id, name, logo, updated_at) VALUES ($1,$2,$3,NOW())
+               ON CONFLICT (team_id) DO UPDATE SET name=EXCLUDED.name,
+                 logo=COALESCE(EXCLUDED.logo, teams.logo), updated_at=NOW()`,
+            [t.id, t.name, t.logo || null]
+          ).catch(() => {});
+        }
         query(
           `INSERT INTO fixtures
              (fixture_id, league_id, season, home_team_id, home_team_name,

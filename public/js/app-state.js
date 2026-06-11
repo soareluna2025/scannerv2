@@ -5,7 +5,25 @@
 // NOTE: blocul CALIBRARE mutat ÎNAINTE de EV helpers pentru hoisting NGP_CAL_REST (var).
 
 
-function tLogo(team,sz){if(!team||!team.logo)return '';return '<img src="'+team.logo+'" width="'+sz+'" height="'+sz+'" style="border-radius:4px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">';}
+// ── SIGLĂ ECHIPĂ — renderer UNIC folosit peste tot (listă, live, H2H, detaliu) ──
+// Logo real dacă URL există; altfel cerc cu INIȚIALELE echipei (2 litere, culoare
+// stabilă derivată din team_id). Nu mai există cazul „nimic". Loaded FIRST → global.
+function teamBadgeColor(id){ id=Math.abs(Number(id)||0); return 'hsl('+((id*47)%360)+',45%,40%)'; }
+function teamInitials(name){
+  name=String(name||'').trim().replace(/[<>&"]/g,''); if(!name) return '?';
+  var p=name.split(/\s+/); var s=(p.length>1?(p[0].charAt(0)+p[1].charAt(0)):name.slice(0,2));
+  return s.toUpperCase();
+}
+function teamLogo(logo,name,id,sz){
+  sz=sz||24; var fs=Math.max(8,Math.round(sz*0.42));
+  var base='position:relative;display:inline-flex;align-items:center;justify-content:center;width:'+sz+'px;height:'+sz
+    +'px;border-radius:50%;flex-shrink:0;vertical-align:middle;background:'+teamBadgeColor(id)
+    +';color:#fff;font-weight:800;font-size:'+fs+'px;overflow:hidden';
+  var img=logo?('<img src="'+logo+'" width="'+sz+'" height="'+sz
+    +'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#0f1620" onerror="this.style.display=\'none\'">'):'';
+  return '<span style="'+base+'">'+teamInitials(name)+img+'</span>';
+}
+function tLogo(team,sz){ if(!team) return teamLogo(null,'',0,sz); return teamLogo(team.logo,team.name,team.id,sz); }
 // ── CONFIG ──────────────────────────────────────────────────
 var CFG={MC:80,MD:20,RI:30000};
 var WR_KEY='alohascan_wr_v2';

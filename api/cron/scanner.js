@@ -204,6 +204,16 @@ async function saveFormStats(m) {
   if (!fid || !hid || !aid || hg === null || ag === null) return;
 
   try {
+    // FIX logo: UPSERT echipele (id/name/logo din payload-ul live) ÎNAINTE de history.
+    for (const side of ['home', 'away']) {
+      const t = m.teams?.[side];
+      if (t?.id) await query(
+        `INSERT INTO teams (team_id, name, logo, updated_at) VALUES ($1,$2,$3,NOW())
+           ON CONFLICT (team_id) DO UPDATE SET name=EXCLUDED.name,
+             logo=COALESCE(EXCLUDED.logo, teams.logo), updated_at=NOW()`,
+        [t.id, t.name || null, t.logo || null]
+      ).catch(() => {});
+    }
     await query(`
       INSERT INTO fixtures_history
         (fixture_id, league_id, season,
