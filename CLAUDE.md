@@ -29,6 +29,9 @@ Modifică DOAR logica `score4` (live-only) și `getLiveStatsFromDB()`.
 
 ## REGULI DE LIVRARE ȘI MEDIU
 
+- **La începutul sesiunii sincronizează-te cu main-ul REAL** (`git fetch`; lucrezi pe
+  `origin/main` la zi). Orice afirmație despre starea repo-ului se verifică cu `ls`/`grep`
+  ÎNAINTE de a fi scrisă în documentație.
 - **Livrare DIRECT PE MAIN** (commit + push). Push pe main declanșează auto-deploy
   (GitHub Actions → SSH pe VPS → `git reset --hard origin/main` + `npm install` +
   `pm2 restart alohascan`). Branch `claude/...` DOAR la cererea explicită a userului.
@@ -41,9 +44,9 @@ Modifică DOAR logica `score4` (live-only) și `getLiveStatsFromDB()`.
 - **Dependențe noi** (npm/pip): raportate EXPLICIT în răspuns, niciodată instalate tacit.
 - **PM2**: doar `pm2 restart alohascan` (fallback `pm2 start ecosystem.config.cjs && pm2 save`).
   INTERZIS `pkill`/`killall`. Nu lăsa niciodată daemonul oprit.
-- **Crontab**: gestionat MANUAL de Vlad pe VPS. Referință: `scripts/run-cron.sh` (rulare
-  manuală a unui cron) + panoul admin „STATUS CRON-URI". NU te baza pe liste statice din
-  docs; NU modifici crontab-ul NICIODATĂ — doar propui linii.
+- **Crontab**: gestionat MANUAL de Vlad pe VPS. Referință: `scripts/setup-crontab.sh`
+  (șablonul liniilor) + `scripts/run-cron.sh` + panoul admin „STATUS CRON-URI". NU te baza
+  pe liste statice din docs; NU modifici crontab-ul NICIODATĂ — doar propui linii.
 - **Verifică sintaxa** cu `node --check <fișier.js>` (sau `python3 -m py_compile`) după
   orice editare, înainte de commit.
 - **Secrete**: NU committa NICIODATĂ chei, token-uri, parole sau `.env`. Verifică
@@ -124,8 +127,7 @@ jucători pentru puterea echipelor.
 | `api/players.js` | API-Football + PostgreSQL | Statistici jucători |
 | `api/agent.js` | Claude API | Analiză AI la cerere |
 | `api/telegram.js` | Telegram Bot API | Notificări alerte NGP |
-| `api/cron/scan.js` | intern | Scanner live (snapshots NGP/markets, /minut) |
-| `api/cron/scanner.js` | intern | Scanner live WebSocket |
+| `api/cron/scanner.js` | intern | Scanner live (WebSocket, snapshots NGP/markets) |
 | `api/cron/collect-daily.js` | API-Football + PG | standings, teams, form_stats |
 | `api/cron/collect-finished.js` | API-Football + PG | stats jucători meciuri FT |
 | `api/cron/prematch-enrichment.js` | API-Football + PG | date prematch în 7 etape |
@@ -175,7 +177,7 @@ playerScore = ratingNorm*0.35 + goalsScore*0.20 + assistScore*0.15
 ```
 
 **F. NGP — Next Goal Probability (LIVE)** — `api/utils/live-score.js` → `calcNextGoal(f)`,
-folosit de `api/cron/scan.js` și `scanner.js`. Frontend afișează `m._ng` din WebSocket.
+folosit de `api/cron/scanner.js`. Frontend afișează `m._ng` din WebSocket.
 ```
 remXg=(txg/mn)*(90-mn); fallback txg=0: formGoals*2.5*remFrac;
 mn>=70:*1.2; mn>=80:*1.15; prob=1-exp(-max(remXg,0.05)); ng=round(min(97,max(3,prob*100)))
@@ -186,7 +188,8 @@ Alertă Telegram când NGP > pragul setat de utilizator.
 
 ## Bază de date (PostgreSQL local)
 Schema reală: `scripts/create-tables.sql` (**44+ tabele**). Hartă cine-scrie/cine-citește:
-planificată în `docs/SCHEMA.md` (vezi și auditele din `docs/`).
+vezi `docs/SCHEMA.md` (harta tabelelor), `docs/API_DATA_MAP.md` (fluxul API→DB),
+`docs/ADMIN_AUDIT.md`, `docs/SPEED_AUDIT.md`.
 Tabele cheie: `fixtures`, `fixtures_history`, `live_stats`, `match_snapshots`, `alerts`,
 `odds`, `predictions`, `standings`, `form_stats`, `player_stats`, `prematch_data`,
 `league_stats`, `referee_stats`, `elo_ratings`/`elo_history`, `backfill_progress`.
