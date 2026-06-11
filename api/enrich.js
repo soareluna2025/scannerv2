@@ -2084,10 +2084,11 @@ export default async function handler(req, res) {
             elo_adjusted, elo_diff_used,
             api_advice, api_cmp_form_home, api_cmp_form_away, api_cmp_att_home, api_cmp_att_away,
             api_cmp_def_home, api_cmp_def_away, api_cmp_poisson_home, api_cmp_poisson_away,
-            api_cmp_h2h_home, api_cmp_h2h_away)
+            api_cmp_h2h_home, api_cmp_h2h_away,
+            home_elo, away_elo, elo_diff_ml, home_win_prob_elo)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
             $20,$21,$22,$23,$24,$25,$26,$27,$28,$29,
-            $30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)
+            $30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44)
           ON CONFLICT (fixture_id) DO UPDATE SET
             lambda_home=EXCLUDED.lambda_home, lambda_away=EXCLUDED.lambda_away,
             lambda_total=EXCLUDED.lambda_total,
@@ -2113,6 +2114,10 @@ export default async function handler(req, res) {
             api_cmp_poisson_away=COALESCE(EXCLUDED.api_cmp_poisson_away, predictions.api_cmp_poisson_away),
             api_cmp_h2h_home=COALESCE(EXCLUDED.api_cmp_h2h_home, predictions.api_cmp_h2h_home),
             api_cmp_h2h_away=COALESCE(EXCLUDED.api_cmp_h2h_away, predictions.api_cmp_h2h_away),
+            home_elo=COALESCE(EXCLUDED.home_elo, predictions.home_elo),
+            away_elo=COALESCE(EXCLUDED.away_elo, predictions.away_elo),
+            elo_diff_ml=COALESCE(EXCLUDED.elo_diff_ml, predictions.elo_diff_ml),
+            home_win_prob_elo=COALESCE(EXCLUDED.home_win_prob_elo, predictions.home_win_prob_elo),
             updated_at=NOW()
           WHERE predictions.result_over15 IS NULL`,
           [
@@ -2133,6 +2138,12 @@ export default async function handler(req, res) {
             _cv('def', 'home'), _cv('def', 'away'),
             _cv('poisson_distribution', 'home'), _cv('poisson_distribution', 'away'),
             _cv('h2h', 'home'), _cv('h2h', 'away'),
+            // [ELO] $41-$44 — persistă ELO la NAȘTERE (eloResult, din elo_history/elo_ratings).
+            // COALESCE pe conflict → nu suprascrie cu NULL dacă eloResult lipsește momentan.
+            eloResult ? eloResult.home_elo : null,
+            eloResult ? eloResult.away_elo : null,
+            eloResult ? eloResult.elo_diff : null,
+            eloResult ? eloResult.home_win_prob : null,
           ]
         ).catch(() => {});
       }

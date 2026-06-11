@@ -195,13 +195,31 @@ export default async function handler(req, res) {
       await query(`INSERT INTO elo_applied (fixture_id) VALUES ${vals} ON CONFLICT DO NOTHING`, chunk);
     }
 
-    await logCron('success', `teams:${upserts} used:${matchesUsed}/${rows.length}`);
+    // ── PLASA DE SIGURANȚĂ (FIX): umple feature-urile ELO ale predicțiilor care s-au
+    // născut fără ele (home_elo NULL), din elo_history pe fixture_id. Set-based,
+    // idempotent (WHERE home_elo IS NULL) → acoperă orice gaură trecută/viitoare, zilnic.
+    let eloBackfilled = 0;
+    try {
+      const up = await query(`
+        UPDATE predictions p
+           SET home_elo          = eh.home_elo,
+               away_elo          = eh.away_elo,
+               elo_diff_ml       = eh.elo_diff,
+               home_win_prob_elo = eh.home_win_prob
+          FROM elo_history eh
+         WHERE eh.fixture_id = p.fixture_id
+           AND p.home_elo IS NULL`);
+      eloBackfilled = up.rowCount || 0;
+    } catch (_) { /* catch-up best-effort — nu oprește cron-ul */ }
+
+    await logCron('success', `teams:${upserts} used:${matchesUsed}/${rows.length} elo_backfill:${eloBackfilled}`);
     return res.status(200).json({
       ok: true,
       teams: upserts,
       matches_total: rows.length,
       matches_used: matchesUsed,
       elo_history_rows: matchesUsed,
+      predictions_elo_backfilled: eloBackfilled,
       note: 'Temporal decay phi=0.03/lună + Rolling window 100',
     });
   } catch (e) {
