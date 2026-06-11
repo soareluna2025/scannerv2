@@ -414,6 +414,21 @@ export default async function handler(req, res) {
     const players = useDbPlayers ? [] : (dPlayers.response || []);
     const events  = dEvents.response  || [];
 
+    // FIX gold: salvează formațiile (4-3-3 etc.) în fixtures_history din lineups-ul
+    // DEJA cerut. Doar salvare (UPDATE dacă rândul există); nimic nu intră în model.
+    try {
+      if (lineups.length && fixture?.teams) {
+        const _hid = fixture.teams.home?.id, _aid = fixture.teams.away?.id;
+        const _fmt = (tid) => { const l = lineups.find(x => x.team?.id === tid); return l?.formation || null; };
+        const _hf = _fmt(_hid), _af = _fmt(_aid);
+        if (_hf || _af) await query(
+          `UPDATE fixtures_history SET home_formation=COALESCE($2,home_formation),
+             away_formation=COALESCE($3,away_formation) WHERE fixture_id=$1`,
+          [id, _hf, _af]
+        ).catch(() => {});
+      }
+    } catch (_) {}
+
     // Resolve h2h
     const h2hFromDB = dbH2H.rows.map(r => ({
       teams: { home: { id: r.home_team_id }, away: { id: r.away_team_id } },

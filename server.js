@@ -185,6 +185,16 @@ async function ensureColumns() {
   } catch (e) {
     console.error('[columns] ensureColumns (features):', e.message);
   }
+  // [GOLD] Coloane „recolta de aur" (referee/formații/goals_prevented/standings
+  // splits/api comparison) — idempotent, ADD COLUMN IF NOT EXISTS.
+  try {
+    const { readFileSync } = await import('fs');
+    const sql = readFileSync(join(__dirname, 'scripts', 'migrations', 'add-gold-columns.sql'), 'utf8');
+    await query(sql);
+    console.log('[columns] add-gold-columns.sql aplicat (idempotent)');
+  } catch (e) {
+    console.error('[columns] ensureColumns (gold):', e.message);
+  }
 }
 
 const httpServer = app.listen(PORT, '0.0.0.0', async () => {

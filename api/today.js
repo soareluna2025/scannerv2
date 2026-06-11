@@ -183,7 +183,7 @@ export default async function handler(req, res) {
 
     const result = afterAll
       .map(m => ({
-        fixture: { id: m.fixture.id, date: m.fixture.date, status: m.fixture.status },
+        fixture: { id: m.fixture.id, date: m.fixture.date, status: m.fixture.status, referee: m.fixture.referee || null },
         league:  { id: m.league.id, name: m.league.name, country: m.league.country, flag: m.league.flag },
         teams:   { home: { id: m.teams.home.id, name: m.teams.home.name, logo: m.teams.home.logo || null },
                    away: { id: m.teams.away.id, name: m.teams.away.name, logo: m.teams.away.logo || null } },
@@ -210,11 +210,12 @@ export default async function handler(req, res) {
         query(
           `INSERT INTO fixtures
              (fixture_id, league_id, season, home_team_id, home_team_name,
-              away_team_id, away_team_name, status_short, status_long, match_date, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+              away_team_id, away_team_name, status_short, status_long, match_date, referee, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
            ON CONFLICT (fixture_id) DO UPDATE SET
              status_short=EXCLUDED.status_short,
              status_long=EXCLUDED.status_long,
+             referee=COALESCE(EXCLUDED.referee, fixtures.referee),
              updated_at=NOW()`,
           [
             m.fixture.id,
@@ -227,6 +228,7 @@ export default async function handler(req, res) {
             m.fixture.status?.short || 'NS',
             m.fixture.status?.long  || 'Not Started',
             m.fixture.date,
+            m.fixture.referee || null,
           ]
         ).catch(e => log(`fixtures upsert err ${m.fixture.id}: ${e.message}`));
       }

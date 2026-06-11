@@ -218,11 +218,12 @@ async function saveFormStats(m) {
       INSERT INTO fixtures_history
         (fixture_id, league_id, season,
          home_team_id, home_team_name, away_team_id, away_team_name,
-         home_goals, away_goals, status_short, match_date)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'FT',$10)
+         home_goals, away_goals, status_short, match_date, referee)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'FT',$10,$11)
       ON CONFLICT (fixture_id) DO UPDATE SET
-        home_goals=EXCLUDED.home_goals, away_goals=EXCLUDED.away_goals, status_short='FT'
-    `, [fid, lid, season, hid, m.teams?.home?.name || '', aid, m.teams?.away?.name || '', hg, ag, dt]);
+        home_goals=EXCLUDED.home_goals, away_goals=EXCLUDED.away_goals, status_short='FT',
+        referee=COALESCE(EXCLUDED.referee, fixtures_history.referee)
+    `, [fid, lid, season, hid, m.teams?.home?.name || '', aid, m.teams?.away?.name || '', hg, ag, dt, m.fixture?.referee || null]);
 
     const hr = await query(`
       SELECT

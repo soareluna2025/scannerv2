@@ -339,14 +339,22 @@ export default async function handler(req, res) {
           await query(
             `INSERT INTO standings
                (league_id, season, team_id, team_name, rank, points,
-                goals_for, goals_against, goals_diff, played, win, draw, lose, form, group_name, updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+                goals_for, goals_against, goals_diff, played, win, draw, lose, form, group_name,
+                played_home, win_home, draw_home, lose_home, gf_home, ga_home,
+                played_away, win_away, draw_away, lose_away, gf_away, ga_away, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
+                     $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,NOW())
              ON CONFLICT (league_id, season, team_id) DO UPDATE SET
                team_name=EXCLUDED.team_name, rank=EXCLUDED.rank, points=EXCLUDED.points,
                goals_for=EXCLUDED.goals_for, goals_against=EXCLUDED.goals_against,
                goals_diff=EXCLUDED.goals_diff, played=EXCLUDED.played,
                win=EXCLUDED.win, draw=EXCLUDED.draw, lose=EXCLUDED.lose,
-               form=EXCLUDED.form, group_name=EXCLUDED.group_name, updated_at=EXCLUDED.updated_at`,
+               form=EXCLUDED.form, group_name=EXCLUDED.group_name,
+               played_home=EXCLUDED.played_home, win_home=EXCLUDED.win_home, draw_home=EXCLUDED.draw_home,
+               lose_home=EXCLUDED.lose_home, gf_home=EXCLUDED.gf_home, ga_home=EXCLUDED.ga_home,
+               played_away=EXCLUDED.played_away, win_away=EXCLUDED.win_away, draw_away=EXCLUDED.draw_away,
+               lose_away=EXCLUDED.lose_away, gf_away=EXCLUDED.gf_away, ga_away=EXCLUDED.ga_away,
+               updated_at=NOW()`,
             [
               leagueId, lgSeason, row.team.id, row.team.name, row.rank, row.points,
               row.all?.goals?.for     || 0,
@@ -358,7 +366,10 @@ export default async function handler(req, res) {
               row.all?.lose           || 0,
               row.form || null,
               row.group || null,
-              new Date().toISOString(),
+              row.home?.played || 0, row.home?.win || 0, row.home?.draw || 0,
+              row.home?.lose || 0, row.home?.goals?.for || 0, row.home?.goals?.against || 0,
+              row.away?.played || 0, row.away?.win || 0, row.away?.draw || 0,
+              row.away?.lose || 0, row.away?.goals?.for || 0, row.away?.goals?.against || 0,
             ]
           );
           stats.standings++;

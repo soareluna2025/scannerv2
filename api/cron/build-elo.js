@@ -57,12 +57,27 @@ async function logCron(status, msg = '') {
 }
 
 export default async function handler(req, res) {
+  const rebuild = (req?.query?.rebuild === '1' || req?.query?.rebuild === 1);
   try {
     await ensureTables();
-    // Reconstrucție curată: golim guard-ul de idempotență ca să permitem
-    // re-procesarea completă cu noul K (ponderat pe competiție). Se repopulează
-    // la final cu setul replay-at.
-    await query(`DELETE FROM elo_applied`).catch(() => {});
+    // Rulare ZILNICĂ ieftină: dacă NU sunt meciuri FT noi de la ultimul build
+    // (toate sunt deja în elo_applied), nu mai facem replay-ul. ?rebuild=1 forțează.
+    if (!rebuild) {
+      const nw = await query(
+        `SELECT COUNT(*)::int AS n FROM fixtures_history fh
+          WHERE fh.status_short = ANY($1) AND fh.league_id = ANY($2)
+            AND fh.home_team_id IS NOT NULL AND fh.away_team_id IS NOT NULL
+            AND fh.home_goals IS NOT NULL  AND fh.away_goals IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM elo_applied e WHERE e.fixture_id = fh.fixture_id)`,
+        [DONE, ALLOWED]
+      ).catch(() => ({ rows: [{ n: 1 }] }));
+      if ((nw.rows[0]?.n || 0) === 0) {
+        return res.status(200).json({ ok: true, skipped: 'no new FT matches since last build', mode: 'incremental' });
+      }
+    }
+    // DELETE doar la rebuild explicit (formula/replay NEATINSE; replay-ul e
+    // idempotent + mărginit de fereastra rolling-100, deci e sigur zilnic).
+    if (rebuild) await query(`DELETE FROM elo_applied`).catch(() => {});
 
     const { rows } = await query(`
       SELECT fixture_id, league_id, home_team_id, away_team_id, home_goals, away_goals, match_date

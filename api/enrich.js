@@ -2062,6 +2062,11 @@ export default async function handler(req, res) {
         const apiHomePct = apiPred ? (parseFloat(apiPred.predictions?.percent?.home) || null) : null;
         const apiDrawPct = apiPred ? (parseFloat(apiPred.predictions?.percent?.draw) || null) : null;
         const apiAwayPct = apiPred ? (parseFloat(apiPred.predictions?.percent?.away) || null) : null;
+        // [GOLD] comparison (att/def/form/poisson/h2h %) + advice — DEJA în payload-ul
+        // /predictions (prematch_data). Doar persistat; nimic nu intră încă în model.
+        const _cmp = apiPred?.comparison || {};
+        const _cv = (k, s) => { const o = _cmp?.[k]?.[s]; const n = (o == null ? null : parseFloat(o)); return Number.isFinite(n) ? n : null; };
+        const apiAdvice = apiPred?.predictions?.advice || null;
         // [ML features] breakdown DEJA calculat (payload.breakdown) — doar persistat.
         const _bd = payload.breakdown || {};
         // league_group din league_stats.avg_goals_per_match (aceleași praguri ca recalibrate-tables).
@@ -2076,9 +2081,13 @@ export default async function handler(req, res) {
             home_score_rate, away_score_rate, h2h_over15, confidence,
             api_home_pct, api_draw_pct, api_away_pct,
             score1, score2, score3, score4, score6, score7, h2h_sample, league_group,
-            elo_adjusted, elo_diff_used)
+            elo_adjusted, elo_diff_used,
+            api_advice, api_cmp_form_home, api_cmp_form_away, api_cmp_att_home, api_cmp_att_away,
+            api_cmp_def_home, api_cmp_def_away, api_cmp_poisson_home, api_cmp_poisson_away,
+            api_cmp_h2h_home, api_cmp_h2h_away)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
-            $20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
+            $20,$21,$22,$23,$24,$25,$26,$27,$28,$29,
+            $30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)
           ON CONFLICT (fixture_id) DO UPDATE SET
             lambda_home=EXCLUDED.lambda_home, lambda_away=EXCLUDED.lambda_away,
             lambda_total=EXCLUDED.lambda_total,
@@ -2093,6 +2102,17 @@ export default async function handler(req, res) {
             score4=EXCLUDED.score4, score6=EXCLUDED.score6, score7=EXCLUDED.score7,
             h2h_sample=EXCLUDED.h2h_sample, league_group=EXCLUDED.league_group,
             elo_adjusted=EXCLUDED.elo_adjusted, elo_diff_used=EXCLUDED.elo_diff_used,
+            api_advice=COALESCE(EXCLUDED.api_advice, predictions.api_advice),
+            api_cmp_form_home=COALESCE(EXCLUDED.api_cmp_form_home, predictions.api_cmp_form_home),
+            api_cmp_form_away=COALESCE(EXCLUDED.api_cmp_form_away, predictions.api_cmp_form_away),
+            api_cmp_att_home=COALESCE(EXCLUDED.api_cmp_att_home, predictions.api_cmp_att_home),
+            api_cmp_att_away=COALESCE(EXCLUDED.api_cmp_att_away, predictions.api_cmp_att_away),
+            api_cmp_def_home=COALESCE(EXCLUDED.api_cmp_def_home, predictions.api_cmp_def_home),
+            api_cmp_def_away=COALESCE(EXCLUDED.api_cmp_def_away, predictions.api_cmp_def_away),
+            api_cmp_poisson_home=COALESCE(EXCLUDED.api_cmp_poisson_home, predictions.api_cmp_poisson_home),
+            api_cmp_poisson_away=COALESCE(EXCLUDED.api_cmp_poisson_away, predictions.api_cmp_poisson_away),
+            api_cmp_h2h_home=COALESCE(EXCLUDED.api_cmp_h2h_home, predictions.api_cmp_h2h_home),
+            api_cmp_h2h_away=COALESCE(EXCLUDED.api_cmp_h2h_away, predictions.api_cmp_h2h_away),
             updated_at=NOW()
           WHERE predictions.result_over15 IS NULL`,
           [
@@ -2107,6 +2127,12 @@ export default async function handler(req, res) {
             _bd.live ?? null, _bd.consistenta ?? null, _bd.putereEchipe ?? null,
             payload.h2hSample ?? null, _leagueGroup,
             payload.eloAdjusted === true, payload.eloDiffUsed ?? null,
+            // [GOLD] $30-$40 — advice + comparison (att/def/form/poisson/h2h %)
+            apiAdvice, _cv('form', 'home'), _cv('form', 'away'),
+            _cv('att', 'home'), _cv('att', 'away'),
+            _cv('def', 'home'), _cv('def', 'away'),
+            _cv('poisson_distribution', 'home'), _cv('poisson_distribution', 'away'),
+            _cv('h2h', 'home'), _cv('h2h', 'away'),
           ]
         ).catch(() => {});
       }

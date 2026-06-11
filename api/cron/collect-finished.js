@@ -141,8 +141,8 @@ async function collectMatchStats(fixtureId, homeTeamId) {
           shots_insidebox, shots_outsidebox,
           expected_goals, ball_possession,
           total_passes, passes_accurate, pass_percentage,
-          fouls, yellow_cards, red_cards, corner_kicks, offsides, goalkeeper_saves)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+          fouls, yellow_cards, red_cards, corner_kicks, offsides, goalkeeper_saves, goals_prevented)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        ON CONFLICT (fixture_id, team_id) DO UPDATE SET
          team_name=EXCLUDED.team_name,
          shots_on_goal=EXCLUDED.shots_on_goal,
@@ -153,7 +153,8 @@ async function collectMatchStats(fixtureId, homeTeamId) {
          pass_percentage=EXCLUDED.pass_percentage, fouls=EXCLUDED.fouls,
          yellow_cards=EXCLUDED.yellow_cards, red_cards=EXCLUDED.red_cards,
          corner_kicks=EXCLUDED.corner_kicks, offsides=EXCLUDED.offsides,
-         goalkeeper_saves=EXCLUDED.goalkeeper_saves`,
+         goalkeeper_saves=EXCLUDED.goalkeeper_saves,
+         goals_prevented=COALESCE(EXCLUDED.goals_prevented, match_stats.goals_prevented)`,
       [
         fixtureId, teamStat.team.id, teamStat.team.name,
         parseInt(s['Shots on Goal'])      || 0,
@@ -172,6 +173,7 @@ async function collectMatchStats(fixtureId, homeTeamId) {
         parseInt(s['Corner Kicks'])       || 0,
         parseInt(s['Offsides'])           || 0,
         parseInt(s['Goalkeeper Saves'])   || 0,
+        parseFloat(s['goals_prevented'])  || null,
       ]
     );
   }
