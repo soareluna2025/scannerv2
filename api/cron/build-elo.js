@@ -13,6 +13,11 @@ import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 const ALLOWED = [...ALLOWED_LEAGUE_IDS];
 const DONE = ['FT', 'AET', 'PEN'];
 
+// Avantaj de teren — validat 11.06.2026: Brier 0.1784→0.1744, acc 61.0%→63.3%,
+// pe 60.815 meciuri OOS (vezi ml/elo_experiment_report.txt). Aplicat DOAR în
+// expected(): ratingul gazdei primește +HOME_ADV la calculul așteptării.
+const HOME_ADV = 50;
+
 function kFactor(games) { return games < 10 ? 40 : games < 30 ? 32 : 24; }
 
 // Multiplicator de importanță a competiției aplicat peste K (meciuri „grele"
@@ -142,7 +147,9 @@ export default async function handler(req, res) {
       const H = getT(m.home_team_id, lid), A = getT(m.away_team_id, lid);
       // Snapshot PRE-MECI (ELO-ul de DINAINTEA meciului — fără lookahead).
       const preH = H.elo, preA = A.elo;
-      const expH = 1 / (1 + Math.pow(10, (preA - preH) / 400));  // = home_win_prob
+      // Simetric cu experimentul (ml/experiment_elo.py, mod prod): gazda primește
+      // +HOME_ADV DOAR în așteptare. expH curge nemodificat în update-ul de rating.
+      const expH = 1 / (1 + Math.pow(10, (preA - (preH + HOME_ADV)) / 400));  // = home_win_prob
       histBuf.push({
         fid: m.fixture_id, hid: m.home_team_id, aid: m.away_team_id,
         he: +preH.toFixed(2), ae: +preA.toFixed(2),
