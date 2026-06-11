@@ -6,8 +6,8 @@
 > cu comanda exactă — nu sunt presupuse.
 >
 > Cifre inventar: **8 ecrane** principale (+ modal meci cu 7 taburi, pagină echipă 4 taburi,
-> hub World Cup 5 taburi, admin ~27 carduri) · **~84 endpoint-uri/handlere** (25 api + 3
-> backfill + 27 admin + 28 cron + WS) · **23 probleme** (🔴 7 · 🟠 11 · 🟡 5).
+> hub World Cup 5 taburi, admin ~20 carduri) · **~84 endpoint-uri/handlere** (25 api + 3
+> backfill + 27 admin + 28 cron + WS) · **28 probleme** (🔴 8 · 🟠 14 · 🟡 6).
 
 ---
 
@@ -102,10 +102,19 @@ API-usage + trend (`:1581`, `:2496`), Live-matches (`:1622`), Cron-status/health
 Erori (`:1728`), Trigger-cron (`:1648`), Optimizare DB (`admin.js:470`), **Stabilizare completă DB**
 (`:2077`, lanț `STABILIZE_STEPS` `admin.js:500-501`), Win-rate patterns (`:2217`), Calibrare (`:2296`),
 Leagues-insights (`:2599`), Scanner state/toggle (`:2458`,`:2476`), DB-cleanup (`:2578`), vs-API (`:2642`).
-- **Verdict prospețime:** on-demand (proaspăt la apăsare).
-- **Bug 🔴:** `admin.html:2369` cheamă `/api/admin/bets-aggregate` care **NU există** în `api/admin.js`
-  → card 404 (P04). 3 endpoint-uri admin definite dar neapelate (prediction-accuracy/access-log/
-  learning-stats) — moarte.
+- **Prospețime admin:** DOUĂ regimuri — auto-refresh 30s (Status/Env/DB/API-usage/Live/Cron/Erori/
+  Backfill/Scanner-state, `admin.html:2159-2173`) vs on-demand (Win-rate/Calibrare/Bilete/vs-API/
+  Trend/Cleanup/Insights/Health/Stabilizare).
+- **Bug 🔴 (singurul card complet rupt):** Card „STATISTICI BILETE & ROI" (`admin.html:2365-2370`)
+  cheamă `/api/admin/bets-aggregate` care **NU există** în `api/admin.js` → HTTP 404 permanent
+  („Eroare fetch: HTTP 404", `admin.html:2449-2450`) — schemă pentru bilete LTC fără backend (P04).
+- **Cod mort backend:** 3 endpoint-uri admin definite dar neapelate (`prediction-accuracy` `admin.js:605`,
+  `access-log` `:640`, `learning-stats` `:645`) + funcția `triggerCalibration()` (`admin.html:2346`)
+  nelegată de niciun buton (P28).
+- **Cosmetice (P28):** fallback static „COMPLETĂ = 17 / progres /14" desincronizat de
+  `STABILIZE_STEPS.length=17` (`admin.html:1104,1112` vs `admin.js:487-509`) — totalul real vine din
+  răspuns, deci corect la runtime; label cleanup „logged_at" greșit pt `prematch_enrichment_log`
+  (coloana reală `executed_at`, `admin.html:2545` vs `admin.js:1079`).
 
 ---
 
@@ -230,6 +239,23 @@ SĂPTĂMÂNAL (Lun 06:00)** — cel mai rar.
 ## SECȚIUNEA 5 — INTEGRITATE & COERENȚĂ
 
 **A. Aceeași informație, surse diferite (risc contradicție pe ecran):**
+- **🔴 CONTRADICȚIE GARANTATĂ — DOUĂ „Over 1.5" pe ACELAȘI card live, una sub alta:**
+  `mk.over15` = Poisson RECALCULAT în frontend din λ euristic (`app-state.js:248-255`, randat
+  `app-ui.js:216`) vs `ed.over15Prob` = Poisson BACKEND enrich (`enrich.js:272`, randat IMEDIAT
+  dedesubt `app-ui.js:226`). Două procente diferite simultan pentru același meci (P24). Idem GG.
+- **NGP badge vs NGP-din-confidence (surse diferite):** badge `m._ng` din `match_snapshots.ng` cu
+  smoothing (`scanner.js:567-589`) vs componenta NGP a scorului de încredere din
+  `live_stats.ngp_home+ngp_away` fără smoothing (`scanner.js:279`, citit `enrich.js:697-705`) → pot
+  diferi pe ecran (P25).
+- **Două motoare Poisson cu ACELEAȘI nume de câmp:** `match.js:238-243` (medie aritmetică simplă,
+  Poisson vechi) vs `enrich.js:220-230` (Maher + shrinkage + Dixon-Coles). SUMAR randează enrich (bun),
+  dar `/api/match` expune `over15Prob/homeWin` divergente folosite de tab ML live (`app-ui.js:1318`) —
+  risc latent (P26).
+- **`today.js:65,79` `COALESCE(p.confidence,50)`** — confidence NULL devine tăcut 50 în composite
+  „Top Oportunități" → poate umfla artificial scorul (P27).
+- **Team Strength — formulă duplicată cu greutăți DIFERITE după sursă:** player_stats
+  (`enrich.js:467-473`) vs players_season fallback (`:490-494`) vs lineup (`:423-426`) → „Putere"
+  diferă după ce date sunt disponibile.
 - **1X2** — 4 surse: enrich Poisson (`app-ui.js:224,761,2481`; `app-live.js:915`); inverse-Poisson din
   cotele tastate care SUPRASCRIE în SUMAR (`app-state.js:736-748,719`); ML `result_final` normalizat
   (`app-ui.js:1519-1538`); Monte-Carlo (`app-live.js:1102-1104`). + badge ELO (`app-ui.js:2158-2160`).
@@ -283,8 +309,15 @@ recalibrat în JS (`app-state.js:331-350`); scoring generator paralel cu serveru
 | P21 | 🟡 | LIVE card | NGP „—" maschează 0% real | `app-ui.js:209` | S |
 | P22 | 🟡 | World Cup | URL afiliat placeholder | `app-ui.js:3294` | S |
 | P23 | 🟡 | PRE-MECI | Corners/cards Top-Opps cu fallback-uri nebacktestate | `app-ui.js:617-625` | M |
+| P24 | 🔴 | LIVE card | DOUĂ „Over 1.5" diferite simultan pe același card (contradicție vizibilă) | `app-ui.js:216` (mk client) vs `:226` (enrich); `app-state.js:248-255` | M |
+| P25 | 🟠 | LIVE/SUMAR | NGP badge (snapshot smoothed) ≠ NGP din confidence (live_stats raw) | `scanner.js:567-589` vs `:279`; `enrich.js:697-705` | M |
+| P26 | 🟠 | modal/ML | Două motoare Poisson cu aceleași nume câmp (match.js vechi vs enrich) | `match.js:238-243` vs `enrich.js:220-230` | M |
+| P27 | 🟠 | PRE-MECI | `COALESCE(confidence,50)` umflă tăcut composite-ul Top-Opps | `today.js:65,79` | S |
+| P28 | 🟡 | Admin | Cod mort + cosmetice (3 endpoint orfane, triggerCalibration mort, fallback „14/17", label cleanup) | `admin.js:605,640,645`; `admin.html:2346,1104,1112,2545` | S |
 
 **Efort:** S = mic (<1h) · M = mediu (câteva ore) · L = mare (refactor).
+**DE VERIFICAT PE VPS (card rupt + divergențe):** `curl -s -H "X-Api-Key:$ADMIN_API_KEY" localhost:3000/api/admin/bets-aggregate` (așteptat 404);
+NGP divergent: `SELECT s.fixture_id,s.ng,(COALESCE(l.ngp_home,0)+COALESCE(l.ngp_away,0)) FROM match_snapshots s JOIN LATERAL (SELECT * FROM live_stats WHERE fixture_id=s.fixture_id ORDER BY recorded_at DESC LIMIT 1) l ON true WHERE s.outcome='LIVE';`
 
 ---
 
