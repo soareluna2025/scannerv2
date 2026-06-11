@@ -399,6 +399,9 @@ function buildLiveFeaturesV2(liveState, en, elo) {
 // Silent-fail: model lipsă/eroare → {} (integrarea live e dezactivată curat).
 export function predictLiveMarketsV2(liveState, enrichData, eloData) {
   try {
+    // REGULA DE AUR (Ziua 3): modelul live e antrenat pe snapshot-uri DIN meci →
+    // pre-kickoff (elapsed<=0) ar da procente umflate. Nu produce piețe live atunci.
+    if (!liveState || !(Number(liveState.elapsed) > 0)) return {};
     const lm = loadLiveModel();
     if (!lm || typeof lm !== 'object') return {};
     const feat = buildLiveFeaturesV2(liveState, enrichData, eloData);

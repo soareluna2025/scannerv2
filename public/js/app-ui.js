@@ -1413,6 +1413,33 @@ function mdRenderML(d){
   // produs probabilități (independență) pt combinații; a,b în 0..1
   function combo(label,a,b){ if(a==null||b==null)return mc(label,null); return mc(label, Math.round(a*b*100)); }
 
+  // [Ziua 3] Model LIVE (payload.mlLive) — declarat SUS ca să-l folosească ȘI BLOC 1
+  // (PRE-MECI dinamic). lp = piață binară live (număr); lp3 = piață 3-clase (obiect).
+  var mlLive=(d&&d.mlLive)||en.mlLive||null;
+  var mlLiveAvail=!!((d&&d.mlLiveAvailable)||en.mlLiveAvailable);
+  var elapsedNum=lc.elapsed||0;
+  var _preLive=!!(mlLiveAvail && mlLive && elapsedNum>0);   // kickoff trecut + model live
+  var pc=function(v){ v=Number(v); return Number.isFinite(v)?v:null; };  // FIX3: NaN/invalid → null → "—"
+  var lp=function(k){ return (mlLive&&typeof mlLive[k]==='number')?pc(mlLive[k]):null; };
+  var lp3=function(k){ return (mlLive&&mlLive[k]&&typeof mlLive[k]==='object')?mlLive[k]:null; };
+  var ocl=function(label,p){
+    if(p===100) return '<div class="mc"><div class="mc-name">'+label+'</div><div class="mc-prob" style="color:#00e5b8">✅ 100%</div></div>';
+    return mc(label,pc(p));
+  };
+  // FIX2: rând 3-clase (1/X/2 sau home/none/away) cu LIDERUL evidențiat; invalid → "—".
+  function triRow(items){
+    var vals=items.map(function(it){return pc(it[1]);});
+    var maxi=-1,maxv=-1; vals.forEach(function(v,i){ if(v!=null&&v>maxv){maxv=v;maxi=i;} });
+    return '<div style="'+grid(items.length)+'">'+items.map(function(it,i){
+      var v=vals[i], lead=(i===maxi&&v!=null);
+      var col=lead?'#00e5b8':(v==null?'#6b7a99':'#cdd8e6');
+      return '<div class="mc" style="'+(lead?'border:1px solid #00e5b855;':'')+'"><div class="mc-name">'+it[0]+'</div>'
+        +'<div class="mc-prob" style="color:'+col+';font-weight:'+(lead?900:700)+'">'+(v!=null?v+'%':'—')+'</div></div>';
+    }).join('')+'</div>';
+  }
+  // Badge „· actualizat live · min X" (PRE-MECI dinamic, doar după kickoff).
+  var liveBadge=function(){ return _preLive?(' <span style="font-size:9px;color:#ff7777;font-weight:700">· actualizat live · min '+elapsedNum+'</span>'):''; };
+
   // Status header
   var stTxt, stClr;
   if(lc.status==='HT'){ stTxt='⏸ Pauză · HT '+(lc.homeHT!=null?lc.homeHT:'?')+'-'+(lc.awayHT!=null?lc.awayHT:'?'); stClr='#ffcc44'; }
@@ -1462,21 +1489,26 @@ function mdRenderML(d){
 
   // ════ BLOC 1 — PRE-MECI ════
   out+='<div class="md-section"><div class="md-section-title" style="font-size:15px;font-weight:800;color:#a5b4fc;border-left:3px solid #6366f1;padding-left:8px">⏱ PRE-MECI</div>';
-  out+='<div class="ml-sub">Total goluri meci</div>';
+  // PRE-MECI DINAMIC: după kickoff, piețele full-match se reactualizează din
+  // modelul live cu starea curentă (scor/minut). Pre-kickoff = modelul static.
+  out+='<div class="ml-sub">Total goluri meci'+liveBadge()+'</div>';
   out+='<div style="'+grid(5)+'">'
     +oc('Ov 0.5',1,tg,false,matchLive,prob('over05_total'))
-    +oc('Ov 1.5',2,tg,false,matchLive,prob('over15_total'))
-    +oc('Ov 2.5',3,tg,false,matchLive,prob('over25_total'))
-    +oc('Ov 3.5',4,tg,false,matchLive,prob('over35_total'))
-    +oc('Ov 4.5',5,tg,false,matchLive,prob('over45_total'))+'</div>';
-  out+='<div class="ml-sub">Rezultat final</div>';
-  out+='<div style="'+grid(3)+'">'+mc('1 Gazde',prob('home_win'))+mc('X Egal',prob('draw'))+mc('2 Oaspeți',prob('away_win'))+'</div>';
+    +oc('Ov 1.5',2,tg,false,matchLive,_preLive?lp('goals_total_over15'):prob('over15_total'))
+    +oc('Ov 2.5',3,tg,false,matchLive,_preLive?lp('goals_total_over25'):prob('over25_total'))
+    +oc('Ov 3.5',4,tg,false,matchLive,_preLive?lp('goals_total_over35'):prob('over35_total'))
+    +oc('Ov 4.5',5,tg,false,matchLive,_preLive?lp('goals_total_over45'):prob('over45_total'))+'</div>';
+  // Rezultat final (multiclass, lider evidențiat): live → result_final; pre → 1X2 static.
+  out+='<div class="ml-sub">Rezultat final'+liveBadge()+'</div>';
+  var rfPre=_preLive?lp3('result_final'):null;
+  if(rfPre){ out+=triRow([['1 Gazde',rfPre['1']],['X Egal',rfPre['X']],['2 Oaspeți',rfPre['2']]]); }
+  else { out+=triRow([['1 Gazde',prob('home_win')],['X Egal',prob('draw')],['2 Oaspeți',prob('away_win')]]); }
   var p1=prob('home_win'),px=prob('draw'),p2=prob('away_win');
   var dc=function(a,b){ return (a!=null&&b!=null)?Math.min(100,a+b):null; };
   out+='<div class="ml-sub">Șansă dublă</div>';
   out+='<div style="'+grid(3)+'">'+mc('1X',dc(p1,px))+mc('X2',dc(px,p2))+mc('12',dc(p1,p2))+'</div>';
-  var bt=prob('btts_total'), btDone=(hg>0&&ag>0);
-  out+='<div class="ml-sub">Ambele marchează</div>';
+  var bt=_preLive?lp('btts_final'):prob('btts_total'); var btDone=(hg>0&&ag>0);
+  out+='<div class="ml-sub">Ambele marchează'+liveBadge()+'</div>';
   out+='<div style="'+grid(2)+'">'+res('BTTS DA',btDone,btDone,bt)+mc('BTTS NU',bt!=null?(100-bt):null)+'</div>';
   out+='<div class="ml-sub">Goluri per echipă (tot meciul)</div>';
   out+='<div style="'+grid(2)+'">';
@@ -1521,26 +1553,13 @@ function mdRenderML(d){
     +mc('Over 3.5',prob('cards_away_over35'))+'</div></div>';
   out+='</div></div>';
 
-  // ════ BLOC 2 — REPRIZA 1 ════
-  // Date model LIVE v2 (payload.mlLive) — disponibile doar pe meci live.
-  var mlLive=(d&&d.mlLive)||en.mlLive||null;
-  var mlLiveAvail=!!((d&&d.mlLiveAvailable)||en.mlLiveAvailable);
-  var elapsedNum=lc.elapsed||0;
-  // lp = piață binară live (număr); lp3 = piață 3-clase live (obiect {cls:%}).
-  var lp=function(k){ return (mlLive&&typeof mlLive[k]==='number')?mlLive[k]:null; };
-  var lp3=function(k){ return (mlLive&&mlLive[k]&&typeof mlLive[k]==='object')?mlLive[k]:null; };
-  // Celulă binară live: prag atins (100 din model) → ✅ 100%; altfel prob colorat.
-  var ocl=function(label,p){
-    if(p===100) return '<div class="mc"><div class="mc-name">'+label+'</div><div class="mc-prob" style="color:#00e5b8">✅ 100%</div></div>';
-    return mc(label,p);
-  };
-
+  // ════ BLOC 2 — REPRIZA 1 ════ (mlLive/lp/lp3/ocl declarate sus, lângă helpers)
   if(mlLiveAvail && mlLive && elapsedNum>0 && elapsedNum<=45 && lp3('result_r1')){
     // ── BLOC 2 LIVE v2 (model_live_export.json) ──
     out+='<div class="md-section"><div class="md-section-title" style="color:#ff7777">⏱ REPRIZA 1 — LIVE <span style="font-size:9px;font-weight:700">🔴 min '+elapsedNum+'</span></div>';
     var rr1=lp3('result_r1')||{};
     out+='<div class="ml-sub">Rezultat R1</div>';
-    out+='<div style="'+grid(3)+'">'+mc('1 Gazde',rr1['1'])+mc('X Egal',rr1['X'])+mc('2 Oaspeți',rr1['2'])+'</div>';
+    out+=triRow([['1 Gazde',rr1['1']],['X Egal',rr1['X']],['2 Oaspeți',rr1['2']]]);
     // Total goluri R1 — oc() cu scorul curent tg (prag atins → DA ✓).
     out+='<div class="ml-sub">Total goluri R1</div>';
     out+='<div style="'+grid(3)+'">'
@@ -1585,10 +1604,15 @@ function mdRenderML(d){
       +oc('Ov 2.5',3,thh,r1Done,r1Live,prob('ht_over25'))
       +res('BTTS',r1BttsDone,r1Done,prob('ht_btts'))+'</div>';
     out+='<div class="ml-sub">Rezultat R1</div>';
-    out+='<div style="'+grid(3)+'">'
-      +res('1 Gazde', r1H>r1A, r1Done, null)
-      +res('X Egal',  r1H===r1A && r1Done, r1Done, null)
-      +res('2 Oaspeți',r1A>r1H, r1Done, null)+'</div>';
+    if(r1Done){
+      out+='<div style="'+grid(3)+'">'
+        +res('1 Gazde', r1H>r1A, true, null)
+        +res('X Egal',  r1H===r1A, true, null)
+        +res('2 Oaspeți',r1A>r1H, true, null)+'</div>';
+    } else {
+      // REGULA DE AUR: rezultatul R1 e piață LIVE-only → pre-kickoff NU folosim modelul live.
+      out+='<div class="mc" style="text-align:center;color:#6b7a99;font-size:11px;padding:10px">— disponibil la kickoff</div>';
+    }
     out+='<div class="ml-sub">Goluri per echipă R1</div>';
     out+='<div style="'+grid(2)+'">';
     out+='<div><div class="ml-team-label home">⚽ '+htmlEsc(hn)+'</div><div style="display:flex;flex-direction:column;gap:6px">'
@@ -1604,7 +1628,7 @@ function mdRenderML(d){
     out+='<div class="md-section"><div class="md-section-title" style="color:#ff7777">⏱ REPRIZA 2 — LIVE <span style="font-size:9px;font-weight:700">🔴 min '+elapsedNum+'</span></div>';
     var rf=lp3('result_final')||{};
     out+='<div class="ml-sub">Rezultat final</div>';
-    out+='<div style="'+grid(3)+'">'+mc('1 Gazde',rf['1'])+mc('X Egal',rf['X'])+mc('2 Oaspeți',rf['2'])+'</div>';
+    out+=triRow([['1 Gazde',rf['1']],['X Egal',rf['X']],['2 Oaspeți',rf['2']]]);
     // Total goluri meci — oc() cu tg (prag atins → DA ✓).
     out+='<div class="ml-sub">Total goluri meci</div>';
     out+='<div style="'+grid(4)+'">'
