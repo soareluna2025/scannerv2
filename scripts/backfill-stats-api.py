@@ -131,6 +131,46 @@ def upsert_stats(cur, fixture_id, resp):
     return n
 
 
+CREATE_CHECKED = """
+CREATE TABLE IF NOT EXISTS stats_api_checked (
+    fixture_id   BIGINT PRIMARY KEY,
+    checked_at   TIMESTAMPTZ DEFAULT NOW(),
+    has_stats    BOOLEAN,
+    has_referee  BOOLEAN
+);
+"""
+
+CHECKED_SQL = """
+INSERT INTO stats_api_checked (fixture_id, checked_at, has_stats, has_referee)
+VALUES (%s, NOW(), %s, %s)
+ON CONFLICT (fixture_id) DO UPDATE SET
+  checked_at=NOW(), has_stats=EXCLUDED.has_stats, has_referee=EXCLUDED.has_referee
+"""
+
+# Candidați: DOAR ligi „acoperite dovedit" de API (>=50 rânduri match_stats),
+# excluzând fixture-urile deja verificate (stats_api_checked). Recente întâi.
+CANDIDATES_SQL = """
+WITH covered AS (
+  SELECT fh3.league_id
+    FROM match_stats ms
+    JOIN fixtures_history fh3 ON fh3.fixture_id = ms.fixture_id
+   GROUP BY fh3.league_id HAVING COUNT(*) >= 50
+)
+SELECT fh.fixture_id, fh.home_team_id,
+       (NOT EXISTS (SELECT 1 FROM match_stats ms WHERE ms.fixture_id=fh.fixture_id)) AS need_stats,
+       (fh.referee IS NULL OR btrim(fh.referee)='') AS need_ref,
+       EXTRACT(YEAR FROM fh.match_date)::int AS an
+  FROM fixtures_history fh
+ WHERE fh.match_date >= %s AND fh.status_short='FT'
+   AND fh.league_id IN (SELECT league_id FROM covered)
+   AND NOT EXISTS (SELECT 1 FROM stats_api_checked c WHERE c.fixture_id = fh.fixture_id)
+   AND (NOT EXISTS (SELECT 1 FROM match_stats ms WHERE ms.fixture_id=fh.fixture_id)
+        OR fh.referee IS NULL OR btrim(fh.referee)='')
+ ORDER BY fh.match_date DESC
+ LIMIT %s
+"""
+
+
 def arg(name, default):
     return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else default
 
@@ -144,28 +184,30 @@ def main():
 
     conn = get_conn(); conn.autocommit = False
     cur = conn.cursor()
-    cur.execute("""
-        SELECT fh.fixture_id, fh.home_team_id,
-               (NOT EXISTS (SELECT 1 FROM match_stats ms WHERE ms.fixture_id=fh.fixture_id)) AS need_stats,
-               (fh.referee IS NULL OR btrim(fh.referee)='') AS need_ref
-          FROM fixtures_history fh
-         WHERE fh.match_date >= %s AND fh.status_short='FT'
-           AND (NOT EXISTS (SELECT 1 FROM match_stats ms WHERE ms.fixture_id=fh.fixture_id)
-                OR fh.referee IS NULL OR btrim(fh.referee)='')
-         ORDER BY fh.match_date DESC
-         LIMIT %s
-    """, (since, limit))
-    targets = cur.fetchall()
-    print(f"Fixturi de completat: {len(targets)}  (cele mai recente întâi, since={since})")
+    cur.execute(CREATE_CHECKED); conn.commit()
 
-    calls = 0; stats_done = 0; ref_done = 0
-    for i, (fid, hid, need_stats, need_ref) in enumerate(targets, 1):
+    cur.execute(CANDIDATES_SQL, (since, limit))
+    targets = cur.fetchall()
+    if not targets:
+        print("Niciun candidat (ligi acoperite, neverificate) — nimic de făcut.")
+        cur.close(); conn.close(); return
+
+    # Defalcare pe an a candidaților selectați.
+    by_year = {}
+    for t in targets:
+        by_year[t[4]] = by_year.get(t[4], 0) + 1
+    print(f"Candidați (ligi acoperite ≥50 stats, neverificați, recente întâi): {len(targets)}")
+    print("  pe an: " + ", ".join(f"{y}:{by_year[y]}" for y in sorted(by_year, reverse=True)))
+
+    calls = 0; stats_done = 0; ref_done = 0; processed = 0; aborted = False
+    for i, (fid, hid, need_stats, need_ref, _an) in enumerate(targets, 1):
+        got_stats = False; got_ref = False
         if need_stats:
             data = api_get(f"/fixtures/statistics?fixture={fid}"); calls += 1
             if data and data.get("response"):
                 try:
                     if upsert_stats(cur, fid, data["response"]) > 0:
-                        stats_done += 1
+                        stats_done += 1; got_stats = True
                 except Exception as e:
                     print(f"  [db stats {fid}] {e}")
             time.sleep(throttle)
@@ -176,15 +218,36 @@ def main():
                        if data and data.get("response") else None)
                 if ref:
                     cur.execute("UPDATE fixtures_history SET referee=%s WHERE fixture_id=%s",
-                                (ref, fid)); ref_done += 1
+                                (ref, fid)); ref_done += 1; got_ref = True
             except Exception as e:
                 print(f"  [db ref {fid}] {e}")
             time.sleep(throttle)
+
+        # Marchează fixture-ul ca VERIFICAT (indiferent de rezultat) → fără re-ardere.
+        cur.execute(CHECKED_SQL, (int(fid),
+                                  (not need_stats) or got_stats,
+                                  (not need_ref) or got_ref))
+        processed += 1
+
         if i % 100 == 0:
             conn.commit()
-            print(f"  [{i}/{len(targets)}] calls={calls} stats+={stats_done} ref+={ref_done}")
+            yld = (100.0 * stats_done / processed) if processed else 0.0
+            print(f"  [{i}/{len(targets)}] calls={calls} stats+={stats_done} "
+                  f"ref+={ref_done} (yield={yld:.1f}%)")
+
+        # Plasă anti-ardere: după 200 fixturi, dacă yield-ul stats < 5% → stop.
+        if processed >= 200:
+            yld = 100.0 * stats_done / processed
+            if yld < 5.0:
+                conn.commit()
+                print(f"⛔ STOP anti-ardere: yield={yld:.1f}% < 5% după {processed} fixturi. "
+                      f"Ligile rămase probabil nu-s acoperite de API.")
+                aborted = True
+                break
+
     conn.commit()
-    print(f"✅ API backfill: {len(targets)} fixturi · {calls} apeluri API · "
+    tag = " (oprit anti-ardere)" if aborted else ""
+    print(f"✅ API backfill{tag}: {processed} fixturi verificate · {calls} apeluri · "
           f"stats={stats_done} · referee={ref_done}")
     cur.close(); conn.close()
 
