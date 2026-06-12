@@ -2367,7 +2367,10 @@ function mdRenderSumar(d){
     var ngpData=calcScore(fix);
     var ng15=(typeof fix._ng15==='number')?fix._ng15:null;
     var ngRaw=ngpData.ng;
-    var ngCal=calibrateNgpRest(ngRaw);
+    // [P25] _ng vine deja calibrat+smoothed de scanner (EXACT sursa badge-ului din lista LIVE).
+    // NU îl recalibrăm a doua oară cu calibrateNgpRest → modalul afișează ACELAȘI NGP ca badge-ul.
+    // calibrateNgpRest rămâne DOAR fallback când nu există _ng de la scanner (ex. static/pre-meci).
+    var ngCal=(typeof fix._ng==='number')?Math.round(fix._ng):calibrateNgpRest(ngRaw);
     var ngpClr=ngCal>=80?'#00d4a8':ngCal>=60?'#ffd166':'#ff6b6b';
     var ng15Clr=ng15===null?'#888':ng15>=40?'#00d4a8':ng15>=25?'#ffd166':'#ff6b6b';
     // NGP nesigur în primele 10 min (scanner forțează 0) → „—" în loc de „0%"
@@ -3497,14 +3500,25 @@ function wcRenderMatches(d){
     // Eticheta competiție = numele grupei (ex "Group A"); crest = steag SVG (wcFlag).
     var grp=m.round||'Cupa Mondială';
     var kickoff=m.matchDate?new Date(m.matchDate).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
-    var liveTxt=m.live?'<span style="color:var(--red);font-weight:700">● LIVE'+(m.ng!=null?(' '+m.ng+'%'):'')+'</span>':('🕐 '+kickoff);
+    var wcDone={FT:1,AET:1,PEN:1}, isDone=!!wcDone[m.status];
+    var liveTxt=m.live?'<span style="color:var(--red);font-weight:700">● LIVE'+(m.ng!=null?(' '+m.ng+'%'):'')+'</span>':(isDone?'<span style="color:var(--mu);font-weight:700">✓ FINAL</span>':('🕐 '+kickoff));
     out+='<div class="pm-card" onclick="wcClose();mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer;position:relative">';
     out+='<div class="pm-header">';
     out+='<div class="pm-kickoff">'+htmlEsc(grp)+' · '+liveTxt+'</div>';
     out+='<div class="pm-teams">'+wcFlag(m.homeLogo,hn,32)+'<span>'+htmlEsc(hn)+'</span><span style="color:var(--mu);font-size:13px;font-weight:600">vs</span>'+wcFlag(m.awayLogo,an,32)+'<span>'+htmlEsc(an)+'</span></div>';
     out+='</div>';
     var hasPred=(m.over15!=null)||(m.gg!=null)||(m.confidence!=null);
-    if(hasPred){
+    if(isDone){
+      // [FT BUG] Meci terminat → SCOR FINAL color-codat (câștigătorul verde), NU bare de
+      // predicție pre-meci. Acoperă fixture-uri ca 1538999 (Korea 2-1 Czech, FT).
+      var fhg=(m.homeGoals!=null)?m.homeGoals:'-', fag=(m.awayGoals!=null)?m.awayGoals:'-';
+      out+='<div class="pm-body" style="display:flex;align-items:center;justify-content:center;gap:14px;padding:12px 0">'
+        +'<span style="font-size:10px;font-weight:800;color:var(--mu);letter-spacing:.5px">FINAL'+(m.status!=='FT'?(' · '+htmlEsc(m.status)):'')+'</span>'
+        +'<span style="font-size:22px;font-weight:900;color:'+((Number(m.homeGoals)>Number(m.awayGoals))?'#22c55e':'var(--tx)')+'">'+fhg+'</span>'
+        +'<span style="color:var(--mu);font-weight:700">-</span>'
+        +'<span style="font-size:22px;font-weight:900;color:'+((Number(m.awayGoals)>Number(m.homeGoals))?'#22c55e':'var(--tx)')+'">'+fag+'</span>'
+        +'</div>';
+    }else if(hasPred){
       out+='<div class="pm-body">';
       if(m.over15!=null)out+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(m.over15||0,100)+'%;background:'+ec(m.over15)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(m.over15)+'">'+Math.round(m.over15||0)+'%</div></div>';
       if(m.gg!=null)out+='<div class="pm-meter-row"><div class="pm-meter-label">GG</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(m.gg||0,100)+'%;background:'+ec(m.gg)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(m.gg)+'">'+Math.round(m.gg||0)+'%</div></div>';
