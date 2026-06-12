@@ -1773,6 +1773,7 @@ function mdRenderML(d){
   var trainedK=ml.trainedOn?('~'+Math.round(ml.trainedOn/1000)+'k meciuri'):null;
   var chipFam='all'; try{ chipFam=localStorage.getItem('mlx_chip')||'all'; }catch(_){}
   var gopen=function(ph){ try{ return localStorage.getItem('mlx_grp_'+ph)!=='0'; }catch(_){ return true; } };
+  var gopenC=function(ph){ try{ return localStorage.getItem('mlx_grp_'+ph)==='1'; }catch(_){ return false; } };   // default ÎNCHIS (ad/dec)
   var CHIPS=[['all','Toate'],['goals','⚽ Goluri'],['cards','🟨 Cartonașe'],['corners','⛳ Cornere'],['result','🏆 Rezultat']];
 
   var out='';
@@ -1781,7 +1782,7 @@ function mdRenderML(d){
     +'.mc-name{font-size:10px;color:#6b7a99;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}'
     +'.mc-prob{font-size:16px;font-weight:800}'
     +'.ml-sub{font-size:11px;color:#8b9bb4;font-weight:700}'
-    +'.mlx-sticky{position:sticky;top:0;z-index:6;background:rgba(8,13,24,.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);margin:-4px -2px 8px;padding:4px 2px 0}'
+    +'.mlx-sticky{position:sticky;top:0;z-index:20;background:rgba(8,13,24,.98);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--bor);margin:-4px -2px 10px;padding:6px 2px 6px}'
     +'.mlx-head{display:flex;align-items:center;gap:10px;background:rgba(8,13,24,.6);border:1px solid var(--bor);border-radius:12px;padding:9px 12px}'
     +'.mlx-head .sc{font-size:20px;font-weight:900;color:var(--tx)}'
     +'.mlx-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff7777;animation:livePulse 1s infinite;margin-right:6px}'
@@ -1857,14 +1858,18 @@ function mdRenderML(d){
 
   // 4. 🔒 APROAPE DECISE (implicit strânsă)
   if(nearDec.length){
-    out+='<details class="mlx-acc" data-hideempty="ad"><summary>🔒 APROAPE DECISE <span class="gn" data-count-of="ad">'+nearDec.length+'</span></summary><div>';
+    out+='<details class="mlx-acc" data-ph="ad" data-hideempty="ad"'+(gopenC('ad')?' open':'')
+      +' ontoggle="try{localStorage.setItem(\'mlx_grp_\'+this.dataset.ph,this.open?\'1\':\'0\')}catch(e){}">'
+      +'<summary>🔒 APROAPE DECISE <span class="gn" data-count-of="ad">'+nearDec.length+'</span></summary><div>';
     nearDec.forEach(function(it){ out+=rowBar(it,0,'ad','ad|'); });
     out+='</div></details>';
   }
 
   // 5. ✓ DECONTATE (acordeon existent)
   if(settled.length){
-    out+='<details class="mlx-acc"><summary data-n="'+settled.length+'">✓ DECONTATE ('+settled.length+')</summary><div>';
+    out+='<details class="mlx-acc" data-ph="dec"'+(gopenC('dec')?' open':'')
+      +' ontoggle="try{localStorage.setItem(\'mlx_grp_\'+this.dataset.ph,this.open?\'1\':\'0\')}catch(e){}">'
+      +'<summary data-n="'+settled.length+'">✓ DECONTATE ('+settled.length+')</summary><div>';
     settled.forEach(function(it){ out+=rowSettled(it); });
     out+='</div></details>';
   }
