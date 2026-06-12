@@ -6,6 +6,7 @@
 
 import { query } from '../db.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
+import { normalizeStandingsGroup } from '../utils/standings-normalize.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const DONE = ['FT', 'AET', 'PEN'];
@@ -94,7 +95,7 @@ async function saveStanding(leagueId, season, row) {
        updated_at=NOW()`,
     [
       leagueId, season, row.rank, row.team.id, row.team.name, row.team.logo || null,
-      row.points, row.goalsDiff || 0, row.group || null,
+      row.points, row.goalsDiff || 0, normalizeStandingsGroup(row.group, leagueId),
       row.all?.played || 0, row.all?.win || 0, row.all?.draw || 0, row.all?.lose || 0,
       row.all?.goals?.for || 0, row.all?.goals?.against || 0,
       row.form || null, row.status || null, row.description || null,

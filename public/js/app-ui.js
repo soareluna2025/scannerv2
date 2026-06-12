@@ -3535,10 +3535,20 @@ function wcRenderMatches(d){
 function wcRenderGroups(d){
   var body=document.getElementById('wc-body');
   var allGroups=d.groups||[];
+  // Defensiv: acceptă și numele NOI ale API-ului (CM 2026) ca fallback, dacă migrarea/
+  // normalizarea din colector n-au rulat încă. "Group Stage - Group X" → "Group X";
+  // "Group Stage" exact → "Ranking of third-placed teams".
+  var wcNormGroup=function(n){
+    n=String(n||'').trim();
+    var m=n.match(/^Group Stage\s*[-–—]\s*(Group\s+.+)$/i); if(m) return m[1].trim();
+    if(/^Group Stage$/i.test(n)) return 'Ranking of third-placed teams';
+    return n;
+  };
+  allGroups.forEach(function(g){ g._dn=wcNormGroup(g.name); });
   // Separă grupele normale (Group A..L) de clasamentul „Ranking of third-placed teams".
   var isThird=function(n){return /third|ranking/i.test(n||'');};
-  var groups=allGroups.filter(function(g){return !isThird(g.name);});
-  var third=allGroups.filter(function(g){return isThird(g.name);});
+  var groups=allGroups.filter(function(g){return !isThird(g._dn);});
+  var third=allGroups.filter(function(g){return isThird(g._dn);});
   if(!groups.length && !third.length){ body.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-t">Grupe indisponibile</div><div class="empty-s">Clasamentul pe grupe nu e încă în baza de date</div></div>'; return; }
   // NU se deduplică după team_id — fiecare rând din grupă se randează ca atare (4/grupă).
   var cell=function(r){
@@ -3550,7 +3560,7 @@ function wcRenderGroups(d){
   var thead='<thead><tr><th>#</th><th class="tn">Echipă</th><th>J</th><th>V</th><th>E</th><th>Î</th><th>GD</th><th style="color:var(--ac)">Pct</th></tr></thead><tbody>';
   var out='';
   groups.forEach(function(g){
-    out+='<div class="md-section"><div class="md-section-title" style="color:var(--gold)">'+htmlEsc(g.name)+'</div>';
+    out+='<div class="md-section"><div class="md-section-title" style="color:var(--gold)">'+htmlEsc(g._dn||g.name)+'</div>';
     out+='<div style="overflow-x:auto"><table class="standings-tbl">'+thead;
     g.rows.forEach(function(r){
       var qual=(r.rank<=2)?'srow-home':'';

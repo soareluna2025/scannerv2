@@ -10,6 +10,7 @@
 
 import { query } from '../db.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
+import { normalizeStandingsGroup } from '../utils/standings-normalize.js';
 import { collectTeamSeason } from './backfill-players.js';
 import enrichHandler from '../enrich.js';
 
@@ -176,7 +177,7 @@ async function extractStandings(teamId, season, leagues) {
           L, season, row.team.id, row.team.name, row.rank, row.points,
           row.all?.goals?.for || 0, row.all?.goals?.against || 0, row.goalsDiff || 0,
           row.all?.played || 0, row.all?.win || 0, row.all?.draw || 0, row.all?.lose || 0,
-          row.form || null, row.group || null,
+          row.form || null, normalizeStandingsGroup(row.group, L),
         ]
       ).catch(() => {});
       done++;

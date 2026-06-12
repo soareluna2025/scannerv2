@@ -9,6 +9,7 @@ import { isAllowedMatch } from '../utils/league-filter.js';
 import { fetchApiFootball } from '../utils/fetch-api.js';
 import { calcPoisson6x6 } from '../calc-utils.js';
 import { seasonForLeague, fallbackSeason } from '../utils/season.js';
+import { normalizeStandingsGroup } from '../utils/standings-normalize.js';
 
 const PRIORITY_LEAGUES = [...ALLOWED_LEAGUE_IDS];
 
@@ -388,7 +389,7 @@ export default async function handler(req, res) {
               row.all?.draw           || 0,
               row.all?.lose           || 0,
               row.form || null,
-              row.group || null,
+              normalizeStandingsGroup(row.group, leagueId),
               row.home?.played || 0, row.home?.win || 0, row.home?.draw || 0,
               row.home?.lose || 0, row.home?.goals?.for || 0, row.home?.goals?.against || 0,
               row.away?.played || 0, row.away?.win || 0, row.away?.draw || 0,
