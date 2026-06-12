@@ -90,6 +90,42 @@ function applyCalibPct(table, key, probPct) {
 }
 function _isCalibrated(table, key) { return !!(table && table[key] && table[key].calibrated); }
 
+// Interpolare liniară monotonă peste breakpoints (x,y) în [0,1]. p deja în [0,1].
+function _interp(x, y, p) {
+  if (p <= x[0]) return y[0];
+  if (p >= x[x.length - 1]) return y[y.length - 1];
+  let i = 1; while (i < x.length && x[i] < p) i++;
+  const x0 = x[i - 1], x1 = x[i], y0 = y[i - 1], y1 = y[i];
+  const t = (x1 === x0) ? 0 : (p - x0) / (x1 - x0);
+  return y0 + t * (y1 - y0);
+}
+
+// Calibrare MULTICLASS: table[key] = { calibrated, multiclass, iso:{ clasă:{x,y} } }. obj =
+// { clasă: pct }. Calibrează fiecare clasă + RENORMALIZEAZĂ la 100% (largest-remainder = norm3).
+// Necalibrată/lipsă → identitate. Întoarce { obj, calibrated }.
+function applyCalibMulti(table, key, obj) {
+  const e = table && table[key];
+  if (!e || !e.calibrated || !e.multiclass || !e.iso || !obj) return { obj, calibrated: false };
+  const ks = Object.keys(obj);
+  const cal01 = {}; let sum = 0;
+  for (const c of ks) {
+    let p = Number(obj[c]); if (!Number.isFinite(p)) p = 0;
+    let v = Math.max(0, Math.min(1, p / 100));
+    const iso = e.iso[c];
+    if (iso && Array.isArray(iso.x) && Array.isArray(iso.y) && iso.x.length >= 2) v = _interp(iso.x, iso.y, v);
+    v = Math.max(0.001, Math.min(0.999, v));
+    cal01[c] = v; sum += v;
+  }
+  if (sum <= 0) return { obj, calibrated: false };
+  // largest-remainder la 100% (echivalent norm3 din frontend)
+  const out = {}; const rema = []; let floorSum = 0;
+  for (const c of ks) { const exact = cal01[c] / sum * 100; const fl = Math.floor(exact); out[c] = fl; floorSum += fl; rema.push([c, exact - fl]); }
+  rema.sort((a, b) => b[1] - a[1]);
+  const rem = 100 - floorSum;
+  for (let i = 0; i < rem && rema.length; i++) out[rema[i % rema.length][0]]++;
+  return { obj: out, calibrated: true };
+}
+
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 
 // Construiește harta de features din payload-ul enrich + ELO (+ context live).
@@ -462,8 +498,8 @@ export function predictLiveMarketsV2(liveState, enrichData, eloData) {
       const m = lm[key];
       if (!m || !Array.isArray(m.features)) continue;
       if (Array.isArray(m.classes) && m.classes.length > 0) {
-        const probs = lrProbMulti(m, feat);   // piață cu 3 clase (necalibrată — pas viitor)
-        if (probs) { out[key] = probs; calFlags[key] = false; }
+        const probs = lrProbMulti(m, feat);   // piață cu 3 clase
+        if (probs) { const cm = applyCalibMulti(calL, key, probs); out[key] = cm.obj; calFlags[key] = cm.calibrated; }
       } else {
         const p = lrProb(m, feat);             // piață binară (ACELAȘI lrProb)
         if (p != null) { out[key] = applyCalibPct(calL, key, p); calFlags[key] = _isCalibrated(calL, key); }

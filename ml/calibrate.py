@@ -19,7 +19,9 @@ Metodă, per piață binară:
   • Isotonic pe predicțiile din CALIB (OOS pt model). Evaluare pe TEST (OOS pt isotonic).
   • <500 rezultate în CALIB → IDENTITATE (necalibrată). Dacă Brier(TEST) se înrăutățește
     după calibrare → piața rămâne IDENTITATE (raportat explicit).
-  • Multiclass (1X2 / next_goal) → identitate (calibrarea per-clasă = pas viitor).
+  • Multiclass (next_goal_r1/r2, result_r1/result_final) → calibrare one-vs-rest: isotonic per
+    clasă pe CALIB + renormalizare la sumă 1; criteriu = log loss(TEST). 1X2 pre-meci rămâne BINAR
+    (home_win/draw/away_win calibrate individual) — NU se atinge.
 """
 import os
 import sys
@@ -33,14 +35,18 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.isotonic import IsotonicRegression
-from sklearn.metrics import brier_score_loss
+from sklearn.metrics import brier_score_loss, log_loss
 
 import train_model as tm            # QUERY, FEATURES_PREMATCH/HT, MARKETS, get_conn
 import train_live_v2 as tl          # get_conn, load_feature_map, process_feature_map, generate_half, MARKETS
 
 MIN_CAL = 500           # sub atât în fereastra de CALIBRARE → identitate
 MIN_TOTAL = 1500        # sub atât total → identitate (nu putem face 60/20/20 fiabil)
+MIN_CLASS = 500         # multiclass: minim per CLASĂ minoritară în fereastra CALIB
 BUCKETS = [(0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9)]
+# Cod întreg → etichetă clasă (TREBUIE să fie identic cu serving-ul: lrProbMulti cheie pe string).
+NG2STR  = {0: "home", 1: "away", 2: "none"}   # next_goal_* (NG_CODE din train_live_v2)
+RES2STR = {0: "1",    1: "X",    2: "2"}       # result_*    (RESULT_CODE din train_live_v2)
 PRE_OUT  = os.path.join(ML_DIR, "calibration_export.json")
 LIVE_OUT = os.path.join(ML_DIR, "calibration_live_export.json")
 REPORT   = os.path.join(ML_DIR, "calibration_report.txt")
@@ -196,6 +202,63 @@ def calibrate_binary(X, y):
     return {"calibrated": False, "reason": meta["reason"]}, meta
 
 
+# Calibrare MULTICLASS one-vs-rest: isotonic per clasă pe CALIB + renormalizare la sumă 1.
+# Criteriu: log loss(TEST) trebuie să se îmbunătățească, altfel identitate. code2str = cod→etichetă.
+def calibrate_multiclass(X, y, code2str):
+    X = np.asarray(X, dtype=np.float64)
+    y = np.asarray(y)
+    mask = ~pd.isnull(y)
+    X, y = X[mask], y[mask].astype(int)
+    n = len(y)
+    if n < MIN_TOTAL:
+        return {"calibrated": False, "reason": "total <%d (%d)" % (MIN_TOTAL, n)}, None
+    i1, i2 = int(n * 0.6), int(n * 0.8)
+    Xtr, Xcal, Xte = X[:i1], X[i1:i2], X[i2:]
+    ytr, ycal, yte = y[:i1], y[i1:i2], y[i2:]
+    classes = np.unique(y)
+    if len(classes) < 2:
+        return {"calibrated": False, "reason": "o singură clasă"}, None
+    counts = {int(c): int((ycal == c).sum()) for c in classes}
+    if min(counts.values()) < MIN_CLASS:
+        return {"calibrated": False, "reason": "clasă minoritară <%d în calib (%s)" % (MIN_CLASS, counts)}, None
+    for split in (ytr, ycal, yte):
+        if len(np.unique(split)) < len(classes):
+            return {"calibrated": False, "reason": "clasă lipsă într-un split"}, None
+    sc = StandardScaler().fit(Xtr)
+    lr = LogisticRegression(multi_class="multinomial", max_iter=1000).fit(sc.transform(Xtr), ytr)
+    cls = lr.classes_            # coduri int, sortate (ordinea coloanelor predict_proba)
+    Pcal = lr.predict_proba(sc.transform(Xcal))
+    Pte = lr.predict_proba(sc.transform(Xte))
+    isos, rel_b, rel_a = {}, {}, {}
+    cal_te = np.zeros_like(Pte)
+    for j, c in enumerate(cls):
+        iso = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0).fit(Pcal[:, j], (ycal == c).astype(int))
+        cal_te[:, j] = np.clip(iso.predict(Pte[:, j]), 0.001, 0.999)
+        s = code2str.get(int(c), str(int(c)))
+        isos[s] = {"x": [round(float(v), 5) for v in np.asarray(iso.X_thresholds_, float)],
+                   "y": [round(float(v), 5) for v in np.asarray(iso.y_thresholds_, float)]}
+        rel_b[s] = reliability((yte == c).astype(float), Pte[:, j])
+    # RENORMALIZARE la sumă 1 (echivalent largest-remainder pe scara 0-1; serving = norm3 la 100).
+    rs = cal_te.sum(axis=1, keepdims=True); rs[rs == 0] = 1.0
+    cal_te = cal_te / rs
+    for j, c in enumerate(cls):
+        rel_a[code2str.get(int(c), str(int(c)))] = reliability((yte == c).astype(float), cal_te[:, j])
+    classes_str = [code2str.get(int(c), str(int(c))) for c in cls]
+    cls_list = list(cls)
+    ll_raw = float(log_loss(yte, Pte, labels=cls_list))
+    ll_cal = float(log_loss(yte, cal_te, labels=cls_list))
+    mb_raw = float(tl._multiclass_brier(yte, Pte, cls_list))
+    mb_cal = float(tl._multiclass_brier(yte, cal_te, cls_list))
+    meta = {"n_cal": int(len(ycal)), "n_test": int(len(yte)), "classes": classes_str,
+            "ll_raw": round(ll_raw, 5), "ll_cal": round(ll_cal, 5),
+            "mb_raw": round(mb_raw, 5), "mb_cal": round(mb_cal, 5),
+            "rel_before": rel_b, "rel_after": rel_a}
+    if ll_cal <= ll_raw - 1e-6:
+        return {"calibrated": True, "multiclass": True, "classes": classes_str, "iso": isos}, meta
+    meta["reason"] = "log loss nu se îmbunătățește (raw=%.5f cal=%.5f)" % (ll_raw, ll_cal)
+    return {"calibrated": False, "reason": meta["reason"]}, meta
+
+
 def _emit(name, key, desc, res, meta, example_sink):
     if res["calibrated"]:
         R("  [CALIBRAT]  %-24s brier %.5f→%.5f  (n_cal=%d)" %
@@ -241,14 +304,26 @@ def run_live():
     fmap = tl.load_feature_map(conn)
     fmap_proc, _med, default_ff = tl.process_feature_map(fmap)
     cov = {"total": 0, "ml_features": 0, "elo_history": 0, "standings": 0, "referee": 0}
-    export, examples = {}, []
+    export, examples, mc_examples = {}, [], []
     for half in ("r1", "r2"):
         X, _fid, labels, n, markets_h = tl.generate_half(conn, half, fmap_proc, default_ff, cov)
         R("  %s: %d snapshot-uri" % (half, n))
         for (mkey, _h, kind, _lbl) in markets_h:
             if kind != "bin":
-                export[mkey] = {"calibrated": False, "reason": "multiclass (calibrare per-clasă = pas viitor)"}
-                R("  [identitate] %-24s multiclass" % mkey)
+                code2str = NG2STR if mkey.startswith("next_goal") else (RES2STR if mkey.startswith("result") else {})
+                try:
+                    res, meta = calibrate_multiclass(X, np.asarray(labels[mkey]), code2str)
+                except Exception as e:
+                    res, meta = {"calibrated": False, "reason": "eroare: %s" % e}, None
+                export[mkey] = res
+                if res.get("calibrated"):
+                    R("  [CALIBRAT-mc] %-22s logloss %.5f→%.5f · mc-brier %.5f→%.5f" %
+                      (mkey, meta["ll_raw"], meta["ll_cal"], meta["mb_raw"], meta["mb_cal"]))
+                else:
+                    extra = (" logloss %.5f→%.5f" % (meta["ll_raw"], meta["ll_cal"])) if (meta and "ll_raw" in meta) else ""
+                    R("  [identitate] %-22s %s%s" % (mkey, res.get("reason", ""), extra))
+                if meta and "ll_raw" in meta:
+                    mc_examples.append((mkey, meta))
                 continue
             try:
                 y = np.asarray(labels[mkey], dtype=np.float64)
@@ -260,12 +335,34 @@ def run_live():
         del X, labels
     conn.close()
     export["_meta"] = {"model": "model_live_export.json", "method": "isotonic OOS temporal 60/20/20",
-                       "clamp": [0.01, 0.99], "min_cal": MIN_CAL}
+                       "clamp": [0.01, 0.99], "min_cal": MIN_CAL, "min_class": MIN_CLASS,
+                       "multiclass": "one-vs-rest isotonic + renormalizare (next_goal/result)"}
     with open(LIVE_OUT, "w") as f:
         json.dump(export, f, indent=2)
     R("→ %s (%d piețe; %d calibrate)" % (LIVE_OUT, len(export) - 1,
       sum(1 for k, v in export.items() if isinstance(v, dict) and v.get("calibrated"))))
-    return examples
+    return examples, mc_examples
+
+
+def _print_mc(mc):
+    if not mc:
+        return
+    R("\n══════ MULTICLASS — log loss / Brier mc (înainte → după) ══════")
+    R("%-16s %9s %9s | %9s %9s   n_test" % ("piață", "ll_raw", "ll_cal", "mb_raw", "mb_cal"))
+    for key, meta in mc:
+        R("%-16s %9.5f %9.5f | %9.5f %9.5f   %d" %
+          (key, meta["ll_raw"], meta["ll_cal"], meta["mb_raw"], meta["mb_cal"], meta["n_test"]))
+    for key, meta in mc:
+        if key not in ("next_goal_r1", "next_goal_r2"):
+            continue
+        R("\n── Reliability per CLASĂ — %s ──" % key)
+        for s in meta["classes"]:
+            R("  clasă '%s':   bucket   pred_b   real_b   pred_a   real_a    n" % s)
+            for (lo, hi, pb, rb, n), (_, _, pa, ra, _n2) in zip(meta["rel_before"][s], meta["rel_after"][s]):
+                if not n:
+                    R("    %.0f-%.0f      —        —        —        —        0" % (lo * 100, hi * 100)); continue
+                R("    %.0f-%.0f      %.3f    %.3f    %.3f    %.3f    %d" %
+                  (lo * 100, hi * 100, pb, rb, pa, ra, n))
 
 
 def _print_example(examples):
@@ -286,8 +383,9 @@ def _print_example(examples):
 def main():
     R("CALIBRARE ML — isotonic, OOS temporal (zero leakage). %s" % pd.Timestamp.now())
     ex_pre = run_prematch()
-    ex_live = run_live()
+    ex_live, mc = run_live()
     _print_example(ex_pre + ex_live)
+    _print_mc(mc)
     with open(REPORT, "w") as f:
         f.write("\n".join(_report_lines) + "\n")
     R("\n✅ Raport: %s" % REPORT)
