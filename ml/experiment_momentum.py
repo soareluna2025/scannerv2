@@ -41,6 +41,7 @@ import train_live_v2 as tl
 REPORT = os.path.join(ML_DIR, "experiment_momentum_report.txt")
 SPLIT_FRAC = 0.8
 SAMPLE_CAP = 700000            # peste atât pe o jumătate → eșantionare temporală (stride)
+SMOKE_N = 20                   # --smoke: rulează întreg pipeline-ul pe primele N meciuri
 WORSEN_TOL = 0.0005
 STATS = ["sot", "shots", "da", "corners", "possession"]
 WINDOWS = [10, 15]
@@ -56,38 +57,81 @@ def R(s=""):
     print(s); _rep.append(s)
 
 
-def load_momentum(conn):
-    """Δ ultimele ~10/15 min per (fixture_id, minut) din live_stats (self merge_asof)."""
-    cols = ", ".join(["home_" + s + ", away_" + s for s in STATS])
-    ls = pd.read_sql("SELECT fixture_id, elapsed, " + cols + " FROM live_stats WHERE elapsed IS NOT NULL", conn)
+def _rss_mb():
+    import resource
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0   # KB→MB pe Linux
+
+
+def CK(label):
+    R("[ck] %-36s RSS=%.0f MB" % (label, _rss_mb()))
+
+
+def _group_delta(fids, el, vals, win):
+    """Δ vs ~win min în urmă, PER fixture, VECTORIZAT per grup (searchsorted). GARANTAT liniar în
+    memorie: out are EXACT forma input-ului (vals). FĂRĂ merge → fără explozie carteziană."""
+    n = len(el)
+    out = np.full(vals.shape, np.nan, dtype=np.float32)
+    if n == 0:
+        return out
+    uniq, starts = np.unique(fids, return_index=True)   # fids deja sortat → granițe de grup
+    bounds = list(starts) + [n]
+    for gi in range(len(uniq)):
+        a, b = bounds[gi], bounds[gi + 1]
+        ge = el[a:b]
+        if len(ge) < 2:
+            continue
+        pos = np.searchsorted(ge, ge - win, side="right") - 1   # ultimul minut <= curent-win
+        posc = np.clip(pos, 0, len(ge) - 1)
+        gap = ge - ge[posc]
+        ok = (pos >= 0) & (gap >= win - 5) & (gap <= win + 8)   # fereastră în jurul lui win
+        gv = vals[a:b]
+        d = gv - gv[posc]
+        d[~ok] = np.nan
+        out[a:b] = d
+    return out
+
+
+def load_momentum(conn, fixture_ids=None):
+    """Δ ultimele ~10/15 min per (fixture_id, MINUT) din live_stats. INCASABIL:
+    1) dedup la UN rând per (fixture, minut) — live_stats scrie la ~10s (multe rânduri/minut),
+       statistici CUMULATIVE → max = ultima valoare a minutului. ELIMINĂ produsul cartezian.
+    2) Δ per grup prin searchsorted (out == input ca formă). 3) assert pe dimensiuni."""
+    statcols = [sd + "_" + s for s in STATS for sd in ["home", "away"]]
+    q = "SELECT fixture_id, elapsed, " + ", ".join(statcols) + " FROM live_stats WHERE elapsed IS NOT NULL"
+    params = None
+    if fixture_ids is not None:
+        q += " AND fixture_id = ANY(%(f)s)"
+        params = {"f": list(fixture_ids)}
+    ls = pd.read_sql(q, conn, params=params)
+    CK("live_stats citit (%d rânduri brute)" % len(ls))
     if not len(ls):
         return pd.DataFrame(columns=["fixture_id", "elapsed"] + NEW)
-    statcols = [sd + "_" + s for s in STATS for sd in ["home", "away"]]
     for c in statcols:
-        ls[c] = pd.to_numeric(ls[c], errors="coerce").astype("float32")   # dtypes minime de la load
-    ls["fixture_id"] = pd.to_numeric(ls["fixture_id"], errors="coerce").astype("int32")
+        ls[c] = pd.to_numeric(ls[c], errors="coerce").astype("float32")
+    ls["fixture_id"] = pd.to_numeric(ls["fixture_id"], errors="coerce").astype("int64")
     ls["elapsed"] = pd.to_numeric(ls["elapsed"], errors="coerce")
-    ls = ls.dropna(subset=["elapsed"]); ls["elapsed"] = ls["elapsed"].astype("int16")
-    ls = ls.sort_values(["fixture_id", "elapsed"])
+    ls = ls.dropna(subset=["fixture_id", "elapsed"])
+    ls["elapsed"] = ls["elapsed"].astype("int64")
+    # DEDUP: o singură stare per (fixture, minut) — colapsează rândurile per-secundă.
+    ls = ls.groupby(["fixture_id", "elapsed"], as_index=False)[statcols].max()
+    ls = ls.sort_values(["fixture_id", "elapsed"]).reset_index(drop=True)
+    CK("dedup (fixture,minut) → %d rânduri unice" % len(ls))
 
-    def delta(win):
-        base = ls[["fixture_id", "elapsed"] + statcols].sort_values("elapsed")
-        past = base.copy(); past["elapsed"] = past["elapsed"] + win
-        past = past.sort_values("elapsed")
-        m = pd.merge_asof(base, past, by="fixture_id", on="elapsed",
-                          direction="backward", tolerance=win // 2 + 3, suffixes=("", "_p"))
-        d = m[["fixture_id", "elapsed"]].copy()
-        for s in STATS:
-            h = m["home_" + s] - m["home_" + s + "_p"]
-            a = m["away_" + s] - m["away_" + s + "_p"]
-            d["home_" + s + "_mom" + str(win)] = h
-            d["away_" + s + "_mom" + str(win)] = a
-            d["diff_" + s + "_mom" + str(win)] = h - a
-        return d
-
-    mom = delta(WINDOWS[0])
-    for w in WINDOWS[1:]:
-        mom = mom.merge(delta(w), on=["fixture_id", "elapsed"], how="outer")
+    fids = ls["fixture_id"].to_numpy()
+    el = ls["elapsed"].to_numpy()
+    vals = ls[statcols].to_numpy(dtype=np.float32)
+    mom = pd.DataFrame({"fixture_id": ls["fixture_id"].to_numpy(),
+                        "elapsed": ls["elapsed"].to_numpy()})
+    for w in WINDOWS:
+        d = _group_delta(fids, el, vals, w)
+        assert d.shape[0] == len(ls), "delta size mismatch (%d != %d) — calcul greșit, abort" % (d.shape[0], len(ls))
+        for si, s in enumerate(STATS):           # statcols = [home_s, away_s, ...] → home=2*si, away=2*si+1
+            h = d[:, 2 * si]; a = d[:, 2 * si + 1]
+            mom["home_" + s + "_mom" + str(w)] = h
+            mom["away_" + s + "_mom" + str(w)] = a
+            mom["diff_" + s + "_mom" + str(w)] = h - a
+    assert len(mom) == len(ls), "momentum size != input (%d != %d)" % (len(mom), len(ls))
+    CK("momentum gata (%d rânduri × %d feature)" % (len(mom), len(NEW)))
     return mom
 
 
@@ -152,6 +196,7 @@ def eval_half(name, X, fid, labels, markets_bin, market_multi, mom):
     X, fid, labels, stride = maybe_sample(X, fid, labels)
     if stride > 1:
         R("Eșantionare TEMPORALĂ stride=%d → %d snapshot-uri (memorie)." % (stride, X.shape[0]))
+    CK("%s: X=%s" % (name, str(X.shape)))
     M, covered = attach_momentum(X, fid, mom)
     cov = int(covered.sum()); n = X.shape[0]
     R("Acoperire momentum: %d/%d (%.2f%%)" % (cov, n, 100.0 * cov / max(n, 1)))
@@ -210,30 +255,38 @@ def eval_half(name, X, fid, labels, markets_bin, market_multi, mom):
 
 
 def main():
-    R("EXPERIMENT MOMENTUM LIVE (#3a) — %s" % pd.Timestamp.now())
+    smoke = ("--smoke" in sys.argv)
+    R("EXPERIMENT MOMENTUM LIVE (#3a)%s — %s" % (" [SMOKE]" if smoke else "", pd.Timestamp.now()))
     tl.assert_no_odds(tl.FEATURES + NEW)   # ZIDUL ANTI-COTE pe setul extins
-    R("Zidul anti-cote: OK · feature-uri momentum noi: %d\n" % len(NEW))
+    R("Zidul anti-cote: OK · feature-uri momentum noi: %d" % len(NEW))
+    CK("start")
 
     conn = tl.get_conn()
-    # MEMORY-LEAN: snapshot-urile se generează DOAR pentru meciurile acoperite de live_stats
-    # (verdictul oricum se dă pe subsetul acoperit) → evită construirea celor 1.4M snapshot-uri.
+    # MEMORY-LEAN: snapshot-urile se generează DOAR pentru meciurile acoperite de live_stats.
     fids = pd.read_sql("SELECT DISTINCT fixture_id FROM live_stats WHERE elapsed IS NOT NULL",
                        conn)["fixture_id"].dropna().astype(int).tolist()
-    R("live_stats: %d meciuri distincte → generate_half rulează DOAR pe ele (fără OOM)." % len(fids))
-    mom = load_momentum(conn)
-    R("live_stats momentum: %d rânduri (fixture×minut) cu Δ10/Δ15." % len(mom))
+    if smoke:
+        fids = sorted(fids)[:SMOKE_N]
+        R("SMOKE: restrâns la primele %d meciuri." % len(fids))
+    R("live_stats: %d meciuri → generate_half + momentum DOAR pe ele." % len(fids))
+    mom = load_momentum(conn, fixture_ids=fids)
+    R("momentum: %d rânduri (fixture×minut) cu Δ10/Δ15." % len(mom))
+    CK("după load_momentum")
     fmap = tl.load_feature_map(conn)
     fmap_proc, _med, default_ff = tl.process_feature_map(fmap)
     del fmap; gc.collect()
+    CK("după feature_map")
     cov_counts = {"total": 0, "ml_features": 0, "elo_history": 0, "standings": 0, "referee": 0}
 
     res = {}
     Xr1, fidr1, labr1, nr1, _mk1 = tl.generate_half(conn, "r1", fmap_proc, default_ff, cov_counts, fixture_ids=fids)
+    CK("generate_half r1 (X=%s)" % str(Xr1.shape))
     res["r1"] = eval_half("REPRIZA 1", Xr1, fidr1, labr1, BIN_R1, MULTI["r1"], mom)
-    del Xr1, fidr1, labr1; gc.collect()
+    del Xr1, fidr1, labr1; gc.collect(); CK("după R1")
     Xr2, fidr2, labr2, nr2, _mk2 = tl.generate_half(conn, "r2", fmap_proc, default_ff, cov_counts, fixture_ids=fids)
+    CK("generate_half r2 (X=%s)" % str(Xr2.shape))
     res["r2"] = eval_half("REPRIZA 2 / FINAL", Xr2, fidr2, labr2, BIN_R2, MULTI["r2"], mom)
-    del Xr2, fidr2, labr2; gc.collect()
+    del Xr2, fidr2, labr2; gc.collect(); CK("după R2")
     conn.close()
 
     # VERDICT
