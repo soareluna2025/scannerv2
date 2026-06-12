@@ -24,6 +24,9 @@ function teamLogo(logo,name,id,sz){
   return '<span style="'+base+'">'+teamInitials(name)+img+'</span>';
 }
 function tLogo(team,sz){ if(!team) return teamLogo(null,'',0,sz); return teamLogo(team.logo,team.name,team.id,sz); }
+// [P06] Formator procent uniform (ca pc() din tabul ML): valoare invalidă → "—",
+// NICIODATĂ NaN/undefined/0% fals. Folosit oriunde un câmp posibil-null ajunge în UI.
+function pctTxt(v){ var n=Number(v); return Number.isFinite(n)?Math.round(n)+'%':'—'; }
 // ── CONFIG ──────────────────────────────────────────────────
 var CFG={MC:80,MD:20,RI:30000};
 var WR_KEY='alohascan_wr_v2';

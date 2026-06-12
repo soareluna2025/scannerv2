@@ -144,14 +144,18 @@ async function collectWorldCupSchedule(stats) {
       await query(
         `INSERT INTO fixtures
            (fixture_id, league_id, season, round, home_team_id, home_team_name,
-            away_team_id, away_team_name, status_short, status_long, match_date, updated_at)
-         VALUES ($1,1,2026,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+            away_team_id, away_team_name, status_short, status_long, match_date,
+            home_goals, away_goals, updated_at)
+         VALUES ($1,1,2026,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
          ON CONFLICT (fixture_id) DO UPDATE SET
            round=EXCLUDED.round,
            home_team_id=EXCLUDED.home_team_id, home_team_name=EXCLUDED.home_team_name,
            away_team_id=EXCLUDED.away_team_id, away_team_name=EXCLUDED.away_team_name,
            status_short=EXCLUDED.status_short, status_long=EXCLUDED.status_long,
-           match_date=EXCLUDED.match_date, updated_at=NOW()`,
+           match_date=EXCLUDED.match_date,
+           home_goals=COALESCE(EXCLUDED.home_goals, fixtures.home_goals),
+           away_goals=COALESCE(EXCLUDED.away_goals, fixtures.away_goals),
+           updated_at=NOW()`,
         [
           m.fixture?.id,
           m.league?.round || null,
@@ -160,11 +164,30 @@ async function collectWorldCupSchedule(stats) {
           m.fixture?.status?.short || 'NS',
           m.fixture?.status?.long  || 'Not Started',
           m.fixture?.date,
+          m.goals?.home ?? null, m.goals?.away ?? null,
         ]
       );
       upserted++;
     } catch (_) { /* skip punctual */ }
   }
+
+  // [P01] PLASĂ DE SIGURANȚĂ set-based, idempotentă: umple scorurile NULL ale fixturilor
+  // WC deja existente din fixtures_history (datele FT sunt LOCAL — ZERO apeluri API).
+  try {
+    const bf = await query(
+      `UPDATE fixtures f
+          SET home_goals = fh.home_goals,
+              away_goals = fh.away_goals,
+              status_short = COALESCE(NULLIF(f.status_short,'NS'), fh.status_short),
+              updated_at = NOW()
+         FROM fixtures_history fh
+        WHERE fh.fixture_id = f.fixture_id
+          AND f.league_id = 1
+          AND f.home_goals IS NULL
+          AND fh.home_goals IS NOT NULL`
+    );
+    stats.worldcup_scores_backfilled = bf.rowCount || 0;
+  } catch (_) { /* best-effort */ }
   stats.worldcup_fixtures = upserted;
 }
 

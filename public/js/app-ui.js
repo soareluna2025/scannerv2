@@ -72,6 +72,11 @@ function connectWS(){
           var idx=ST.ms.findIndex(function(x){return x.fixture&&x.fixture.id===fid;});
           if(idx>=0)ST.ms[idx]=m; else ST.ms.push(m);
         });
+        // [P02] REMOVAL: scoate instant din lista LIVE meciurile terminate/ieșite.
+        if(Array.isArray(msg.payload.removed)&&msg.payload.removed.length){
+          var _rem={};msg.payload.removed.forEach(function(r){var rid=(r&&r.id!=null)?r.id:r;_rem[rid]=1;});
+          ST.ms=ST.ms.filter(function(x){return !(x.fixture&&_rem[x.fixture.id]);});
+        }
         renderMatches();updateStats();
         if(msg.payload.ts)document.getElementById('s-upd').textContent=new Date(msg.payload.ts).toTimeString().slice(0,5);
       }
@@ -211,20 +216,23 @@ function buildCardHtml(m,lgName){
   o+='<div class="ngp-pct" style="color:'+c+'">'+_ngShow+'</div></div>';
   o+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+_ngW+'%;background:'+c+'"></div></div>';
   var tg=hg+ag;var _cc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
+  var ed=m.enrichData||null;
+  // [P24] O SINGURĂ sursă pentru Over: valoarea din enrich când există; recalculul frontend
+  // (mk) rămâne DOAR ca fallback când enrich lipsește. [P06] pctTxt → niciodată undefined%/NaN%.
+  var _mov=function(ev,fb){ return pctTxt((ed&&ed[ev]!=null)?ed[ev]:fb); };
   o+='<div class="markets">';
-  if(tg===0)o+='<div class="mkt">Over 0.5 <span>'+mk.over05+'%</span></div>';
-  if(tg<2)o+='<div class="mkt">Over 1.5 <span>'+mk.over15+'%</span></div>';
-  if(tg<3)o+='<div class="mkt">Over 2.5 <span>'+mk.over25+'%</span></div>';
-  if(tg>=3&&tg<4)o+='<div class="mkt">Over 3.5 <span>'+mk.over35+'%</span></div>';
+  if(tg===0)o+='<div class="mkt">Over 0.5 <span>'+pctTxt(mk.over05)+'</span></div>';
+  if(tg<2)o+='<div class="mkt">Over 1.5 <span>'+_mov('over15Prob',mk.over15)+'</span></div>';
+  if(tg<3)o+='<div class="mkt">Over 2.5 <span>'+_mov('over25Prob',mk.over25)+'</span></div>';
+  if(tg>=3&&tg<4)o+='<div class="mkt">Over 3.5 <span>'+pctTxt(mk.over35)+'</span></div>';
   if(_cc)o+='<div class="mkt" style="color:var(--mu);margin-left:auto">('+_cc+')</div>';
   o+='</div>';
-  var ed=m.enrichData;
   if(ed){
     var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
-    if(ed.homeWin!=null)o+='<div class="enrich-row hda-row"><span class="hda-h" style="color:'+ec(ed.homeWin)+'">H:'+ed.homeWin+'%</span><span class="hda-d" style="color:'+ec(ed.draw)+'">D:'+ed.draw+'%</span><span class="hda-a" style="color:'+ec(ed.awayWin)+'">A:'+ed.awayWin+'%</span></div>';
+    if(ed.homeWin!=null)o+='<div class="enrich-row hda-row"><span class="hda-h" style="color:'+ec(ed.homeWin)+'">H:'+pctTxt(ed.homeWin)+'</span><span class="hda-d" style="color:'+ec(ed.draw)+'">D:'+pctTxt(ed.draw)+'</span><span class="hda-a" style="color:'+ec(ed.awayWin)+'">A:'+pctTxt(ed.awayWin)+'</span></div>';
     o+='<div class="enrich-row">';
-    if(ed.over15Prob!=null)o+='<span class="enr" style="color:'+ec(ed.over15Prob)+'">O1.5 '+Math.round(ed.over15Prob)+'%</span>';
-    if(ed.ggProb!=null)o+='<span class="enr" style="color:'+ec(ed.ggProb)+'">GG '+Math.round(ed.ggProb)+'%</span>';
+    // [P24] O1.5 nu se mai dublează aici — apare o singură dată în „markets" (din enrich).
+    if(ed.ggProb!=null)o+='<span class="enr" style="color:'+ec(ed.ggProb)+'">GG '+pctTxt(ed.ggProb)+'</span>';
     if(ed.lambdaTotal!=null)o+='<span class="enr" style="color:var(--mu2)">λ '+Number(ed.lambdaTotal).toFixed(2)+'</span>';
     // Badge LOW/MED/HIGH derivat din confidenceScore (pragurile noi 70/55)
     if(ed.confidenceScore!=null){
@@ -2448,9 +2456,9 @@ function mdRenderSumar(d){
       out+='</div>';
       out+='<details style="margin-top:8px"><summary style="cursor:pointer;font-size:11px;color:var(--mu);padding:4px 0">Vezi totuși predicțiile pre-meci →</summary>';
       out+='<div class="md-prob-row" style="margin-top:8px;opacity:0.6">';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over15Prob)+'">'+Math.round(en.over15Prob)+'%</div><div class="md-prob-lbl">Over 1.5</div></div>';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over25Prob)+'">'+Math.round(en.over25Prob)+'%</div><div class="md-prob-lbl">Over 2.5</div></div>';
-      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.ggProb)+'">'+Math.round(en.ggProb)+'%</div><div class="md-prob-lbl">GG</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over15Prob)+'">'+pctTxt(en.over15Prob)+'</div><div class="md-prob-lbl">Over 1.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.over25Prob)+'">'+pctTxt(en.over25Prob)+'</div><div class="md-prob-lbl">Over 2.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.ggProb)+'">'+pctTxt(en.ggProb)+'</div><div class="md-prob-lbl">GG</div></div>';
       out+='</div>';
       out+='<div class="md-prob-row" style="opacity:0.6">';
       out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeScoreRate)+'">'+(en.homeScoreRate!=null?en.homeScoreRate+'%':'—')+'</div><div class="md-prob-lbl">Gazde marcheaza</div></div>';
@@ -2459,9 +2467,9 @@ function mdRenderSumar(d){
       out+='</div></details>';
     } else {
       out+='<div class="md-prob-row">';
-      out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_o15" style="color:'+ec(en.over15Prob)+'">'+Math.round(en.over15Prob)+'%</div><div class="md-prob-lbl">Over 1.5</div></div>';
-      out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_o25" style="color:'+ec(en.over25Prob)+'">'+Math.round(en.over25Prob)+'%</div><div class="md-prob-lbl">Over 2.5</div></div>';
-      out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_gg" style="color:'+ec(en.ggProb)+'">'+Math.round(en.ggProb)+'%</div><div class="md-prob-lbl">GG</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_o15" style="color:'+ec(en.over15Prob)+'">'+pctTxt(en.over15Prob)+'</div><div class="md-prob-lbl">Over 1.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_o25" style="color:'+ec(en.over25Prob)+'">'+pctTxt(en.over25Prob)+'</div><div class="md-prob-lbl">Over 2.5</div></div>';
+      out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_gg" style="color:'+ec(en.ggProb)+'">'+pctTxt(en.ggProb)+'</div><div class="md-prob-lbl">GG</div></div>';
       out+='</div>';
       out+='<div class="md-prob-row">';
       out+='<div class="md-prob"><div class="md-prob-val" id="mdpv_'+fk+'_hsc" style="color:'+ec(en.homeScoreRate)+'">'+(en.homeScoreRate!=null?en.homeScoreRate+'%':'—')+'</div><div class="md-prob-lbl">Gazde marcheaza</div></div>';
@@ -2478,9 +2486,9 @@ function mdRenderSumar(d){
       // FIX 3 — 1X2 medalions + Double Chance (dc1x, dcx2 deja calculate)
       if(en.homeWin!=null){
         out+='<div class="md-prob-row">';
-        out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeWin)+'">'+Math.round(en.homeWin)+'%</div><div class="md-prob-lbl">1 (Gazde)</div></div>';
-        out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.draw)+'">'+Math.round(en.draw)+'%</div><div class="md-prob-lbl">X (Egal)</div></div>';
-        out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.awayWin)+'">'+Math.round(en.awayWin)+'%</div><div class="md-prob-lbl">2 (Oaspeți)</div></div>';
+        out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.homeWin)+'">'+pctTxt(en.homeWin)+'</div><div class="md-prob-lbl">1 (Gazde)</div></div>';
+        out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.draw)+'">'+pctTxt(en.draw)+'</div><div class="md-prob-lbl">X (Egal)</div></div>';
+        out+='<div class="md-prob"><div class="md-prob-val" style="color:'+ec(en.awayWin)+'">'+pctTxt(en.awayWin)+'</div><div class="md-prob-lbl">2 (Oaspeți)</div></div>';
         out+='</div>';
       }
       if(en.dc1x!=null||en.dcx2!=null){

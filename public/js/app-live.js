@@ -911,8 +911,8 @@ function renderFavs(){
     s+='</div>';
     if(ed&&ed.homeWin!=null){
       s+='<div class="pm-body" style="cursor:pointer" onclick="mdOpen('+fid+','+hid+','+aid+',this)">';
-      s+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(ed.over15Prob||0,100)+'%;background:'+ec(ed.over15Prob)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(ed.over15Prob)+'">'+Math.round(ed.over15Prob||0)+'%</div></div>';
-      s+='<div class="enrich-row hda-row"><span style="color:'+ec(ed.homeWin)+'">H:'+ed.homeWin+'%</span><span style="color:'+ec(ed.draw)+'">D:'+ed.draw+'%</span><span style="color:'+ec(ed.awayWin)+'">A:'+ed.awayWin+'%</span></div>';
+      s+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(Number(ed.over15Prob)||0,100)+'%;background:'+ec(ed.over15Prob)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(ed.over15Prob)+'">'+pctTxt(ed.over15Prob)+'</div></div>';
+      s+='<div class="enrich-row hda-row"><span style="color:'+ec(ed.homeWin)+'">H:'+pctTxt(ed.homeWin)+'</span><span style="color:'+ec(ed.draw)+'">D:'+pctTxt(ed.draw)+'</span><span style="color:'+ec(ed.awayWin)+'">A:'+pctTxt(ed.awayWin)+'</span></div>';
       s+='</div>';
     }
     s+='</div>';

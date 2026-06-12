@@ -1272,17 +1272,8 @@ body{
     </div>
   </section>
 
-  <section class="card" id="cardBets">
-    <div class="card-h">
-      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6M7 16h8"/></svg></span>
-      <h2>Statistici Bilete &amp; ROI</h2>
-      <button class="hc-btn" onclick="loadBetsAggregate()" style="margin-left:auto">Reîncarcă</button>
-    </div>
-    <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">Pariuri salvate de utilizator — ROI per piață / ligă / interval cotă.</div>
-    <div id="bets-results" style="margin-top:8px">
-      <div style="text-align:center;color:var(--mu);padding:20px;font-size:12px">Apasă „Reîncarcă"</div>
-    </div>
-  </section>
+  <!-- [P04] Cardul „Statistici Bilete & ROI" eliminat: apela /api/admin/bets-aggregate
+       (endpoint inexistent → 404 permanent). Se reconstruiește la „Pontul Zilei" pe date reale. -->
 
   <section class="card" id="cardVsApi">
     <div class="card-h">
@@ -2360,96 +2351,7 @@ async function triggerCalibration(jobName) {
   } catch (e) { toast('Eroare: ' + e.message, '#ef4444'); }
 }
 
-// ──────────────────────────────────────────────────────────────
-// STATISTICI BILETE / ROI
-async function loadBetsAggregate() {
-  var el = document.getElementById('bets-results');
-  el.innerHTML = '<div style="text-align:center;color:var(--mu);padding:14px;font-size:12px">⏳ Încarcă...</div>';
-  try {
-    var d = await apiFetch('/api/admin/bets-aggregate');
-    if (!d.ok) { el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + (d.error || 'unknown') + '</div>'; return; }
-    if (d.empty) { el.innerHTML = '<div style="color:var(--mu);padding:10px;font-size:12px">' + d.message + '</div>'; return; }
-    var g = d.global;
-    var roi = g.staked > 0 ? +(g.netProfit / g.staked * 100).toFixed(1) : null;
-    var wr  = (g.wins + g.losses) > 0 ? +(g.wins / (g.wins + g.losses) * 100).toFixed(1) : null;
-    var roiClr = roi === null ? 'var(--mu)' : roi > 5 ? '#22c55e' : roi >= -5 ? '#f59e0b' : '#ef4444';
-    var profitClr = g.netProfit > 0 ? '#22c55e' : g.netProfit < 0 ? '#ef4444' : 'var(--mu)';
-    var h = '';
-    // Global stats card
-    h += '<div style="background:rgba(255,255,255,.03);border-radius:8px;padding:12px;margin-bottom:14px">';
-    h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;font-size:11px">';
-    h += '<div><div style="font-size:18px;font-weight:800;color:#22c55e">' + g.wins + '</div><div style="color:var(--mu)">WIN</div></div>';
-    h += '<div><div style="font-size:18px;font-weight:800;color:#ef4444">' + g.losses + '</div><div style="color:var(--mu)">LOSS</div></div>';
-    h += '<div><div style="font-size:18px;font-weight:800;color:#f59e0b">' + g.pending + '</div><div style="color:var(--mu)">PEND</div></div>';
-    h += '<div><div style="font-size:18px;font-weight:800;color:var(--tx)">' + (wr === null ? '—' : wr + '%') + '</div><div style="color:var(--mu)">WR</div></div>';
-    h += '<div><div style="font-size:18px;font-weight:800;color:#6366f1">' + g.multi + '</div><div style="color:var(--mu)">MULTI</div></div>';
-    h += '</div>';
-    h += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bor);display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;font-size:11px">';
-    h += '<div><div style="color:var(--mu)">Miză total</div><div style="font-weight:700">' + g.staked.toFixed(4) + ' LTC</div></div>';
-    h += '<div><div style="color:var(--mu)">Profit net</div><div style="font-weight:800;color:' + profitClr + ';font-size:14px">' + (g.netProfit >= 0 ? '+' : '') + g.netProfit.toFixed(4) + ' LTC</div></div>';
-    h += '<div><div style="color:var(--mu)">ROI</div><div style="font-weight:800;color:' + roiClr + ';font-size:14px">' + (roi === null ? '—' : (roi >= 0 ? '+' : '') + roi + '%') + '</div></div>';
-    h += '</div></div>';
-
-    // Per market
-    if (d.by_market.length) {
-      h += '<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:6px">🎯 Per Piață</div>';
-      h += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px">';
-      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:5px">Piață</th><th style="padding:5px;text-align:right">N</th><th style="padding:5px;text-align:right">W/L</th><th style="padding:5px;text-align:right">WR%</th><th style="padding:5px;text-align:right">Profit LTC</th><th style="padding:5px;text-align:right">ROI%</th></tr></thead><tbody>';
-      d.by_market.forEach(function(r) {
-        var roiC = r.roi === null ? 'var(--mu)' : r.roi > 5 ? '#22c55e' : r.roi >= -5 ? '#f59e0b' : '#ef4444';
-        var pC = r.profit > 0 ? '#22c55e' : r.profit < 0 ? '#ef4444' : 'var(--mu)';
-        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
-        h += '<td style="padding:5px">' + r.market + '</td>';
-        h += '<td style="padding:5px;text-align:right">' + r.total + '</td>';
-        h += '<td style="padding:5px;text-align:right;font-size:10px"><span style="color:#22c55e">' + r.wins + '</span>/<span style="color:#ef4444">' + r.losses + '</span></td>';
-        h += '<td style="padding:5px;text-align:right;font-weight:700">' + (r.winRate === null ? '—' : r.winRate + '%') + '</td>';
-        h += '<td style="padding:5px;text-align:right;color:' + pC + '">' + (r.profit > 0 ? '+' : '') + r.profit.toFixed(4) + '</td>';
-        h += '<td style="padding:5px;text-align:right;color:' + roiC + ';font-weight:700">' + (r.roi === null ? '—' : (r.roi >= 0 ? '+' : '') + r.roi + '%') + '</td>';
-        h += '</tr>';
-      });
-      h += '</tbody></table>';
-    }
-
-    // Per cota bucket
-    if (d.by_cota.length) {
-      h += '<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:6px">📊 Per Interval Cotă</div>';
-      h += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px">';
-      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:5px">Cotă</th><th style="padding:5px;text-align:right">N</th><th style="padding:5px;text-align:right">W/L</th><th style="padding:5px;text-align:right">WR%</th><th style="padding:5px;text-align:right">Profit</th></tr></thead><tbody>';
-      d.by_cota.forEach(function(r) {
-        var pC = r.profit > 0 ? '#22c55e' : r.profit < 0 ? '#ef4444' : 'var(--mu)';
-        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
-        h += '<td style="padding:5px;font-family:monospace">' + r.bucket + '</td>';
-        h += '<td style="padding:5px;text-align:right">' + r.total + '</td>';
-        h += '<td style="padding:5px;text-align:right;font-size:10px"><span style="color:#22c55e">' + r.wins + '</span>/<span style="color:#ef4444">' + r.losses + '</span></td>';
-        h += '<td style="padding:5px;text-align:right;font-weight:700">' + (r.winRate === null ? '—' : r.winRate + '%') + '</td>';
-        h += '<td style="padding:5px;text-align:right;color:' + pC + '">' + (r.profit > 0 ? '+' : '') + r.profit.toFixed(4) + '</td>';
-        h += '</tr>';
-      });
-      h += '</tbody></table>';
-    }
-
-    // Per liga
-    if (d.by_league.length) {
-      h += '<div style="font-weight:700;font-size:13px;color:#22c55e;margin-bottom:6px">🏆 Per Ligă (top 15)</div>';
-      h += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
-      h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:5px">Liga</th><th style="padding:5px;text-align:right">N</th><th style="padding:5px;text-align:right">WR%</th><th style="padding:5px;text-align:right">Profit LTC</th></tr></thead><tbody>';
-      d.by_league.forEach(function(r) {
-        var pC = r.profit > 0 ? '#22c55e' : r.profit < 0 ? '#ef4444' : 'var(--mu)';
-        h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">';
-        h += '<td style="padding:5px">' + r.league + '</td>';
-        h += '<td style="padding:5px;text-align:right">' + r.total + '</td>';
-        h += '<td style="padding:5px;text-align:right;font-weight:700">' + (r.winRate === null ? '—' : r.winRate + '%') + '</td>';
-        h += '<td style="padding:5px;text-align:right;color:' + pC + '">' + (r.profit > 0 ? '+' : '') + r.profit.toFixed(4) + '</td>';
-        h += '</tr>';
-      });
-      h += '</tbody></table>';
-    }
-
-    el.innerHTML = h;
-  } catch (e) {
-    el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare fetch: ' + e.message + '</div>';
-  }
-}
+// [P04] loadBetsAggregate() eliminat — apela /api/admin/bets-aggregate (inexistent → 404).
 
 // ──────────────────────────────────────────────────────────────
 // SCANNER CONTROL (pauza/resume)

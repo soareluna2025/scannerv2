@@ -70,3 +70,16 @@ export function clearFreeze(id) {
   delete _frozenSince[id];
   _frozenLogged.delete(id);
 }
+
+// [P03] Persistență peste restart PM2: fereastra „observed" (_frozenSince) trăia DOAR în
+// memorie → se pierdea la restart și meciurile rămâneau înghețate până la regula „drift"
+// (75 min). snapshot/restore permit salvarea în app_settings + reîncărcarea la boot.
+// Timestamp-urile sunt absolute (epoch ms), deci ceasul de îngheț continuă corect.
+export function snapshotFreeze() {
+  return { le: { ..._lastElapsed }, fs: { ..._frozenSince } };
+}
+export function restoreFreeze(s) {
+  if (!s || typeof s !== 'object') return;
+  if (s.le) Object.assign(_lastElapsed, s.le);
+  if (s.fs) Object.assign(_frozenSince, s.fs);
+}

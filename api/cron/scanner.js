@@ -14,7 +14,7 @@ import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 import { isAllowedMatch } from '../utils/league-filter.js';
 import { calcFeatures, calcNextGoal, calcNextGoalWindow, calcGG, calcMarkets } from '../utils/live-score.js';
 import { calibrateNgp } from '../utils/ngp-calibration.js';
-import { trackElapsed, freezeReason, maybeLogFrozen, clearFreeze } from '../utils/freeze-state.js';
+import { trackElapsed, freezeReason, maybeLogFrozen, clearFreeze, snapshotFreeze, restoreFreeze } from '../utils/freeze-state.js';
 
 const FOOTBALL_KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 
@@ -425,6 +425,28 @@ async function resolveNGPOutcomes(liveMatches) {
   }
 }
 
+// [P03] Persistență freeze-state în app_settings (restart-proof). Salvare throttled la 30s.
+let _freezePersistAt = 0;
+async function persistFreezeState() {
+  const now = Date.now();
+  if (now - _freezePersistAt < 30_000) return;
+  _freezePersistAt = now;
+  try {
+    await query(
+      `INSERT INTO app_settings (key, value) VALUES ('freeze_state', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [JSON.stringify(snapshotFreeze())]
+    );
+  } catch (_) { /* best-effort */ }
+}
+async function loadFreezeState() {
+  try {
+    await query(`CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT)`);
+    const r = await query(`SELECT value FROM app_settings WHERE key = 'freeze_state'`);
+    if (r.rows[0]?.value) restoreFreeze(JSON.parse(r.rows[0].value));
+  } catch (_) { /* fără stare salvată → comportament ca înainte */ }
+}
+
 // ── Ciclu 1: /fixtures?live=all — la fiecare 10 secunde ──────────────────────
 
 async function scanLive10s() {
@@ -467,6 +489,7 @@ async function scanLive10s() {
     }));
 
     const processedMatches = [];
+    const finishedThisCycle = {};   // [P02] id → scor final, pt semnalul de removal pe WS
 
     // FIX 3: priority buckets 3-tier (la 2s cadența scanLive10s):
     //   HIGH   — mn≥50 OR NGP>40 OR diff≤1 → fiecare scan (2s)
@@ -499,9 +522,11 @@ async function scanLive10s() {
 
       // Meci terminat — rezolvă outcome dacă îl urmăream
       if (DONE_STATUS.has(sh)) {
+        const fh = m.goals?.home ?? 0;
+        const fa = m.goals?.away ?? 0;
+        // [P02] reține tranziția FT cu scorul final → broadcast removal către UI.
+        finishedThisCycle[id] = { home: fh, away: fa, status: sh };
         if (liveCache[id]) {
-          const fh = m.goals?.home ?? 0;
-          const fa = m.goals?.away ?? 0;
           resolveOutcome(id, (fh + fa) >= 2 ? 'WIN' : 'LOSS', fh, fa)
             .catch(e => log(`resolveOutcome ${id}: ${e.message}`));
           saveFormStats(m).catch(e => log(`saveFormStats ${id}: ${e.message}`)); // M5
@@ -717,21 +742,33 @@ async function scanLive10s() {
 
       // Curăță snap-uri pentru meciuri terminate / ascunse (frozen) → la unfreeze
       // reapar ca „changed" și se rebroadcast.
-      const activeIds = new Set(visibleMatches.map(m => m.fixture?.id));
+      const activeIds = new Set(visibleMatches.map(m => m.fixture?.id).filter(Boolean));
       Object.keys(_lastBroadcastSnap).forEach(id => {
         if (!activeIds.has(Number(id))) delete _lastBroadcastSnap[id];
       });
 
-      const liveData = { matches: visibleMatches, ts: now };
+      // [P02] REMOVAL: orice meci care era în lista live ciclul trecut și acum a ieșit
+      // (FT/AET/PEN, terminal-extra, frozen sau prune-by-absence) → semnal de eliminare
+      // către UI, cu scorul final unde îl cunoaștem.
+      const prevIds = (global._prevLiveIds instanceof Set) ? global._prevLiveIds : new Set();
+      const removed = [];
+      prevIds.forEach(id => {
+        if (!activeIds.has(id)) removed.push({ id, final: finishedThisCycle[id] || null });
+      });
+      global._prevLiveIds = activeIds;
+
+      const liveData = { matches: visibleMatches, removed, ts: now };
       global.lastLiveData = liveData;
 
       if (isFullUpdate) {
         global._lastFullBroadcast = now;
         global.wsBroadcast('LIVE_UPDATE', liveData);
-      } else if (changedMatches.length > 0) {
-        global.wsBroadcast('LIVE_DELTA', { changed: changedMatches, ts: now });
+      } else if (changedMatches.length > 0 || removed.length > 0) {
+        global.wsBroadcast('LIVE_DELTA', { changed: changedMatches, removed, ts: now });
       }
     }
+
+    persistFreezeState();   // [P03] salvare throttled (30s) a stării de îngheț
   } catch (e) {
     log(`scanLive10s error: ${e.message}`);
   }
@@ -881,6 +918,7 @@ export function startScanner() {
   }
 
   ensureTables();
+  loadFreezeState();   // [P03] reîncarcă starea de îngheț salvată → restart-proof
 
   // Wrappers care respecta scannerPaused
   function runIfActive(fn, name) {
