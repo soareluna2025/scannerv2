@@ -1355,6 +1355,29 @@ function _mdLiveCtx(d){
 }
 var _mlxPrev={};   // istoric procente per fixture pt count-up + flash live (verde/roșu)
 var _mlxEnteredFor=null;   // fixture_id pt care animația de INTRARE s-a jucat deja (o singură dată)
+// ── TUNING TAB ML (configurabil) ─────────────────────────────────────────────
+var OPP_MIN=55, OPP_MAX=85;   // ⭐ Oportunități: probabilitate în ZONA DE ÎNCREDERE [OPP_MIN,OPP_MAX]
+var OPP_MAX_N=6;              // max piețe afișate în secțiunea Oportunități
+var AD_LOW=10, AD_HIGH=92;    // 🔒 Aproape decise: p<AD_LOW sau p>AD_HIGH → secțiune separată
+// Filtru chips (familie de piață) — fără re-render (păstrează animațiile). Recalcul count-uri
+// + ascunde grupele rămase goale sub filtru. Stare în localStorage (mlx_chip).
+function mlxApplyFilter(root, fam){
+  if(!root) return; fam=fam||'all';
+  root.querySelectorAll('.mlx-chip').forEach(function(c){ c.classList.toggle('on', c.getAttribute('data-fam')===fam); });
+  root.querySelectorAll('[data-fam]:not(.mlx-chip)').forEach(function(el){
+    el.style.display=(fam==='all'||el.getAttribute('data-fam')===fam)?'':'none';
+  });
+  ['opp','match','r1','r2','ad'].forEach(function(key){
+    var rows=root.querySelectorAll('[data-grp="'+key+'"]'), n=0;
+    rows.forEach(function(r){ if(r.style.display!=='none') n++; });
+    root.querySelectorAll('[data-count-of="'+key+'"]').forEach(function(b){ b.textContent=n; });
+    root.querySelectorAll('[data-hideempty="'+key+'"]').forEach(function(box){ box.style.display=n?'':'none'; });
+  });
+}
+function mlxSetChip(fam){
+  try{ localStorage.setItem('mlx_chip', fam); }catch(_){}
+  mlxApplyFilter(document.getElementById('md-body'), fam);
+}
 function _mlxCountUp(el,from,to,ms){
   var t0=null;
   function step(ts){ if(t0==null)t0=ts; var k=Math.min(1,(ts-t0)/ms); el.textContent=Math.round(from+(to-from)*k)+'%'; if(k<1)requestAnimationFrame(step); }
@@ -1384,6 +1407,9 @@ function _mlxInit(root,fid,firstOpen){
     if(!reduce && pn && n>pn){ sumEl.classList.add('mlx-pulse'); setTimeout(function(){ sumEl.classList.remove('mlx-pulse'); },900); }
     store.__set=n;
   }
+  // Aplică filtrul de chips salvat (ascunde piețele din afara familiei alese) după render.
+  try{ var _f='all'; try{ _f=localStorage.getItem('mlx_chip')||'all'; }catch(_){}
+    mlxApplyFilter(root,_f); }catch(_){}
 }
 function mdRenderML(d){
   var body=document.getElementById('md-body');
@@ -1641,6 +1667,14 @@ function mdRenderML(d){
   }
   items.forEach(function(it){ it.dec=decide(it,st); it.c=conv(it); it.phase=phaseOf(it); it.prio=prioOf(it); });
   var multiKind=function(it){ return it.kind==='result'||it.kind==='next'; };
+  var singleProb=function(it){ return !multiKind(it) && it.p!=null; };
+  function famOf(it){
+    if(it.kind==='result'||it.kind==='dc'||it.kind==='next') return 'result';
+    if(it.kind==='plain'){ var g=(it.group||'')+(it.label||''); if(/Cartona/i.test(g)) return 'cards'; if(/Cornere/i.test(g)) return 'corners'; }
+    return 'goals';
+  }
+  items.forEach(function(it){ it.fam=famOf(it); });
+
   var inplay=items.filter(function(it){
     if(it.dec.status!=='in_joc') return false;
     if(multiKind(it)) return true;
@@ -1648,9 +1682,16 @@ function mdRenderML(d){
   });
   var settled=items.filter(function(it){ return it.dec.status==='decontat'; });
 
-  // grupare pe faze; faza curentă urcă prima; grupă goală → omisă (rămâne în acordeon)
+  // 🔒 APROAPE DECISE: single-prob în joc cu p<AD_LOW sau p>AD_HIGH → secțiune separată
+  // (dispar din grupe ȘI din Oportunități). La update WS, dacă ies din prag → revin în grupă.
+  var nearDec=inplay.filter(function(it){ return singleProb(it) && (it.p<AD_LOW||it.p>AD_HIGH); });
+  var nearSet={}; nearDec.forEach(function(it){ nearSet[it.phase+'|'+it.label]=1; });
+  nearDec.sort(function(a,b){ return b.p-a.p; });
+  var grpItems=inplay.filter(function(it){ return !nearSet[it.phase+'|'+it.label]; });
+
+  // Grupare pe faze (din grpItems); ordine internă FIXĂ (prio).
   var byPhase={match:[],r1:[],r2:[]};
-  inplay.forEach(function(it){ (byPhase[it.phase]||byPhase.match).push(it); });
+  grpItems.forEach(function(it){ (byPhase[it.phase]||byPhase.match).push(it); });
   Object.keys(byPhase).forEach(function(ph){ byPhase[ph].sort(function(a,b){ return a.prio-b.prio; }); });
   var order;
   if(lc.status==='1H') order=['r1','match','r2'];
@@ -1658,7 +1699,24 @@ function mdRenderML(d){
   else order=['match','r1','r2'];
   var GROUP_T={ match:'🏟 MECI ÎNTREG', r1:'⏱ REPRIZA 1', r2:'⏱ REPRIZA 2' };
 
-  // ════════ RANDARE (identitatea grafică existentă: tokens + glassmorphism) ════════
+  // ⭐ OPORTUNITĂȚI: single-prob, p∈[OPP_MIN,OPP_MAX], relevanță de fază, top OPP_MAX_N.
+  var phaseElig=function(it){
+    if(lc.status==='2H'||lc.status==='HT'||lc.status==='ET') return it.phase!=='r1';   // R1 e decontată de decide()
+    return true;   // R1 sau pre-meci: meci întreg + R1 + R2
+  };
+  var opps=grpItems.filter(function(it){ return singleProb(it) && it.p>=OPP_MIN && it.p<=OPP_MAX && phaseElig(it); })
+                   .sort(function(a,b){ return b.p-a.p; }).slice(0, OPP_MAX_N);
+  function motivOf(it){
+    if(it.phase==='r2' && lc.status==='1H') return 'R2 abia urmează';
+    var ctx=it.dec.context||'', m=ctx.match(/mai trebuie \d+/);
+    if(m && lc.isLive){
+      var rem=(it.phase==='r1')?Math.max(0,45-elapsedNum):Math.max(0,90-elapsedNum);
+      return '~'+rem+' min rămase · '+m[0];
+    }
+    return 'zonă de încredere';
+  }
+
+  // ════════ RANDARE (compact · glassmorphism existent · tokens) ════════
   var semClr=function(p){ return p==null?'#6b7a99':p>=70?'#00e5b8':p>=50?'#ffcc44':'#ff7777'; };
   function triCells(cls){
     var mi=-1,mv=-1; cls.forEach(function(c,i){ if(c[1]!=null&&c[1]>mv){mv=c[1];mi=i;} });
@@ -1668,20 +1726,34 @@ function mdRenderML(d){
         +'<div class="mc-prob" style="color:'+col+';font-weight:'+(lead?900:700)+'">'+(v!=null?v+'%':'—')+'</div></div>';
     }).join('')+'</div>';
   }
-  function rowBar(it,delay){
-    var p=it.p, col=semClr(p), rawkey=it.phase+'|'+it.label, prev=_store0[rawkey];
-    var binit=_first?0:((prev!=null)?prev:(p!=null?p:0));   // re-render: pornește de la curent
+  // Rând COMPACT: [nume+context | procent] + bară 3px jos. grp=secțiune (match/r1/r2/ad/opp);
+  // kp=prefix cheie (chei distincte pt count-up/flash când aceeași piață apare în 2 secțiuni).
+  function rowBar(it,delay,grp,kp){
+    var p=it.p, col=semClr(p), rawkey=(kp||'')+it.phase+'|'+it.label, prev=_store0[rawkey];
+    var binit=_first?0:((prev!=null)?prev:(p!=null?p:0));
     var ptxt=(p==null)?'—':(_first?'0%':(p+'%'));
     var rcls=_first?'mlx-row mlx-anim':'mlx-row', rsty=_first?(' style="animation-delay:'+delay+'ms"'):'';
-    return '<div class="'+rcls+'"'+rsty+'>'
-      +'<div class="nm"><b>'+htmlEsc(it.label)+'</b>'
-      +'<small>'+htmlEsc(it.group)+(it.dec.context?(' · '+htmlEsc(it.dec.context)):'')+'</small>'
+    var ctx=it.dec.context?(' · '+htmlEsc(it.dec.context)):'';
+    return '<div class="'+rcls+'" data-fam="'+it.fam+'" data-grp="'+(grp||'')+'"'+rsty+'>'
+      +'<div class="nm"><b>'+htmlEsc(it.label)+'</b><small>'+htmlEsc(it.group)+ctx+'</small>'
       +'<div class="mlx-bar"><i data-w="'+(p!=null?p:0)+'" style="width:'+binit+'%;background:'+col+'"></i></div></div>'
       +'<div class="pct" data-k="'+htmlEsc(rawkey)+'" data-v="'+(p!=null?p:'')+'" style="color:'+col+'">'+ptxt+'</div></div>';
   }
-  function rowMulti(it,delay){
-    var mcls=_first?' class="mlx-anim"':'', msty=_first?('animation-delay:'+delay+'ms;margin-bottom:8px'):'margin-bottom:8px';
-    return '<div'+mcls+' style="'+msty+'"><div class="ml-sub" style="margin:8px 0 4px">'+htmlEsc(it.label)+'</div>'+triCells(it.classes)+'</div>';
+  // Rând OPORTUNITATE: motiv verde scurt în loc de subtext.
+  function rowOpp(it,delay){
+    var p=it.p, col=semClr(p), rawkey='opp|'+it.phase+'|'+it.label, prev=_store0[rawkey];
+    var binit=_first?0:((prev!=null)?prev:(p!=null?p:0));
+    var ptxt=(p==null)?'—':(_first?'0%':(p+'%'));
+    var rcls=_first?'mlx-row mlx-anim':'mlx-row', rsty=_first?(' style="animation-delay:'+delay+'ms"'):'';
+    return '<div class="'+rcls+'" data-fam="'+it.fam+'" data-grp="opp"'+rsty+'>'
+      +'<div class="nm"><b>'+htmlEsc(it.label)+'</b><small style="color:#00e5b8">★ '+htmlEsc(motivOf(it))+'</small>'
+      +'<div class="mlx-bar"><i data-w="'+(p!=null?p:0)+'" style="width:'+binit+'%;background:'+col+'"></i></div></div>'
+      +'<div class="pct" data-k="'+htmlEsc(rawkey)+'" data-v="'+(p!=null?p:'')+'" style="color:'+col+'">'+ptxt+'</div></div>';
+  }
+  function rowMulti(it,delay,grp){
+    var cls=(_first?'mlx-anim ':'')+'mlx-multi', sty=_first?('animation-delay:'+delay+'ms'):'';
+    return '<div class="'+cls+'" data-fam="'+it.fam+'" data-grp="'+(grp||'')+'"'+(sty?(' style="'+sty+'"'):'')+'>'
+      +'<div class="ml-sub" style="margin:6px 0 4px">'+htmlEsc(it.label)+'</div>'+triCells(it.classes)+'</div>';
   }
   function rowSettled(it){
     var r=it.dec.rezultat||'—', g=r==='DA'?'✓':(r==='NU'?'✗':'⊘');
@@ -1690,7 +1762,7 @@ function mdRenderML(d){
       +'<span style="color:#5a6a80">'+htmlEsc(it.dec.context||'')+'</span></div>';
   }
 
-  // status header
+  // Header status (scor + minut)
   var minTxt, minClr;
   if(lc.isHT){ minTxt='Pauză · HT '+(htKnown?hh+'-'+ah:'?'); minClr='#ffcc44'; }
   else if(lc.status==='2H'||lc.status==='ET'){ minTxt='min '+elapsedNum+' · R2'; minClr='#ff7777'; }
@@ -1698,101 +1770,108 @@ function mdRenderML(d){
   else if(ft){ minTxt='Final'; minClr='var(--mu)'; }
   else { minTxt='Pre-meci'; minClr='var(--mu)'; }
   var liveDot=lc.isLive?'<span class="mlx-dot"></span>':'';
-
-  // FIX 2 — HERO doar dintre piețele primare de GOLURI și REZULTAT (exclude șansa
-  // dublă, cartonașe, cornere). Formulare: numele pieței + procentul.
-  var finalRes=null; settled.forEach(function(it){ if(it.kind==='result'&&it.scope==='match') finalRes=it; });
-  var heroPool=inplay.filter(function(it){ return it.kind==='over'||it.kind==='team'||it.kind==='btts'||it.kind==='result'; });
-  heroPool.sort(function(a,b){ return b.c-a.c; });
-  var heroHtml;
-  if(ft && finalRes){ heroHtml='🏁 Final '+hg+'-'+ag+': <b>'+htmlEsc(finalRes.dec.rezultat)+'</b>'; }
-  else if(heroPool.length){
-    var h=heroPool[0];
-    if(multiKind(h)){
-      var mx=-1,mlab=''; (h.classes||[]).forEach(function(c){ if(c[1]!=null&&c[1]>mx){mx=c[1];mlab=c[0];} });
-      heroHtml='<b>'+htmlEsc(h.label)+'</b> — <b style="color:'+semClr(mx)+'">'+htmlEsc(mlab)+' '+(mx<0?'—':mx+'%')+'</b>';
-    } else {
-      heroHtml='<b>'+htmlEsc(h.label)+'</b> — <b style="color:'+semClr(h.p)+'">'+(h.p!=null?h.p+'%':'—')+'</b>';
-    }
-  } else { heroHtml='Niciun semnal puternic momentan.'; }
-
   var trainedK=ml.trainedOn?('~'+Math.round(ml.trainedOn/1000)+'k meciuri'):null;
+  var chipFam='all'; try{ chipFam=localStorage.getItem('mlx_chip')||'all'; }catch(_){}
+  var gopen=function(ph){ try{ return localStorage.getItem('mlx_grp_'+ph)!=='0'; }catch(_){ return true; } };
+  var CHIPS=[['all','Toate'],['goals','⚽ Goluri'],['cards','🟨 Cartonașe'],['corners','⛳ Cornere'],['result','🏆 Rezultat']];
 
   var out='';
   out+='<style>'
-    +'.mc{background:#0f1620;border:1px solid var(--bor);border-radius:8px;padding:8px;text-align:center}'
+    +'.mc{background:#0f1620;border:1px solid var(--bor);border-radius:8px;padding:7px;text-align:center}'
     +'.mc-name{font-size:10px;color:#6b7a99;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}'
-    +'.mc-prob{font-size:17px;font-weight:800}'
+    +'.mc-prob{font-size:16px;font-weight:800}'
     +'.ml-sub{font-size:11px;color:#8b9bb4;font-weight:700}'
-    +'.mlx-head{display:flex;align-items:center;gap:10px;background:rgba(8,13,24,.6);border:1px solid var(--bor);border-radius:12px;padding:10px 12px;margin-bottom:10px}'
+    +'.mlx-sticky{position:sticky;top:0;z-index:6;background:rgba(8,13,24,.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);margin:-4px -2px 8px;padding:4px 2px 0}'
+    +'.mlx-head{display:flex;align-items:center;gap:10px;background:rgba(8,13,24,.6);border:1px solid var(--bor);border-radius:12px;padding:9px 12px}'
     +'.mlx-head .sc{font-size:20px;font-weight:900;color:var(--tx)}'
     +'.mlx-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff7777;animation:livePulse 1s infinite;margin-right:6px}'
-    +'.mlx-hero{position:relative;overflow:hidden;background:rgba(99,102,241,.10);border:1px solid rgba(99,102,241,.30);border-radius:12px;padding:13px 14px;margin-bottom:14px;font-size:13px;color:#c7d2fe;line-height:1.4}'
-    +'.mlx-hero::after{content:"";position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);transform:skewX(-20deg);animation:mlxShim 5s ease-in-out infinite;pointer-events:none}'
-    +'.mlx-zone{font-size:12px;font-weight:800;color:#a5b4fc;letter-spacing:.4px;margin:4px 0 8px}'
-    +'.mlx-grp{font-size:11px;font-weight:800;color:#8b9bb4;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;display:flex;align-items:center;gap:8px}'
-    +'.mlx-grp .gn{font-size:10px;font-weight:700;color:#6b7a99;background:rgba(255,255,255,.05);border-radius:10px;padding:1px 7px}'
-    +'.mlx-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--bor);border-radius:10px;background:rgba(255,255,255,.02);margin-bottom:6px}'
+    +'.mlx-chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0 6px;scrollbar-width:none}'
+    +'.mlx-chips::-webkit-scrollbar{display:none}'
+    +'.mlx-chip{flex:none;cursor:pointer;font-size:11px;font-weight:700;color:#8b9bb4;background:rgba(255,255,255,.04);border:1px solid var(--bor);border-radius:999px;padding:5px 11px;white-space:nowrap}'
+    +'.mlx-chip.on{color:#00e5b8;border-color:#00e5b855;background:rgba(0,229,184,.08)}'
+    +'.mlx-zone{font-size:12px;font-weight:800;color:#a5b4fc;letter-spacing:.4px;margin:6px 0 8px;display:flex;align-items:center;gap:8px}'
+    +'.mlx-zone .gn,.mlx-grpd .gn{font-size:10px;font-weight:700;color:#6b7a99;background:rgba(255,255,255,.05);border-radius:10px;padding:1px 7px}'
+    +'.mlx-grpd{margin:10px 0 0}'
+    +'.mlx-grpd>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;color:#8b9bb4;text-transform:uppercase;letter-spacing:.5px;margin:4px 0 8px}'
+    +'.mlx-grpd>summary::-webkit-details-marker{display:none}'
+    +'.mlx-grpd>summary .arw{margin-left:auto;transition:transform .2s;color:#6b7a99;font-size:10px}'
+    +'.mlx-grpd[open]>summary .arw{transform:rotate(180deg)}'
+    +'.mlx-row{display:flex;align-items:center;gap:10px;padding:5px 9px;border:1px solid var(--bor);border-radius:9px;background:rgba(255,255,255,.02);margin-bottom:4px}'
     +'.mlx-row .nm{flex:1;min-width:0}'
     +'.mlx-row .nm b{font-size:12px;font-weight:700;color:var(--tx);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-    +'.mlx-row .nm small{font-size:10px;color:var(--mu)}'
-    +'.mlx-row .pct{font-size:18px;font-weight:800;min-width:50px;text-align:right}'
-    +'.mlx-bar{height:3px;border-radius:2px;background:rgba(255,255,255,.06);margin-top:5px;overflow:hidden}'
+    +'.mlx-row .nm small{font-size:10px;color:var(--mu);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    +'.mlx-row .pct{font-size:17px;font-weight:800;min-width:48px;text-align:right}'
+    +'.mlx-bar{height:3px;border-radius:2px;background:rgba(255,255,255,.06);margin-top:4px;overflow:hidden}'
     +'.mlx-bar i{display:block;height:100%;border-radius:2px;width:0;transition:width .6s ease-out}'
-    +'details.mlx-acc{margin-top:14px;border:1px solid var(--bor);border-radius:10px;overflow:hidden}'
-    +'details.mlx-acc>summary{cursor:pointer;padding:10px 12px;font-size:12px;font-weight:800;color:#8b9bb4;list-style:none;background:rgba(255,255,255,.02);display:inline-block}'
+    +'.mlx-multi{margin-bottom:6px}'
+    +'details.mlx-acc{margin-top:12px;border:1px solid var(--bor);border-radius:10px;overflow:hidden}'
+    +'details.mlx-acc>summary{cursor:pointer;padding:9px 12px;font-size:12px;font-weight:800;color:#8b9bb4;list-style:none;background:rgba(255,255,255,.02);display:flex;align-items:center;gap:8px}'
     +'details.mlx-acc>summary::-webkit-details-marker{display:none}'
-    +'.mlx-set{display:flex;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid var(--bor);font-size:11px;color:#6b7a99}'
+    +'details.mlx-acc>div{padding:6px 8px}'
+    +'.mlx-set{display:flex;align-items:center;gap:10px;padding:6px 6px;border-top:1px solid var(--bor);font-size:11px;color:#6b7a99}'
     +'.mlx-set .sg{min-width:86px;font-weight:800;color:#8b9bb4}'
     +'@keyframes mlxIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}'
     +'.mlx-anim{animation:mlxIn .32s ease-out both}'
-    +'@keyframes mlxShim{0%,68%{left:-60%}84%,100%{left:130%}}'
     +'@keyframes mlxFlashUp{0%{color:#00e5b8;text-shadow:0 0 8px rgba(0,229,184,.7)}100%{text-shadow:none}}'
     +'@keyframes mlxFlashDn{0%{color:#ff7777;text-shadow:0 0 8px rgba(255,119,119,.7)}100%{text-shadow:none}}'
     +'.mlx-flash-up{animation:mlxFlashUp .85s ease-out}'
     +'.mlx-flash-dn{animation:mlxFlashDn .85s ease-out}'
     +'@keyframes mlxPulse{0%{transform:scale(1)}50%{transform:scale(1.07)}100%{transform:scale(1)}}'
     +'.mlx-pulse{display:inline-block;animation:mlxPulse .9s ease-out;color:#00e5b8 !important}'
-    +'@media (prefers-reduced-motion: reduce){'
-      +'.mlx-anim{animation:none}.mlx-bar i{transition:none}.mlx-hero::after{display:none}'
-      +'.mlx-flash-up,.mlx-flash-dn,.mlx-pulse{animation:none}}'
+    +'@media (prefers-reduced-motion: reduce){.mlx-anim{animation:none}.mlx-bar i{transition:none}.mlx-flash-up,.mlx-flash-dn,.mlx-pulse{animation:none}}'
     +'</style>';
 
-  // 1. Header viu
+  // 1. STICKY: scor + chips de familie
+  out+='<div class="mlx-sticky">';
   out+='<div class="mlx-head">'+liveDot
     +'<span style="flex:1;font-size:12px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+htmlEsc(hn)+' — '+htmlEsc(an)+'</span>'
     +'<span class="sc">'+hg+'-'+ag+'</span>'
     +'<span style="font-size:11px;font-weight:700;color:'+minClr+'">'+minTxt+'</span></div>';
+  out+='<div class="mlx-chips">'+CHIPS.map(function(c){
+    return '<div class="mlx-chip'+(c[0]===chipFam?' on':'')+'" data-fam="'+c[0]+'" onclick="mlxSetChip(\''+c[0]+'\')">'+c[1]+'</div>';
+  }).join('')+'</div>';
+  out+='</div>';
 
-  // 2. Hero (shimmer via CSS)
-  out+='<div class="mlx-hero">'+heroHtml+'</div>';
+  var aidx=1;
+  // 2. ⭐ OPORTUNITĂȚI (prima secțiune)
+  if(opps.length){
+    out+='<div class="mlx-zone'+(_first?' mlx-anim':'')+'" data-hideempty="opp">⭐ OPORTUNITĂȚI <span class="gn" data-count-of="opp">'+opps.length+'</span></div>';
+    opps.forEach(function(it){ out+=rowOpp(it, Math.min(aidx*30,400)); aidx++; });
+  }
 
-  // 3. ÎN JOC — trei grupe fixe, prioritate fixă în interior
-  out+='<div class="mlx-zone'+(_first?' mlx-anim':'')+'"'+(_first?' style="animation-delay:0ms"':'')+'>🎯 ÎN JOC ('+inplay.length+')</div>';
-  if(inplay.length){
-    var aidx=1;
-    order.forEach(function(ph){
-      var arr=byPhase[ph]; if(!arr||!arr.length) return;
-      out+='<div class="mlx-grp'+(_first?' mlx-anim':'')+'"'+(_first?(' style="animation-delay:'+Math.min(aidx*30,400)+'ms"'):'')+'>'+GROUP_T[ph]+'<span class="gn">'+arr.length+'</span></div>'; aidx++;
-      arr.forEach(function(it){
-        var delay=Math.min(aidx*30,400); aidx++;
-        out+= multiKind(it)?rowMulti(it,delay):rowBar(it,delay);
-      });
+  // 3. GRUPELE pe faze (colapsabile, memorate în localStorage; ordine internă fixă)
+  order.forEach(function(ph){
+    var arr=byPhase[ph]; if(!arr||!arr.length) return;
+    out+='<details class="mlx-grpd" data-ph="'+ph+'" data-hideempty="'+ph+'"'+(gopen(ph)?' open':'')
+      +' ontoggle="try{localStorage.setItem(\'mlx_grp_\'+this.dataset.ph,this.open?\'1\':\'0\')}catch(e){}">';
+    out+='<summary>'+GROUP_T[ph]+'<span class="gn" data-count-of="'+ph+'">'+arr.length+'</span><span class="arw">▾</span></summary><div>';
+    arr.forEach(function(it){
+      var delay=Math.min(aidx*30,400); aidx++;
+      out+= multiKind(it)?rowMulti(it,delay,ph):rowBar(it,delay,ph,'');
     });
-  } else {
+    out+='</div></details>';
+  });
+  if(!grpItems.length && !opps.length){
     out+='<div style="font-size:11px;color:var(--mu);padding:8px 2px">Toate piețele relevante sunt decontate.</div>';
   }
 
-  // 4. Acordeon DECONTATE (UNUL global, pliat implicit, gri/neutru)
+  // 4. 🔒 APROAPE DECISE (implicit strânsă)
+  if(nearDec.length){
+    out+='<details class="mlx-acc" data-hideempty="ad"><summary>🔒 APROAPE DECISE <span class="gn" data-count-of="ad">'+nearDec.length+'</span></summary><div>';
+    nearDec.forEach(function(it){ out+=rowBar(it,0,'ad','ad|'); });
+    out+='</div></details>';
+  }
+
+  // 5. ✓ DECONTATE (acordeon existent)
   if(settled.length){
     out+='<details class="mlx-acc"><summary data-n="'+settled.length+'">✓ DECONTATE ('+settled.length+')</summary><div>';
     settled.forEach(function(it){ out+=rowSettled(it); });
     out+='</div></details>';
   }
 
-  // 6. Footer onest
+  // 6. Footer model
   out+='<div style="font-size:10px;color:var(--mu);margin-top:14px;line-height:1.5">'
-    +'🤖 Model: <b>HistGradientBoosting</b> · '+items.length+' piețe'
+    +'🤖 Model: <b>HistGradientBoosting</b> · '+items.length+' piețe · calibrat zilnic'
     +(trainedK?(' · antrenat pe '+trainedK):'')+'</div>';
 
   body.innerHTML=out;
