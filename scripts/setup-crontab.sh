@@ -64,6 +64,7 @@ NEW_CRONTAB=$(cat <<EOF
 30 3 * * * /root/scripts/backup-db.sh >> /var/log/alohascan-backup.log 2>&1
 30 5 * * * cd ${APP_DIR} && set -a && . ${APP_DIR}/.env && set +a && python3 ml/train_model.py >> ${APP_DIR}/ml/train.log 2>&1
 30 6 * * * cd /root/scannerv2 && python3 -u ml/train_live_v2.py >> /root/.pm2/logs/train-live-v2.log 2>&1
+50 6 * * * cd /root/scannerv2 && python3 -u ml/calibrate.py >> /root/scannerv2/logs/calibrate.log 2>&1
 EOF
 )
 
