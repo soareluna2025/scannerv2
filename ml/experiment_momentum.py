@@ -15,8 +15,11 @@ Reutilizare (import, nu copy-paste): train_live_v2.generate_half (snapshot-uri +
 existente + labels), FEATURES, assert_no_odds, _multiclass_brier. Momentum se ATAȘEAZĂ la
 fiecare snapshot prin (fixture_id, minut) — minutul recuperat din elapsed_norm (=min(1,elapsed/90)).
 
-MEMORIE (2GB, ~1.4M snapshot-uri R2): float32, procesare pe jumătăți (r1 apoi r2, cu eliberare),
-plafon SAMPLE_CAP cu eșantionare stratificată TEMPORAL (stride) dacă o jumătate depășește capul.
+MEMORIE (2GB) — FIX OOM: NU mai construim cele 1.4M snapshot-uri. Întâi luăm fixture_id DISTINCT
+din live_stats (~877 meciuri) și generăm snapshot-uri DOAR pentru ele (generate_half primește
+fixture_ids). live_stats: doar coloanele necesare, dtypes minime (int16/int32/float32). float32,
+jumătăți separate (r1 → eliberare → r2), del + gc.collect() după fiecare etapă. Estimare nouă:
+sub câteva sute de MB (de la 1.6GB → OOM). SAMPLE_CAP rămâne ca plasă, dar NU se mai declanșează.
 
 Rulare:  cd /root/scannerv2 && python3 -u ml/experiment_momentum.py
 """
@@ -61,9 +64,10 @@ def load_momentum(conn):
         return pd.DataFrame(columns=["fixture_id", "elapsed"] + NEW)
     statcols = [sd + "_" + s for s in STATS for sd in ["home", "away"]]
     for c in statcols:
-        ls[c] = pd.to_numeric(ls[c], errors="coerce").astype("float32")
+        ls[c] = pd.to_numeric(ls[c], errors="coerce").astype("float32")   # dtypes minime de la load
+    ls["fixture_id"] = pd.to_numeric(ls["fixture_id"], errors="coerce").astype("int32")
     ls["elapsed"] = pd.to_numeric(ls["elapsed"], errors="coerce")
-    ls = ls.dropna(subset=["elapsed"]); ls["elapsed"] = ls["elapsed"].astype(int)
+    ls = ls.dropna(subset=["elapsed"]); ls["elapsed"] = ls["elapsed"].astype("int16")
     ls = ls.sort_values(["fixture_id", "elapsed"])
 
     def delta(win):
@@ -169,13 +173,9 @@ def eval_half(name, X, fid, labels, markets_bin, market_multi, mom):
         be, _, _ = _brier_bin(Xexp[tr], y[tr], Xexp[te], y[te])
         return bb, be, len(te)
 
-    R("\n[FULL SET] (momentum NaN→median pe necacoperite)")
-    R("%-20s %9s %9s %9s" % ("piață", "Brier_b", "Brier_e", "Δ(b-e)"))
-    full = {}
-    for mk in markets_bin:
-        r = run_bin(mk, False)
-        if r: full[mk] = r; R("%-20s %9.5f %9.5f %+9.5f" % (mk, r[0], r[1], r[0] - r[1]))
-
+    # [FULL SET] eliminat: după filtrarea la sursă pe meciurile live_stats, NU mai construim
+    # 1.4M snapshot-uri (era ieftin doar înainte) și oricum era diluat de NaN→median. Verdictul
+    # se dă pe SUBSETUL ACOPERIT (snapshot-uri cu momentum real) — apples-to-apples, n raportat.
     R("\n[SUBSET ACOPERIT] (doar snapshot-uri cu momentum real — verdictul ADEVĂRAT)")
     R("%-20s %9s %9s %9s   n" % ("piață", "Brier_b", "Brier_e", "Δ(b-e)"))
     imp = 0; bad = 0; valid = 0
@@ -215,17 +215,23 @@ def main():
     R("Zidul anti-cote: OK · feature-uri momentum noi: %d\n" % len(NEW))
 
     conn = tl.get_conn()
+    # MEMORY-LEAN: snapshot-urile se generează DOAR pentru meciurile acoperite de live_stats
+    # (verdictul oricum se dă pe subsetul acoperit) → evită construirea celor 1.4M snapshot-uri.
+    fids = pd.read_sql("SELECT DISTINCT fixture_id FROM live_stats WHERE elapsed IS NOT NULL",
+                       conn)["fixture_id"].dropna().astype(int).tolist()
+    R("live_stats: %d meciuri distincte → generate_half rulează DOAR pe ele (fără OOM)." % len(fids))
     mom = load_momentum(conn)
     R("live_stats momentum: %d rânduri (fixture×minut) cu Δ10/Δ15." % len(mom))
     fmap = tl.load_feature_map(conn)
     fmap_proc, _med, default_ff = tl.process_feature_map(fmap)
+    del fmap; gc.collect()
     cov_counts = {"total": 0, "ml_features": 0, "elo_history": 0, "standings": 0, "referee": 0}
 
     res = {}
-    Xr1, fidr1, labr1, nr1, _mk1 = tl.generate_half(conn, "r1", fmap_proc, default_ff, cov_counts)
+    Xr1, fidr1, labr1, nr1, _mk1 = tl.generate_half(conn, "r1", fmap_proc, default_ff, cov_counts, fixture_ids=fids)
     res["r1"] = eval_half("REPRIZA 1", Xr1, fidr1, labr1, BIN_R1, MULTI["r1"], mom)
     del Xr1, fidr1, labr1; gc.collect()
-    Xr2, fidr2, labr2, nr2, _mk2 = tl.generate_half(conn, "r2", fmap_proc, default_ff, cov_counts)
+    Xr2, fidr2, labr2, nr2, _mk2 = tl.generate_half(conn, "r2", fmap_proc, default_ff, cov_counts, fixture_ids=fids)
     res["r2"] = eval_half("REPRIZA 2 / FINAL", Xr2, fidr2, labr2, BIN_R2, MULTI["r2"], mom)
     del Xr2, fidr2, labr2; gc.collect()
     conn.close()

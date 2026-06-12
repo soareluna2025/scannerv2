@@ -440,7 +440,7 @@ def process_feature_map(fmap):
     return proc, med, (med.copy(), (False, False, False, False))
 
 
-def generate_half(conn, half, fmap_proc, default_ff, cov_counts):
+def generate_half(conn, half, fmap_proc, default_ff, cov_counts, fixture_ids=None):
     """Generează snapshot-urile UNEI reprize în buffere compacte (X float32 +
     label int8 per piață + fixture_id). build_snapshots e apelat per fixture și
     rândurile sunt filtrate pe is_r2 — celelalte aruncate imediat."""
@@ -482,7 +482,13 @@ def generate_half(conn, half, fmap_proc, default_ff, cov_counts):
             state["n"] += 1
 
     cur = conn.cursor()
-    cur.execute(QUERY)
+    # Filtrare OPȚIONALĂ pe fixture_id (DOAR pt experimente memory-lean; default = comportament
+    # IDENTIC). Modificare strict de filtrare — logica de generare e neatinsă.
+    if fixture_ids:
+        cur.execute(QUERY.replace("ORDER BY", "AND fh.fixture_id = ANY(%(fids)s)\nORDER BY"),
+                    {"fids": list(fixture_ids)})
+    else:
+        cur.execute(QUERY)
     for r in cur:
         (fid, elapsed, ee, etype, detail, team_id,
          home_id, away_id, fhg, fag, hht, aht) = r
