@@ -195,6 +195,16 @@ async function ensureColumns() {
   } catch (e) {
     console.error('[columns] ensureColumns (gold):', e.message);
   }
+  // [WC] standings: cheie unică group-aware (echipa poate fi în grupă ȘI în „third-placed").
+  // Drop constraint vechi + dedup + unique index nou. Idempotent.
+  try {
+    const { readFileSync } = await import('fs');
+    const sql = readFileSync(join(__dirname, 'scripts', 'migrations', 'fix-standings-group-unique.sql'), 'utf8');
+    await query(sql);
+    console.log('[columns] fix-standings-group-unique.sql aplicat (idempotent)');
+  } catch (e) {
+    console.error('[columns] ensureColumns (standings-group):', e.message);
+  }
 }
 
 const httpServer = app.listen(PORT, '0.0.0.0', async () => {

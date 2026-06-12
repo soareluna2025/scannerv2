@@ -11,6 +11,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const DONE = ['FT', 'AET', 'PEN'];
 
 const WC_QUALIFIERS = [
+  // Turneul final CM 2026 (league=1): grupe + „Ranking of third-placed teams".
+  // season=2026 EXPLICIT — collect-daily folosește seasonForLeague(1) (API seasons.current,
+  // poate ≠2026 în timpul turneului) → rândurile season 2026 rămâneau neîmprospătate.
+  { league: 1, season: 2026, name: 'World Cup', confederation: 'World Cup Finals' },
   { league: 29, season: 2023, name: 'CAF', confederation: 'Africa' },
   { league: 30, season: 2022, name: 'AFC', confederation: 'Asia' },
   { league: 30, season: 2026, name: 'AFC', confederation: 'Asia' },
@@ -81,13 +85,13 @@ async function saveStanding(leagueId, season, row) {
         points, goals_diff, group_name, played, win, draw, lose,
         goals_for, goals_against, form, status, description, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-     ON CONFLICT (league_id, season, team_id) DO UPDATE SET
+     ON CONFLICT (league_id, season, team_id, COALESCE(group_name, '')) DO UPDATE SET
        rank=EXCLUDED.rank, team_name=EXCLUDED.team_name, team_logo=EXCLUDED.team_logo,
        points=EXCLUDED.points, goals_diff=EXCLUDED.goals_diff, group_name=EXCLUDED.group_name,
        played=EXCLUDED.played, win=EXCLUDED.win, draw=EXCLUDED.draw, lose=EXCLUDED.lose,
        goals_for=EXCLUDED.goals_for, goals_against=EXCLUDED.goals_against,
        form=EXCLUDED.form, status=EXCLUDED.status, description=EXCLUDED.description,
-       updated_at=EXCLUDED.updated_at`,
+       updated_at=NOW()`,
     [
       leagueId, season, row.rank, row.team.id, row.team.name, row.team.logo || null,
       row.points, row.goalsDiff || 0, row.group || null,

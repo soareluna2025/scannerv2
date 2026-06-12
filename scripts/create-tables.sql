@@ -188,9 +188,13 @@ CREATE TABLE IF NOT EXISTS standings (
     lose            INTEGER,
     goals_for       INTEGER,
     goals_against   INTEGER,
-    updated_at      TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (league_id, season, team_id)
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
+-- Cheie unică group-aware: o echipă poate apărea în grupa ei ȘI în „Ranking of
+-- third-placed teams" (CM). NULL group_name → '' (ligile fără grupe rămân unice).
+-- Vezi scripts/migrations/fix-standings-group-unique.sql (aplicat la boot pe DB-uri existente).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_standings_uniq_group
+  ON standings (league_id, season, team_id, COALESCE(group_name, ''));
 
 -- ── 9. form_stats ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS form_stats (

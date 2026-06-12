@@ -3316,14 +3316,15 @@ var WC_ISO2 = {
   // CONCACAF
   'usa':'us','united states':'us','canada':'ca','mexico':'mx','costa rica':'cr',
   'panama':'pa','jamaica':'jm','honduras':'hn','el salvador':'sv','guatemala':'gt',
-  'haiti':'ht','trinidad and tobago':'tt','curacao':'cw',
+  'haiti':'ht','trinidad and tobago':'tt','curacao':'cw','curaçao':'cw',
   // UEFA
   'france':'fr','spain':'es','england':'gb-eng','germany':'de','portugal':'pt',
   'netherlands':'nl','italy':'it','belgium':'be','croatia':'hr','denmark':'dk',
   'switzerland':'ch','poland':'pl','serbia':'rs','wales':'gb-wls','scotland':'gb-sct',
-  'austria':'at','ukraine':'ua','sweden':'se','turkey':'tr','norway':'no',
+  'austria':'at','ukraine':'ua','sweden':'se','turkey':'tr','türkiye':'tr','turkiye':'tr','norway':'no',
   'czech republic':'cz','czechia':'cz','hungary':'hu','romania':'ro','greece':'gr',
   'slovakia':'sk','slovenia':'si','republic of ireland':'ie','ireland':'ie','albania':'al',
+  'bosnia and herzegovina':'ba','bosnia & herzegovina':'ba','bosnia':'ba',
   // CAF
   'morocco':'ma','senegal':'sn','tunisia':'tn','algeria':'dz','egypt':'eg',
   'nigeria':'ng','ghana':'gh','cameroon':'cm','ivory coast':'ci',"cote d'ivoire":'ci',
@@ -3533,24 +3534,47 @@ function wcRenderMatches(d){
 
 function wcRenderGroups(d){
   var body=document.getElementById('wc-body');
-  var groups=d.groups||[];
-  if(!groups.length){ body.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-t">Grupe indisponibile</div><div class="empty-s">Clasamentul pe grupe nu e încă în baza de date</div></div>'; return; }
+  var allGroups=d.groups||[];
+  // Separă grupele normale (Group A..L) de clasamentul „Ranking of third-placed teams".
+  var isThird=function(n){return /third|ranking/i.test(n||'');};
+  var groups=allGroups.filter(function(g){return !isThird(g.name);});
+  var third=allGroups.filter(function(g){return isThird(g.name);});
+  if(!groups.length && !third.length){ body.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-t">Grupe indisponibile</div><div class="empty-s">Clasamentul pe grupe nu e încă în baza de date</div></div>'; return; }
+  // NU se deduplică după team_id — fiecare rând din grupă se randează ca atare (4/grupă).
+  var cell=function(r){
+    var logo=wcFlag(r.teamLogo,r.teamName,16)+' ';
+    return '<td>'+r.played+'</td><td>'+r.win+'</td><td>'+r.draw+'</td><td>'+r.lose+'</td>'
+      +'<td style="color:'+(Number(r.goalsDiff)>=0?'#22c55e':'#ef4444')+'">'+(Number(r.goalsDiff)>0?'+':'')+r.goalsDiff+'</td>'
+      +'<td style="font-weight:800;color:var(--ac)">'+r.points+'</td></tr>';
+  };
+  var thead='<thead><tr><th>#</th><th class="tn">Echipă</th><th>J</th><th>V</th><th>E</th><th>Î</th><th>GD</th><th style="color:var(--ac)">Pct</th></tr></thead><tbody>';
   var out='';
   groups.forEach(function(g){
     out+='<div class="md-section"><div class="md-section-title" style="color:var(--gold)">'+htmlEsc(g.name)+'</div>';
-    out+='<div style="overflow-x:auto"><table class="standings-tbl"><thead><tr><th>#</th><th class="tn">Echipă</th><th>J</th><th>V</th><th>E</th><th>Î</th><th>GD</th><th style="color:var(--ac)">Pct</th></tr></thead><tbody>';
+    out+='<div style="overflow-x:auto"><table class="standings-tbl">'+thead;
     g.rows.forEach(function(r){
       var qual=(r.rank<=2)?'srow-home':'';
-      var logo=wcFlag(r.teamLogo,r.teamName,16)+' ';
-      out+='<tr class="'+qual+'">';
-      out+='<td style="color:var(--mu)">'+r.rank+'</td>';
-      out+='<td class="tn" style="'+(r.rank<=2?'font-weight:800;':'')+'">'+logo+htmlEsc(r.teamName||'')+'</td>';
-      out+='<td>'+r.played+'</td><td>'+r.win+'</td><td>'+r.draw+'</td><td>'+r.lose+'</td>';
-      out+='<td style="color:'+(Number(r.goalsDiff)>=0?'#22c55e':'#ef4444')+'">'+(Number(r.goalsDiff)>0?'+':'')+r.goalsDiff+'</td>';
-      out+='<td style="font-weight:800;color:var(--ac)">'+r.points+'</td></tr>';
+      out+='<tr class="'+qual+'"><td style="color:var(--mu)">'+r.rank+'</td>';
+      out+='<td class="tn" style="'+(r.rank<=2?'font-weight:800;':'')+'">'+wcFlag(r.teamLogo,r.teamName,16)+' '+htmlEsc(r.teamName||'')+'</td>';
+      out+=cell(r);
     });
     out+='</tbody></table></div>';
     out+='<div style="font-size:10px;color:var(--mu);margin-top:6px"><span style="display:inline-block;width:10px;height:10px;background:rgba(34,197,94,.3);border-radius:2px;margin-right:4px"></span>Primele 2 — calificare</div>';
+    out+='</div>';
+  });
+  // BONUS: tabel separat „LOCURILE 3" — primele 8 (verde) se califică în faza eliminatorie.
+  third.forEach(function(g){
+    var rows=(g.rows||[]).slice().sort(function(a,b){return (a.rank||99)-(b.rank||99);});
+    out+='<div class="md-section"><div class="md-section-title" style="color:var(--gold)">🥉 LOCURILE 3</div>';
+    out+='<div style="overflow-x:auto"><table class="standings-tbl">'+thead;
+    rows.forEach(function(r,i){
+      var passes=(i<8);   // primele 8 locuri 3 se califică
+      out+='<tr class="'+(passes?'srow-home':'')+'"><td style="color:'+(passes?'#22c55e':'var(--mu)')+';font-weight:'+(passes?800:400)+'">'+(i+1)+'</td>';
+      out+='<td class="tn" style="'+(passes?'font-weight:800;':'')+'">'+wcFlag(r.teamLogo,r.teamName,16)+' '+htmlEsc(r.teamName||'')+'</td>';
+      out+=cell(r);
+    });
+    out+='</tbody></table></div>';
+    out+='<div style="font-size:10px;color:var(--mu);margin-top:6px"><span style="display:inline-block;width:10px;height:10px;background:rgba(34,197,94,.3);border-radius:2px;margin-right:4px"></span>Primele 8 — calificare în faza eliminatorie</div>';
     out+='</div>';
   });
   body.innerHTML=out;
