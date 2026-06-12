@@ -164,6 +164,11 @@ def reliability(y, p):
     return out
 
 
+def _f3(v):
+    """Format procentual None-safe: număr → '0.xxx', altfel '—' (bucket gol)."""
+    return ("%.3f" % v) if isinstance(v, (int, float)) else "  —  "
+
+
 # Calibrare 1 piață binară. X cronologic, y binar (poate conține NaN → eliminat).
 def calibrate_binary(X, y):
     X = np.asarray(X, dtype=np.float64)
@@ -358,11 +363,11 @@ def _print_mc(mc):
         R("\n── Reliability per CLASĂ — %s ──" % key)
         for s in meta["classes"]:
             R("  clasă '%s':   bucket   pred_b   real_b   pred_a   real_a    n" % s)
-            for (lo, hi, pb, rb, n), (_, _, pa, ra, _n2) in zip(meta["rel_before"][s], meta["rel_after"][s]):
-                if not n:
-                    R("    %.0f-%.0f      —        —        —        —        0" % (lo * 100, hi * 100)); continue
-                R("    %.0f-%.0f      %.3f    %.3f    %.3f    %.3f    %d" %
-                  (lo * 100, hi * 100, pb, rb, pa, ra, n))
+            for (lo, hi, pb, rb, nb), (_, _, pa, ra, na) in zip(meta["rel_before"][s], meta["rel_after"][s]):
+                if not nb and not na:
+                    continue   # bucket complet gol → sărit (evită None la formatare)
+                R("    %.0f-%.0f      %-7s  %-7s  %-7s  %-7s  %d" %
+                  (lo * 100, hi * 100, _f3(pb), _f3(rb), _f3(pa), _f3(ra), nb or na or 0))
 
 
 def _print_example(examples):
@@ -373,11 +378,11 @@ def _print_example(examples):
     for name, key, desc, meta in examples:
         R("  %s · %s (%s)  Brier %.5f → %.5f" % (name, key, desc, meta["brier_raw"], meta["brier_cal"]))
         R("    bucket    pred_before  real_before  pred_after  real_after   n")
-        for (lo, hi, pb, rb, n), (_, _, pa, ra, _n2) in zip(meta["rel_before"], meta["rel_after"]):
-            if not n:
-                R("    %.0f-%.0f       —            —            —           —          0" % (lo * 100, hi * 100)); continue
-            R("    %.0f-%.0f       %.3f        %.3f        %.3f       %.3f       %d" %
-              (lo * 100, hi * 100, pb, rb, pa, ra, n))
+        for (lo, hi, pb, rb, nb), (_, _, pa, ra, na) in zip(meta["rel_before"], meta["rel_after"]):
+            if not nb and not na:
+                continue   # bucket complet gol (înainte ȘI după) → sărit
+            R("    %.0f-%.0f       %-7s      %-7s      %-7s     %-7s    %d" %
+              (lo * 100, hi * 100, _f3(pb), _f3(rb), _f3(pa), _f3(ra), nb or na or 0))
 
 
 def main():
