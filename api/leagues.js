@@ -102,7 +102,8 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   285,   // Cupa României
 
   // Greece
-  551,   // Super League 1
+  197,   // Super League 1 (Tier 1 — corectat din fals „Algeria")
+  198,   // Football League / Super League 2 (Liga 2 — corectat din fals „Algeria")
   556,   // Greek Cup
 
   // Hungary
@@ -143,17 +144,19 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   71,    // Serie A
   72,    // Serie B (Liga 2)
   73,    // Copa do Brasil
-  8077,  // Catarinense 2 (Santa Catarina — divizia a 2-a de stat)
-  682,   // Carioca A2 (Rio de Janeiro — divizia a 2-a de stat)
-  // IDs de VERIFICAT pe VPS (GET /api/health-check?action=leagues&country=Brazil&name=...):
-  // Copa Sul-Sudeste    → ?action=leagues&country=Brazil&name=Sul-Sudeste
-  // Copa FGF            → ?action=leagues&country=Brazil&name=FGF
-  // Copa Centro-Oeste   → ?action=leagues&country=Brazil&name=Centro-Oeste
+  75,    // Serie C
+  76,    // Serie D
+  612,   // Copa do Nordeste
 
   // Argentina
-  128,   // Primera Division
+  128,   // Liga Profesional (Primera Division)
   131,   // Primera Nacional (Liga 2)
-  132,   // Copa Argentina
+  129,   // Primera Nacional — DE CONFIRMAT la audit (posibil duplicat 131)
+  130,   // Copa Argentina (corectat din fals „Primera B Metropolitana")
+  132,   // DE CONFIRMAT la audit (era etichetat „Copa Argentina" — coliziune cu 130)
+  134,   // Torneo Federal A (tier 3) // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
+  906,   // DE CONFIRMAT la audit // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
+  1032,  // DE CONFIRMAT la audit
 
   // Mexico
   262,   // Liga MX
@@ -170,6 +173,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   265,   // Primera Division
   266,   // Primera B (Liga 2)
   267,   // Copa Chile
+  711,   // DE CONFIRMAT la audit // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
 
   // Uruguay
   268,   // Primera Division
@@ -181,13 +185,15 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   282,   // Liga 2
 
   // Ecuador
-  242,   // LigaPro Primera A (Liga 1)
-  917,   // Copa Ecuador (ID corect; 735 era greșit → scos)
+  242,   // LigaPro Serie A (Liga 1)
+  917,   // Copa Ecuador
+  243,   // LigaPro Serie B — DE CONFIRMAT la audit
 
   // Paraguay
-  278,   // Primera Division
-  279,   // Division Intermedia (Liga 2)
-  280,   // Copa Paraguay
+  250,   // Primera Division — Apertura (corectat din fals „Malaysia")
+  252,   // Primera Division — Clausura
+  251,   // Division Intermedia (Liga 2)
+  501,   // DE CONFIRMAT la audit
 
   // Bolivia
   273,   // Primera Division
@@ -277,6 +283,12 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Uzbekistan
   335,   // Super League
 
+  // Malaysia
+  278,   // Super League (corectat din fals „Paraguay")
+  279,   // Premier League (corectat din fals „Paraguay")
+  519,   // DE CONFIRMAT la audit
+  520,   // DE CONFIRMAT la audit
+
   // Australia
   188,   // A-League Men
   189,   // Australia Cup
@@ -285,10 +297,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   323,   // ISL (Indian Super League)
   324,   // I-League (Liga 2)
   325,   // Durand Cup
-
-  // Malaysia
-  519,   // Premier League (Liga 2)
-  520,   // Malaysia Cup
 
   // Indonesia
   274,   // Liga 1 (Tier 1)
@@ -343,8 +351,8 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   378,   // Coupe de Tunisie
 
   // Algeria
-  197,   // Ligue Professionnelle 1
-  198,   // Ligue Professionnelle 2 (Liga 2)
+  186,   // Ligue Professionnelle 1 (Tier 1 — Algeria reală)
+  187,   // Ligue Professionnelle 2 (Liga 2 — Algeria reală)
   199,   // Coupe d'Algérie
 
   // South Africa
@@ -386,41 +394,4 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   9,     // Copa America
   10,    // CONCACAF Champions Cup
   26,    // CONCACAF Nations League
-
-  // ── BATCH SA + Algeria (ID-uri NOI; cele deja prezente NU sunt re-adăugate) ──
-  // Brazilia
-  75,    // Serie C
-  76,    // Serie D
-  612,   // Copa do Nordeste
-  // Uruguay
-  930,   // (competiție Uruguay)
-  // Paraguay
-  250,   // Primera Division
-  252,   // (Paraguay)
-  251,   // (Paraguay)
-  501,   // (Paraguay)
-  // Bolivia
-  710,   // (Bolivia)
-  964,   // (Bolivia)
-  // Ecuador
-  243,   // (Ecuador)
-  // Chile
-  711,   // (Chile)
-  // Argentina
-  129,   // Primera B Nacional
-  130,   // Primera B Metropolitana
-  134,   // (Argentina)
-  517,   // (Argentina)
-  810,   // (Argentina)
-  906,   // (Argentina)
-  1032,  // (Argentina)
-  1067,  // (Argentina)
-  1178,  // (Argentina)
-  // Algeria
-  186,   // Ligue 1
-  187,   // Ligue 2
-  514,   // (Algeria)
-  516,   // (Algeria)
-  832,   // (Algeria)
-  1224,  // Copa Sul-Sudeste (Brazilia)
 ]);
