@@ -27,6 +27,24 @@ function tLogo(team,sz){ if(!team) return teamLogo(null,'',0,sz); return teamLog
 // [P06] Formator procent uniform (ca pc() din tabul ML): valoare invalidă → "—",
 // NICIODATĂ NaN/undefined/0% fals. Folosit oriunde un câmp posibil-null ajunge în UI.
 function pctTxt(v){ var n=Number(v); return Number.isFinite(n)?Math.round(n)+'%':'—'; }
+// ── RÂND DE MECI UNIFICAT (3 coloane). home/away: {flag:'<html steag>', name:'text-escapat'}.
+// center: HTML (folosește mrTime/mrScore). Geometrie unică pe toate cardurile de meci.
+function mrRow(home,away,center){
+  home=home||{}; away=away||{};
+  return '<div class="match-row">'
+    +'<div class="mr-team mr-home"><span class="mr-name">'+(home.name||'—')+'</span>'+(home.flag||'')+'</div>'
+    +'<div class="mr-center">'+(center||'')+'</div>'
+    +'<div class="mr-team mr-away">'+(away.flag||'')+'<span class="mr-name">'+(away.name||'—')+'</span></div>'
+    +'</div>';
+}
+function mrTime(txt){ return '<span class="mr-time">'+(txt||'—')+'</span>'; }
+function mrScore(hg,ag,sub,subColor){
+  var hn=Number(hg), an=Number(ag);
+  var hw=Number.isFinite(hn)&&Number.isFinite(an)&&hn>an;
+  var aw=Number.isFinite(hn)&&Number.isFinite(an)&&an>hn;
+  var s=sub?('<div class="mr-sub" style="color:'+(subColor||'var(--mu)')+'">'+sub+'</div>'):'';
+  return s+'<span class="mr-score"><span'+(hw?' class="w"':'')+'>'+(hg!=null?hg:'-')+'</span> - <span'+(aw?' class="w"':'')+'>'+(ag!=null?ag:'-')+'</span></span>';
+}
 // ── CONFIG ──────────────────────────────────────────────────
 var CFG={MC:80,MD:20,RI:30000};
 var WR_KEY='alohascan_wr_v2';

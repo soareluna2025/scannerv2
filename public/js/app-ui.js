@@ -204,8 +204,11 @@ function buildCardHtml(m,lgName){
   o+='<div class="card-minute">'+(_b.dot?'<div class="min-dot" style="background:'+_b.c+'"></div>':'')+'<div class="min-val" style="color:'+_b.c+'">'+_b.t+'</div></div>';
   o+='</div>';
   o+='<div class="card-teams">';
-  o+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+(m.teams&&m.teams.home&&m.teams.home.name||'—')+(hRed?' 🟥':'')+'</span></div><div class="team-score'+(hWin?' winning':'')+'">'+hg+'</div></div>';
-  o+='<div class="team-row"><div class="team-name">'+tLogo(m.teams&&m.teams.away,32)+'<span>'+(m.teams&&m.teams.away&&m.teams.away.name||'—')+(aRed?' 🟥':'')+'</span></div><div class="team-score'+(aWin?' winning':'')+'">'+ag+'</div></div>';
+  o+=mrRow(
+    {flag:tLogo(m.teams&&m.teams.home,32), name:htmlEsc((m.teams&&m.teams.home&&m.teams.home.name)||'—')+(hRed?' 🟥':'')},
+    {flag:tLogo(m.teams&&m.teams.away,32), name:htmlEsc((m.teams&&m.teams.away&&m.teams.away.name)||'—')+(aRed?' 🟥':'')},
+    mrScore(hg,ag)
+  );
   o+='</div>';
   o+='<div class="card-footer">';
   o+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
@@ -749,7 +752,11 @@ function renderPM(){
     o+='<div class="pm-card" onclick="mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer;position:relative">';
     o+='<div class="pm-header">';
     o+='<div class="pm-kickoff"><button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>'+flag+lg+' · '+matchStatusLabel(m)+'</div>';
-    o+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu);font-size:13px;font-weight:600">vs</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div>';
+    o+=mrRow(
+      {flag:tLogo(m.teams&&m.teams.home,32), name:htmlEsc(hn)},
+      {flag:tLogo(m.teams&&m.teams.away,32), name:htmlEsc(an)},
+      mrTime(kickoff)
+    );
     o+='</div>';
     if(enr){
       o+='<div class="pm-body">';
@@ -2829,11 +2836,7 @@ function buildH2HMatchDetail(h, idx){
   // HEADER (mereu vizibil) — clickabil DOAR dacă există body de expandat.
   o+='<div class="h2h-match-header'+(hasBody?'':' static')+(isOpen?' expanded':'')+'"'+(hasBody?(' onclick="toggleH2H(\''+domId+'\')"'):'')+'>';
   o+='<div style="flex:1;min-width:0">';
-  o+='<div class="h2h-score-header">';
-  o+='<span class="h2h-team-n" style="text-align:right">'+htmlEsc(hName)+'</span>';
-  o+='<span class="h2h-score-c"><span style="color:'+hc+'">'+(hg!=null?hg:'-')+'</span> - <span style="color:'+ac+'">'+(ag!=null?ag:'-')+'</span></span>';
-  o+='<span class="h2h-team-n" style="text-align:left">'+htmlEsc(aName)+'</span>';
-  o+='</div>';
+  o+=mrRow({name:htmlEsc(hName)},{name:htmlEsc(aName)},mrScore(hg,ag));
   o+='<div class="h2h-sub">'+subTxt+'</div>';
   o+='</div>';
   if(hasBody)o+='<span class="h2h-chevron">▼</span>';
@@ -3501,23 +3504,21 @@ function wcRenderMatches(d){
     var grp=m.round||'Cupa Mondială';
     var kickoff=m.matchDate?new Date(m.matchDate).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
     var wcDone={FT:1,AET:1,PEN:1}, isDone=!!wcDone[m.status];
-    var liveTxt=m.live?'<span style="color:var(--red);font-weight:700">● LIVE'+(m.ng!=null?(' '+m.ng+'%'):'')+'</span>':(isDone?'<span style="color:var(--mu);font-weight:700">✓ FINAL</span>':('🕐 '+kickoff));
+    // Centrul rândului de meci, în funcție de stare: FT → scor final + „✓ FINAL"; live → scor
+    // + „● LIVE"; NS → ora. Câștigătorul evidențiat verde (mrScore .w). [FT BUG: 1538999]
+    var wcCenter = isDone
+      ? mrScore(m.homeGoals,m.awayGoals,'✓ FINAL'+(m.status!=='FT'?(' · '+htmlEsc(m.status)):''),'var(--mu)')
+      : (m.live
+          ? mrScore(m.homeGoals,m.awayGoals,'● LIVE'+(m.ng!=null?(' '+m.ng+'%'):''),'var(--red)')
+          : mrTime(kickoff));
     out+='<div class="pm-card" onclick="wcClose();mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer;position:relative">';
     out+='<div class="pm-header">';
-    out+='<div class="pm-kickoff">'+htmlEsc(grp)+' · '+liveTxt+'</div>';
-    out+='<div class="pm-teams">'+wcFlag(m.homeLogo,hn,32)+'<span>'+htmlEsc(hn)+'</span><span style="color:var(--mu);font-size:13px;font-weight:600">vs</span>'+wcFlag(m.awayLogo,an,32)+'<span>'+htmlEsc(an)+'</span></div>';
+    out+='<div class="pm-kickoff">'+htmlEsc(grp)+'</div>';
+    out+=mrRow({flag:wcFlag(m.homeLogo,hn,32),name:htmlEsc(hn)},{flag:wcFlag(m.awayLogo,an,32),name:htmlEsc(an)},wcCenter);
     out+='</div>';
     var hasPred=(m.over15!=null)||(m.gg!=null)||(m.confidence!=null);
     if(isDone){
-      // [FT BUG] Meci terminat → SCOR FINAL color-codat (câștigătorul verde), NU bare de
-      // predicție pre-meci. Acoperă fixture-uri ca 1538999 (Korea 2-1 Czech, FT).
-      var fhg=(m.homeGoals!=null)?m.homeGoals:'-', fag=(m.awayGoals!=null)?m.awayGoals:'-';
-      out+='<div class="pm-body" style="display:flex;align-items:center;justify-content:center;gap:14px;padding:12px 0">'
-        +'<span style="font-size:10px;font-weight:800;color:var(--mu);letter-spacing:.5px">FINAL'+(m.status!=='FT'?(' · '+htmlEsc(m.status)):'')+'</span>'
-        +'<span style="font-size:22px;font-weight:900;color:'+((Number(m.homeGoals)>Number(m.awayGoals))?'#22c55e':'var(--tx)')+'">'+fhg+'</span>'
-        +'<span style="color:var(--mu);font-weight:700">-</span>'
-        +'<span style="font-size:22px;font-weight:900;color:'+((Number(m.awayGoals)>Number(m.homeGoals))?'#22c55e':'var(--tx)')+'">'+fag+'</span>'
-        +'</div>';
+      // Scorul final e deja în rândul de meci (mr-center) → fără corp de predicții.
     }else if(hasPred){
       out+='<div class="pm-body">';
       if(m.over15!=null)out+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(m.over15||0,100)+'%;background:'+ec(m.over15)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(m.over15)+'">'+Math.round(m.over15||0)+'%</div></div>';
@@ -3613,12 +3614,10 @@ function wcRenderBracket(d){
     out+='<div class="wc-br-round"><div class="md-section-title" style="color:var(--gold)">'+htmlEsc(rnd.round)+'</div>';
     rnd.matches.forEach(function(m){
       var sc=(m.homeGoals!=null&&m.awayGoals!=null)?(m.homeGoals+'-'+m.awayGoals):'–';
-      var hf=m.tbd?'':wcFlag(m.homeLogo,m.home,16)+' ';
-      var af=m.tbd?'':' '+wcFlag(m.awayLogo,m.away,16);
+      var hf=m.tbd?'':wcFlag(m.homeLogo,m.home,16);
+      var af=m.tbd?'':wcFlag(m.awayLogo,m.away,16);
       out+='<div class="wc-br-row'+(m.tbd?' tbd':'')+'">';
-      out+='<span class="wc-br-team">'+hf+htmlEsc(m.home||'TBD')+'</span>';
-      out+='<span class="wc-br-score">'+sc+'</span>';
-      out+='<span class="wc-br-team" style="text-align:right">'+htmlEsc(m.away||'TBD')+af+'</span>';
+      out+=mrRow({flag:hf,name:htmlEsc(m.home||'TBD')},{flag:af,name:htmlEsc(m.away||'TBD')},'<span class="mr-score" style="font-size:15px">'+sc+'</span>');
       out+='</div>';
     });
     out+='</div>';
@@ -3691,12 +3690,8 @@ async function wcRenderQualifiers(){
           var dt=m.match_date?new Date(m.match_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
           var sc=(m.home_goals!=null&&m.away_goals!=null)?(m.home_goals+'-'+m.away_goals):'–';
           out+='<div onclick="wcShowMatchDetail('+m.fixture_id+')" style="cursor:pointer;padding:6px 4px;border-bottom:1px solid var(--bd)">';
-          out+='<div style="display:flex;align-items:center;gap:6px;font-size:12px">';
-          out+='<span style="color:var(--mu);font-size:10px;min-width:62px">'+dt+'</span>';
-          out+='<span style="flex:1;text-align:right">'+htmlEsc(m.home_team_name||'')+' '+wcFlag(null,m.home_team_name,14)+'</span>';
-          out+='<span style="font-weight:800;min-width:34px;text-align:center">'+sc+'</span>';
-          out+='<span style="flex:1">'+wcFlag(null,m.away_team_name,14)+' '+htmlEsc(m.away_team_name||'')+'</span>';
-          out+='</div>';
+          out+='<div style="font-size:10px;color:var(--mu);margin-bottom:3px">'+dt+'</div>';
+          out+=mrRow({flag:wcFlag(null,m.home_team_name,14),name:htmlEsc(m.home_team_name||'')},{flag:wcFlag(null,m.away_team_name,14),name:htmlEsc(m.away_team_name||'')},'<span class="mr-score" style="font-size:14px">'+sc+'</span>');
           if((m.events||[]).length){
             var ev=m.events.map(function(e){
               var nm=(e.player_name||'').trim();var sh=nm.split(' ').slice(-1)[0]||nm;
@@ -3773,9 +3768,7 @@ function wcShowMatchDetail(fid){
   var html='<div class="wc-match-modal-content">';
   html+='<button class="wc-match-modal-close" onclick="wcCloseMatchDetail()">←</button>';
   html+='<div class="wc-match-modal-header">';
-  html+='<div class="wc-mm-team">'+wcFlag(null,hn,26)+'<span>'+htmlEsc(hn)+'</span></div>';
-  html+='<div class="wc-mm-score">'+sc+'</div>';
-  html+='<div class="wc-mm-team">'+wcFlag(null,an,26)+'<span>'+htmlEsc(an)+'</span></div>';
+  html+=mrRow({flag:wcFlag(null,hn,26),name:htmlEsc(hn)},{flag:wcFlag(null,an,26),name:htmlEsc(an)},'<span class="mr-score" style="font-size:22px">'+sc+'</span>');
   html+='</div>';
   if(sub)html+='<div class="wc-mm-sub">'+htmlEsc(sub)+'</div>';
 
