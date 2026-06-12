@@ -1075,7 +1075,8 @@ router.post('/db-cleanup', async (req, res) => {
       'predictions':              { col: 'created_at', label: 'Predictii' },
       'cron_logs':                { col: 'ran_at',     label: 'Logs cron' },
       'alerts':                   { col: 'sent_at',    label: 'Alerte' },
-      'live_stats':               { col: 'recorded_at',label: 'Stats live' },
+      // [ARHIVARE] live_stats EXCLUS din cleanup: sursa UNICĂ de date de momentum (exp. #3a) →
+      // trebuie să acumuleze PERMANENT, fără ștergere. NU adăuga înapoi.
       'prematch_enrichment_log':  { col: 'executed_at',label: 'Log prematch' },
     };
     if (!ALLOWED[table]) {
@@ -1268,7 +1269,7 @@ router.get('/db-cleanup-preview', async (req, res) => {
       'predictions': 'created_at',
       'cron_logs': 'ran_at',
       'alerts': 'sent_at',
-      'live_stats': 'recorded_at',
+      // live_stats EXCLUS din cleanup/preview (arhivare permanentă — vezi db-cleanup).
       'prematch_enrichment_log': 'executed_at',
     };
     const preview = {};

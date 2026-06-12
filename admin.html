@@ -2467,7 +2467,7 @@ async function loadDbCleanupPreview() {
       h += '</tr>';
     });
     h += '</tbody></table>';
-    h += '<div style="font-size:10px;color:var(--mu);margin-top:10px;padding:8px;background:rgba(99,102,241,.05);border-left:2px solid #6366f1;border-radius:4px;line-height:1.4">💡 <b>Recomandare</b>: pastreaza ultimele 90 zile pentru cron_logs si live_stats. Predictions le pastreaza 180+ zile (folosite pentru calibrare).</div>';
+    h += '<div style="font-size:10px;color:var(--mu);margin-top:10px;padding:8px;background:rgba(99,102,241,.05);border-left:2px solid #6366f1;border-radius:4px;line-height:1.4">💡 <b>Recomandare</b>: pastreaza ultimele 90 zile pentru cron_logs. Predictions le pastreaza 180+ zile (calibrare). <b>live_stats NU se sterge</b> — arhiva de date de momentum (acumulare permanenta).</div>';
     el.innerHTML = h;
   } catch (e) {
     el.innerHTML = '<div style="color:#ef4444;padding:10px;font-size:12px">Eroare: ' + e.message + '</div>';

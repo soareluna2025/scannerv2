@@ -205,6 +205,15 @@ async function ensureColumns() {
   } catch (e) {
     console.error('[columns] ensureColumns (standings-group):', e.message);
   }
+  // [ARHIVARE] live_stats.created_at (idempotent) — măsurarea acumulării în timp.
+  try {
+    const { readFileSync } = await import('fs');
+    const sql = readFileSync(join(__dirname, 'scripts', 'migrations', 'add-live-stats-created.sql'), 'utf8');
+    await query(sql);
+    console.log('[columns] add-live-stats-created.sql aplicat (idempotent)');
+  } catch (e) {
+    console.error('[columns] ensureColumns (live-stats-created):', e.message);
+  }
 }
 
 const httpServer = app.listen(PORT, '0.0.0.0', async () => {

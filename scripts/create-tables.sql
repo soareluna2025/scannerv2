@@ -95,8 +95,10 @@ CREATE TABLE IF NOT EXISTS live_stats (
     away_xg         NUMERIC(5,2),
     ngp_home        NUMERIC(5,2),
     ngp_away        NUMERIC(5,2),
-    recorded_at     TIMESTAMPTZ DEFAULT NOW()
+    recorded_at     TIMESTAMPTZ DEFAULT NOW(),
+    created_at      TIMESTAMPTZ DEFAULT NOW()
 );
+-- live_stats = ARHIVĂ permanentă (sursa de date de momentum) — EXCLUS din orice cleanup/retenție.
 CREATE INDEX IF NOT EXISTS idx_live_stats_fixture ON live_stats(fixture_id);
 CREATE INDEX IF NOT EXISTS idx_live_stats_recorded ON live_stats(recorded_at);
 
