@@ -53,7 +53,7 @@ export default async function handler(req, res) {
             WHERE fixture_id = f.fixture_id ORDER BY recorded_at DESC LIMIT 1
          ) ls ON TRUE
         WHERE f.league_id = $1 AND (f.season = $2 OR f.season IS NULL)
-        ORDER BY f.match_date ASC
+        ORDER BY f.match_date ASC NULLS LAST, f.fixture_id ASC
         LIMIT 200`,
       [WC_LEAGUE, WC_SEASON]
     ).catch(() => ({ rows: [] }));

@@ -280,6 +280,10 @@ function calcPoisson(hGames, aGames, h2h, hId, aId, lgHome = 1.2, lgAway = 1.2) 
     awayAvgScored: r2(awayAvgScored), awayAvgConceded: r2(awayAvgConceded),
     awayScoreRate: pct(aGames, m => ((m.teams?.away?.id === aId ? m.goals?.away : m.goals?.home) ?? 0) > 0),
     lambdaHome: r2(lambdaHome), lambdaAway: r2(lambdaAway), lambdaTotal: r2(lambdaTotal),
+    // [P26] SURSĂ UNICĂ de afișare = /api/enrich (Maher+shrinkage+Dixon-Coles). Aceste câmpuri
+    // Poisson „simple" (medie λ) rămân DOAR input intern pt predictAllMarkets / fallback —
+    // frontend-ul citește exclusiv enrich (_mdEnMerged → d.enrich), nu aceste valori. NU le
+    // folosi pentru afișare directă: ar contrazice enrich pe ecran.
     over15Prob: matrix.over15Prob, over25Prob: matrix.over25Prob, ggProb: matrix.ggProb,
     homeWin: matrix.homeWin, draw: matrix.draw, awayWin: matrix.awayWin,
     // BUG #11 FIX: fallback la matrix.over15Prob/ggProb când pct() returnează null (sample <5)

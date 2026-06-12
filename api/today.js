@@ -62,7 +62,7 @@ export default async function handler(req, res) {
       const { rows } = await query(`
         SELECT
           p.fixture_id,
-          ROUND(p.over15_prob * 0.40 + p.gg_prob * 0.30 + COALESCE(p.confidence, 50) * 0.30, 1)
+          ROUND(p.over15_prob * 0.40 + p.gg_prob * 0.30 + COALESCE(p.confidence, 0) * 0.30, 1)
             AS composite_score,
           p.over15_prob  AS over15_score,
           p.gg_prob      AS gg_score,
@@ -76,7 +76,7 @@ export default async function handler(req, res) {
         WHERE p.match_date > NOW()
           AND p.match_date < NOW() + INTERVAL '3 days'
           AND p.result_over15 IS NULL
-        ORDER BY (p.over15_prob * 0.40 + p.gg_prob * 0.30 + COALESCE(p.confidence, 50) * 0.30) DESC NULLS LAST
+        ORDER BY (p.over15_prob * 0.40 + p.gg_prob * 0.30 + COALESCE(p.confidence, 0) * 0.30) DESC NULLS LAST
         LIMIT 20
       `).catch(() => ({ rows: [] }));
       return res.status(200).json({ snapshots: rows });
