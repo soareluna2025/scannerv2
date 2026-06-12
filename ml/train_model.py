@@ -258,7 +258,19 @@ ACTUAL_COL = {"y_over15": "over15_prob", "y_over25": "over25_prob",
               "y_btts": "gg_prob", "y_home_win": "home_win_prob"}
 
 
+# ── ZIDUL ANTI-COTE — protecția permanentă a edge-ului ──────────────────────
+# Nicio coloană derivată din cote nu intră NICIODATĂ ca feature în model. Cotele
+# trăiesc EXCLUSIV în stratul de decizie (EV) și ca benchmark CLV. Oprește antrenarea.
+_ODDS_TERMS = ("odd", "odds", "cota", "price", "implied", "book", "bet365", "pinnacle")
+def assert_no_odds(feature_names):
+    bad = [f for f in feature_names if any(t in str(f).lower() for t in _ODDS_TERMS)]
+    if bad:
+        raise SystemExit("❌ ZIDUL ANTI-COTE: feature(uri) derivate din cote interzise: "
+                         + ", ".join(bad) + ". Cotele NU intră în model — doar în stratul EV.")
+
+
 def main():
+    assert_no_odds(FEATURES_PREMATCH + FEATURES_HT)   # ZIDUL ANTI-COTE
     conn = get_conn()
     df = pd.read_sql(QUERY, conn)
     conn.close()

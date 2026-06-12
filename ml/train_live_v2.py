@@ -648,8 +648,18 @@ def _train_half(half_name, X, fid, labels, markets_h, n, final):
             final[mkey] = model
 
 
+# ── ZIDUL ANTI-COTE — protecția permanentă a edge-ului (vezi train_model.py) ──
+_ODDS_TERMS = ("odd", "odds", "cota", "price", "implied", "book", "bet365", "pinnacle")
+def assert_no_odds(feature_names):
+    bad = [f for f in feature_names if any(t in str(f).lower() for t in _ODDS_TERMS)]
+    if bad:
+        raise SystemExit("❌ ZIDUL ANTI-COTE: feature(uri) derivate din cote interzise: "
+                         + ", ".join(bad) + ". Cotele NU intră în model — doar în stratul EV.")
+
+
 def main():
     print("AlohaScan — antrenare model LIVE (minut-cu-minut)\n")
+    assert_no_odds(FEATURES)   # ZIDUL ANTI-COTE — oprește dacă vreun feature derivă din cote
     conn = get_conn()
 
     # Feature map (25 pre-meci) + mediane + flags coverage — memorie mică (per-fixture).

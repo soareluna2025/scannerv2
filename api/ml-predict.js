@@ -49,6 +49,47 @@ function loadLiveModel() {
   return _liveModel;
 }
 
+// ── STRAT DE CALIBRARE (ml/calibrate.py → calibration_export.json / *_live_export.json) ──
+// Mapare monotonă prob_model→prob_reală per piață, aplicată la TOATE probabilitățile.
+// Interpolare LINIARĂ MONOTONĂ peste breakpoints (x→y), clamp [0.01,0.99]. Fișier lipsă →
+// IDENTITATE silențioasă (aplicația NU cade din cauza calibrării). Reîncărcare pe mtime.
+const CALIB_PATH = path.join(__dirname, '..', 'ml', 'calibration_export.json');
+const CALIB_LIVE_PATH = path.join(__dirname, '..', 'ml', 'calibration_live_export.json');
+let _calib = null, _calibTs = 0, _calibAt = 0;
+let _calibLive = null, _calibLiveTs = 0, _calibLiveAt = 0;
+function _loadCalib(p, cur, ts, at) {
+  const now = Date.now();
+  if (now - at < RELOAD_MS) return { v: cur, ts, at };
+  try {
+    const mt = fs.statSync(p).mtimeMs;
+    if (mt !== ts) { cur = JSON.parse(fs.readFileSync(p, 'utf8')); ts = mt; }
+  } catch (_) { cur = null; ts = 0; }
+  return { v: cur, ts, at: now };
+}
+function loadCalib() { const r = _loadCalib(CALIB_PATH, _calib, _calibTs, _calibAt); _calib = r.v; _calibTs = r.ts; _calibAt = r.at; return _calib; }
+function loadCalibLive() { const r = _loadCalib(CALIB_LIVE_PATH, _calibLive, _calibLiveTs, _calibLiveAt); _calibLive = r.v; _calibLiveTs = r.ts; _calibLiveAt = r.at; return _calibLive; }
+
+// Aplică maparea de calibrare unei probabilități în PROCENTE (0-100). table[key] =
+// { calibrated:true, x:[...0..1], y:[...0..1] }. Necalibrată/lipsă → identitate.
+function applyCalibPct(table, key, probPct) {
+  if (probPct == null || !Number.isFinite(probPct)) return probPct;
+  const e = table && table[key];
+  if (!e || !e.calibrated || !Array.isArray(e.x) || !Array.isArray(e.y) || e.x.length < 2) return probPct;
+  const x = e.x, y = e.y, p = Math.max(0, Math.min(1, probPct / 100));
+  let cal;
+  if (p <= x[0]) cal = y[0];
+  else if (p >= x[x.length - 1]) cal = y[y.length - 1];
+  else {
+    let i = 1; while (i < x.length && x[i] < p) i++;
+    const x0 = x[i - 1], x1 = x[i], y0 = y[i - 1], y1 = y[i];
+    const t = (x1 === x0) ? 0 : (p - x0) / (x1 - x0);
+    cal = y0 + t * (y1 - y0);
+  }
+  cal = Math.max(0.01, Math.min(0.99, cal));
+  return Math.round(cal * 100);
+}
+function _isCalibrated(table, key) { return !!(table && table[key] && table[key].calibrated); }
+
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 
 // Construiește harta de features din payload-ul enrich + ELO (+ context live).
@@ -250,6 +291,7 @@ export function predictAllMarkets(enrichData, eloData, liveCtx) {
     const htAvailable = (lc.homeHT != null && lc.awayHT != null);
 
     const markets = {};
+    const calT = loadCalib();   // strat de calibrare pre-meci (identitate dacă lipsește)
     let count = 0, bestBrier = null, trainedOn = null;
     for (const key of Object.keys(models)) {
       try {
@@ -257,7 +299,8 @@ export function predictAllMarkets(enrichData, eloData, liveCtx) {
         const prob = lrProb(m, feat);
         if (prob == null) continue;
         markets[key] = {
-          prob,
+          prob: applyCalibPct(calT, key, prob),   // calibrare aplicată la afișare
+          calibrated: _isCalibrated(calT, key),
           desc: m.description || key,
           brierGb: m.brier_gb ?? null,
           brierActual: m.brier_actual ?? null,
@@ -412,18 +455,21 @@ export function predictLiveMarketsV2(liveState, enrichData, eloData) {
       if (feat[k] == null || !Number.isFinite(feat[k])) feat[k] = med[k];
     }
     const out = {};
+    const calL = loadCalibLive();   // strat de calibrare live (identitate dacă lipsește)
+    const calFlags = {};            // flag per piață: calibrated true/false
     for (const key of Object.keys(lm)) {
       if (key.charCodeAt(0) === 95) continue;   // chei meta (_feature_medians/_coverage)
       const m = lm[key];
       if (!m || !Array.isArray(m.features)) continue;
       if (Array.isArray(m.classes) && m.classes.length > 0) {
-        const probs = lrProbMulti(m, feat);   // piață cu 3 clase
-        if (probs) out[key] = probs;
+        const probs = lrProbMulti(m, feat);   // piață cu 3 clase (necalibrată — pas viitor)
+        if (probs) { out[key] = probs; calFlags[key] = false; }
       } else {
         const p = lrProb(m, feat);             // piață binară (ACELAȘI lrProb)
-        if (p != null) out[key] = p;
+        if (p != null) { out[key] = applyCalibPct(calL, key, p); calFlags[key] = _isCalibrated(calL, key); }
       }
     }
+    out._calibrated = calFlags;   // flag per piață în payload (frontend citește chei specifice, ignoră _*)
     // ── Praguri deja depășite de scorul curent → 100% (NU din model) ──
     const s = liveState || {};
     const hg = Number(s.home_goals) || 0, ag = Number(s.away_goals) || 0, tg = hg + ag;

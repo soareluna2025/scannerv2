@@ -24,9 +24,12 @@ jobs:
             cd /root/scannerv2
 
             # Păstrează artefactele ML (gitignored) peste git reset --hard:
-            # model_export.json (pre-meci) + model_live_export.json (live v2).
+            # model_export.json (pre-meci) + model_live_export.json (live v2) +
+            # straturile de calibrare (calibration_export.json / *_live_export.json).
             cp ml/model_live_export.json /tmp/model_live_export.json.bak 2>/dev/null || true
             cp ml/model_export.json /tmp/model_export.json.bak 2>/dev/null || true
+            cp ml/calibration_export.json /tmp/calibration_export.json.bak 2>/dev/null || true
+            cp ml/calibration_live_export.json /tmp/calibration_live_export.json.bak 2>/dev/null || true
 
             git fetch origin
             git reset --hard origin/main
@@ -34,6 +37,8 @@ jobs:
             # Restaurează artefactele ML după reset (dacă existau înainte).
             cp /tmp/model_live_export.json.bak ml/model_live_export.json 2>/dev/null || true
             cp /tmp/model_export.json.bak ml/model_export.json 2>/dev/null || true
+            cp /tmp/calibration_export.json.bak ml/calibration_export.json 2>/dev/null || true
+            cp /tmp/calibration_live_export.json.bak ml/calibration_live_export.json 2>/dev/null || true
 
             npm install --silent
 
