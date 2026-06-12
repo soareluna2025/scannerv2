@@ -3,6 +3,11 @@
 // cronologic, cu K dinamic. Sursă de adevăr — rulează săptămânal (luni 06:00).
 // NEFOLOSIT în scoring: doar calculează și persistă în elo_ratings.
 //
+// MODURI:
+//   (implicit)        rebuild complet (replay rolling-window-100 din 1500) + backfill predicții.
+//   ?mode=backfill    LIGHT zilnic: NU reface de la zero — pornește din elo_ratings existente,
+//                     aplică DOAR meciurile FT noi (neaplicate) + backfill predicții. Formule identice.
+//
 // K dinamic: games<10 → 40 ; games<30 → 32 ; altfel → 24.
 // Marchează toate fixturile procesate în elo_applied → update-ul incremental
 // din collect-finished nu le re-aplică (exactly-once între reconstrucții).
@@ -61,10 +66,153 @@ async function logCron(status, msg = '') {
   try { await Promise.resolve(/* cron_logs → dispecer */); } catch (_) {}
 }
 
+// ── MOD LIGHT: ?mode=backfill ────────────────────────────────────────────────
+// NU reface ELO de la zero. Pornește de la ratingurile EXISTENTE (elo_ratings) și
+// aplică incremental DOAR meciurile FT noi (neprezente în elo_applied) de la ultima
+// actualizare încoace → actualizează elo_ratings + elo_history pentru ele, apoi
+// rulează backfill-ul predicțiilor cu ELO lipsă (aceeași logică set-based).
+// Formulele (kFactor / getCompetitionWeight / temporal decay / HOME_ADV / expH) sunt
+// IDENTICE cu rebuild-ul complet — NEATINSE.
+async function runBackfillMode(res) {
+  const NOW_TS = Date.now();
+
+  // 1. Ratinguri de START = cele existente (NU 1500). games păstrat pt kFactor corect.
+  const teamElo = new Map();   // 'tid|lid' → { elo, games }
+  const er = await query(`SELECT team_id, league_id, elo, games FROM elo_ratings`);
+  for (const r of er.rows) {
+    teamElo.set(r.team_id + '|' + r.league_id, { elo: Number(r.elo), games: Number(r.games) || 0 });
+  }
+  const getT = (tid, lid) => {
+    const k = tid + '|' + lid;
+    let t = teamElo.get(k);
+    if (!t) { t = { elo: 1500, games: 0 }; teamElo.set(k, t); }   // echipă nouă → 1500
+    return t;
+  };
+
+  // 2. DOAR meciurile FT noi (neaplicate), cronologic.
+  const { rows } = await query(`
+    SELECT fh.fixture_id, fh.league_id, fh.home_team_id, fh.away_team_id,
+           fh.home_goals, fh.away_goals, fh.match_date
+      FROM fixtures_history fh
+     WHERE fh.status_short = ANY($1)
+       AND fh.home_team_id IS NOT NULL AND fh.away_team_id IS NOT NULL
+       AND fh.home_goals IS NOT NULL  AND fh.away_goals IS NOT NULL
+       AND fh.league_id = ANY($2)
+       AND NOT EXISTS (SELECT 1 FROM elo_applied e WHERE e.fixture_id = fh.fixture_id)
+     ORDER BY fh.match_date ASC NULLS LAST, fh.fixture_id ASC
+  `, [DONE, ALLOWED]);
+
+  // 3. Replay incremental — DOAR meciurile noi (formule identice cu rebuild-ul).
+  const histBuf = [];
+  const HIST_CH = 1000;
+  async function flushHist() {
+    if (!histBuf.length) return;
+    const vals = [], params = [];
+    histBuf.forEach((r, i) => {
+      const b = i * 7;
+      vals.push(`($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7})`);
+      params.push(r.fid, r.hid, r.aid, r.he, r.ae, r.diff, r.hwp);
+    });
+    await query(`INSERT INTO elo_history
+        (fixture_id, home_team_id, away_team_id, home_elo, away_elo, elo_diff, home_win_prob)
+      VALUES ${vals.join(',')}
+      ON CONFLICT (fixture_id) DO UPDATE SET
+        home_elo=EXCLUDED.home_elo, away_elo=EXCLUDED.away_elo,
+        elo_diff=EXCLUDED.elo_diff, home_win_prob=EXCLUDED.home_win_prob`, params);
+    histBuf.length = 0;
+  }
+
+  const touched = new Set();   // 'tid|lid' modificate → upsert ȚINTIT (nu toată tabela)
+  for (const m of rows) {
+    const lid = m.league_id;
+    const H = getT(m.home_team_id, lid), A = getT(m.away_team_id, lid);
+    const preH = H.elo, preA = A.elo;
+    const expH = 1 / (1 + Math.pow(10, (preA - (preH + HOME_ADV)) / 400));  // = home_win_prob
+    histBuf.push({
+      fid: m.fixture_id, hid: m.home_team_id, aid: m.away_team_id,
+      he: +preH.toFixed(2), ae: +preA.toFixed(2),
+      diff: +(preH - preA).toFixed(2), hwp: +expH.toFixed(4),
+    });
+    if (histBuf.length >= HIST_CH) await flushHist();
+    const hg = Number(m.home_goals), ag = Number(m.away_goals);
+    const actH = hg > ag ? 1 : hg === ag ? 0.5 : 0;
+    const weight = getCompetitionWeight(lid);
+    let decayFactor = 1;
+    if (m.match_date) {
+      const monthsAgo = (NOW_TS - new Date(m.match_date).getTime()) / (1000 * 60 * 60 * 24 * 30);
+      if (Number.isFinite(monthsAgo)) decayFactor = Math.exp(-0.03 * Math.max(0, monthsAgo));
+    }
+    const kH = kFactor(H.games) * weight * decayFactor;
+    const kA = kFactor(A.games) * weight * decayFactor;
+    H.elo += kH * (actH - expH);
+    A.elo += kA * ((1 - actH) - (1 - expH));
+    H.games++; A.games++;
+    touched.add(m.home_team_id + '|' + lid);
+    touched.add(m.away_team_id + '|' + lid);
+  }
+  await flushHist();
+
+  // 4. UPSERT doar echipele atinse de meciurile noi.
+  let upserts = 0;
+  for (const k of touched) {
+    const t = teamElo.get(k);
+    const [tid, lid] = k.split('|').map(Number);
+    await query(`INSERT INTO elo_ratings (team_id, league_id, elo, games, updated_at)
+      VALUES ($1,$2,$3,$4,NOW())
+      ON CONFLICT (team_id, league_id) DO UPDATE SET
+        elo=EXCLUDED.elo, games=EXCLUDED.games, updated_at=NOW()`,
+      [tid, lid, +t.elo.toFixed(2), t.games]);
+    upserts++;
+  }
+
+  // 5. Marchează fixturile procesate ca aplicate → nu se re-aplică data viitoare.
+  const fids = rows.map(r => r.fixture_id);
+  const CH = 1000;
+  for (let i = 0; i < fids.length; i += CH) {
+    const chunk = fids.slice(i, i + CH);
+    const vals = chunk.map((_, j) => '($' + (j + 1) + ')').join(',');
+    await query(`INSERT INTO elo_applied (fixture_id) VALUES ${vals} ON CONFLICT DO NOTHING`, chunk);
+  }
+
+  // 6. Backfill predicții cu ELO lipsă (IDENTIC cu rebuild-ul — set-based, idempotent).
+  let eloBackfilled = 0;
+  try {
+    const up = await query(`
+      UPDATE predictions p
+         SET home_elo          = eh.home_elo,
+             away_elo          = eh.away_elo,
+             elo_diff_ml       = eh.elo_diff,
+             home_win_prob_elo = eh.home_win_prob
+        FROM elo_history eh
+       WHERE eh.fixture_id = p.fixture_id
+         AND p.home_elo IS NULL`);
+    eloBackfilled = up.rowCount || 0;
+  } catch (_) { /* best-effort */ }
+
+  await logCron('success', `mode:backfill matches:${rows.length} teams:${upserts} elo_backfill:${eloBackfilled}`);
+  return res.status(200).json({
+    ok: true,
+    mode: 'backfill',
+    matches_processed: rows.length,
+    teams_updated: upserts,
+    elo_history_rows: rows.length,
+    predictions_elo_backfilled: eloBackfilled,
+    note: 'Incremental — start din elo_ratings, doar meciuri noi (neaplicate). Formule identice cu rebuild-ul.',
+  });
+}
+
 export default async function handler(req, res) {
   const rebuild = (req?.query?.rebuild === '1' || req?.query?.rebuild === 1);
+  const mode = (req?.query?.mode || '').toString();
   try {
     await ensureTables();
+
+    // MOD LIGHT zilnic: ELO incremental (nu de la zero) + backfill predicții. Modul
+    // implicit (fără param) rămâne EXACT rebuild-ul complet de mai jos — neschimbat.
+    if (mode === 'backfill') {
+      return await runBackfillMode(res);
+    }
+
     // Rulare ZILNICĂ ieftină: dacă NU sunt meciuri FT noi de la ultimul build
     // (toate sunt deja în elo_applied), nu mai facem replay-ul. ?rebuild=1 forțează.
     if (!rebuild) {
