@@ -44,9 +44,10 @@ Modifică DOAR logica `score4` (live-only) și `getLiveStatsFromDB()`.
 - **Dependențe noi** (npm/pip): raportate EXPLICIT în răspuns, niciodată instalate tacit.
 - **PM2**: doar `pm2 restart alohascan` (fallback `pm2 start ecosystem.config.cjs && pm2 save`).
   INTERZIS `pkill`/`killall`. Nu lăsa niciodată daemonul oprit.
-- **Crontab**: gestionat MANUAL de Vlad pe VPS. Referință: `scripts/setup-crontab.sh`
-  (șablonul liniilor) + `scripts/run-cron.sh` + panoul admin „STATUS CRON-URI". NU te baza
-  pe liste statice din docs; NU modifici crontab-ul NICIODATĂ — doar propui linii.
+- **Crontab**: gestionat EXCLUSIV prin `scripts/setup-crontab.sh` (sursă CANONICĂ), aplicat
+  la FIECARE deploy (`deploy.yml`). NU se editează manual pe VPS — modificările manuale dispar
+  la următorul deploy. Orice schimbare de crontab = modificare în `scripts/setup-crontab.sh` +
+  push. (Rulare/diagnostic: `scripts/run-cron.sh` + panoul admin „STATUS CRON-URI".)
 - **Verifică sintaxa** cu `node --check <fișier.js>` (sau `python3 -m py_compile`) după
   orice editare, înainte de commit.
 - **Secrete**: NU committa NICIODATĂ chei, token-uri, parole sau `.env`. Verifică
