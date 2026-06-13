@@ -1846,7 +1846,7 @@ async function refreshBFStatus() {
 var _bpTimer = null;
 async function startBP() {
   try {
-    var r = await fetch('/api/cron/backfill-players', { method:'POST', headers:{'X-Api-Key':_key} });
+    var r = await fetch('/api/admin/backfill-players', { method:'POST', headers:{'X-Api-Key':_key} });
     var d = await r.json();
     if (d.error) { toast('✗ ' + d.error, 'var(--red)'); return; }
     toast(d.already_running ? '▶ Backfill jucători deja rulează' : '▶ Backfill jucători pornit');
@@ -1857,7 +1857,7 @@ async function startBP() {
 }
 async function stopBP() {
   try {
-    await fetch('/api/cron/backfill-players?action=stop', { method:'POST', headers:{'X-Api-Key':_key} });
+    await fetch('/api/admin/backfill-players?action=stop', { method:'POST', headers:{'X-Api-Key':_key} });
     toast('⏹ Backfill jucători oprit');
     refreshBPStatus();
   } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
@@ -1865,14 +1865,14 @@ async function stopBP() {
 async function resetBP() {
   if (!confirm('Reia backfill-ul de jucători de la zero?')) return;
   try {
-    await fetch('/api/cron/backfill-players?action=reset', { method:'POST', headers:{'X-Api-Key':_key} });
+    await fetch('/api/admin/backfill-players?action=reset', { method:'POST', headers:{'X-Api-Key':_key} });
     toast('↺ Backfill jucători resetat');
     refreshBPStatus();
   } catch(e) { toast('✗ ' + e.message, 'var(--red)'); }
 }
 async function refreshBPStatus() {
   try {
-    var r = await fetch('/api/cron/backfill-players?action=status', { headers:{'X-Api-Key':_key} });
+    var r = await fetch('/api/admin/backfill-players?action=status', { headers:{'X-Api-Key':_key} });
     var d = await r.json();
     var startBtn = document.getElementById('bp-start-btn');
     var stopBtn  = document.getElementById('bp-stop-btn');
@@ -2004,7 +2004,7 @@ async function extractTeam() {
   var season = Number((document.getElementById('et-season')||{}).value) || _etCurrentSeason();
   if (!teamId) { toast('Selectează o echipă sau completează ID', 'var(--red)'); return; }
   try {
-    var r = await fetch('/api/cron/extract-team?team_id=' + teamId + '&season=' + season, { method:'POST', headers:{'X-Api-Key':_key} });
+    var r = await fetch('/api/admin/extract-team?team_id=' + teamId + '&season=' + season, { method:'POST', headers:{'X-Api-Key':_key} });
     var d = await r.json();
     if (d.error) { toast('✗ ' + d.error, 'var(--red)'); return; }
     toast(d.already_running ? '▶ Deja rulează' : '▶ Extragere & aplicare pornită (' + season + '+' + (season-1) + ')');
@@ -2015,7 +2015,7 @@ async function extractTeam() {
 }
 async function refreshETStatus() {
   try {
-    var r = await fetch('/api/cron/extract-team?status=1', { headers:{'X-Api-Key':_key} });
+    var r = await fetch('/api/admin/extract-team?status=1', { headers:{'X-Api-Key':_key} });
     var d = await r.json();
     var s = d.status;
     var activeDiv = document.getElementById('et-active');

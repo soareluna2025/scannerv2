@@ -464,6 +464,35 @@ router.post('/trigger-cron', async (req, res) => {
   }
 });
 
+// ── Proxy admin → cron pentru butoanele protejate cu X-Api-Key ───────────────
+// „Backfill Jucători" și „Extragere Echipă" trăiesc în panoul admin (auth X-Api-Key),
+// dar loaderul /api/cron/* (server.js) cere `x-cron-secret`. Apelul direct din UI ar
+// da 401 când CRON_SECRET e setat pe VPS. Aceste 2 proxy-uri forwardează către cron-ul
+// real pe localhost adăugând x-cron-secret din process.env (NU expus în frontend),
+// PĂSTREAZĂ metoda + query-string-ul (action=start/stop/reset/status, team_id, season)
+// și întorc statusul + răspunsul real al rutei cron către UI. Același pattern ca
+// trigger-cron/optimize-db (fetch local + x-cron-secret), dar AȘTEAPTĂ răspunsul
+// (cron-urile răspund imediat — munca grea rulează în fundal).
+async function _proxyCron(req, res, cronJob) {
+  const port = process.env.PORT || 3000;
+  const qs   = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+  const url  = `http://localhost:${port}/api/cron/${cronJob}${qs}`;
+  try {
+    const r    = await fetch(url, {
+      method: req.method,
+      headers: { 'x-cron-secret': process.env.CRON_SECRET || '' },
+    });
+    const data = await r.json().catch(() => ({ ok: false, error: 'răspuns invalid de la cron' }));
+    res.status(r.status).json(data);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+}
+
+// GET (status) + POST (start/stop/reset) — router.all acoperă ambele metode.
+router.all('/backfill-players', (req, res) => _proxyCron(req, res, 'backfill-players'));
+router.all('/extract-team',     (req, res) => _proxyCron(req, res, 'extract-team'));
+
 // ── POST /api/admin/optimize-db ──────────────────────────────────────────────
 // Rulează AȘTEPTAT /api/cron/optimize-db (VACUUM ANALYZE rapid) și întoarce
 // durata per tabel. Așteaptă finalizarea (~2 min < headersTimeout 5 min undici).
