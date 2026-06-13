@@ -190,6 +190,29 @@ async function resolveOutcome(fixtureId, outcome, finalHome, finalAway) {
   );
 }
 
+// FIX PROSPEȚIME FT: când scannerul prinde finalul unui meci live, scrie INSTANT
+// scorul/status-ul final în tabela fixtures (UPDATE idempotent, NU creează rândul) —
+// cardul devine proaspăt la secunda finalului, fără să aștepte cronul de dimineață.
+// Golurile lipsă din payload-ul live păstrează valoarea existentă (COALESCE).
+async function freshenFixtureFinal(m, fixtureId, statusShort) {
+  const hg = m.goals?.home;
+  const ag = m.goals?.away;
+  const htH = m.score?.halftime?.home;
+  const htA = m.score?.halftime?.away;
+  await query(
+    `UPDATE fixtures
+       SET status_short = $2,
+           home_goals   = COALESCE($3, home_goals),
+           away_goals   = COALESCE($4, away_goals),
+           home_ht      = COALESCE($5, home_ht),
+           away_ht      = COALESCE($6, away_ht),
+           updated_at   = NOW()
+     WHERE fixture_id = $1`,
+    [fixtureId, statusShort,
+     (hg ?? null), (ag ?? null), (htH ?? null), (htA ?? null)]
+  );
+}
+
 // M5: Save FT match to fixtures_history and update form_stats for both teams
 async function saveFormStats(m) {
   const fid    = m.fixture?.id;
@@ -526,6 +549,9 @@ async function scanLive10s() {
         const fa = m.goals?.away ?? 0;
         // [P02] reține tranziția FT cu scorul final → broadcast removal către UI.
         finishedThisCycle[id] = { home: fh, away: fa, status: sh };
+        // FIX PROSPEȚIME FT: scrie INSTANT scorul final în fixtures (toate meciurile
+        // scanate live, nu doar WC) — UPDATE idempotent, fără creare de rând.
+        freshenFixtureFinal(m, id, sh).catch(e => log(`freshenFixtureFinal ${id}: ${e.message}`));
         if (liveCache[id]) {
           resolveOutcome(id, (fh + fa) >= 2 ? 'WIN' : 'LOSS', fh, fa)
             .catch(e => log(`resolveOutcome ${id}: ${e.message}`));
