@@ -249,6 +249,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Japan
   98,    // J1 League
   99,    // J2 League (Liga 2)
+  100,   // J3 League (tier 3) // SUB OBSERVAȚIE win-rate (ligă nouă Etapa 4)
 
   // South Korea
   292,   // K League 1
@@ -269,6 +270,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // China
   169,   // Super League
   170,   // League One (Liga 2)
+  929,   // League Two (tier 3) // SUB OBSERVAȚIE win-rate (ligă nouă Etapa 4)
   171,   // FA Cup
 
   // Thailand
