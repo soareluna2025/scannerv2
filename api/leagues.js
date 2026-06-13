@@ -96,6 +96,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Romania
   283,   // Liga I (Superliga)
   284,   // Liga II
+  285,   // Cupa României // SUB OBSERVAȚIE win-rate (ligă nouă Etapa 3)
 
   // Greece
   197,   // Super League 1 (Tier 1)
@@ -134,6 +135,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   498,   // Kazakhstan Cup
 
   // Cyprus
+  318,   // 1. Division (tier 1) // SUB OBSERVAȚIE win-rate (ligă nouă Etapa 3)
   319,   // Second Division (Liga 2 — corectat din fals „Honduras")
   320,   // Third Division (corectat din fals „Honduras Copa")
 
@@ -224,6 +226,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   321,   // Canadian Premier League
 
   // Costa Rica
+  162,   // Primera División (tier 1) // SUB OBSERVAȚIE win-rate (ligă nouă Etapa 3)
   259,   // Segunda Division (Liga 2)
 
   // Honduras
@@ -257,6 +260,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   291,   // Azadegan League (Liga 2)
 
   // Qatar
+  305,   // Stars League (tier 1) // SUB OBSERVAȚIE win-rate (ligă nouă Etapa 3)
   306,   // Second Division (Liga 2 — corectat din fals „Panama Primera")
 
   // UAE
@@ -310,6 +314,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Egypt
   233,   // Premier League
+  887,   // Second League (Liga 2) // SUB OBSERVAȚIE win-rate (ligă nouă Etapa 3)
 
   // Morocco
   200,   // Botola Pro
@@ -334,7 +339,11 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   667,   // Nigerian FA Cup
 
   // Ivory Coast
+  386,   // Ligue 1 (tier 1) // SUB OBSERVAȚIE win-rate (ligă nouă Etapa 3)
   385,   // Coupe de Côte d'Ivoire
+
+  // Ghana
+  570,   // Premier League (tier 1) // SUB OBSERVAȚIE win-rate (ligă nouă Etapa 3)
 
   // Kenya
   276,   // FKF Premier League (corectat din fals „Copa Bolivia")
