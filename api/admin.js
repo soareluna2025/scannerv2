@@ -565,7 +565,24 @@ router.post('/stabilize', async (req, res) => {
   res.json({ ok: true, started: true, mode, total: steps.length });
 });
 
-// ── GET /api/admin/cron-health — status TUTUROR joburilor (panou monitorizare) ──
+// Joburi ACTIVE = endpoint-urile reale /api/cron/* (server.js cronFiles) + joburile
+// care se loghează în cron_logs în afara acestei rute (update-results + scripturile
+// Python din setup-crontab.sh). Sursa canonică = scripts/setup-crontab.sh.
+// Panoul STATUS CRON-URI listează DOAR aceste joburi; intrările istorice ale unor
+// joburi care NU mai există (ex. backfill:fixtures_2022/2023/2024, collect-team-stats,
+// scan) sunt IGNORATE la afișare — NU se șterge istoricul valid din cron_logs.
+const ACTIVE_CRON_JOBS = new Set([
+  'collect-daily', 'collect-finished', 'prematch-enrichment', 'league-stats', 'referee-stats',
+  'learning-analysis', 'recalibrate-tables', 'calibrate-live', 'collect-venues', 'collect-coaches',
+  'coach-stats', 'referee-extended', 'collect-top-scorers', 'collect-players-season', 'collect-squads',
+  'cazarma-router', 'auto-predict', 'backfill-pass-shots', 'backfill-players', 'extract-team',
+  'collect-national-history', 'collect-wc-qualifiers', 'build-elo', 'cleanup-settings',
+  'build-ml-features', 'train-model', 'train-live', 'optimize-db',
+  'update-results',                                  // /api/update-results (02:00)
+  'train_model', 'train_live_v2', 'calibrate',       // scripturi Python (setup-crontab.sh)
+]);
+
+// ── GET /api/admin/cron-health — status joburilor ACTIVE (panou monitorizare) ──
 // Folosește logging-ul uniform: ultima rulare + status + durată + „stale" (roșu
 // dacă jobul programat n-a mai scris nimic de mult).
 router.get('/cron-health', async (req, res) => {
@@ -576,18 +593,21 @@ router.get('/cron-health', async (req, res) => {
        WHERE ran_at >= NOW() - INTERVAL '45 days'
        ORDER BY job_name, ran_at DESC`);
     const now = Date.now();
-    const jobs = rows.map(r => {
-      const ageMin = r.ran_at ? Math.round((now - new Date(r.ran_at).getTime()) / 60000) : null;
-      return {
-        job: (r.job_name || '').replace(/^cron-/, ''),
-        last_run: r.ran_at,
-        age_min: ageMin,
-        status: r.status || 'ok',
-        duration_ms: r.duration_ms,
-        items: r.items_processed,
-        stale: ageMin != null && ageMin > 48 * 60,   // >48h fără semnal = suspect
-      };
-    });
+    const jobs = rows
+      .map(r => ({ ...r, job: (r.job_name || '').replace(/^cron-/, '') }))
+      .filter(r => ACTIVE_CRON_JOBS.has(r.job))   // [P19] ignoră joburile fantomă (șterse din crontab)
+      .map(r => {
+        const ageMin = r.ran_at ? Math.round((now - new Date(r.ran_at).getTime()) / 60000) : null;
+        return {
+          job: r.job,
+          last_run: r.ran_at,
+          age_min: ageMin,
+          status: r.status || 'ok',
+          duration_ms: r.duration_ms,
+          items: r.items_processed,
+          stale: ageMin != null && ageMin > 48 * 60,   // >48h fără semnal = suspect
+        };
+      });
     res.json({ ok: true, jobs });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -601,130 +621,6 @@ router.get('/stabilize-status', async (req, res) => {
   res.json({ ...(_stabilize), totalMs });
 });
 
-// ── GET /api/admin/prediction-accuracy ──────────────────────────────────────
-router.get('/prediction-accuracy', async (req, res) => {
-  try {
-    const { rows } = await query(`
-      SELECT
-        COUNT(*) FILTER (WHERE outcome = 'WIN')           AS wins,
-        COUNT(*) FILTER (WHERE outcome = 'LOSS')          AS losses,
-        COUNT(*) FILTER (WHERE outcome IS NOT NULL)       AS resolved,
-        COUNT(*)                                          AS total,
-        ROUND(
-          100.0 * COUNT(*) FILTER (WHERE outcome = 'WIN')
-          / NULLIF(COUNT(*) FILTER (WHERE outcome IS NOT NULL), 0), 1
-        ) AS accuracy_pct
-      FROM (
-        SELECT outcome FROM pre_match_snapshots
-        WHERE outcome IS NOT NULL
-        ORDER BY created_at DESC LIMIT 100
-      ) recent
-    `).catch(() => ({ rows: [] }));
-
-    const row = rows[0] || {};
-    res.json({
-      ok:           true,
-      accuracy_pct: row.accuracy_pct ? Number(row.accuracy_pct) : null,
-      wins:         Number(row.wins   || 0),
-      losses:       Number(row.losses || 0),
-      sample:       Number(row.resolved || 0),
-      total_snapshots: Number(row.total || 0),
-      note: 'WIN = over15_prob ≥55% AND actual over15, OR over15_prob <45% AND actual under15. Last 100 resolved.',
-    });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
-
-// ── GET /api/admin/access-log ────────────────────────────────────────────────
-router.get('/access-log', (req, res) => {
-  res.json({ ok: true, entries: [...accessLog].reverse().slice(0, 50) });
-});
-
-// ── GET /api/admin/learning-stats ───────────────────────────────────────────
-router.get('/learning-stats', async (req, res) => {
-  try {
-    const safe = q => query(q).catch(() => ({ rows: [] }));
-
-    const [totals, byModule, byLeague, recentWeights] = await Promise.all([
-      safe(`SELECT
-        COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE outcome!='PENDING') AS resolved,
-        COUNT(*) FILTER (WHERE outcome='PENDING') AS pending,
-        COUNT(*) FILTER (WHERE outcome='WIN') AS wins,
-        ROUND(100.0*COUNT(*) FILTER (WHERE outcome='WIN')/NULLIF(COUNT(*) FILTER (WHERE outcome!='PENDING'),0),1) AS global_win_rate
-        FROM prediction_log`),
-      safe(`SELECT module,
-        COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE outcome!='PENDING') AS resolved,
-        COUNT(*) FILTER (WHERE outcome='WIN') AS wins,
-        ROUND(100.0*COUNT(*) FILTER (WHERE outcome='WIN')/NULLIF(COUNT(*) FILTER (WHERE outcome!='PENDING'),0),1) AS win_rate,
-        MAX(created_at) AS last_prediction
-        FROM prediction_log
-        GROUP BY module ORDER BY module`),
-      safe(`SELECT pl.league_id, pl.league_name,
-        COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE pl.outcome='WIN') AS wins,
-        ROUND(100.0*COUNT(*) FILTER (WHERE pl.outcome='WIN')/NULLIF(COUNT(*) FILTER (WHERE pl.outcome!='PENDING'),0),1) AS win_rate
-        FROM prediction_log pl
-        WHERE pl.outcome != 'PENDING' AND pl.league_id IS NOT NULL
-        GROUP BY pl.league_id, pl.league_name
-        HAVING COUNT(*) >= 10
-        ORDER BY win_rate DESC NULLS LAST
-        LIMIT 10`),
-      safe(`SELECT module, context_key, weight_name, weight_value, default_value, sample_size, win_rate, confidence_level, last_updated
-        FROM model_weights
-        WHERE last_updated > NOW() - INTERVAL '7 days'
-          AND weight_value != default_value
-        ORDER BY last_updated DESC LIMIT 20`),
-    ]);
-
-    const t = totals.rows[0] || {};
-    const mod = byModule.rows.map(r => ({
-      module:       r.module,
-      total:        Number(r.total),
-      resolved:     Number(r.resolved),
-      wins:         Number(r.wins),
-      win_rate:     r.win_rate ? Number(r.win_rate) : null,
-      last_prediction: r.last_prediction,
-      trend: r.win_rate > 60 ? 'good' : r.win_rate < 45 ? 'poor' : 'neutral',
-    }));
-
-    const globalWR = t.global_win_rate ? Number(t.global_win_rate) : null;
-    const confidence = Number(t.resolved) >= 100 ? 'HIGH' : Number(t.resolved) >= 30 ? 'MEDIUM' : 'LOW';
-
-    res.json({
-      ok: true,
-      total_predictions: Number(t.total || 0),
-      resolved:          Number(t.resolved || 0),
-      pending:           Number(t.pending || 0),
-      wins:              Number(t.wins || 0),
-      global_win_rate:   globalWR,
-      model_confidence:  confidence,
-      by_module:         mod,
-      by_league_top10:   byLeague.rows.map(r => ({
-        league_id:   Number(r.league_id),
-        league_name: r.league_name,
-        total:       Number(r.total),
-        wins:        Number(r.wins),
-        win_rate:    Number(r.win_rate),
-      })),
-      weights_updated_recently: recentWeights.rows.map(r => ({
-        module:       r.module,
-        context_key:  r.context_key,
-        weight_name:  r.weight_name,
-        old_value:    Number(r.default_value),
-        new_value:    Number(r.weight_value),
-        samples:      Number(r.sample_size),
-        win_rate:     r.win_rate ? Number(r.win_rate) : null,
-        confidence:   r.confidence_level,
-        updated_at:   r.last_updated,
-      })),
-    });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
 
 // ── GET /api/admin/win-rate-patterns ─────────────────────────────────────────
 // Foloseste tabela 'predictions' (alerte NGP/Over15 stocate de scanner.js):

@@ -1030,14 +1030,17 @@ async function simRun(){
   // Animate counter
   var countEl=document.getElementById('sim-count-lbl');
   var fillEl=document.getElementById('sim-prog-fill');
-  var step=0,total=10000,dur=2500,interval=50;
+  // [P20] Bara e un simplu indicator de încărcare (animație vizuală), NU reflectă
+  // progresul real al simulării server-side. Nu mai afișăm un contor fabricat de
+  // scenarii („4,231 / 10,000") care sugera fals un progres real — doar o etichetă
+  // onestă. Numărul real (10.000) e cel din /api/simulate, afișat la finalizare.
+  var step=0,dur=2500,interval=50;
   var steps=dur/interval;
+  countEl.textContent='Se simulează 10.000 scenarii…';
   var timer=setInterval(function(){
     step++;
-    var pct=Math.min(100,Math.round(step/steps*100));
-    var cnt=Math.min(total,Math.round(step/steps*total));
+    var pct=Math.min(95,Math.round(step/steps*95));  // se oprește la 95% până vine răspunsul
     fillEl.style.width=pct+'%';
-    countEl.textContent=cnt.toLocaleString()+' / 10,000 scenarii';
     if(step>=steps)clearInterval(timer);
   },interval);
 

@@ -213,9 +213,12 @@ function buildCardHtml(m,lgName){
   o+='<div class="card-footer">';
   o+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
   if(s.forte)o+='<div class="badge-forte">⚡ FORTE</div>';
-  // NGP nesigur în primele 10 min (scanner forțează 0) → afișăm „—" în loc de „0%"
-  var _ngShow=(mn<10||ng===0)?'—':(ng+'%');
-  var _ngW=(mn<10||ng===0)?0:ng;
+  // [P21] „—" DOAR când lipsesc datele (ng absent) sau în primele 10 min (scanner
+  // încă nesigur). Un NGP numeric real (inclusiv valori mici) se afișează ca atare,
+  // nu mai e mascat de condiția ng===0.
+  var _ngHas=(typeof s.ng==='number');
+  var _ngShow=(!_ngHas||mn<10)?'—':(ng+'%');
+  var _ngW=(!_ngHas||mn<10)?0:ng;
   o+='<div class="ngp-pct" style="color:'+c+'">'+_ngShow+'</div></div>';
   o+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+_ngW+'%;background:'+c+'"></div></div>';
   var tg=hg+ag;var _cc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
@@ -622,18 +625,22 @@ async function loadTopOpps(){
         var cal4=g2Calibrate('away','total',0,Math.round(enr.awayScoreRate),m);
         addPick('away','Oaspeti marcheaza',enr.awayScoreRate,cal4);
       }
-      // 6. Cornere — scalez lg avg cu intensitatea meciului (lambdaTotal)
-      // matches cu mai multe goluri asteptate au probabil mai multe cornere
+      // [P23] Cornere/Cartonașe — DOAR când liga are statistici reale (avg_corners /
+      // avg_yellow_cards din DB). Fără fallback hardcodat (9.5 / 4) care intra
+      // nebacktestat în biletul calibrat și umfla artificial. lambdaTot scalează intensitatea.
       var lambdaTot=enr.lambdaTotal||2.5;
-      var lgCornBase=enr.leagueStats?.avg_corners??9.5;
-      var lambdaCorn=lgCornBase*Math.max(0.7,Math.min(1.4,lambdaTot/2.5));  // scaling factor
-      var bestCorn=bestThreshold(lambdaCorn,[4,5,6,7,8,9,10,11,12,13],70);
-      if(bestCorn)addPick('corn','Cornere Over '+bestCorn.thr,bestCorn.prob,bestCorn.prob);
-      // 6. Cartonase — scalez similar
-      var lgCardsBase=enr.leagueStats?.avg_yellow_cards??4;
-      var lambdaCards=lgCardsBase*Math.max(0.7,Math.min(1.4,lambdaTot/2.5));
-      var bestCards=bestThreshold(lambdaCards,[1,2,3,4,5,6],70);
-      if(bestCards)addPick('cards','Cartonase Over '+bestCards.thr,bestCards.prob,bestCards.prob);
+      var lgCornBase=enr.leagueStats?.avg_corners;
+      if(typeof lgCornBase==='number'){
+        var lambdaCorn=lgCornBase*Math.max(0.7,Math.min(1.4,lambdaTot/2.5));  // scaling factor
+        var bestCorn=bestThreshold(lambdaCorn,[4,5,6,7,8,9,10,11,12,13],70);
+        if(bestCorn)addPick('corn','Cornere Over '+bestCorn.thr,bestCorn.prob,bestCorn.prob);
+      }
+      var lgCardsBase=enr.leagueStats?.avg_yellow_cards;
+      if(typeof lgCardsBase==='number'){
+        var lambdaCards=lgCardsBase*Math.max(0.7,Math.min(1.4,lambdaTot/2.5));
+        var bestCards=bestThreshold(lambdaCards,[1,2,3,4,5,6],70);
+        if(bestCards)addPick('cards','Cartonase Over '+bestCards.thr,bestCards.prob,bestCards.prob);
+      }
     });
 
     // Sort fiecare grup DESC dupa finalScore, ia top 3
@@ -3389,7 +3396,9 @@ function tpRenderStatistici(d){
 // CUPA MONDIALĂ 2026 — card featured pe LIVE + hub overlay (accent auriu).
 // READ-ONLY: citește /api/worldcup (predicții existente), zero recalcul scoring/NGP.
 // ══════════════════════════════════════════════════════════════════════════
-var SPORTSBET_AFFILIATE_URL = 'https://sportsbet.io/';  // placeholder — completează tu
+// [P22] gol = neconfigurat → butonul de pariere NU se randează (fără link placeholder
+// mort). Completează cu URL-ul real de afiliere pentru a-l reactiva.
+var SPORTSBET_AFFILIATE_URL = '';
 var WC_START = new Date('2026-06-11T00:00:00');
 var WC_END   = new Date('2026-07-19T23:59:59');
 var _wc={data:null,tabIdx:0,day:null,qual:null};
@@ -3546,7 +3555,7 @@ function wcRenderPont(d){
   out+='<div class="wc-pont-match">'+htmlEsc(p.home||'?')+' vs '+htmlEsc(p.away||'?')+'</div>';
   out+='<div class="wc-pont-conf">'+(p.confidence!=null?Math.round(p.confidence)+'%':'—')+'</div>';
   out+='<div class="wc-pont-market">Piață recomandată: <b style="color:var(--gold)">'+htmlEsc(mk)+'</b>'+cota+'</div>';
-  out+='<a class="wc-bet-btn" href="'+SPORTSBET_AFFILIATE_URL+'" target="_blank" rel="noopener">PARIAZĂ PE SPORTSBET.IO →</a>';
+  if(SPORTSBET_AFFILIATE_URL)out+='<a class="wc-bet-btn" href="'+SPORTSBET_AFFILIATE_URL+'" target="_blank" rel="noopener">PARIAZĂ PE SPORTSBET.IO →</a>';
   out+='</div>';
   body.innerHTML=out;
 }

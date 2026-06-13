@@ -48,12 +48,14 @@ app.use(express.static(join(__dirname, 'public'), {
 import { logError } from './api/db.js';
 import { logCronRun, ensureCronLogColumns } from './api/utils/cron-log.js';
 
+// [P19] Rute moarte eliminate: players, db-stats, backfill-stats, debug-live (0 referințe
+// UI — fișierele șterse) + elo, monte-carlo, match-momentum (fără apel HTTP; fișierele
+// rămân, importate direct de simulate.js).
 const apiFiles = [
-  'football', 'today', 'enrich', 'match', 'players',
-  'agent', 'update-results', 'health-check', 'simulate',
-  'elo', 'monte-carlo', 'match-momentum', 'db-stats', 'generator',
-  'standings-data', 'venue-weather', 'backfill-stats', 'learning-leagues',
-  'calibration', 'debug-live', 'matches-history', 'model-accuracy', 'team', 'worldcup', 'worldcup-qualifiers'
+  'football', 'today', 'enrich', 'match',
+  'agent', 'update-results', 'health-check', 'simulate', 'generator',
+  'standings-data', 'venue-weather', 'learning-leagues',
+  'calibration', 'matches-history', 'model-accuracy', 'team', 'worldcup', 'worldcup-qualifiers'
 ];
 
 for (const name of apiFiles) {

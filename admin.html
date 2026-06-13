@@ -1109,7 +1109,7 @@ body{
       <div id="optdb-result" style="font-size:11px;color:var(--tx-2);margin-top:8px"></div>
     </div>
     <div id="stab-progress" style="display:none;margin-top:12px">
-      <div class="bf-label">Progres: <span id="stab-step">0</span>/<span id="stab-total">14</span> · Curent: <span id="stab-current">—</span></div>
+      <div class="bf-label">Progres: <span id="stab-step">0</span>/<span id="stab-total">—</span> · Curent: <span id="stab-current">—</span></div>
       <div class="bf-bar"><div class="bf-bar-fill" id="stab-fill" style="width:0%"></div></div>
       <div class="bf-label">Timp scurs: <span id="stab-elapsed">0s</span></div>
       <div id="stab-steps" style="font-size:11px;color:var(--tx-2);margin-top:8px"></div>
@@ -2334,22 +2334,8 @@ async function loadCalibration() {
   }
 }
 
-async function triggerCalibration(jobName) {
-  if (!confirm('Rulez „' + jobName + '"? Poate dura 30-90 secunde.')) return;
-  try {
-    var r = await fetch(BASE + '/api/admin/trigger-cron', {
-      method: 'POST',
-      headers: { 'X-Api-Key': _key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ job: jobName }),
-    });
-    var d = await r.json();
-    if (d.ok) {
-      toast('Cron „' + jobName + '" pornit (fire-and-forget). Reîncarcă peste 1-2 min.', '#22c55e');
-    } else {
-      toast('Eroare: ' + (d.error || 'unknown'), '#ef4444');
-    }
-  } catch (e) { toast('Eroare: ' + e.message, '#ef4444'); }
-}
+// [P28] triggerCalibration() eliminat — funcție moartă, nelegată de niciun buton
+// (trigger-cron se apelează direct din panoul „Trigger cron").
 
 // [P04] loadBetsAggregate() eliminat — apela /api/admin/bets-aggregate (inexistent → 404).
 
@@ -2444,7 +2430,7 @@ async function loadDbCleanupPreview() {
       'cron_logs': 'Logs cron (după ran_at)',
       'alerts': 'Alerte (după created_at)',
       'live_stats': 'Live stats (după recorded_at)',
-      'prematch_enrichment_log': 'Log prematch (după logged_at)',
+      'prematch_enrichment_log': 'Log prematch (după executed_at)',
     };
     var h = '<table style="width:100%;border-collapse:collapse;font-size:11px">';
     h += '<thead><tr style="background:rgba(255,255,255,.04);text-align:left"><th style="padding:6px">Tabel</th><th style="padding:6px;text-align:right">Total</th><th style="padding:6px;text-align:right">>30z</th><th style="padding:6px;text-align:right">>90z</th><th style="padding:6px;text-align:right">>180z</th><th style="padding:6px">Curăță</th></tr></thead><tbody>';
