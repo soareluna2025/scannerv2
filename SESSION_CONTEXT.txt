@@ -7619,6 +7619,26 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   ⚠ NErulat live; E1 e cert in cod (4 coloane scrise+citite, absente din schema+ALTER).
     Confirmare pe VPS: \d predictions; curl -s '.../api/admin/vs-api?days=30'.
 
+[13.06 16:40] - FIX bug #1 admin (auth Backfill Jucatori + Extragere Echipa) | Commit: 7c0b9ad
+  PROBLEMA: butoanele „Backfill Jucatori" (start/stop/reset/status) si „Extragere
+    Echipa" loveau DIRECT /api/cron/backfill-players si /api/cron/extract-team
+    trimitand header X-Api-Key. Loaderul cron generic (server.js:79-87) accepta DOAR
+    x-cron-secret → cand CRON_SECRET e setat pe VPS, cele 6 fetch-uri dadeau 401.
+  FIX (auth/routing DOAR, zero scoring):
+    - api/admin.js: helper _proxyCron(req,res,job) + 2 rute `router.all` in spatele
+      middleware-ului admin (X-Api-Key): /api/admin/backfill-players si
+      /api/admin/extract-team. Forwardeaza catre /api/cron/<job> pe localhost
+      adaugand x-cron-secret din process.env (NU expus in frontend), pastreaza
+      metoda + query-string (action/status/team_id/season) si intoarce statusul +
+      raspunsul real (acelasi pattern ca trigger-cron/optimize-db; cron-urile
+      raspund imediat, munca grea ruleaza in fundal).
+    - admin.html: 6 fetch-uri mutate /api/cron/* → /api/admin/*. apiFetch/X-Api-Key
+      neatins. Nimic altceva schimbat.
+  Verificare: node --check admin.js+server.js OK; zero reziduuri /api/cron/{backfill-players,
+    extract-team} in admin.html. ⚠ NErulat live (sandbox). Confirmare pe VPS:
+    cele 2 endpoint-uri /api/admin/* trebuie sa dea 200 (nu 401) dupa restart PM2.
+  Constranti: NU am atins calcConfidence*/score1-7/score4/Lambda/Monte Carlo/chei API.
+
 ═══════════════════════════════════════════════════════════════
 PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════
