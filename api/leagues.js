@@ -40,17 +40,16 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Belgium
   144,   // Pro League
   145,   // Challenger Pro League (Liga 2)
-  146,   // Belgian Cup
 
   // Turkey
   203,   // Super Lig
   204,   // TFF First League (Liga 2)
-  205,   // Turkish Cup
+  205,   // 2. Lig (tier 3) // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
 
   // Scotland
   179,   // Premiership
   180,   // Championship (Liga 2)
-  184,   // Scottish Cup
+  184,   // League Two (tier 4) // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
 
   // Czech Republic
   345,   // Fortuna Liga (Liga 1)
@@ -60,7 +59,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Austria
   218,   // Bundesliga
   219,   // 2. Liga
-  221,   // ÖFB Cup
 
   // Switzerland
   207,   // Super League
@@ -70,7 +68,6 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Denmark
   119,   // Superliga
   120,   // 1st Division (Liga 2)
-  123,   // DBU Pokalen
 
   // Norway
   103,   // Eliteserien
@@ -99,16 +96,14 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Romania
   283,   // Liga I (Superliga)
   284,   // Liga II
-  285,   // Cupa României
 
   // Greece
-  197,   // Super League 1 (Tier 1 — corectat din fals „Algeria")
-  198,   // Football League / Super League 2 (Liga 2 — corectat din fals „Algeria")
+  197,   // Super League 1 (Tier 1)
+  494,   // Super League 2 (Liga 2 — corectat din fals „Jordan Cup")
   556,   // Greek Cup
 
   // Hungary
   271,   // Nemzeti Bajnokság I (Liga 1)
-  275,   // Magyar Kupa
 
   // Bulgaria
   172,   // First Professional League
@@ -120,11 +115,11 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Finland
   244,   // Veikkausliiga (Liga 1)
-  246,   // Finnish Cup
+  246,   // Suomen Cup
 
   // Ukraine
   333,   // Premier League
-  336,   // Ukrainian Cup
+  336,   // Druha Liga (tier 3) // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
 
   // Russia
   235,   // Premier League
@@ -138,6 +133,23 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   389,   // Premier League
   498,   // Kazakhstan Cup
 
+  // Cyprus
+  319,   // Second Division (Liga 2 — corectat din fals „Honduras")
+  320,   // Third Division (corectat din fals „Honduras Copa")
+
+  // Israel
+  383,   // Ligat Ha'al (Liga 1 — corectat din fals „Ivory Coast")
+
+  // Ireland
+  357,   // Premier Division (corectat din fals „Kenya")
+  358,   // First Division (Liga 2 — corectat din fals „Kenya")
+
+  // Armenia
+  342,   // Premier League (corectat din fals „Vietnamese Cup")
+
+  // Azerbaijan
+  418,   // Birinci Dasta (Liga 2 — corectat din fals „Ghana FA Cup")
+
   // ── AMERICAS ─────────────────────────────────────────────────
 
   // Brazil
@@ -147,21 +159,21 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   75,    // Serie C
   76,    // Serie D
   612,   // Copa do Nordeste
+  475,   // Paulista A1 (corectat din fals „Jordan Division 1")
 
   // Argentina
   128,   // Liga Profesional (Primera Division)
-  131,   // Primera Nacional (Liga 2)
-  129,   // Primera Nacional — DE CONFIRMAT la audit (posibil duplicat 131)
-  130,   // Copa Argentina (corectat din fals „Primera B Metropolitana")
-  132,   // DE CONFIRMAT la audit (era etichetat „Copa Argentina" — coliziune cu 130)
+  129,   // Primera Nacional (Liga 2)
+  130,   // Copa Argentina
+  131,   // Primera B Metropolitana (tier 3) // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
+  132,   // Primera C (tier 4) // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
   134,   // Torneo Federal A (tier 3) // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
-  906,   // DE CONFIRMAT la audit // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
+  906,   // Argentina (tier 3) // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
   1032,  // DE CONFIRMAT la audit
 
   // Mexico
   262,   // Liga MX
   263,   // Liga Expansion (Liga 2)
-  264,   // Copa MX
 
   // Colombia
   239,   // Primera A
@@ -173,7 +185,7 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   265,   // Primera Division
   266,   // Primera B (Liga 2)
   267,   // Copa Chile
-  711,   // DE CONFIRMAT la audit // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
+  711,   // Chile (tier 3) // SUB OBSERVAȚIE win-rate (tier 3 / reserve)
 
   // Uruguay
   268,   // Primera Division
@@ -187,66 +199,49 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   // Ecuador
   242,   // LigaPro Serie A (Liga 1)
   917,   // Copa Ecuador
-  243,   // LigaPro Serie B — DE CONFIRMAT la audit
+  243,   // LigaPro Serie B (Liga 2)
 
   // Paraguay
-  250,   // Primera Division — Apertura (corectat din fals „Malaysia")
+  250,   // Primera Division — Apertura
   252,   // Primera Division — Clausura
   251,   // Division Intermedia (Liga 2)
-  501,   // DE CONFIRMAT la audit
 
   // Bolivia
-  273,   // Primera Division
-  344,   // Primera División (Liga 2)
-  276,   // Copa Bolivia
+  273,   // Primera Division // DUBLURĂ? de rezolvat
+  344,   // Primera División // DUBLURĂ? de rezolvat
 
   // Venezuela
-  153,   // Liga FUTVE
-  154,   // Segunda Division (Liga 2)
-  155,   // Copa Venezuela
+  299,   // Primera Division (corectat din fals „Kuwait")
+  300,   // Segunda Division (Liga 2 — corectat din fals „Kuwait")
 
   // USA
   253,   // MLS
   255,   // USL Championship (Liga 2)
   257,   // US Open Cup
   909,   // MLS Next Pro (nivel 3)
-  // EXCLUSE INTENȚIONAT (sub nivel 2):
-  //   USL League One, USL League Two, NISA — filtrate și prin LOWER_DIV_TERMS
 
   // Canada
   321,   // Canadian Premier League
 
   // Costa Rica
-  258,   // Primera Division
   259,   // Segunda Division (Liga 2)
-  260,   // Copa Costa Rica
 
   // Honduras
-  319,   // Liga de Ascenso (Liga 2)
-  320,   // Copa Honduras
+  234,   // Liga Nacional (corectat din fals „Egypt Second Division")
 
   // Guatemala
   339,   // Liga Nacional
   338,   // Primera Division (Liga 2)
-  248,   // Copa Guatemala
-
-  // El Salvador
-  349,   // Segunda Division (Liga 2)
-  350,   // Copa El Salvador
-
-  // Nicaragua
-  256,   // Primera Division
-  380,   // Segunda Division (Liga 2)
 
   // Panama
-  306,   // Primera División
+  304,   // Liga Panameña (corectat din fals „Iraqi Cup")
 
   // ── ASIA ─────────────────────────────────────────────────────
 
   // Saudi Arabia
   307,   // Saudi Pro League
   308,   // First Division (Liga 2)
-  313,   // King Cup
+  309,   // Division 2 (tier 3 — corectat din fals „Oman Professional League")
 
   // Japan
   98,    // J1 League
@@ -262,13 +257,10 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   291,   // Azadegan League (Liga 2)
 
   // Qatar
-  19,    // Qatar Stars League
-  21,    // QSL (Liga 2)
-  22,    // Emir Cup
+  306,   // Second Division (Liga 2 — corectat din fals „Panama Primera")
 
   // UAE
-  433,   // Pro League
-  434,   // First Division (Liga 2)
+  303,   // Division 1 (Liga 2 — corectat din fals „Iraq Division 1")
 
   // China
   169,   // Super League
@@ -284,14 +276,11 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   335,   // Super League
 
   // Malaysia
-  278,   // Super League (corectat din fals „Paraguay")
-  279,   // Premier League (corectat din fals „Paraguay")
-  519,   // DE CONFIRMAT la audit
-  520,   // DE CONFIRMAT la audit
+  278,   // Super League
+  279,   // Premier League (Liga 2)
 
   // Australia
   188,   // A-League Men
-  189,   // Australia Cup
 
   // India
   323,   // ISL (Indian Super League)
@@ -300,45 +289,27 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Indonesia
   274,   // Liga 1 (Tier 1)
-  460,   // Liga 2
+  460,   // Liga 2 // DUBLURĂ? de rezolvat
+  275,   // Liga 2 (corectat din fals „Magyar Kupa") // DUBLURĂ? de rezolvat
 
   // Vietnam
   340,   // V.League 1
-  341,   // V.League 2 (Liga 2)
-  342,   // Vietnamese Cup
+  341,   // Vietnamese Cup
 
   // Iraq
   302,   // Premier League
-  303,   // Division 1 (Liga 2)
-  304,   // Iraqi Cup
-
-  // Jordan
-  475,   // Division 1 (Liga 2)
-  494,   // Jordan Cup
-
-  // Kuwait
-  299,   // Premier League
-  300,   // Division 1 (Liga 2)
-  493,   // Emir Cup
 
   // Oman
-  309,   // Professional League
   491,   // Division 1 (Liga 2)
 
   // Hong Kong
-  499,   // Premier League
-
-  // Singapore
-  502,   // Premier League
-
-  // Philippines
-  483,   // PFL (Philippine Football League)
+  499,   // Premier League // DUBLURĂ? de rezolvat
+  380,   // Premier League (corectat din fals „Nicaragua Segunda") // DUBLURĂ? de rezolvat
 
   // ── AFRICA ───────────────────────────────────────────────────
 
   // Egypt
   233,   // Premier League
-  234,   // Second Division (Liga 2)
 
   // Morocco
   200,   // Botola Pro
@@ -347,34 +318,26 @@ export const ALLOWED_LEAGUE_IDS = new Set([
 
   // Tunisia
   202,   // Ligue 1
-  377,   // Ligue 2
   378,   // Coupe de Tunisie
 
   // Algeria
-  186,   // Ligue Professionnelle 1 (Tier 1 — Algeria reală)
-  187,   // Ligue Professionnelle 2 (Liga 2 — Algeria reală)
+  186,   // Ligue Professionnelle 1 (Tier 1)
+  187,   // Ligue Professionnelle 2 (Liga 2)
   199,   // Coupe d'Algérie
 
   // South Africa
   288,   // Premier Division (PSL)
-  670,   // National First Division (Liga 2)
+  289,   // First Division (Liga 2 — corectat din fals „Ghana Premier League")
 
   // Nigeria
   399,   // NPFL
   667,   // Nigerian FA Cup
 
-  // Ghana
-  289,   // Premier League
-  418,   // Ghana FA Cup
-
   // Ivory Coast
-  383,   // Ligue 1
   385,   // Coupe de Côte d'Ivoire
 
   // Kenya
-  357,   // Premier League
-  358,   // National Super League (Liga 2)
-  // 500 — FKF Cup Kenya (ID duplicat cu HK First Division — omis)
+  276,   // FKF Premier League (corectat din fals „Copa Bolivia")
 
   // ── INTERNAȚIONALE ───────────────────────────────────────────
 
@@ -390,8 +353,9 @@ export const ALLOWED_LEAGUE_IDS = new Set([
   4,     // Euro Championship
   5,     // UEFA Nations League
   1,     // World Cup
-  6,     // FIFA Club World Cup
+  6,     // Africa Cup of Nations (corectat din fals „FIFA Club World Cup")
   9,     // Copa America
   10,    // CONCACAF Champions Cup
-  26,    // CONCACAF Nations League
+  19,    // African Nations Championship (corectat din fals „Qatar Stars League")
+  22,    // CONCACAF Gold Cup (corectat din fals „Emir Cup")
 ]);
