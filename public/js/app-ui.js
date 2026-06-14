@@ -1458,6 +1458,32 @@ function mdRenderML(d){
   var lp=function(k){ return (mlLive&&typeof mlLive[k]==='number')?pc(mlLive[k]):null; };
   var lp3=function(k){ return (mlLive&&mlLive[k]&&typeof mlLive[k]==='object')?mlLive[k]:null; };
   var dc=function(a,b){ return (a!=null&&b!=null)?Math.min(100,a+b):null; };
+  // ── Live Bayes-Poisson pe minutele rămase (MECI ÎNTREG) pt piețele de goluri.
+  //    g2LiveAdjust (app-live.js) întoarce 0-100 întreg sau null (când NU e live:
+  //    status_short ∉ {1H,HT,2H,ET}) → fallback. Adaptor din contextul live + en;
+  //    forma lipsă → media ligii (fallback intern g2). Strat de PREZENTARE — nu
+  //    atinge modelele/scoringul. elapsedNum (sus) == lc.elapsed.
+  var _lmAdj={ status_short:lc.status, minute:elapsedNum,
+               home_goals:hg, away_goals:ag,
+               league:{ avg_goals:(en.leagueStats&&en.leagueStats.avg_goals_per_match)||null },
+               form:null };
+  // gp: sp()-only (over05 total + team home/away) — live g2, altfel valoarea statică.
+  var gp=function(sub,thr,fbKey){
+    if(typeof g2LiveAdjust==='function'){
+      var v=g2LiveAdjust(_lmAdj,'goals',sub,thr);
+      if(v!=null) return v;            // deja 0-100 întreg, EXACT ca sp()
+    }
+    return sp(fbKey);
+  };
+  // gpML: ladder „total" 1.5-4.5 — live g2 (monoton cu over05), altfel păstrează
+  //       comportamentul curent (_preLive?lp(modelLive):sp(static)).
+  var gpML=function(sub,thr,liveKey,fbKey){
+    if(typeof g2LiveAdjust==='function'){
+      var v=g2LiveAdjust(_lmAdj,'goals',sub,thr);
+      if(v!=null) return v;
+    }
+    return _preLive?lp(liveKey):sp(fbKey);
+  };
   // FIX 1 — normalizare multiclass la suma 100% (largest-remainder), aplicată ÎNAINTE
   // de afișare ȘI înainte de derivarea șansei duble. Doar când toate clasele există.
   function norm3(a){
@@ -1568,17 +1594,17 @@ function mdRenderML(d){
   var p1=_r[0], px=_r[1], p2=_r[2];
 
   // ── MECI (total) ──
-  add(over('Peste 0.5 goluri','Total meci','match','total',1, sp('over05_total')));
-  add(over('Peste 1.5 goluri','Total meci','match','total',2, _preLive?lp('goals_total_over15'):sp('over15_total')));
-  add(over('Peste 2.5 goluri','Total meci','match','total',3, _preLive?lp('goals_total_over25'):sp('over25_total')));
-  add(over('Peste 3.5 goluri','Total meci','match','total',4, _preLive?lp('goals_total_over35'):sp('over35_total')));
-  add(over('Peste 4.5 goluri','Total meci','match','total',5, _preLive?lp('goals_total_over45'):sp('over45_total')));
-  add(team('Peste 0.5 — '+hn,'Goluri '+hn,'match','home',1, sp('over05_home')));
-  add(team('Peste 1.5 — '+hn,'Goluri '+hn,'match','home',2, sp('over15_home')));
-  add(team('Peste 2.5 — '+hn,'Goluri '+hn,'match','home',3, sp('over25_home')));
-  add(team('Peste 0.5 — '+an,'Goluri '+an,'match','away',1, sp('over05_away')));
-  add(team('Peste 1.5 — '+an,'Goluri '+an,'match','away',2, sp('over15_away')));
-  add(team('Peste 2.5 — '+an,'Goluri '+an,'match','away',3, sp('over25_away')));
+  add(over('Peste 0.5 goluri','Total meci','match','total',1, gp('total',0.5,'over05_total')));
+  add(over('Peste 1.5 goluri','Total meci','match','total',2, gpML('total',1.5,'goals_total_over15','over15_total')));
+  add(over('Peste 2.5 goluri','Total meci','match','total',3, gpML('total',2.5,'goals_total_over25','over25_total')));
+  add(over('Peste 3.5 goluri','Total meci','match','total',4, gpML('total',3.5,'goals_total_over35','over35_total')));
+  add(over('Peste 4.5 goluri','Total meci','match','total',5, gpML('total',4.5,'goals_total_over45','over45_total')));
+  add(team('Peste 0.5 — '+hn,'Goluri '+hn,'match','home',1, gp('home',0.5,'over05_home')));
+  add(team('Peste 1.5 — '+hn,'Goluri '+hn,'match','home',2, gp('home',1.5,'over15_home')));
+  add(team('Peste 2.5 — '+hn,'Goluri '+hn,'match','home',3, gp('home',2.5,'over25_home')));
+  add(team('Peste 0.5 — '+an,'Goluri '+an,'match','away',1, gp('away',0.5,'over05_away')));
+  add(team('Peste 1.5 — '+an,'Goluri '+an,'match','away',2, gp('away',1.5,'over15_away')));
+  add(team('Peste 2.5 — '+an,'Goluri '+an,'match','away',3, gp('away',2.5,'over25_away')));
   var bttsM=btts('Ambele marchează (DA)','BTTS','match','', _preLive?lp('btts_final'):sp('btts_total'));
   add(bttsM);
   add({kind:'bttsno',label:'Ambele marchează (NU)',group:'BTTS',src:bttsM,p:(bttsM.p!=null?100-bttsM.p:null)});
