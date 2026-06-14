@@ -57,6 +57,19 @@ Modifică DOAR logica `score4` (live-only) și `getLiveStatsFromDB()`.
 
 ---
 
+## REGULĂ COMENZI PENTRU USER (Termius / iPhone)
+
+REGULĂ COMENZI PENTRU USER: Vlad rulează de pe iPhone prin Termius și poate
+lipi/executa DOAR comenzi pe O SINGURĂ LINIE. Orice comandă de shell pe care i-o
+dai lui să o ruleze manual TREBUIE să fie pe o singură linie — FĂRĂ blocuri
+multi-linie, FĂRĂ heredoc (cat <<'EOF' ... EOF), fără secvențe pe mai multe
+rânduri. Pentru orice script multi-pas: scrie-l TU în repo (`scripts/`), commit +
+push, iar userul îl rulează cu o singură linie (ex: `cd /root/scannerv2 && git
+pull && bash scripts/nume.sh`). Comenzile pe care le rulează Code însuși în
+propriul shell nu sunt afectate de regulă.
+
+---
+
 ## REGULI ML (permanente)
 
 - **ZIDUL ANTI-COTE**: nicio coloană derivată din cote (`odd`, `odds`, `cota`, `price`,

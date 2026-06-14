@@ -7639,6 +7639,13 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
     cele 2 endpoint-uri /api/admin/* trebuie sa dea 200 (nu 401) dupa restart PM2.
   Constranti: NU am atins calcConfidence*/score1-7/score4/Lambda/Monte Carlo/chei API.
 
+[13.06 21:48] - DOC: regula comenzi user (Termius/iPhone) in CLAUDE.md | Commit: 756f51a
+  Adaugata sectiune noua „REGULĂ COMENZI PENTRU USER (Termius / iPhone)" in CLAUDE.md
+  (dupa „REGULI DE LIVRARE ȘI MEDIU"): Vlad ruleaza de pe iPhone prin Termius → DOAR
+  comenzi pe O SINGURĂ LINIE; fara heredoc/multi-linie. Scripturile multi-pas se scriu
+  in scripts/, commit+push, userul le ruleaza one-liner (git pull && bash scripts/x.sh).
+  Comenzile rulate de Code in propriul shell NU sunt afectate. Pe branch claude/ola-czusgf.
+
 ═══════════════════════════════════════════════════════════════
 PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════
