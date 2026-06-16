@@ -239,7 +239,7 @@ def run_backtest(days, conf_high, top):
     print(f"Zile distincte în fereastră: {n_zile_total}\n")
     print(f"{'PRAG':>5}  {'ponturi':>7}  {'zile_active':>11}  {'medie/zi':>8}  "
           f"{'hit-rate':>8}  {'zile_all_win':>12}")
-    for prag in [0.85, 0.88, 0.90, 0.92]:
+    for prag in [0.75, 0.80, 0.85, 0.88, 0.90, 0.92]:
         picks = select_picks(long_df, prag, conf_high, top)
         total = len(picks)
         if total == 0:
@@ -262,7 +262,7 @@ def run_backtest(days, conf_high, top):
 def main():
     ap = argparse.ArgumentParser(description="AlohaScan — selecție ponturi zilnice (prototip read-only).")
     ap.add_argument("--backtest", action="store_true", help="rulează backtest pe ultimele --days zile")
-    ap.add_argument("--prag", type=float, default=0.88, help="prag p_calibrat în mod AZI (default 0.88)")
+    ap.add_argument("--prag", type=float, default=0.75, help="prag p_calibrat în mod AZI (default 0.75)")
     ap.add_argument("--conf-high", type=float, default=80.0, help="prag confidence HIGH (default 80)")
     ap.add_argument("--days", type=int, default=90, help="fereastră backtest în zile (default 90)")
     ap.add_argument("--top", type=int, default=5, help="număr maxim de ponturi/zi (default 5)")
