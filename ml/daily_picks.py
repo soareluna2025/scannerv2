@@ -127,9 +127,28 @@ def _prep_features(df):
     return df
 
 
+def _poisson_prob(key, lh, la):
+    """p_poisson per piață din lambda Poisson (lh=lambda_home, la=lambda_away,
+    numpy float cu NaN unde lipsesc). lambda NULL → rezultat NaN (pontul cade la sită).
+      over15_total: 1 - exp(-Lt)*(1+Lt), Lt = lh+la
+      over05_home:  1 - exp(-lh)
+      over05_away:  1 - exp(-la)"""
+    if key == "over15_total":
+        Lt = lh + la
+        return 1.0 - np.exp(-Lt) * (1.0 + Lt)
+    if key == "over05_home":
+        return 1.0 - np.exp(-lh)
+    if key == "over05_away":
+        return 1.0 - np.exp(-la)
+    return np.full(len(lh), np.nan)
+
+
 def _build_long(df, models, calib, with_outcome):
-    """Tabel lung: un rând per (fixtură × piață de încredere) cu p_calibrat și
-    (opțional) outcome real. p_calibrat din calibrate_p (=raw dacă necalibrat)."""
+    """Tabel lung: un rând per (fixtură × piață de încredere) cu p_calibrat,
+    p_poisson + diferența |p_cal - p_poisson|, și (opțional) outcome real.
+    p_calibrat din calibrate_p (=raw dacă necalibrat)."""
+    lh = pd.to_numeric(df["lambda_home"], errors="coerce").to_numpy(dtype=float)
+    la = pd.to_numeric(df["lambda_away"], errors="coerce").to_numpy(dtype=float)
     rows = []
     for name, key, outcome_fn in CONF_MARKETS:
         m = models.get(key)
@@ -137,7 +156,8 @@ def _build_long(df, models, calib, with_outcome):
             print(f"⚠ Piață lipsă din model_export.json: {key} — ignorată.")
             continue
         p_raw = ta.lr_predict(m, df)                  # 0..1
-        p_cal = ta.calibrate_p(calib, key, p_raw)     # 0..1 (=raw dacă necalibrat)
+        p_cal = np.asarray(ta.calibrate_p(calib, key, p_raw), dtype=float)  # 0..1 (=raw dacă necalibrat)
+        p_pois = _poisson_prob(key, lh, la)           # 0..1 sau NaN (lambda lipsă)
         sub = pd.DataFrame({
             "fixture_id": df["fixture_id"].to_numpy(),
             "day": pd.to_datetime(df["match_date"]).dt.date.to_numpy(),
@@ -148,7 +168,9 @@ def _build_long(df, models, calib, with_outcome):
             "confidence": pd.to_numeric(df["confidence"], errors="coerce").to_numpy(),
             "market": name,
             "market_key": key,
-            "p_cal": np.asarray(p_cal, dtype=float),
+            "p_cal": p_cal,
+            "p_poisson": p_pois,
+            "diff": np.abs(p_cal - p_pois),           # NaN unde p_poisson lipsește
         })
         if with_outcome:
             sub["outcome"] = outcome_fn(df).to_numpy(dtype=int)
@@ -156,6 +178,15 @@ def _build_long(df, models, calib, with_outcome):
     if not rows:
         return pd.DataFrame()
     return pd.concat(rows, ignore_index=True)
+
+
+def apply_sieve(long_df, acord):
+    """SITA ML-vs-Poisson: păstrează (fixtură×piață) DOAR dacă p_poisson există
+    ȘI |p_calibrat - p_poisson| <= acord. Restul cad. Aplicat ÎNAINTE de select_picks."""
+    if long_df.empty:
+        return long_df
+    keep = long_df["p_poisson"].notna() & (long_df["diff"] <= acord)
+    return long_df[keep].copy()
 
 
 MAX_PER_LEAGUE = 2  # max ponturi per campionat (league_id) pe zi
@@ -195,44 +226,47 @@ def select_picks(long_df, prag, conf_high, top):
     return pd.DataFrame(out_rows).reset_index(drop=True)
 
 
-def run_today(prag, conf_high, top):
+def run_today(prag, conf_high, top, acord):
     models, calib = _load_models_and_calib()
     conn = ta.get_conn()
     df = pd.read_sql(QUERY_TODAY, conn)
     conn.close()
     df = df.loc[:, ~df.columns.duplicated()]   # scapă de coloane duplicate din JOIN (df[c]→DataFrame)
-    print(f"\n=== PONTURILE ZILEI ===  prag={prag:.2f} | confidence≥{conf_high:g} | top {top}")
+    print(f"\n=== PONTURILE ZILEI ===  prag={prag:.2f} | confidence≥{conf_high:g} | acord≤{acord:.2f} | top {top}")
     print(f"Fixturi cu predicție AZI: {len(df)}")
     if df.empty:
         print("Niciun meci cu predicție azi.")
         return
     df = _prep_features(df)
     long_df = _build_long(df, models, calib, with_outcome=False)
+    long_df = apply_sieve(long_df, acord)      # sită ML-vs-Poisson, ÎNAINTE de select_picks
     picks = select_picks(long_df, prag, conf_high, top)
     if picks.empty:
-        print("Niciun pont peste prag + confidence HIGH azi.")
+        print("Niciun pont peste prag + confidence HIGH + acord ML-vs-Poisson azi.")
         return
-    print(f"\n{'#':>2}  {'P_CAL':>6}  {'CONF':>5}  {'PIAȚĂ':<18} MECI / LIGĂ")
+    print(f"\n{'#':>2}  {'P_CAL':>6}  {'P_POIS':>6}  {'Δ':>5}  {'CONF':>5}  {'PIAȚĂ':<18} MECI / LIGĂ")
     for i, (_, r) in enumerate(picks.iterrows(), 1):
-        print(f"{i:>2}  {r['p_cal']*100:5.1f}%  {r['confidence']:5.1f}  {r['market']:<18} "
+        print(f"{i:>2}  {r['p_cal']*100:5.1f}%  {r['p_poisson']*100:5.1f}%  {r['diff']*100:4.1f}  "
+              f"{r['confidence']:5.1f}  {r['market']:<18} "
               f"{r['home_team']} - {r['away_team']}  [{r['league_name']}]")
 
 
-def run_backtest(days, conf_high, top):
+def run_backtest(days, conf_high, top, acord):
     models, calib = _load_models_and_calib()
     conn = ta.get_conn()
     df = pd.read_sql(QUERY_BACKTEST, conn, params={"days": str(days)})
     conn.close()
     df = df.loc[:, ~df.columns.duplicated()]   # scapă de coloane duplicate din JOIN (df[c]→DataFrame)
-    print(f"\n=== BACKTEST {days} zile ===  confidence≥{conf_high:g} | top {top}/zi")
+    print(f"\n=== BACKTEST {days} zile ===  confidence≥{conf_high:g} | acord≤{acord:.2f} | top {top}/zi")
     print(f"Meciuri jucate cu predicție: {len(df)}")
     if len(df) < 50:
         print("⚠ Prea puține meciuri pentru backtest relevant.")
         return
     df = _prep_features(df)
     long_df = _build_long(df, models, calib, with_outcome=True)
+    long_df = apply_sieve(long_df, acord)      # sită ML-vs-Poisson, constantă pe toate pragurile
     if long_df.empty:
-        print("Nicio piață de încredere disponibilă în model.")
+        print("Nicio piață de încredere disponibilă după sită (acord ML-vs-Poisson).")
         return
 
     n_zile_total = long_df["day"].nunique()
@@ -266,12 +300,14 @@ def main():
     ap.add_argument("--conf-high", type=float, default=80.0, help="prag confidence HIGH (default 80)")
     ap.add_argument("--days", type=int, default=90, help="fereastră backtest în zile (default 90)")
     ap.add_argument("--top", type=int, default=5, help="număr maxim de ponturi/zi (default 5)")
+    ap.add_argument("--acord", type=float, default=0.10,
+                    help="prag sită ML-vs-Poisson: max |p_calibrat - p_poisson| (default 0.10)")
     args = ap.parse_args()
 
     if args.backtest:
-        run_backtest(args.days, args.conf_high, args.top)
+        run_backtest(args.days, args.conf_high, args.top, args.acord)
     else:
-        run_today(args.prag, args.conf_high, args.top)
+        run_today(args.prag, args.conf_high, args.top, args.acord)
 
 
 if __name__ == "__main__":
