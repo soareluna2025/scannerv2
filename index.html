@@ -57,19 +57,22 @@
 
 <!-- MAIN CONTENT -->
 <main class="page" id="page">
-<!-- TICKER „Ponturile Zilei" — defilare dreapta→stânga, fetch /daily_picks.json
-     (înlocuiește fostul banner ACURATEȚE MODEL). Listă goală → ascuns (loadDailyPicks). -->
+<!-- TICKER „Ponturile Zilei" — MEREU vizibil, defilare dreapta→stânga, loop continuu.
+     Sursă /daily_picks.json. Cu ponturi → VERDE; gol/404 → „LIPSĂ PONTURI" ROȘU.
+     Tap → pagina dedicată (dpOpen). Logica: loadDailyPicks() din app-state.js. -->
 <style>
-  .dp-ticker{display:none;overflow:hidden;position:sticky;top:0;z-index:60;
-    background:rgba(99,102,241,.10);border-bottom:1px solid rgba(99,102,241,.22);white-space:nowrap}
+  .dp-ticker{overflow:hidden;position:sticky;top:0;z-index:60;cursor:pointer;
+    background:rgba(0,214,125,.10);border-bottom:1px solid rgba(0,214,125,.25);white-space:nowrap}
   .dp-track{display:inline-block;white-space:nowrap;padding:7px 0;
     animation:dp-scroll 45s linear infinite;will-change:transform}
   .dp-ticker:hover .dp-track{animation-play-state:paused}
-  .dp-item{font-size:12px;font-weight:700;color:#a5b4fc;padding:0 4px}
-  .dp-sep{opacity:.4;padding:0 12px;color:#a5b4fc}
+  .dp-item{font-size:12px;font-weight:700;color:#00D67D;padding:0 4px}
+  .dp-sep{opacity:.5;padding:0 12px;color:#00D67D}
+  .dp-ticker.dp-empty{background:rgba(239,68,68,.10);border-bottom-color:rgba(239,68,68,.25)}
+  .dp-ticker.dp-empty .dp-item,.dp-ticker.dp-empty .dp-sep{color:#ef4444}
   @keyframes dp-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 </style>
-<div class="dp-ticker" id="dp-ticker">
+<div class="dp-ticker" id="dp-ticker" onclick="dpOpen()">
   <div class="dp-track" id="dp-track"></div>
 </div>
 
@@ -205,6 +208,18 @@
     <button class="md-tab" onclick="wcTab(4)">BRACKET</button>
   </div>
   <div class="md-body" id="wc-body">
+    <div class="spinner"><div class="spin"></div></div>
+  </div>
+</div>
+
+<!-- PONTURILE ZILEI — pagină dedicată (refolosește md-overlay; carduri stil WC PONTUL) -->
+<div class="md-overlay" id="dp-overlay">
+  <div class="md-hdr">
+    <button class="md-close" onclick="dpClose()">←</button>
+    <div class="md-title">🎯 PONTURILE ZILEI</div>
+    <div style="width:36px"></div>
+  </div>
+  <div class="md-body" id="dp-page-body">
     <div class="spinner"><div class="spin"></div></div>
   </div>
 </div>
