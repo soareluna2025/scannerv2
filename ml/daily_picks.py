@@ -324,6 +324,7 @@ def run_write(prag, conf_high, acord, out_path=DAILY_PICKS_JSON):
                     "market": r["market"],
                     "p_cal": round(float(r["p_cal"]), 4),
                     "p_poisson": round(float(r["p_poisson"]), 4),
+                    "confidence": round(float(r["confidence"]), 1),
                 })
     payload = {"generated_at": datetime.now(timezone.utc).isoformat(), "picks": picks_list}
     os.makedirs(os.path.dirname(out_path), exist_ok=True)

@@ -98,30 +98,63 @@ function loadModelAccuracy(){
       }).catch(function(){});
   }catch(e){}
 }
-// ── TICKER „Ponturile Zilei" — defilare în header, sursă /daily_picks.json ──────
-// Înlocuiește auto-încărcarea fostului banner ACURATEȚE MODEL. Listă goală → ascuns.
+// ── TICKER „Ponturile Zilei" — MEREU vizibil + pagină dedicată la tap ───────────
+// Sursă /daily_picks.json. Cu ponturi → verde; gol/404 → „LIPSĂ PONTURI" roșu.
+var _dpPicks=[];
+function _dpEsc(s){return String(s==null?'':s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function loadDailyPicks(){
   try{
     fetch('/daily_picks.json?ts='+Date.now())
       .then(function(r){return r.ok?r.json():null;}).then(function(d){
-        var tk=document.getElementById('dp-ticker');
-        var tr=document.getElementById('dp-track');
-        if(!tk||!tr)return;
-        var picks=(d&&d.picks)||[];
-        if(!picks.length){tk.style.display='none';tr.innerHTML='';return;}
-        var esc=function(s){return String(s==null?'':s)
-          .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
-        var item=function(p){
-          var pct=Math.round((p.p_cal!=null?p.p_cal:0)*100);
-          return '<span class="dp-item">'+esc(p.home)+' vs '+esc(p.away)+
-                 ' · '+esc(p.market)+' · '+pct+'%</span>';
-        };
-        var html=picks.map(item).join('<span class="dp-sep">•</span>');
-        // dublăm conținutul → loop continuu fără gol (keyframe translateX -50%).
-        tr.innerHTML=html+'<span class="dp-sep">•</span>'+html;
-        tk.style.display='block';
-      }).catch(function(){var tk=document.getElementById('dp-ticker');if(tk)tk.style.display='none';});
+        _dpPicks=(d&&d.picks)||[];
+        dpRenderTicker();
+        var ov=document.getElementById('dp-overlay');
+        if(ov&&ov.classList.contains('open'))dpRenderPage();
+      }).catch(function(){ _dpPicks=[]; dpRenderTicker(); });
   }catch(e){}
+}
+function dpRenderTicker(){
+  var tk=document.getElementById('dp-ticker'), tr=document.getElementById('dp-track');
+  if(!tk||!tr)return;
+  if(!_dpPicks.length){
+    tk.classList.add('dp-empty');   // roșu
+    var one='<span class="dp-item">LIPSĂ PONTURI</span><span class="dp-sep">•</span>';
+    var rep=''; for(var i=0;i<12;i++){rep+=one;}   // umple banda
+    tr.innerHTML=rep+rep;            // dublat → loop continuu (translateX -50%)
+    return;
+  }
+  tk.classList.remove('dp-empty');   // verde
+  var item=function(p){
+    var pct=Math.round((p.p_cal!=null?p.p_cal:0)*100);
+    return '<span class="dp-item">'+_dpEsc(p.home)+' vs '+_dpEsc(p.away)+
+           ' · '+_dpEsc(p.market)+' · '+pct+'%</span>';
+  };
+  var html=_dpPicks.map(item).join('<span class="dp-sep">•</span>');
+  tr.innerHTML=html+'<span class="dp-sep">•</span>'+html;
+}
+function dpOpen(){ var ov=document.getElementById('dp-overlay'); if(!ov)return; dpRenderPage(); ov.classList.add('open'); }
+function dpClose(){ var ov=document.getElementById('dp-overlay'); if(ov)ov.classList.remove('open'); }
+function dpRenderPage(){
+  var body=document.getElementById('dp-page-body'); if(!body)return;
+  if(!_dpPicks.length){
+    body.innerHTML='<div class="empty"><div class="empty-icon">🎯</div>'
+      +'<div class="empty-t">Niciun pont de încredere azi</div></div>';
+    return;
+  }
+  var out='';
+  _dpPicks.forEach(function(p){
+    var pct=Math.round((p.p_cal!=null?p.p_cal:0)*100);
+    var conf=(p.confidence!=null?Math.round(p.confidence)+'%':'—');
+    var mk=_dpEsc(p.market)+' ('+pct+'%)';
+    out+='<div class="wc-pont">';
+    out+='<div class="wc-pont-match">'+_dpEsc(p.home)+' vs '+_dpEsc(p.away)+'</div>';
+    out+='<div class="wc-pont-conf">'+conf+'</div>';
+    out+='<div class="wc-pont-market">Piață recomandată: <b style="color:var(--gold)">'+mk+'</b></div>';
+    out+='<div style="font-size:11px;color:var(--mu);margin-top:4px">'+_dpEsc(p.league_name||'')+'</div>';
+    out+='</div>';
+  });
+  body.innerHTML=out;
 }
 loadDailyPicks();
 setInterval(loadDailyPicks, 10*60*1000);
