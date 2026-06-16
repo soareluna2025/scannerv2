@@ -65,7 +65,7 @@ _FEATURE_SELECT = """
 # AZI: fixturile cu predicție din ziua curentă, toate ligile, ideal neîncepute.
 QUERY_TODAY = f"""
 SELECT
-    p.fixture_id, p.home_team, p.away_team, p.league_name, p.match_date, p.confidence,
+    p.fixture_id, p.home_team, p.away_team, p.league_name, p.league_id, p.match_date, p.confidence,
     fh.home_goals, fh.away_goals,
 {_FEATURE_SELECT}
 FROM predictions p
@@ -83,7 +83,7 @@ ORDER BY p.match_date ASC
 # BACKTEST: ultimele N zile, doar meciuri JUCATE (goluri cunoscute) pt outcome real.
 QUERY_BACKTEST = f"""
 SELECT
-    p.fixture_id, p.home_team, p.away_team, p.league_name, p.match_date, p.confidence,
+    p.fixture_id, p.home_team, p.away_team, p.league_name, p.league_id, p.match_date, p.confidence,
     fh.home_goals, fh.away_goals,
 {_FEATURE_SELECT}
 FROM predictions p
@@ -144,6 +144,7 @@ def _build_long(df, models, calib, with_outcome):
             "home_team": df["home_team"].to_numpy(),
             "away_team": df["away_team"].to_numpy(),
             "league_name": df["league_name"].to_numpy(),
+            "league_id": df["league_id"].to_numpy(),
             "confidence": pd.to_numeric(df["confidence"], errors="coerce").to_numpy(),
             "market": name,
             "market_key": key,
@@ -157,21 +158,41 @@ def _build_long(df, models, calib, with_outcome):
     return pd.concat(rows, ignore_index=True)
 
 
+MAX_PER_LEAGUE = 2  # max ponturi per campionat (league_id) pe zi
+
 def select_picks(long_df, prag, conf_high, top):
-    """Regula de selecție: max 1 pont/fixtură (piața cu p_cal maxim) → filtru
-    p_cal>=prag ȘI confidence>=conf_high → top N per zi, rankate p_cal desc."""
+    """Regula de selecție:
+      (a) max 1 pont/fixtură (piața cu p_cal maxim),
+      (b) filtru p_cal>=prag ȘI confidence>=conf_high,
+      (c) rank p_cal desc; parcurgi lista și adaugi un pont DOAR dacă liga lui
+          (league_id) are <2 ponturi deja selectate, până la top N — per zi."""
     if long_df.empty:
         return long_df
-    # 1) diversificare: per fixtură păstrăm piața cu p_cal maxim.
+    # (a) diversificare: per fixtură păstrăm piața cu p_cal maxim.
     idx = long_df.groupby("fixture_id")["p_cal"].idxmax()
     best = long_df.loc[idx].copy()
-    # 2) filtru prag + confidence HIGH.
+    # (b) filtru prag + confidence HIGH.
     best = best[(best["p_cal"] >= prag) & (best["confidence"] >= conf_high)]
     if best.empty:
         return best
-    # 3) top N per zi (rankate p_cal desc).
+    # (c) per zi: rank p_cal desc, greedy cu plafon MAX_PER_LEAGUE/ligă, până la top N.
     best = best.sort_values(["day", "p_cal"], ascending=[True, False])
-    return best.groupby("day", group_keys=False).head(top)
+    out_rows = []
+    for _day, grp in best.groupby("day", sort=True):
+        league_count = {}
+        picked = 0
+        for _, r in grp.iterrows():           # deja sortat p_cal desc în grup
+            lg = r["league_id"]
+            if league_count.get(lg, 0) >= MAX_PER_LEAGUE:
+                continue
+            out_rows.append(r)
+            league_count[lg] = league_count.get(lg, 0) + 1
+            picked += 1
+            if picked >= top:
+                break
+    if not out_rows:
+        return best.iloc[0:0]
+    return pd.DataFrame(out_rows).reset_index(drop=True)
 
 
 def run_today(prag, conf_high, top):
@@ -179,6 +200,7 @@ def run_today(prag, conf_high, top):
     conn = ta.get_conn()
     df = pd.read_sql(QUERY_TODAY, conn)
     conn.close()
+    df = df.loc[:, ~df.columns.duplicated()]   # scapă de coloane duplicate din JOIN (df[c]→DataFrame)
     print(f"\n=== PONTURILE ZILEI ===  prag={prag:.2f} | confidence≥{conf_high:g} | top {top}")
     print(f"Fixturi cu predicție AZI: {len(df)}")
     if df.empty:
@@ -201,6 +223,7 @@ def run_backtest(days, conf_high, top):
     conn = ta.get_conn()
     df = pd.read_sql(QUERY_BACKTEST, conn, params={"days": str(days)})
     conn.close()
+    df = df.loc[:, ~df.columns.duplicated()]   # scapă de coloane duplicate din JOIN (df[c]→DataFrame)
     print(f"\n=== BACKTEST {days} zile ===  confidence≥{conf_high:g} | top {top}/zi")
     print(f"Meciuri jucate cu predicție: {len(df)}")
     if len(df) < 50:
