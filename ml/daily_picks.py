@@ -20,11 +20,17 @@ MOD „BACKTEST":         python3 ml/daily_picks.py --backtest [--days 90] [--co
 import os
 import json
 import argparse
+from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
 # REFOLOSIRE din test_accuracy.py (NU rescriem): paths, conexiune, lr_predict, calibrate_p.
 import test_accuracy as ta
+
+# Output JSON pt ticker-ul „Ponturile Zilei" (modul --write).
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+DAILY_PICKS_JSON = os.path.join(os.path.dirname(_THIS_DIR), "public", "daily_picks.json")
+NO_CAP = 10 ** 9  # „fără limită" de ponturi (modul --write) — max2/ligă rămâne activ.
 
 
 # Piețe de ÎNCREDERE — chei EXACT ca în model_export.json / calibration_export.json
@@ -293,9 +299,43 @@ def run_backtest(days, conf_high, top, acord):
     print("TOATE ponturile selectate au câștigat (relevant pt bilet compound zilnic).")
 
 
+def run_write(prag, conf_high, acord, out_path=DAILY_PICKS_JSON):
+    """Scrie ponturile zilei (modul AZI) ca JSON pt ticker, FĂRĂ cap de număr —
+    toate cele care trec prag + confidence + sită + max1/fixtură + max2/ligă,
+    sortate desc după p_cal. Read-only pe DB; scrie DOAR fișierul JSON."""
+    models, calib = _load_models_and_calib()
+    conn = ta.get_conn()
+    df = pd.read_sql(QUERY_TODAY, conn)
+    conn.close()
+    df = df.loc[:, ~df.columns.duplicated()]
+    picks_list = []
+    if not df.empty:
+        df = _prep_features(df)
+        long_df = _build_long(df, models, calib, with_outcome=False)
+        long_df = apply_sieve(long_df, acord)                     # sită ML-vs-Poisson
+        picks = select_picks(long_df, prag, conf_high, NO_CAP)    # fără cap (max2/ligă rămâne)
+        if not picks.empty:
+            picks = picks.sort_values("p_cal", ascending=False)
+            for _, r in picks.iterrows():
+                picks_list.append({
+                    "home": r["home_team"],
+                    "away": r["away_team"],
+                    "league_name": r["league_name"],
+                    "market": r["market"],
+                    "p_cal": round(float(r["p_cal"]), 4),
+                    "p_poisson": round(float(r["p_poisson"]), 4),
+                })
+    payload = {"generated_at": datetime.now(timezone.utc).isoformat(), "picks": picks_list}
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False)
+    print(f"Scris {len(picks_list)} ponturi în {out_path} (generated_at={payload['generated_at']}).")
+
+
 def main():
     ap = argparse.ArgumentParser(description="AlohaScan — selecție ponturi zilnice (prototip read-only).")
     ap.add_argument("--backtest", action="store_true", help="rulează backtest pe ultimele --days zile")
+    ap.add_argument("--write", action="store_true", help="scrie public/daily_picks.json (toate ponturile AZI, fără cap)")
     ap.add_argument("--prag", type=float, default=0.75, help="prag p_calibrat în mod AZI (default 0.75)")
     ap.add_argument("--conf-high", type=float, default=80.0, help="prag confidence HIGH (default 80)")
     ap.add_argument("--days", type=int, default=90, help="fereastră backtest în zile (default 90)")
@@ -304,7 +344,9 @@ def main():
                     help="prag sită ML-vs-Poisson: max |p_calibrat - p_poisson| (default 0.10)")
     args = ap.parse_args()
 
-    if args.backtest:
+    if args.write:
+        run_write(args.prag, args.conf_high, args.acord)
+    elif args.backtest:
         run_backtest(args.days, args.conf_high, args.top, args.acord)
     else:
         run_today(args.prag, args.conf_high, args.top, args.acord)

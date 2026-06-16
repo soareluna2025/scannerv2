@@ -57,15 +57,20 @@
 
 <!-- MAIN CONTENT -->
 <main class="page" id="page">
-<!-- ACURATEȚE MODEL — din prediction_log (server-side), sticky in interiorul page -->
-<div class="wr" id="wr-bar" style="display:flex;position:sticky;top:0;z-index:60" onclick="maOpen()">
-  <div style="display:flex;flex-direction:column">
-    <span class="wr-lbl">🎯 Acurate&#539;e model <span style="opacity:.5">ⓘ</span></span>
-    <span id="ma-sub" style="font-size:8px;color:var(--mu);font-weight:500;letter-spacing:.3px;margin-top:1px">&mdash; predic&#539;ii rezolvate &middot; 30 zile</span>
-  </div>
-  <div class="wr-items">
-    <span class="wr-r" id="ma-pct" style="font-size:17px;font-weight:800">&mdash;</span>
-  </div>
+<!-- TICKER „Ponturile Zilei" — defilare dreapta→stânga, fetch /daily_picks.json
+     (înlocuiește fostul banner ACURATEȚE MODEL). Listă goală → ascuns (loadDailyPicks). -->
+<style>
+  .dp-ticker{display:none;overflow:hidden;position:sticky;top:0;z-index:60;
+    background:rgba(99,102,241,.10);border-bottom:1px solid rgba(99,102,241,.22);white-space:nowrap}
+  .dp-track{display:inline-block;white-space:nowrap;padding:7px 0;
+    animation:dp-scroll 45s linear infinite;will-change:transform}
+  .dp-ticker:hover .dp-track{animation-play-state:paused}
+  .dp-item{font-size:12px;font-weight:700;color:#a5b4fc;padding:0 4px}
+  .dp-sep{opacity:.4;padding:0 12px;color:#a5b4fc}
+  @keyframes dp-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+</style>
+<div class="dp-ticker" id="dp-ticker">
+  <div class="dp-track" id="dp-track"></div>
 </div>
 
   <!-- TAB: LIVE -->

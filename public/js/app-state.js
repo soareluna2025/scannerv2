@@ -98,8 +98,33 @@ function loadModelAccuracy(){
       }).catch(function(){});
   }catch(e){}
 }
-loadModelAccuracy();
-setInterval(loadModelAccuracy, 10*60*1000);
+// ── TICKER „Ponturile Zilei" — defilare în header, sursă /daily_picks.json ──────
+// Înlocuiește auto-încărcarea fostului banner ACURATEȚE MODEL. Listă goală → ascuns.
+function loadDailyPicks(){
+  try{
+    fetch('/daily_picks.json?ts='+Date.now())
+      .then(function(r){return r.ok?r.json():null;}).then(function(d){
+        var tk=document.getElementById('dp-ticker');
+        var tr=document.getElementById('dp-track');
+        if(!tk||!tr)return;
+        var picks=(d&&d.picks)||[];
+        if(!picks.length){tk.style.display='none';tr.innerHTML='';return;}
+        var esc=function(s){return String(s==null?'':s)
+          .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+        var item=function(p){
+          var pct=Math.round((p.p_cal!=null?p.p_cal:0)*100);
+          return '<span class="dp-item">'+esc(p.home)+' vs '+esc(p.away)+
+                 ' · '+esc(p.market)+' · '+pct+'%</span>';
+        };
+        var html=picks.map(item).join('<span class="dp-sep">•</span>');
+        // dublăm conținutul → loop continuu fără gol (keyframe translateX -50%).
+        tr.innerHTML=html+'<span class="dp-sep">•</span>'+html;
+        tk.style.display='block';
+      }).catch(function(){var tk=document.getElementById('dp-ticker');if(tk)tk.style.display='none';});
+  }catch(e){}
+}
+loadDailyPicks();
+setInterval(loadDailyPicks, 10*60*1000);
 
 function maColor(p){return p==null?'#888':p>=70?'#22c55e':p>=55?'#f59e0b':'#ef4444';}
 function maOpen(){var ov=document.getElementById('ma-overlay');if(ov){ov.style.display='flex';maRender();}}
