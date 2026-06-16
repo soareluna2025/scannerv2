@@ -68,7 +68,9 @@ _FEATURE_SELECT = """
     CASE WHEN rs.referee_style = 'open' THEN 1 ELSE 0 END AS ref_style_open
 """
 
-# AZI: fixturile cu predicție din ziua curentă, toate ligile, ideal neîncepute.
+# AZI: fereastră ROLLING absolută în timp (independentă de fusul DB) — meciurile
+# NEÎNCEPUTE din următoarele 24h. Evită bug-ul „ziua calendaristică UTC" (rulat
+# noaptea pe ora RO/CEST, date_trunc('day', NOW()) UTC încă arăta ziua anterioară).
 QUERY_TODAY = f"""
 SELECT
     p.fixture_id, p.home_team, p.away_team, p.league_name, p.league_id, p.match_date, p.confidence,
@@ -81,8 +83,8 @@ LEFT JOIN referee_stats rs ON rs.referee_name = (
     SELECT referee FROM fixtures_history WHERE fixture_id = p.fixture_id
 )
 WHERE p.score1 IS NOT NULL
-  AND p.match_date >= date_trunc('day', NOW())
-  AND p.match_date <  date_trunc('day', NOW()) + INTERVAL '1 day'
+  AND p.match_date >= NOW()
+  AND p.match_date <  NOW() + INTERVAL '24 hours'
 ORDER BY p.match_date ASC
 """
 
