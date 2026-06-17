@@ -45,11 +45,12 @@ TOTAL_BANDS = [
     (3.0, 3.5, "3.0-3.5"), (3.5, 4.0, "3.5-4.0"), (4.0, np.inf, ">=4.0"),
 ]
 
-# piață → (coloana lambda pt bandă, benzi).
+# piață → (coloana lambda pt bandă, benzi). over15 = bandă din lambda_home+lambda_away
+# (lambda_total e ~90% NULL în predicțiile istorice → nu folosim coloana).
 MARKETS = {
     "gazde":   {"col": "lambda_home",  "bands": TEAM_BANDS},
     "oaspeti": {"col": "lambda_away",  "bands": TEAM_BANDS},
-    "over15":  {"col": "lambda_total", "bands": TOTAL_BANDS},
+    "over15":  {"col": None,           "bands": TOTAL_BANDS},
 }
 MARKET_LABEL = {"gazde": "Gazde marchează", "oaspeti": "Oaspeții marchează", "over15": "Over 1.5"}
 ALL_MARKETS = ["gazde", "oaspeti", "over15"]
@@ -60,7 +61,7 @@ ALL_MARKETS = ["gazde", "oaspeti", "over15"]
 QUERY_HISTORY = """
 SELECT p.fixture_id, p.league_id, p.match_date,
        fh.home_goals, fh.away_goals,
-       p.lambda_home, p.lambda_away, p.lambda_total
+       p.lambda_home, p.lambda_away
 FROM predictions p
 JOIN fixtures_history fh ON fh.fixture_id = p.fixture_id
 WHERE fh.status_short = 'FT'
@@ -72,7 +73,7 @@ ORDER BY p.match_date ASC
 # Banding din predictions.lambda_* — FĂRĂ ml_features (viitorul n-are xg).
 QUERY_FUTURE = """
 SELECT p.fixture_id, p.home_team, p.away_team, p.league_name, p.league_id,
-       p.lambda_home, p.lambda_away, p.lambda_total
+       p.lambda_home, p.lambda_away
 FROM predictions p
 WHERE p.match_date >= NOW()
   AND p.match_date <  NOW() + (%(hours)s || ' hours')::interval
@@ -88,7 +89,11 @@ def band_of(x, bands):
 
 
 def _market_lam_series(df, market):
-    """Seria lambda relevantă pt bandă (lambda_home/away/total), per piață."""
+    """Seria lambda relevantă pt bandă, per piață. over15 = lambda_home+lambda_away
+    (lambda_total e ~90% NULL); gazde/oaspeti = coloana proprie."""
+    if market == "over15":
+        return (pd.to_numeric(df["lambda_home"], errors="coerce")
+                + pd.to_numeric(df["lambda_away"], errors="coerce"))
     return pd.to_numeric(df[MARKETS[market]["col"]], errors="coerce")
 
 
@@ -103,13 +108,20 @@ def _market_hit_series(df, market):
 
 
 def _future_lam(row, market):
+    if market == "over15":
+        h = row.get("lambda_home"); a = row.get("lambda_away")
+        h = float(h) if (h is not None and not pd.isna(h)) else None
+        a = float(a) if (a is not None and not pd.isna(a)) else None
+        if h is None or a is None:
+            return None
+        return h + a
     v = row.get(MARKETS[market]["col"])
     return float(v) if (v is not None and not pd.isna(v)) else None
 
 
 def load_history(conn):
     df = pd.read_sql(QUERY_HISTORY, conn)
-    for c in ["home_goals", "away_goals", "lambda_home", "lambda_away", "lambda_total"]:
+    for c in ["home_goals", "away_goals", "lambda_home", "lambda_away"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
 
