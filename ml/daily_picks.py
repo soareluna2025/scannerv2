@@ -2,8 +2,12 @@
 AlohaScan — daily_picks.py — MOTOR PONTURI pe PATTERN ISTORIC (read-only, zero model).
 
 CONCEPT: pentru fiecare meci viitor ne uităm la rata REALĂ istorică a pieței în
-„zona" lui = (ligă × bandă de goluri-așteptate, din xg). Scoatem pontul DOAR dacă
-zona e dovedit fiabilă (N mare + rată mare). Zero model ML, zero cote — doar istoric.
+„zona" lui = (ligă × bandă de goluri-așteptate, din lambda Poisson). Scoatem pontul
+DOAR dacă zona e dovedit fiabilă (N mare + rată mare). Zero model ML, zero cote —
+doar istoric real.
+
+Banding-ul folosește predictions.lambda_* (NU ml_features.xg) — fixturile VIITOARE
+n-au rânduri în ml_features, dar AU lambda în predictions.
 
 READ-ONLY pe DB (doar SELECT). NU atinge enrich/ml-predict/scoring/calibrare/
 frontend/cron. Conexiunea (.env + psycopg2) e REFOLOSITĂ din ml/test_accuracy.py.
@@ -31,7 +35,7 @@ import test_accuracy as ta
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 DAILY_PICKS_JSON = os.path.join(os.path.dirname(_THIS_DIR), "public", "daily_picks.json")
 
-# Benzi de goluri-așteptate (xg). Half-open [lo, hi); ultima prinde restul.
+# Benzi de goluri-așteptate (lambda). Half-open [lo, hi); ultima prinde restul.
 TEAM_BANDS = [
     (-np.inf, 0.8, "<0.8"), (0.8, 1.0, "0.8-1.0"), (1.0, 1.2, "1.0-1.2"),
     (1.2, 1.5, "1.2-1.5"), (1.5, 1.8, "1.5-1.8"), (1.8, np.inf, ">=1.8"),
@@ -41,33 +45,35 @@ TOTAL_BANDS = [
     (3.0, 3.5, "3.0-3.5"), (3.5, 4.0, "3.5-4.0"), (4.0, np.inf, ">=4.0"),
 ]
 
-# piață → (xg folosit, benzi). xg: 'home'/'away' (bandă echipă) sau 'total' (bandă total).
+# piață → (coloana lambda pt bandă, benzi).
 MARKETS = {
-    "gazde":   {"xg": "home",  "bands": TEAM_BANDS},
-    "oaspeti": {"xg": "away",  "bands": TEAM_BANDS},
-    "over15":  {"xg": "total", "bands": TOTAL_BANDS},
+    "gazde":   {"col": "lambda_home",  "bands": TEAM_BANDS},
+    "oaspeti": {"col": "lambda_away",  "bands": TEAM_BANDS},
+    "over15":  {"col": "lambda_total", "bands": TOTAL_BANDS},
 }
 MARKET_LABEL = {"gazde": "Gazde marchează", "oaspeti": "Oaspeții marchează", "over15": "Over 1.5"}
 ALL_MARKETS = ["gazde", "oaspeti", "over15"]
 
 
-# Istoric: meciuri FT cu scor + xg (ml_features). Ordonat temporal pt split backtest.
+# Istoric: meciuri FT cu scor (fixtures_history) + lambda (predictions). Banding din
+# predictions.lambda_*; outcome din fixtures_history. Ordonat temporal pt split backtest.
 QUERY_HISTORY = """
-SELECT fh.fixture_id, fh.league_id, fh.match_date, fh.home_goals, fh.away_goals,
-       mlf.home_xg_avg, mlf.away_xg_avg
-FROM fixtures_history fh
-JOIN ml_features mlf ON mlf.fixture_id = fh.fixture_id
+SELECT p.fixture_id, p.league_id, p.match_date,
+       fh.home_goals, fh.away_goals,
+       p.lambda_home, p.lambda_away, p.lambda_total
+FROM predictions p
+JOIN fixtures_history fh ON fh.fixture_id = p.fixture_id
 WHERE fh.status_short = 'FT'
   AND fh.home_goals IS NOT NULL AND fh.away_goals IS NOT NULL
-ORDER BY fh.match_date ASC
+ORDER BY p.match_date ASC
 """
 
 # Viitor: meciuri NEÎNCEPUTE în următoarele N ore (fereastră absolută, fără fus).
+# Banding din predictions.lambda_* — FĂRĂ ml_features (viitorul n-are xg).
 QUERY_FUTURE = """
 SELECT p.fixture_id, p.home_team, p.away_team, p.league_name, p.league_id,
-       mlf.home_xg_avg, mlf.away_xg_avg
+       p.lambda_home, p.lambda_away, p.lambda_total
 FROM predictions p
-JOIN ml_features mlf ON mlf.fixture_id = p.fixture_id
 WHERE p.match_date >= NOW()
   AND p.match_date <  NOW() + (%(hours)s || ' hours')::interval
 ORDER BY p.match_date ASC
@@ -81,15 +87,9 @@ def band_of(x, bands):
     return bands[-1][2]
 
 
-def _market_xg_series(df, market):
-    kind = MARKETS[market]["xg"]
-    h = pd.to_numeric(df["home_xg_avg"], errors="coerce")
-    a = pd.to_numeric(df["away_xg_avg"], errors="coerce")
-    if kind == "home":
-        return h
-    if kind == "away":
-        return a
-    return h + a
+def _market_lam_series(df, market):
+    """Seria lambda relevantă pt bandă (lambda_home/away/total), per piață."""
+    return pd.to_numeric(df[MARKETS[market]["col"]], errors="coerce")
 
 
 def _market_hit_series(df, market):
@@ -102,23 +102,14 @@ def _market_hit_series(df, market):
     return ((hg + ag) >= 2).astype(int)
 
 
-def _future_xg(row, market):
-    kind = MARKETS[market]["xg"]
-    h = row.get("home_xg_avg"); a = row.get("away_xg_avg")
-    h = float(h) if (h is not None and not pd.isna(h)) else None
-    a = float(a) if (a is not None and not pd.isna(a)) else None
-    if kind == "home":
-        return h
-    if kind == "away":
-        return a
-    if h is None or a is None:
-        return None
-    return h + a
+def _future_lam(row, market):
+    v = row.get(MARKETS[market]["col"])
+    return float(v) if (v is not None and not pd.isna(v)) else None
 
 
 def load_history(conn):
     df = pd.read_sql(QUERY_HISTORY, conn)
-    for c in ["home_goals", "away_goals", "home_xg_avg", "away_xg_avg"]:
+    for c in ["home_goals", "away_goals", "lambda_home", "lambda_away", "lambda_total"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
 
@@ -132,12 +123,12 @@ def build_reliability(hist, market, min_n, min_rate):
     """Zone (league_id × bandă) cu R=hits/N. Întoarce dict {(lid,band):(R,N)} cu
     DOAR zonele păstrate (N>=min_n ȘI R>=min_rate)."""
     bands = MARKETS[market]["bands"]
-    xg = _market_xg_series(hist, market)
-    mask = xg.notna()
+    lam = _market_lam_series(hist, market)
+    mask = lam.notna()
     sub = hist[mask].copy()
     if sub.empty:
         return {}
-    sub["_band"] = xg[mask].map(lambda v: band_of(v, bands))
+    sub["_band"] = lam[mask].map(lambda v: band_of(v, bands))
     sub["_hit"] = _market_hit_series(sub, market).to_numpy()
     g = sub.groupby(["league_id", "_band"])["_hit"]
     R = g.mean(); N = g.size()
@@ -157,10 +148,10 @@ def select_today(hist, future, markets, min_n, min_rate):
         lid = row["league_id"]
         best = None
         for m in markets:
-            xgv = _future_xg(row, m)
-            if xgv is None:
+            lamv = _future_lam(row, m)
+            if lamv is None:
                 continue
-            band = band_of(xgv, MARKETS[m]["bands"])
+            band = band_of(lamv, MARKETS[m]["bands"])
             zone = rel[m].get((lid, band))
             if zone is None:
                 continue
@@ -211,10 +202,10 @@ def print_diagnostic(picks):
 def run_backtest(hist, markets, min_n, min_rate, train_frac=0.8):
     for m in markets:
         bands = MARKETS[m]["bands"]
-        xg = _market_xg_series(hist, m)
-        mask = xg.notna()
+        lam = _market_lam_series(hist, m)
+        mask = lam.notna()
         sub = hist[mask].copy()
-        sub["_band"] = xg[mask].map(lambda v: band_of(v, bands))
+        sub["_band"] = lam[mask].map(lambda v: band_of(v, bands))
         sub["_hit"] = _market_hit_series(sub, m).to_numpy()
         sub = sub.sort_values("match_date")
         n = len(sub)
