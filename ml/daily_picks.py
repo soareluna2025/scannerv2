@@ -71,10 +71,16 @@ ORDER BY p.match_date ASC
 
 # Viitor: meciuri NEÎNCEPUTE în următoarele N ore (fereastră absolută, fără fus).
 # Banding din predictions.lambda_* — FĂRĂ ml_features (viitorul n-are xg).
+# Îmbogățire afișare: nume/țară/steag ligă (leagues) + logo echipe (teams pe nume).
 QUERY_FUTURE = """
-SELECT p.fixture_id, p.home_team, p.away_team, p.league_name, p.league_id,
+SELECT p.fixture_id, p.home_team, p.away_team, p.league_id,
+       l.name AS league_name, l.country AS country, l.flag AS flag,
+       th.logo AS home_logo, ta.logo AS away_logo,
        p.lambda_home, p.lambda_away
 FROM predictions p
+LEFT JOIN leagues l ON l.league_id = p.league_id
+LEFT JOIN teams th ON th.name = p.home_team
+LEFT JOIN teams ta ON ta.name = p.away_team
 WHERE p.match_date >= NOW()
   AND p.match_date <  NOW() + (%(hours)s || ' hours')::interval
 ORDER BY p.match_date ASC
@@ -127,7 +133,9 @@ def load_history(conn):
 
 
 def load_future(conn, hours):
-    return pd.read_sql(QUERY_FUTURE, conn, params={"hours": str(hours)})
+    df = pd.read_sql(QUERY_FUTURE, conn, params={"hours": str(hours)})
+    # JOIN teams pe NUME poate da rânduri duplicate (nume neunic) → păstrăm 1/fixtură.
+    return df.drop_duplicates(subset=["fixture_id"], keep="first").reset_index(drop=True)
 
 
 # ── PASUL 1 — TABEL DE FIABILITATE (din istoric) ─────────────────────────────
@@ -170,7 +178,9 @@ def select_today(hist, future, markets, min_n, min_rate):
             R, N = zone
             if best is None or R > best["R"]:
                 best = {"fixture_id": row["fixture_id"], "home": row["home_team"],
-                        "away": row["away_team"], "league_name": row["league_name"],
+                        "away": row["away_team"], "league_name": row.get("league_name"),
+                        "country": row.get("country"), "flag": row.get("flag"),
+                        "home_logo": row.get("home_logo"), "away_logo": row.get("away_logo"),
                         "league_id": lid, "market": m, "R": R, "N": N, "band": band}
         if best is not None:
             best_per_fixture[row["fixture_id"]] = best   # O singură piață/meci (R maxim)
@@ -185,9 +195,25 @@ def select_today(hist, future, markets, min_n, min_rate):
 
 
 # ── PASUL 4 — output ─────────────────────────────────────────────────────────
+def _clean(v):
+    """NaN/None/gol → None; altfel string curat (pt JSON: logo/flag/țară lipsă = None)."""
+    if v is None:
+        return None
+    try:
+        if pd.isna(v):
+            return None
+    except (TypeError, ValueError):
+        pass
+    s = str(v).strip()
+    return s or None
+
+
 def write_json(picks, out_path=DAILY_PICKS_JSON):
     picks_list = [{
-        "home": p["home"], "away": p["away"], "league_name": p["league_name"],
+        "home": p["home"], "away": p["away"],
+        "league_name": _clean(p.get("league_name")),
+        "country": _clean(p.get("country")), "flag": _clean(p.get("flag")),
+        "home_logo": _clean(p.get("home_logo")), "away_logo": _clean(p.get("away_logo")),
         "market": MARKET_LABEL[p["market"]],
         "p_cal": round(p["R"], 4), "p_poisson": round(p["R"], 4),
         "confidence": round(p["R"] * 100),

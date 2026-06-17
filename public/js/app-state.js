@@ -142,16 +142,31 @@ function dpRenderPage(){
       +'<div class="empty-t">Niciun pont de încredere azi</div></div>';
     return;
   }
+  // Logo (img doar dacă URL http; lipsă → nimic). onerror ascunde img-ul stricat.
+  var logo=function(u){
+    return (u && /^https?:/i.test(u))
+      ? '<img class="dp-logo" src="'+_dpEsc(u)+'" onerror="this.style.display=\'none\'">' : '';
+  };
+  // Steag: URL http → <img>, altfel emoji/text. Lipsă → nimic.
+  var flagHtml=function(f){
+    if(!f) return '';
+    return /^https?:/i.test(f)
+      ? '<img class="dp-flag" src="'+_dpEsc(f)+'" onerror="this.style.display=\'none\'">'
+      : (_dpEsc(f)+' ');
+  };
   var out='';
   _dpPicks.forEach(function(p){
     var pct=Math.round((p.p_cal!=null?p.p_cal:0)*100);
     var conf=(p.confidence!=null?Math.round(p.confidence)+'%':'—');
     var mk=_dpEsc(p.market)+' ('+pct+'%)';
+    var lgName=p.league_name?_dpEsc(p.league_name):'';
+    var ctry=p.country?(' · '+_dpEsc(p.country)):'';
+    var lgRow=lgName?('<div class="dp-league">'+flagHtml(p.flag)+lgName+ctry+'</div>'):'';
     out+='<div class="wc-pont">';
-    out+='<div class="wc-pont-match">'+_dpEsc(p.home)+' vs '+_dpEsc(p.away)+'</div>';
+    out+='<div class="wc-pont-match">'+logo(p.home_logo)+_dpEsc(p.home)+' vs '+logo(p.away_logo)+_dpEsc(p.away)+'</div>';
     out+='<div class="wc-pont-conf">'+conf+'</div>';
     out+='<div class="wc-pont-market">Piață recomandată: <b style="color:var(--gold)">'+mk+'</b></div>';
-    out+='<div style="font-size:11px;color:var(--mu);margin-top:4px">'+_dpEsc(p.league_name||'')+'</div>';
+    out+=lgRow;
     out+='</div>';
   });
   body.innerHTML=out;
