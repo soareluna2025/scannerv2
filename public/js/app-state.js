@@ -147,12 +147,19 @@ function dpRenderPage(){
     return (u && /^https?:/i.test(u))
       ? '<img class="dp-logo" src="'+_dpEsc(u)+'" onerror="this.style.display=\'none\'">' : '';
   };
-  // Steag: URL http → <img>, altfel emoji/text. Lipsă → nimic.
-  var flagHtml=function(f){
-    if(!f) return '';
-    return /^https?:/i.test(f)
-      ? '<img class="dp-flag" src="'+_dpEsc(f)+'" onerror="this.style.display=\'none\'">'
-      : (_dpEsc(f)+' ');
+  // Steag: URL http → <img>; emoji/text → direct; lipsă → derivă din țară
+  // (REFOLOSEȘTE countryToFlag din app-ui.js; '🏳️'/necunoscut → fără steag).
+  var flagHtml=function(f, country){
+    if(f){
+      return /^https?:/i.test(f)
+        ? '<img class="dp-flag" src="'+_dpEsc(f)+'" onerror="this.style.display=\'none\'">'
+        : (_dpEsc(f)+' ');
+    }
+    if(country && typeof countryToFlag==='function'){
+      var e=countryToFlag(country);
+      if(e && e!=='🏳️') return e+' ';
+    }
+    return '';
   };
   var out='';
   _dpPicks.forEach(function(p){
@@ -161,7 +168,7 @@ function dpRenderPage(){
     var mk=_dpEsc(p.market)+' ('+pct+'%)';
     var lgName=p.league_name?_dpEsc(p.league_name):'';
     var ctry=p.country?(' · '+_dpEsc(p.country)):'';
-    var lgRow=lgName?('<div class="dp-league">'+flagHtml(p.flag)+lgName+ctry+'</div>'):'';
+    var lgRow=lgName?('<div class="dp-league">'+flagHtml(p.flag, p.country)+lgName+ctry+'</div>'):'';
     out+='<div class="wc-pont">';
     out+='<div class="wc-pont-match">'+logo(p.home_logo)+_dpEsc(p.home)+' vs '+logo(p.away_logo)+_dpEsc(p.away)+'</div>';
     out+='<div class="wc-pont-conf">'+conf+'</div>';
