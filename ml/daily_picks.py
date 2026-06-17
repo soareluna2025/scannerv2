@@ -265,7 +265,7 @@ def main():
     ap.add_argument("--backtest", action="store_true", help="stabilitate zone (split temporal 80/20)")
     ap.add_argument("--market", choices=["gazde", "oaspeti", "over15", "all"], default="all")
     ap.add_argument("--min-n", type=int, default=200, help="N minim pe zonă (default 200)")
-    ap.add_argument("--min-rate", type=float, default=0.80, help="rată minimă pe zonă (default 0.80)")
+    ap.add_argument("--min-rate", type=float, default=0.75, help="rată minimă pe zonă (default 0.75)")
     ap.add_argument("--hours", type=int, default=24, help="fereastră meciuri viitoare în ore (default 24)")
     args = ap.parse_args()
 

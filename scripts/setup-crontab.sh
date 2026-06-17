@@ -66,7 +66,7 @@ NEW_CRONTAB=$(cat <<EOF
 30 6 * * * cd /root/scannerv2 && python3 -u ml/train_live_v2.py >> /root/.pm2/logs/train-live-v2.log 2>&1
 50 6 * * * cd /root/scannerv2 && python3 -u ml/calibrate.py >> /root/scannerv2/logs/calibrate.log 2>&1
 # Ponturile Zilei → public/daily_picks.json (08:00, DUPĂ auto-predict 00:30 + build-ml-features 03:00 + calibrate 06:50).
-0 8 * * * cd ${APP_DIR} && set -a && . ${APP_DIR}/.env && set +a && python3 ml/daily_picks.py --write >> ${APP_DIR}/logs/daily-picks.log 2>&1
+*/10 * * * * cd ${APP_DIR} && set -a && . ${APP_DIR}/.env && set +a && python3 ml/daily_picks.py --write >> ${APP_DIR}/logs/daily-picks.log 2>&1
 EOF
 )
 
