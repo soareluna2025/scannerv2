@@ -185,12 +185,13 @@ def select_today(hist, future, markets, min_n, min_rate):
         if best is not None:
             best_per_fixture[row["fixture_id"]] = best   # O singură piață/meci (R maxim)
     picks = sorted(best_per_fixture.values(), key=lambda d: d["R"], reverse=True)
-    # Max 2 ponturi/ligă, FĂRĂ plafon total.
-    out, lg = [], {}
+    # Max 2 ponturi/ȚARĂ (country), FĂRĂ plafon total. country None → bucket propriu.
+    out, cc = [], {}
     for p in picks:
-        if lg.get(p["league_id"], 0) >= 2:
+        ckey = p.get("country") if p.get("country") else ("__none__", p["fixture_id"])
+        if cc.get(ckey, 0) >= 2:
             continue
-        out.append(p); lg[p["league_id"]] = lg.get(p["league_id"], 0) + 1
+        out.append(p); cc[ckey] = cc.get(ckey, 0) + 1
     return out
 
 
@@ -291,7 +292,7 @@ def main():
     ap.add_argument("--backtest", action="store_true", help="stabilitate zone (split temporal 80/20)")
     ap.add_argument("--market", choices=["gazde", "oaspeti", "over15", "all"], default="all")
     ap.add_argument("--min-n", type=int, default=200, help="N minim pe zonă (default 200)")
-    ap.add_argument("--min-rate", type=float, default=0.75, help="rată minimă pe zonă (default 0.75)")
+    ap.add_argument("--min-rate", type=float, default=0.70, help="rată minimă pe zonă (default 0.70)")
     ap.add_argument("--hours", type=int, default=24, help="fereastră meciuri viitoare în ore (default 24)")
     args = ap.parse_args()
 
