@@ -170,12 +170,25 @@
 .ev-best-box{margin-top:10px;padding:10px;background:rgba(34,197,94,.08);border-radius:8px;border:1px solid rgba(34,197,94,.2)}
 
 /* PRE-MECI */
-.pm-card{background:var(--sur);border:1px solid var(--bor);border-radius:16px;margin-bottom:8px;overflow:hidden}
-.pm-header{padding:12px 14px;border-bottom:1px solid var(--bor)}
-.pm-kickoff{font-size:10px;color:var(--mu2);font-weight:600;margin-bottom:4px}
-.pm-teams{font-size:15px;font-weight:800;color:var(--tx);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.pm-league{font-size:10px;color:var(--mu);margin-top:2px}
-.pm-body{padding:12px 14px}
+.pm-card{
+    background:
+        linear-gradient(180deg,rgba(255,255,255,.02) 0%,rgba(255,255,255,0) 14%),
+        linear-gradient(180deg,#12171f 0%,#0c1016 100%);
+    border:1px solid rgba(255,255,255,.06);
+    border-radius:18px;
+    margin-bottom:14px;
+    overflow:hidden;
+    box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px rgba(0,0,0,.34);
+}
+.pm-header{
+    padding:14px 16px 12px;
+    border-bottom:1px solid rgba(255,255,255,.055);
+    background:linear-gradient(180deg,rgba(255,255,255,.018),rgba(255,255,255,0));
+}
+.pm-kickoff{font-size:10px;color:var(--mu2);font-weight:700;margin-bottom:4px;letter-spacing:.4px}
+.pm-teams{font-size:15px;font-weight:800;color:var(--tx);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pm-league{font-size:10px;color:var(--mu);margin-top:3px;letter-spacing:.3px}
+.pm-body{padding:14px 16px}
 .pm-meter-row{
     display:flex;
     align-items:center;
@@ -223,16 +236,12 @@
     min-width:38px;
     text-align:right;
 }
-.pm-stats{display:flex;gap:12px;margin-top:6px}
+.pm-stats{display:flex;gap:14px;margin-top:8px}
 .pm-stat{font-size:10px;color:var(--mu)}
-.pm-stat span{color:var(--mu2);font-weight:600}
-.pm-league-hdr{padding:10px 14px 4px;font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center}
-.pm-score-badge{display:inline-flex;align-items:center;
-  background:linear-gradient(135deg,var(--ac2),rgba(6,214,160,.08));
-  border:1px solid var(--ac3);border-radius:8px;padding:4px 10px;
-  font-size:12px;font-weight:800;color:var(--ac);margin-top:8px}
-.pm-summary{background:var(--sur2);border-radius:10px;padding:10px 14px;
-  margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.pm-stat span{color:var(--mu2);font-weight:700}
+.pm-league-hdr{padding:12px 14px 6px;font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center}
+.pm-score-badge{display:inline-flex;align-items:center;background:rgba(0,212,168,.12);border:1px solid rgba(0,212,168,.22);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:800;color:var(--ac);margin-top:8px}
+.pm-summary{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.05);border-radius:12px;padding:11px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
 .pm-summary-t{font-size:11px;color:var(--mu2)}
 .pm-summary-v{font-size:13px;font-weight:800;color:var(--ac)}
 
