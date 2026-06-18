@@ -13,6 +13,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- AdminLTE v4 shell (CDN): Bootstrap 5 + Bootstrap Icons + AdminLTE v4 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.2/dist/css/adminlte.min.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
@@ -921,8 +925,25 @@ body{
 #splash.spl-exit{animation:splBgFade .35s ease-in .4s forwards}
 @keyframes splBgFade{to{opacity:0}}
 </style>
+<!-- AdminLTE shell override — fundal #0a0a0a, accent #00D67D, fonturi păstrate -->
+<style>
+  :root{--alh-accent:#00D67D}
+  body{background:#0a0a0a !important}
+  .app-wrapper{background:#0a0a0a}
+  .app-main{background:#0a0a0a}
+  .app-content{padding-top:10px}
+  .app-content .page{max-width:none !important;width:auto !important;margin:0 !important}
+  /* Sidebar AdminLTE temat dark + accent verde brand */
+  .app-sidebar{background:#0d1117 !important;border-right:1px solid rgba(255,255,255,.06)}
+  .sidebar-brand{border-bottom:1px solid rgba(255,255,255,.06);padding:14px 16px}
+  .sidebar-brand .brand-text{font-family:'Rajdhani','Inter',sans-serif;font-weight:700;letter-spacing:.5px;color:#eafff6}
+  .sidebar-menu .nav-link{color:#9aa4b2;border-radius:8px;margin:2px 8px;font-family:'Rajdhani','Inter',sans-serif;font-weight:600}
+  .sidebar-menu .nav-link:hover{background:rgba(0,214,125,.08);color:#eafff6}
+  .sidebar-menu .nav-link.active{background:rgba(0,214,125,.14);color:#00D67D}
+  .sidebar-menu .nav-icon{color:#00D67D}
+</style>
 </head>
-<body>
+<body class="layout-fixed sidebar-expand-lg" data-bs-theme="dark">
 
 <!-- SPLASH SCREEN -->
 <div id="splash" onclick="splashTap()">
@@ -971,6 +992,42 @@ body{
   <div class="orb orb-3"></div>
 </div>
 
+<!-- ===== AdminLTE v4 shell ===== -->
+<div class="app-wrapper">
+  <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
+    <div class="sidebar-brand">
+      <a href="/admin" class="brand-link text-decoration-none">
+        <span class="brand-text"><b style="color:#00D67D">ALOHA</b>ADMIN</span>
+      </a>
+    </div>
+    <div class="sidebar-wrapper">
+      <nav class="mt-2">
+        <ul class="nav sidebar-menu flex-column" role="menu" data-lte-toggle="treeview">
+          <li class="nav-item"><a href="#cardStatus" class="nav-link" onclick="document.getElementById('cardStatus')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-speedometer2"></i><p>Status Sistem</p></a></li>
+          <li class="nav-item"><a href="#cardEnv" class="nav-link" onclick="document.getElementById('cardEnv')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-sliders"></i><p>Variabile ENV</p></a></li>
+          <li class="nav-item"><a href="#cardDB" class="nav-link" onclick="document.getElementById('cardDB')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-database"></i><p>Baza de Date</p></a></li>
+          <li class="nav-item"><a href="#cardAPI" class="nav-link" onclick="document.getElementById('cardAPI')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-cloud-arrow-down"></i><p>API Football Usage</p></a></li>
+          <li class="nav-item"><a href="#cardLive" class="nav-link" onclick="document.getElementById('cardLive')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-broadcast"></i><p>Meciuri Live</p></a></li>
+          <li class="nav-item"><a href="#cardStabilize" class="nav-link" onclick="document.getElementById('cardStabilize')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-shield-check"></i><p>Stabilizare completă DB</p></a></li>
+          <li class="nav-item"><a href="#cardCron" class="nav-link" onclick="document.getElementById('cardCron')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-clock-history"></i><p>Cron Jobs</p></a></li>
+          <li class="nav-item"><a href="#cardErrors" class="nav-link" onclick="document.getElementById('cardErrors')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-exclamation-triangle"></i><p>Erori Recente</p></a></li>
+          <li class="nav-item"><a href="#cardBackfill" class="nav-link" onclick="document.getElementById('cardBackfill')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-archive"></i><p>Backfill Date Istorice</p></a></li>
+          <li class="nav-item"><a href="#cardBackfillPlayers" class="nav-link" onclick="document.getElementById('cardBackfillPlayers')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-people"></i><p>Backfill Jucători</p></a></li>
+          <li class="nav-item"><a href="#cardExtractTeam" class="nav-link" onclick="document.getElementById('cardExtractTeam')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-download"></i><p>Extragere Echipă</p></a></li>
+          <li class="nav-item"><a href="#cardHealth" class="nav-link" onclick="document.getElementById('cardHealth')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-heart-pulse"></i><p>Health Check</p></a></li>
+          <li class="nav-item"><a href="#cardWinRate" class="nav-link" onclick="document.getElementById('cardWinRate')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-graph-up"></i><p>Win Rate Patterns</p></a></li>
+          <li class="nav-item"><a href="#cardCalibration" class="nav-link" onclick="document.getElementById('cardCalibration')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-bullseye"></i><p>Calibrare Probabilități</p></a></li>
+          <li class="nav-item"><a href="#cardVsApi" class="nav-link" onclick="document.getElementById('cardVsApi')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-bar-chart-steps"></i><p>Noi vs API Football</p></a></li>
+          <li class="nav-item"><a href="#cardScannerControl" class="nav-link" onclick="document.getElementById('cardScannerControl')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-toggles"></i><p>Control Scanner</p></a></li>
+          <li class="nav-item"><a href="#cardApiTrend" class="nav-link" onclick="document.getElementById('cardApiTrend')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-activity"></i><p>Trend Consum API</p></a></li>
+          <li class="nav-item"><a href="#cardDbCleanup" class="nav-link" onclick="document.getElementById('cardDbCleanup')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-trash"></i><p>Cleanup DB</p></a></li>
+          <li class="nav-item"><a href="#cardLeagues" class="nav-link" onclick="document.getElementById('cardLeagues')?.scrollIntoView({behavior:'smooth'});return false"><i class="nav-icon bi bi-trophy"></i><p>Inteligență Ligi</p></a></li>
+        </ul>
+      </nav>
+    </div>
+  </aside>
+  <main class="app-main">
+    <div class="app-content"><div class="container-fluid">
 <div class="page">
 
 <header class="header">
@@ -1272,9 +1329,6 @@ body{
     </div>
   </section>
 
-  <!-- [P04] Cardul „Statistici Bilete & ROI" eliminat: apela /api/admin/bets-aggregate
-       (endpoint inexistent → 404 permanent). Se reconstruiește la „Pontul Zilei" pe date reale. -->
-
   <section class="card" id="cardVsApi">
     <div class="card-h">
       <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3L2 9l10 6 10-6-10-6z"/><path d="M2 15l10 6 10-6"/><path d="M2 12l10 6 10-6"/></svg></span>
@@ -1371,6 +1425,10 @@ body{
 </nav>
 
 </div>
+    </div></div>
+  </main>
+</div>
+<!-- ===== /AdminLTE v4 shell ===== -->
 
 <div id="toast"></div>
 
@@ -2337,7 +2395,6 @@ async function loadCalibration() {
 // [P28] triggerCalibration() eliminat — funcție moartă, nelegată de niciun buton
 // (trigger-cron se apelează direct din panoul „Trigger cron").
 
-// [P04] loadBetsAggregate() eliminat — apela /api/admin/bets-aggregate (inexistent → 404).
 
 // ──────────────────────────────────────────────────────────────
 // SCANNER CONTROL (pauza/resume)
@@ -2641,5 +2698,8 @@ async function loadVsApi() {
   }
 }
 </script>
+<!-- AdminLTE v4 shell JS (CDN) — Bootstrap bundle + AdminLTE -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.2/dist/js/adminlte.min.js"></script>
 </body>
 </html>
