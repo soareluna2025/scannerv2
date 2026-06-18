@@ -753,12 +753,15 @@ function renderPM(){
     var flag=m.league&&m.league.flag?'<img src="'+m.league.flag+'" style="width:12px;height:9px;object-fit:cover;border-radius:2px;margin-right:4px;">':'';
     var kickoff=m.fixture&&m.fixture.date?new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
     var enr=_pmEnrich[fid];
+      var _accc='';
+      if(enr&&enr.confidenceScore!=null){var _acv=enr.confidenceScore;_accc=_acv>=70?'rgba(6,214,160,.7)':_acv>=55?'rgba(245,158,11,.7)':'rgba(239,68,68,.7)';}
     var isTop=enr&&probs.length&&(enr.over15Prob||0)>=topThresh&&topThresh<999;
     var _pmcc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
     var o='';
     o+='<div class="pm-card" onclick="mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer;position:relative">';
+      if(_accc)o+='<div class="pm-accent" style="background:linear-gradient(90deg,transparent,'+_accc+',transparent)"></div>';
     o+='<div class="pm-header">';
-    o+='<div class="pm-kickoff"><button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>'+flag+lg+' · '+matchStatusLabel(m)+'</div>';
+    o+='<div class="pm-kickoff"><button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>'+flag+'<span class="pm-lname">'+lg+'</span><span class="pm-hmeta">'+matchStatusLabel(m)+'</span></div>';
     o+=mrRow(
       {flag:tLogo(m.teams&&m.teams.home,32), name:htmlEsc(hn)},
       {flag:tLogo(m.teams&&m.teams.away,32), name:htmlEsc(an)},
@@ -785,7 +788,7 @@ function renderPM(){
         if(enr.confidenceScore!=null){
           var _cs=enr.confidenceScore;
           var _cc=_cs>=70?'#22c55e':_cs>=55?'#f59e0b':'#ef4444';
-          o+='<div class="cring-wrap"><div class="cring" style="background:conic-gradient('+_cc+' '+_cs+'%,rgba(255,255,255,.08) 0)"><span class="cring-v" style="color:'+_cc+'">'+_cs+'%</span></div><span class="cring-l">Incredere</span></div>';
+          o+='<div class="cring-wrap"><div class="cring" style="background:conic-gradient('+_cc+' '+_cs+'%,rgba(255,255,255,.08) 0);box-shadow:0 0 14px '+_cc+'55"><span class="cring-v" style="color:'+_cc+'">'+_cs+'%</span></div><span class="cring-l">Incredere</span></div>';
         }
         o+='</div>';
       }
