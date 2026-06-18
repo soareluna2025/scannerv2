@@ -767,46 +767,40 @@ function renderPM(){
     o+='</div>';
     if(enr){
       o+='<div class="pm-body">';
-      o+='<div class="pm-meter-row"><div class="pm-meter-label">Over 1.5</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(enr.over15Prob||0,100)+'%;background:'+ec(enr.over15Prob)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(enr.over15Prob)+'">'+Math.round(enr.over15Prob||0)+'%</div></div>';
-      o+='<div class="pm-meter-row"><div class="pm-meter-label">GG</div><div class="pm-meter-bar"><div class="pm-meter-fill" style="width:'+Math.min(enr.ggProb||0,100)+'%;background:'+ec(enr.ggProb)+'"></div></div><div class="pm-meter-pct" style="color:'+ec(enr.ggProb)+'">'+Math.round(enr.ggProb||0)+'%</div></div>';
-      o+='<div class="pm-stats">';
-      o+='<span class="pm-stat">λ <span>'+Number(enr.lambdaTotal||0).toFixed(2)+'</span></span>';
-      o+='<span class="pm-stat">Gazde <span style="color:'+ec(enr.homeScoreRate)+'">'+( enr.homeScoreRate!=null?enr.homeScoreRate+'%':'—')+'</span></span>';
-      o+='<span class="pm-stat">Oaspeti <span style="color:'+ec(enr.awayScoreRate)+'">'+( enr.awayScoreRate!=null?enr.awayScoreRate+'%':'—')+'</span></span>';
-      // Badge LOW/MED/HIGH derivat din confidenceScore (pragurile noi 70/55)
-      if(enr.confidenceScore!=null){
-        var _csPm=enr.confidenceScore;
-        var _cbPm=_csPm>=70?'HIGH':_csPm>=55?'MED':'LOW';
-        o+='<span class="badge-conf '+_cbPm+'">'+_cbPm+'</span>';
-      }
-      o+='</div>';
-      if(enr.homeWin!=null)o+='<div class="enrich-row hda-row"><span style="color:'+ec(enr.homeWin)+'">H:'+enr.homeWin+'%</span><span style="color:'+ec(enr.draw)+'">D:'+enr.draw+'%</span><span style="color:'+ec(enr.awayWin)+'">A:'+enr.awayWin+'%</span></div>';
-      if(enr.confidenceScore!=null){
-        var cs=enr.confidenceScore;
-        var confColor=cs>=70?'#22c55e':cs>=55?'#f59e0b':'#ef4444';
-        var safeBadge='';
-        o+='<div class="conf-bar-wrap">'+
-          '<div class="conf-bar-bg"><div class="conf-bar-fill" style="width:'+cs+'%;background:'+confColor+'"></div></div>'+
-          '<div class="conf-score-row">'+
-            '<span class="conf-pct" style="color:'+confColor+'">'+cs+'%</span>'+
-            '<span class="conf-label">ÎNCREDERE</span>'+
-          '</div>'+safeBadge+'</div>';
-      }
-      var _hasStr=enr.teamStrengthHome!=null||enr.teamStrengthAway!=null;
-      if(_hasStr||isTop||_pmcc){
-        o+='<div class="enrich-row" style="margin-top:6px;align-items:center">';
-        if(_hasStr){
-          var sh=enr.teamStrengthHome!=null?enr.teamStrengthHome:'?';
-          var sa=enr.teamStrengthAway!=null?enr.teamStrengthAway:'?';
-          o+='<span class="str-badge">STR: '+sh+' vs '+sa+'</span>';
-        }
-        if(isTop||_pmcc){
-          o+='<span style="margin-left:auto;display:flex;align-items:center;gap:6px">';
-          if(_pmcc)o+='<span style="font-size:9px;color:var(--mu);font-weight:700">('+_pmcc+')</span>';
-          if(isTop)o+='<span class="badge-top">TOP PICK</span>';
-          o+='</span>';
+      var _mk=[];
+      if(enr.over15Prob!=null)_mk.push({k:'Over 1.5',v:enr.over15Prob});
+      if(enr.ggProb!=null)_mk.push({k:'GG',v:enr.ggProb});
+      if(enr.homeScoreRate!=null)_mk.push({k:'Gazde marcheaza',v:enr.homeScoreRate});
+      if(enr.awayScoreRate!=null)_mk.push({k:'Oaspeti marcheaza',v:enr.awayScoreRate});
+      _mk.sort(function(a,b){return b.v-a.v;});
+      var _hero=_mk.length?_mk[0]:null;
+      var _tier=null;
+      if(enr.confidenceScore!=null)_tier=enr.confidenceScore>=70?'HIGH':enr.confidenceScore>=55?'MED':'LOW';
+      if(_hero){
+        o+='<div class="pm-hero"><div class="pm-hero-main">';
+        o+='<div class="pm-eb">Pont principal'+(_tier?' <span class="badge-conf '+_tier+'" style="padding:1px 6px;font-size:8px">'+_tier+'</span>':'')+(isTop?' <span class="badge-top">TOP</span>':'')+'</div>';
+        o+='<div class="pm-hero-pk"><span class="pm-hero-nm">'+_hero.k+'</span><span class="pm-hero-pc" style="color:'+ec(_hero.v)+'">'+Math.round(_hero.v)+'%</span></div>';
+        o+='<div class="pm-hero-bar"><i style="width:'+Math.min(_hero.v,100)+'%;background:'+ec(_hero.v)+'"></i></div>';
+        o+='</div>';
+        if(enr.confidenceScore!=null){
+          var _cs=enr.confidenceScore;
+          var _cc=_cs>=70?'#22c55e':_cs>=55?'#f59e0b':'#ef4444';
+          o+='<div class="cring-wrap"><div class="cring" style="background:conic-gradient('+_cc+' '+_cs+'%,rgba(255,255,255,.08) 0)"><span class="cring-v" style="color:'+_cc+'">'+_cs+'%</span></div><span class="cring-l">Incredere</span></div>';
         }
         o+='</div>';
+      }
+      o+='<div class="pm-grp"><div class="pm-grp-h"><span class="pm-ge">Goluri</span><span class="pm-lam">λ '+Number(enr.lambdaTotal||0).toFixed(2)+'</span></div><div class="pm-chips">';
+      _mk.forEach(function(it){ if(_hero&&it.k===_hero.k)return; o+='<span class="pm-chip">'+it.k.replace(' marcheaza','')+' <b style="color:'+ec(it.v)+'">'+Math.round(it.v)+'%</b></span>'; });
+      o+='</div></div>';
+      if(enr.homeWin!=null){
+        var _rr='';
+        if(enr.teamStrengthHome!=null||enr.teamStrengthAway!=null){var _sh=enr.teamStrengthHome!=null?enr.teamStrengthHome:'?';var _sa=enr.teamStrengthAway!=null?enr.teamStrengthAway:'?';_rr+='<span class="str-badge">STR '+_sh+'v'+_sa+'</span>';}
+        if(_pmcc)_rr+='<span class="pm-ctag">'+_pmcc+'</span>';
+        o+='<div class="pm-grp"><div class="pm-grp-h"><span class="pm-ge">Rezultat</span>'+(_rr?'<span style="margin-left:auto;display:flex;gap:6px;align-items:center">'+_rr+'</span>':'')+'</div><div class="pm-chips">';
+        o+='<span class="pm-chip">1 <b style="color:'+ec(enr.homeWin)+'">'+enr.homeWin+'%</b></span>';
+        o+='<span class="pm-chip">X <b style="color:'+ec(enr.draw)+'">'+enr.draw+'%</b></span>';
+        o+='<span class="pm-chip">2 <b style="color:'+ec(enr.awayWin)+'">'+enr.awayWin+'%</b></span>';
+        o+='</div></div>';
       }
       o+='</div>';
     }else{
