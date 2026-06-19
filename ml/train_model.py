@@ -109,6 +109,12 @@ SELECT
     mlf.home_goals_r1_avg, mlf.away_goals_r1_avg,
     mlf.home_goals_r2_avg, mlf.away_goals_r2_avg,
     mlf.home_subs_avg, mlf.away_subs_avg,
+    mlf.home_tm_scored_r2_share, mlf.away_tm_scored_r2_share,
+    mlf.home_tm_conceded_r2_share, mlf.away_tm_conceded_r2_share,
+    mlf.home_tm_scored_late_share, mlf.away_tm_scored_late_share,
+    mlf.home_tm_conceded_late_share, mlf.away_tm_conceded_late_share,
+    mlf.home_tm_scored_r1_rate, mlf.away_tm_scored_r1_rate,
+    mlf.home_tm_scored_r2_rate, mlf.away_tm_scored_r2_rate,
     rs.pct_over_25  AS ref_pct_over25,
     CASE WHEN rs.referee_style = 'open' THEN 1 ELSE 0 END AS ref_style_open,
     p.created_at
@@ -182,6 +188,17 @@ FEATURES_HT = FEATURES_PREMATCH + [
     "goals_home_current", "goals_away_current", "goal_diff_current",
 ]
 
+# Features de TIMING goluri (rolling 20, point-in-time) — sursă valori: ml_features,
+# populat de api/cron/build-ml-features.js (calcul canonic api/utils/goal-timing-sql.js,
+# IDENTIC cu serving-ul din api/enrich.js). ADITIVE: folosite DOAR de piețele HT și R2
+# (experimentul a arătat câștig acolo; pe full-match 1X2 înrăutățeau Brier → EXCLUSE).
+_TIMING_BASE = ["tm_scored_r2_share", "tm_conceded_r2_share", "tm_scored_late_share",
+                "tm_conceded_late_share", "tm_scored_r1_rate", "tm_scored_r2_rate"]
+TIMING_FEATURES = [f"home_{b}" for b in _TIMING_BASE] + [f"away_{b}" for b in _TIMING_BASE]
+# Liste dedicate (NU mut FEATURES_PREMATCH/FEATURES_HT — sunt partajate cu full-match):
+FEATURES_HT_TIMING = FEATURES_PREMATCH + TIMING_FEATURES   # piețele ht_*
+FEATURES_R2_TIMING = FEATURES_HT + TIMING_FEATURES         # piețele r2_*
+
 MARKETS = {
     "over05_total": ("y_over05", FEATURES_PREMATCH, "Over 0.5 Total"),
     "over15_total": ("y_over15", FEATURES_PREMATCH, "Over 1.5 Total"),
@@ -194,31 +211,31 @@ MARKETS = {
     "home_win":     ("y_home_win", FEATURES_PREMATCH, "Home Win"),
     "draw":         ("y_draw",     FEATURES_PREMATCH, "Draw"),
     "away_win":     ("y_away_win", FEATURES_PREMATCH, "Away Win"),
-    # Repriza 1 (pre-meci features)
-    "ht_over05": ("y_ht_over05", FEATURES_PREMATCH, "HT Over 0.5"),
-    "ht_over15": ("y_ht_over15", FEATURES_PREMATCH, "HT Over 1.5"),
-    "ht_over25": ("y_ht_over25", FEATURES_PREMATCH, "HT Over 2.5"),
-    "ht_btts":   ("y_ht_btts",   FEATURES_PREMATCH, "HT BTTS"),
-    "ht_home":   ("y_ht_home",   FEATURES_PREMATCH, "HT Home Score"),
-    "ht_away":   ("y_ht_away",   FEATURES_PREMATCH, "HT Away Score"),
-    "ht_home_over15": ("y_ht_home_over15", FEATURES_PREMATCH, "HT Gazde Over 1.5"),
-    "ht_home_over25": ("y_ht_home_over25", FEATURES_PREMATCH, "HT Gazde Over 2.5"),
-    "ht_away_over15": ("y_ht_away_over15", FEATURES_PREMATCH, "HT Oaspeți Over 1.5"),
-    "ht_away_over25": ("y_ht_away_over25", FEATURES_PREMATCH, "HT Oaspeți Over 2.5"),
-    # Repriza 2 (pre-meci + HT features)
-    "r2_over05": ("y_r2_over05", FEATURES_HT, "R2 Over 0.5"),
-    "r2_over15": ("y_r2_over15", FEATURES_HT, "R2 Over 1.5"),
-    "r2_over25": ("y_r2_over25", FEATURES_HT, "R2 Over 2.5"),
-    "r2_btts":   ("y_r2_btts",   FEATURES_HT, "R2 BTTS"),
-    "r2_home":   ("y_r2_home",   FEATURES_HT, "R2 Home Score"),
-    "r2_away":   ("y_r2_away",   FEATURES_HT, "R2 Away Score"),
-    "r2_home_over15": ("y_r2_home_over15", FEATURES_HT, "R2 Gazde Over 1.5"),
-    "r2_home_over25": ("y_r2_home_over25", FEATURES_HT, "R2 Gazde Over 2.5"),
-    "r2_away_over15": ("y_r2_away_over15", FEATURES_HT, "R2 Oaspeți Over 1.5"),
-    "r2_away_over25": ("y_r2_away_over25", FEATURES_HT, "R2 Oaspeți Over 2.5"),
-    "r2_home_win": ("y_r2_home_win", FEATURES_HT, "R2 Gazde câștigă"),
-    "r2_draw":     ("y_r2_draw",     FEATURES_HT, "R2 Egal"),
-    "r2_away_win": ("y_r2_away_win", FEATURES_HT, "R2 Oaspeți câștigă"),
+    # Repriza 1 (pre-meci features + TIMING)
+    "ht_over05": ("y_ht_over05", FEATURES_HT_TIMING, "HT Over 0.5"),
+    "ht_over15": ("y_ht_over15", FEATURES_HT_TIMING, "HT Over 1.5"),
+    "ht_over25": ("y_ht_over25", FEATURES_HT_TIMING, "HT Over 2.5"),
+    "ht_btts":   ("y_ht_btts",   FEATURES_HT_TIMING, "HT BTTS"),
+    "ht_home":   ("y_ht_home",   FEATURES_HT_TIMING, "HT Home Score"),
+    "ht_away":   ("y_ht_away",   FEATURES_HT_TIMING, "HT Away Score"),
+    "ht_home_over15": ("y_ht_home_over15", FEATURES_HT_TIMING, "HT Gazde Over 1.5"),
+    "ht_home_over25": ("y_ht_home_over25", FEATURES_HT_TIMING, "HT Gazde Over 2.5"),
+    "ht_away_over15": ("y_ht_away_over15", FEATURES_HT_TIMING, "HT Oaspeți Over 1.5"),
+    "ht_away_over25": ("y_ht_away_over25", FEATURES_HT_TIMING, "HT Oaspeți Over 2.5"),
+    # Repriza 2 (pre-meci + HT features + TIMING)
+    "r2_over05": ("y_r2_over05", FEATURES_R2_TIMING, "R2 Over 0.5"),
+    "r2_over15": ("y_r2_over15", FEATURES_R2_TIMING, "R2 Over 1.5"),
+    "r2_over25": ("y_r2_over25", FEATURES_R2_TIMING, "R2 Over 2.5"),
+    "r2_btts":   ("y_r2_btts",   FEATURES_R2_TIMING, "R2 BTTS"),
+    "r2_home":   ("y_r2_home",   FEATURES_R2_TIMING, "R2 Home Score"),
+    "r2_away":   ("y_r2_away",   FEATURES_R2_TIMING, "R2 Away Score"),
+    "r2_home_over15": ("y_r2_home_over15", FEATURES_R2_TIMING, "R2 Gazde Over 1.5"),
+    "r2_home_over25": ("y_r2_home_over25", FEATURES_R2_TIMING, "R2 Gazde Over 2.5"),
+    "r2_away_over15": ("y_r2_away_over15", FEATURES_R2_TIMING, "R2 Oaspeți Over 1.5"),
+    "r2_away_over25": ("y_r2_away_over25", FEATURES_R2_TIMING, "R2 Oaspeți Over 2.5"),
+    "r2_home_win": ("y_r2_home_win", FEATURES_R2_TIMING, "R2 Gazde câștigă"),
+    "r2_draw":     ("y_r2_draw",     FEATURES_R2_TIMING, "R2 Egal"),
+    "r2_away_win": ("y_r2_away_win", FEATURES_R2_TIMING, "R2 Oaspeți câștigă"),
     # Goluri per echipă pre-meci
     "over15_home": ("y_over15_home", FEATURES_PREMATCH, "Gazde Over 1.5"),
     "over25_home": ("y_over25_home", FEATURES_PREMATCH, "Gazde Over 2.5"),
@@ -270,7 +287,7 @@ def assert_no_odds(feature_names):
 
 
 def main():
-    assert_no_odds(FEATURES_PREMATCH + FEATURES_HT)   # ZIDUL ANTI-COTE
+    assert_no_odds(FEATURES_PREMATCH + FEATURES_HT + TIMING_FEATURES)   # ZIDUL ANTI-COTE
     conn = get_conn()
     df = pd.read_sql(QUERY, conn)
     conn.close()

@@ -195,6 +195,19 @@ function buildFeatures(en, elo, lc) {
     away_goals_r2_avg: en.awayGoalsR2Avg,
     home_subs_avg: en.homeSubsAvg,
     away_subs_avg: en.awaySubsAvg,
+    // Timing goluri (rolling 20, point-in-time) — folosite DOAR de piețele HT/R2 ML.
+    home_tm_scored_r2_share: en.homeTmScoredR2Share,
+    away_tm_scored_r2_share: en.awayTmScoredR2Share,
+    home_tm_conceded_r2_share: en.homeTmConcededR2Share,
+    away_tm_conceded_r2_share: en.awayTmConcededR2Share,
+    home_tm_scored_late_share: en.homeTmScoredLateShare,
+    away_tm_scored_late_share: en.awayTmScoredLateShare,
+    home_tm_conceded_late_share: en.homeTmConcededLateShare,
+    away_tm_conceded_late_share: en.awayTmConcededLateShare,
+    home_tm_scored_r1_rate: en.homeTmScoredR1Rate,
+    away_tm_scored_r1_rate: en.awayTmScoredR1Rate,
+    home_tm_scored_r2_rate: en.homeTmScoredR2Rate,
+    away_tm_scored_r2_rate: en.awayTmScoredR2Rate,
     goal_diff_current: (_hgCur != null && _agCur != null) ? _hgCur - _agCur : 0,
   };
 }

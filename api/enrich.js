@@ -4,6 +4,7 @@ import { query } from './db.js';
 import { logPrediction } from './log-prediction.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
 import { getWeight } from './weights.js';
+import { timingBody } from './utils/goal-timing-sql.js';
 
 const PRE_MATCH_STATUSES = new Set(['NS']);
 const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
@@ -1235,6 +1236,23 @@ async function getMatchEventsAvg(teamId, matchDate) {
   } catch (_) { return null; }
 }
 
+// Timing goluri (rolling 20, point-in-time) — SURSĂ CANONICĂ api/utils/goal-timing-sql.js,
+// IDENTICĂ cu build-ml-features.js (ml_features). Serving → result.*_tm_*. Silent-fail → null.
+const _avgTimingCache = new Map();
+async function getGoalTimingAvg(teamId, matchDate) {
+  if (!teamId || !matchDate) return null;
+  _avgCachePrune();
+  if (_avgTimingCache.size > 5000) _avgTimingCache.clear();
+  const _ck = `${teamId}|${_dayOf(matchDate)}`;
+  if (_avgTimingCache.has(_ck)) return _avgTimingCache.get(_ck);
+  try {
+    const { rows } = await query(timingBody('$1', '$2'), [Number(teamId), matchDate]);
+    const _v = rows[0] || null;
+    _avgTimingCache.set(_ck, _v);
+    return _v;
+  } catch (_) { return null; }
+}
+
 // Transform h2h rows → API-Football-like format expected by calcPoisson
 function h2hToFixtures(rows) {
   return rows.map(row => ({
@@ -1270,7 +1288,7 @@ export default async function handler(req, res) {
   try {
     // --- Batch 1: DB queries + team strengths + injuries + match_stats + venue in parallel ---
     const _avgDate = dt || new Date().toISOString();
-    const [sbHForm, sbAForm, sbH2H, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA, lineupFactor, dbLambda, mshAvg, msaAvg, mehAvg, meaAvg] = await Promise.all([
+    const [sbHForm, sbAForm, sbH2H, teamStrengths, injuries, matchStats, leagueStats, refereeStats, venueInfo, stnH, stnA, apiPred, topScorerFactorH, topScorerFactorA, squadCntH, squadCntA, lineupFactor, dbLambda, mshAvg, msaAvg, mehAvg, meaAvg, gthAvg, gtaAvg] = await Promise.all([
       getHomeForm(hId),
       getAwayForm(aId),
       getH2HFromDB(hId, aId),
@@ -1293,6 +1311,8 @@ export default async function handler(req, res) {
       getMatchStatsAvg(aId, _avgDate),
       getMatchEventsAvg(hId, _avgDate),
       getMatchEventsAvg(aId, _avgDate),
+      getGoalTimingAvg(hId, _avgDate),
+      getGoalTimingAvg(aId, _avgDate),
     ]);
 
     // [C4] Dacă predictions DB are λ (collect-daily) → NU mai re-fetch-uim formă
@@ -1814,6 +1834,23 @@ export default async function handler(req, res) {
       result.awayGoalsR1Avg = _r2v(meaAvg.goals_r1_avg);
       result.awayGoalsR2Avg = _r2v(meaAvg.goals_r2_avg);
       result.awaySubsAvg    = _r2v(meaAvg.subs_avg);
+    }
+    // Timing goluri (rolling 20, point-in-time) — DOAR features ML pt piețele HT/R2.
+    if (gthAvg) {
+      result.homeTmScoredR2Share    = _r2v(gthAvg.tm_scored_r2_share);
+      result.homeTmConcededR2Share  = _r2v(gthAvg.tm_conceded_r2_share);
+      result.homeTmScoredLateShare  = _r2v(gthAvg.tm_scored_late_share);
+      result.homeTmConcededLateShare = _r2v(gthAvg.tm_conceded_late_share);
+      result.homeTmScoredR1Rate     = _r2v(gthAvg.tm_scored_r1_rate);
+      result.homeTmScoredR2Rate     = _r2v(gthAvg.tm_scored_r2_rate);
+    }
+    if (gtaAvg) {
+      result.awayTmScoredR2Share    = _r2v(gtaAvg.tm_scored_r2_share);
+      result.awayTmConcededR2Share  = _r2v(gtaAvg.tm_conceded_r2_share);
+      result.awayTmScoredLateShare  = _r2v(gtaAvg.tm_scored_late_share);
+      result.awayTmConcededLateShare = _r2v(gtaAvg.tm_conceded_late_share);
+      result.awayTmScoredR1Rate     = _r2v(gtaAvg.tm_scored_r1_rate);
+      result.awayTmScoredR2Rate     = _r2v(gtaAvg.tm_scored_r2_rate);
     }
     if (refereeStats) {
       result.refPctOver25 = _r2v(refereeStats.pct_over_25);

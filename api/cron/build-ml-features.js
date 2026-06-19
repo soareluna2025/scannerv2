@@ -9,6 +9,7 @@
 // Batch BATCH_SIZE fixture_id / rulare, idempotent (ON CONFLICT DO NOTHING),
 // reluabil (procesează DOAR fixturile din predictions încă nematerializate).
 import { query } from '../db.js';
+import { timingBody } from '../utils/goal-timing-sql.js';
 
 const BATCH_SIZE = 5000;
 
@@ -30,7 +31,13 @@ INSERT INTO ml_features (
   home_possession_avg, away_possession_avg,
   home_goals_r1_avg, away_goals_r1_avg,
   home_goals_r2_avg, away_goals_r2_avg,
-  home_subs_avg, away_subs_avg
+  home_subs_avg, away_subs_avg,
+  home_tm_scored_r2_share, away_tm_scored_r2_share,
+  home_tm_conceded_r2_share, away_tm_conceded_r2_share,
+  home_tm_scored_late_share, away_tm_scored_late_share,
+  home_tm_conceded_late_share, away_tm_conceded_late_share,
+  home_tm_scored_r1_rate, away_tm_scored_r1_rate,
+  home_tm_scored_r2_rate, away_tm_scored_r2_rate
 )
 SELECT
   p.fixture_id,
@@ -44,7 +51,13 @@ SELECT
   msh.possession_avg, msa.possession_avg,
   meh.goals_r1_avg, mea.goals_r1_avg,
   meh.goals_r2_avg, mea.goals_r2_avg,
-  meh.subs_avg, mea.subs_avg
+  meh.subs_avg, mea.subs_avg,
+  tmh.tm_scored_r2_share, tma.tm_scored_r2_share,
+  tmh.tm_conceded_r2_share, tma.tm_conceded_r2_share,
+  tmh.tm_scored_late_share, tma.tm_scored_late_share,
+  tmh.tm_conceded_late_share, tma.tm_conceded_late_share,
+  tmh.tm_scored_r1_rate, tma.tm_scored_r1_rate,
+  tmh.tm_scored_r2_rate, tma.tm_scored_r2_rate
 FROM (
   SELECT pp.fixture_id, pp.created_at
     FROM predictions pp
@@ -116,6 +129,9 @@ LEFT JOIN LATERAL (
         ORDER BY MAX(fhx.match_date) DESC LIMIT 100
     ) g
 ) mea ON true
+-- Timing goluri (rolling 20, point-in-time) — sursă canonică api/utils/goal-timing-sql.js
+LEFT JOIN LATERAL (${timingBody('fh.home_team_id', 'fh.match_date')}) tmh ON true
+LEFT JOIN LATERAL (${timingBody('fh.away_team_id', 'fh.match_date')}) tma ON true
 ON CONFLICT (fixture_id) DO NOTHING
 `;
 

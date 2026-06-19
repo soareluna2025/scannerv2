@@ -1081,6 +1081,13 @@ CREATE TABLE IF NOT EXISTS ml_features (
     home_goals_r1_avg NUMERIC, away_goals_r1_avg NUMERIC,
     home_goals_r2_avg NUMERIC, away_goals_r2_avg NUMERIC,
     home_subs_avg NUMERIC, away_subs_avg NUMERIC,
+    -- timing goluri (rolling 20, point-in-time) — adăugat via add-ml-features-timing.sql
+    home_tm_scored_r2_share NUMERIC, away_tm_scored_r2_share NUMERIC,
+    home_tm_conceded_r2_share NUMERIC, away_tm_conceded_r2_share NUMERIC,
+    home_tm_scored_late_share NUMERIC, away_tm_scored_late_share NUMERIC,
+    home_tm_conceded_late_share NUMERIC, away_tm_conceded_late_share NUMERIC,
+    home_tm_scored_r1_rate NUMERIC, away_tm_scored_r1_rate NUMERIC,
+    home_tm_scored_r2_rate NUMERIC, away_tm_scored_r2_rate NUMERIC,
     computed_at TIMESTAMPTZ DEFAULT NOW()
 );
 
