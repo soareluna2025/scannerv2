@@ -1,0 +1,7 @@
+# Dependențe IZOLATE pentru experiment_live_sequence.py (NU le instala în mediul appului).
+# Folosește un venv dedicat (vezi README_live_sequence.md).
+#
+# torch CPU pt SMOKE pe VPS; pe Colab GPU se folosește torch-ul preinstalat (NU instala din asta).
+numpy
+psycopg2-binary        # doar pt --extract (citește DB). Pe Colab nu e nevoie.
+torch                  # pe VPS: instalează varianta CPU (vezi README, --index-url cpu)
