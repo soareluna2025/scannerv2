@@ -64,14 +64,41 @@ cd /root/scannerv2 && /root/seqvenv/bin/python ml/experiment_live_sequence.py --
 ORDINEA `--inputs` = cronologică (2024→2025→2026), ca train-ul să rămână ordonat temporal.
 Urci pe Colab DOAR directorul `ml/live_seq_full/` — **fără DB**.
 
-### 3) TRAIN + EVAL pe Colab GPU (sau orice mașină cu torch; device-agnostic cuda/cpu)
+### 2b) TRANSFER VPS → Colab (bundle dataset + script, fără auth) — o singură linie fiecare
+Empachetează datasetul ȘI scriptul (Colab nu mai are nevoie de DB / git):
+```
+cd /root/scannerv2 && tar czf /tmp/live_seq_bundle.tgz -C /root/scannerv2 ml/live_seq_full ml/experiment_live_sequence.py && ls -lh /tmp/live_seq_bundle.tgz
+```
+Urcă pe un host public fără cont (dă un URL — match stats, fără secrete):
+```
+curl --upload-file /tmp/live_seq_bundle.tgz https://transfer.sh/live_seq_bundle.tgz ; echo
+```
+Pe Colab (sau prin notebook): `!wget -O bundle.tgz "<URL>" && tar xzf bundle.tgz`.
+
+**Alternativă Google Drive (iPhone):** descarci `/tmp/live_seq_bundle.tgz` prin Termius/SFTP,
+îl urci în Drive din Files, apoi în Colab `drive.mount(...)` + `!tar xzf .../live_seq_bundle.tgz`.
+
+### 3) TRAIN + EVAL pe Colab GPU — notebook gata: `ml/colab_live_sequence.ipynb`
+Deschide notebook-ul în Colab (Runtime → GPU), pune URL-ul de la `transfer.sh`, rulează celulele.
+Sau direct (device cuda automat):
 ```
 python3 ml/experiment_live_sequence.py --train --data ml/live_seq_full --ckpt ml/live_seq.pt --report ml/live_seq_eval.txt
 ```
-`--train` face și eval la final. Re-evaluare separată dintr-un checkpoint:
+`--train` face și eval la final (model vs base-rate + Poisson). Re-eval separat:
 ```
 python3 ml/experiment_live_sequence.py --eval --data ml/live_seq_full --ckpt ml/live_seq.pt --report ml/live_seq_eval.txt
 ```
+
+### 4) BASELINE-uri în eval (setul fără momentum)
+- **(a) base-rate marginal** din train — pragul minim absolut; modelul TREBUIE să-l bată.
+- **(b) Poisson no-xG** — clasic, din golurile-de-până-acum + minutul curent (shrink Bayesian
+  spre prior de fotbal 2.7 goluri/90), competing-Poisson → 3 clase. **Ținta reală de bătut.**
+- **(c) OPȚIONAL, PE VPS** (are nevoie de `live_stats`): head-to-head vs heuristica REALĂ
+  `calcNextGoalWindow(10)` cu xG live, doar pe sub-setul de test 2026 care are snapshot:
+```
+cd /root/scannerv2 && /root/seqvenv/bin/python ml/experiment_live_sequence.py --eval-livesubset --data ml/live_seq_full --ckpt ml/live_seq.pt --report ml/live_seq_eval_c.txt
+```
+Raportul scoate Brier **multiclass + binar** (colaps any-goal) + ECE + reliability, model vs fiecare baseline.
 
 ## Ce salvează
 - **director dataset** (`X_seq.npy` fp16 `[N,30,12]`, `X_len`, `X_static [N,4]`,

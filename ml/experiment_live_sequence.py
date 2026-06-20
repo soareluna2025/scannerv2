@@ -99,6 +99,11 @@ CONFIG = {
     # ── I/O ──
     "seq_dtype": "float16",        # secvențele pe disc (valori mici, exacte în fp16)
     "flush_fixtures": 4000,        # extract incremental: progres/flush la fiecare N fixturi
+
+    # ── baseline Poisson clasic (fără xG) — priors de fotbal pt shrink ──
+    "poisson_prior_goals": 2.7,    # goluri/90 medii (prior)
+    "poisson_prior_min": 90.0,     # pseudo-minute de shrink (1 meci)
+    "poisson_home_share": 0.55,    # share gazdă în prior
 }
 
 # Numele feature-urilor DINAMICE (ordine fixă; salvate în meta). v1 FĂRĂ MOMENTUM
@@ -712,6 +717,67 @@ def reliability_table(probs, y, bins=10):
     return rows
 
 
+def ece_binary(probs, y, bins=10):
+    """Expected Calibration Error pe p_gol (binar)."""
+    p = 1.0 - probs[:, 2]
+    yb = (y != 2).astype(np.float32)
+    edges = np.linspace(0, 1, bins + 1)
+    e, N = 0.0, len(y)
+    for b in range(bins):
+        lo, hi = edges[b], edges[b + 1]
+        m = (p >= lo) & (p < hi if b < bins - 1 else p <= hi)
+        if m.sum() > 0:
+            e += abs(float(p[m].mean()) - float(yb[m].mean())) * int(m.sum()) / N
+    return e
+
+
+# ── BASELINE-uri CORECTE pt setul FĂRĂ momentum ──
+def baseline_baserate(y_train, n):
+    """(a) base-rate marginal din TRAIN (prag minim — modelul TREBUIE să-l bată)."""
+    p = np.bincount(np.asarray(y_train).astype(np.int64), minlength=N_CLASSES).astype(np.float64)
+    p = p / max(p.sum(), 1)
+    return np.tile(p.astype(np.float32), (n, 1))
+
+
+def baseline_poisson(hg, ag, minute):
+    """
+    (b) Poisson CLASIC fără xG, din golurile-de-până-acum + minutul curent (ținta reală).
+    Rată din pace observat, cu shrink Bayesian spre un prior de fotbal:
+      lam/min = (G + PRIOR_G) / (T + PRIOR_T);  lam_win = lam/min · W ; W=min(10,90-T)
+      p_none = e^-lam_win ; p_any = 1-p_none
+      share gazdă = (hg + HS·PRIOR_G)/(G + PRIOR_G)  (competing-Poisson => 3 clase)
+    """
+    pg = CONFIG["poisson_prior_goals"]
+    pt = CONFIG["poisson_prior_min"]
+    hs = CONFIG["poisson_home_share"]
+    hg = np.asarray(hg, dtype=np.float32)
+    ag = np.asarray(ag, dtype=np.float32)
+    T = np.asarray(minute, dtype=np.float32)
+    G = hg + ag
+    W = np.minimum(CONFIG["label_window_min"], np.maximum(0.0, 90.0 - T))
+    lam_per_min = (G + pg) / (T + pt)
+    lam_win = lam_per_min * W
+    p_none = np.exp(-lam_win)
+    p_any = 1.0 - p_none
+    s_h = (hg + hs * pg) / (G + pg)
+    return np.stack([p_any * s_h, p_any * (1.0 - s_h), p_none], axis=1).astype(np.float32)
+
+
+def _goals_at_T(raw_seq, lens):
+    """Goluri gazdă/oaspete la T = ultimul pas REAL al secvenței (din X_seq NEscalat)."""
+    hi = DYN_FEATURES.index("home_goals")
+    ai = DYN_FEATURES.index("away_goals")
+    raw = np.asarray(raw_seq)
+    N = raw.shape[0]
+    hg = np.empty(N, dtype=np.float32)
+    ag = np.empty(N, dtype=np.float32)
+    for i in range(N):
+        j = max(0, int(lens[i]) - 1)
+        hg[i] = float(raw[i, j, hi])
+        ag[i] = float(raw[i, j, ai])
+    return hg, ag
+
+
 # ════════════════════════════════════════════════════════════════════════════
 #  TRAIN / EVAL
 # ════════════════════════════════════════════════════════════════════════════
@@ -756,6 +822,14 @@ def _prepare(data, smoke=False):
 
     train = pack(tr)
     test = pack(te)
+
+    # baseline-uri CORECTE pe TEST (din date NEscalate): (a) base-rate train, (b) Poisson no-xG
+    minute_all = np.asarray(d["minute"])
+    raw_test = np.asarray(X_seq[te])                       # NEscalat (fp16) — pt golurile @T
+    hg_t, ag_t = _goals_at_T(raw_test, X_len[te])
+    test["bl_baserate"] = baseline_baserate(y[tr], int(te.sum()))
+    test["bl_poisson"] = baseline_poisson(hg_t, ag_t, minute_all[te])
+
     enc = {"team_map": team_map, "n_team": n_team, "lg_map": lg_map,
            "n_league": n_league, "scaler": {k: v.tolist() for k, v in scaler.items()}}
     return train, test, enc
@@ -893,12 +967,15 @@ def cmd_eval(args):
     X_len, X_static = np.asarray(d["X_len"]), np.asarray(d["X_static"])
     y, baseline, season = np.asarray(d["y"]), np.asarray(d["baseline"]), np.asarray(d["season"])
     hid_raw = np.asarray(d["home_team_id"]); aid_raw = np.asarray(d["away_team_id"]); lid_raw = np.asarray(d["league_id"])
-    _, te, _ = temporal_split(season, y)
+    tr, te, _ = temporal_split(season, y)
     if te.sum() == 0:
         order = np.argsort(np.asarray(d["fixture_id"])); cut = int(0.8 * len(order))
-        te = np.zeros(len(y), dtype=bool); te[order[cut:]] = True
+        tr = np.zeros(len(y), dtype=bool); te = np.zeros(len(y), dtype=bool)
+        tr[order[:cut]] = True; te[order[cut:]] = True
 
     scaler = {k: np.array(v, dtype=np.float32) for k, v in enc["scaler"].items()}
+    minute_all = np.asarray(d["minute"])
+    hg_t, ag_t = _goals_at_T(np.asarray(X_seq[te]), X_len[te])
     pack = {
         "X_seq": torch.tensor(scale_seq(X_seq[te], X_len[te], scaler)),
         "X_len": torch.tensor(X_len[te].astype(np.int64)),
@@ -907,49 +984,151 @@ def cmd_eval(args):
         "aid": torch.tensor(apply_encoder(aid_raw[te], {int(k): v for k, v in enc["team_map"].items()})),
         "lid": torch.tensor(apply_encoder(lid_raw[te], {int(k): v for k, v in enc["lg_map"].items()})),
         "y": torch.tensor(y[te].astype(np.int64)),
-        "baseline": np.asarray(baseline[te]).astype(np.float32),
+        "bl_baserate": baseline_baserate(y[tr], int(te.sum())),
+        "bl_poisson": baseline_poisson(hg_t, ag_t, minute_all[te]),
     }
     model = _build_model(ck["n_dyn"], ck["n_static"], enc["n_team"], enc["n_league"]).to(device)
     model.load_state_dict(ck["state_dict"])
     _evaluate(model, pack, device, ck.get("temperature", 1.0), report_path=args.report)
 
 
+def cmd_eval_livesubset(args):
+    """
+    (c) OPȚIONAL, RULAT PE VPS (are nevoie de DB live_stats): head-to-head MODEL vs
+    heuristica REALĂ calcNextGoalWindow(10) cu xG live, DOAR pe sub-setul de test (2026)
+    care are snapshot live_stats la/înainte de T. Brier mc+binar pe acel subset.
+    """
+    import torch
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ck = torch.load(args.ckpt, map_location=device, weights_only=False)
+    enc = ck["encoders"]
+    d = load_dataset(args.data, mmap=True)
+    X_seq = d["X_seq"]
+    X_len, X_static = np.asarray(d["X_len"]), np.asarray(d["X_static"])
+    y, season = np.asarray(d["y"]), np.asarray(d["season"])
+    fixture, minute = np.asarray(d["fixture_id"]), np.asarray(d["minute"])
+    hid_raw = np.asarray(d["home_team_id"]); aid_raw = np.asarray(d["away_team_id"]); lid_raw = np.asarray(d["league_id"])
+    _, te, _ = temporal_split(season, y)
+    te_idx = np.where(te)[0]
+    if len(te_idx) == 0:
+        log("test gol — nimic de comparat."); return
+
+    # model probs pe TOT testul
+    scaler = {k: np.array(v, dtype=np.float32) for k, v in enc["scaler"].items()}
+    pack = {
+        "X_seq": torch.tensor(scale_seq(X_seq[te], X_len[te], scaler)),
+        "X_len": torch.tensor(X_len[te].astype(np.int64)),
+        "X_static": torch.tensor(scale_static(X_static[te], scaler).astype(np.float32)),
+        "hid": torch.tensor(apply_encoder(hid_raw[te], {int(k): v for k, v in enc["team_map"].items()})),
+        "aid": torch.tensor(apply_encoder(aid_raw[te], {int(k): v for k, v in enc["team_map"].items()})),
+        "lid": torch.tensor(apply_encoder(lid_raw[te], {int(k): v for k, v in enc["lg_map"].items()})),
+    }
+    model = _build_model(ck["n_dyn"], ck["n_static"], enc["n_team"], enc["n_league"]).to(device)
+    model.load_state_dict(ck["state_dict"])
+    pack["y"] = torch.tensor(y[te].astype(np.int64))
+    probs = _predict_probs(model, pack, device, temp=ck.get("temperature", 1.0))
+
+    # live_stats pt fixturile de test
+    conn = get_conn(); cur = conn.cursor()
+    fids = sorted(set(int(f) for f in fixture[te].tolist()))
+    cur.execute("""SELECT fixture_id, elapsed, COALESCE(home_xg,0), COALESCE(away_xg,0)
+                     FROM live_stats WHERE fixture_id = ANY(%s) AND elapsed IS NOT NULL
+                    ORDER BY fixture_id, elapsed ASC""", (fids,))
+    ls = {}
+    for fid, e, hx, ax in cur.fetchall():
+        ls.setdefault(int(fid), []).append((int(e), float(hx), float(ax)))
+    cur.close(); conn.close()
+
+    # subset = eșantioanele de test cu snapshot elapsed<=T; heuristică cu xG REAL
+    heur, ysub, mask = [], [], []
+    yt = y[te]; ft = fixture[te]; mt = minute[te]
+    for k in range(len(te_idx)):
+        snaps = ls.get(int(ft[k]))
+        if not snaps:
+            mask.append(False); continue
+        T = int(mt[k]); best = None
+        for (e, hx, ax) in snaps:
+            if e <= T:
+                best = (hx, ax)
+            else:
+                break
+        if best is None:
+            mask.append(False); continue
+        mask.append(True)
+        heur.append(baseline_distribution(best[0], best[1], T))
+        ysub.append(int(yt[k]))
+    mask = np.array(mask)
+    if mask.sum() == 0:
+        log("0 eșantioane de test au live_stats — (c) nu se poate calcula."); return
+    heur = np.asarray(heur, dtype=np.float32)
+    ysub = np.asarray(ysub, dtype=np.int64)
+    mprobs = probs[mask]
+
+    lines = ["=" * 72,
+             " (c) HEAD-TO-HEAD pe subsetul de test cu live_stats — MODEL vs heuristica reală",
+             "=" * 72,
+             " subset: %d / %d eșantioane test au snapshot live_stats" % (int(mask.sum()), len(yt)),
+             "",
+             " %-26s %12s %12s" % ("", "Brier_mc", "Brier_bin"),
+             " " + "-" * 50,
+             " %-26s %12.5f %12.5f  <= MODEL" % ("GRU live-sequence",
+                multiclass_brier(mprobs, ysub), binary_brier_goal(mprobs, ysub)),
+             " %-26s %12.5f %12.5f" % ("calcNextGoalWindow(10) [c]",
+                multiclass_brier(heur, ysub), binary_brier_goal(heur, ysub)),
+             "=" * 72]
+    out = "\n".join(lines); print(out)
+    if args.report:
+        with open(args.report, "w") as fh:
+            fh.write(out + "\n")
+        log("raport (c) scris -> %s" % args.report)
+
+
 def _evaluate(model, pack, device, temp, report_path=None):
     probs = _predict_probs(model, pack, device, temp=temp)
     y = pack["y"].numpy() if hasattr(pack["y"], "numpy") else np.asarray(pack["y"])
-    base = pack["baseline"]
-
-    bm = multiclass_brier(probs, y)
-    bb = multiclass_brier(base, y)
-    bm_bin = binary_brier_goal(probs, y)
-    bb_bin = binary_brier_goal(base, y)
     dist = np.bincount(y, minlength=N_CLASSES)
 
+    # baseline-uri (atașate în pack de _prepare/cmd_eval). Cheie -> array [N,3].
+    baselines = []
+    if "bl_baserate" in pack:
+        baselines.append(("base-rate (train) [a]", pack["bl_baserate"]))
+    if "bl_poisson" in pack:
+        baselines.append(("Poisson no-xG [b]", pack["bl_poisson"]))
+
+    bm = multiclass_brier(probs, y)
+    bm_bin = binary_brier_goal(probs, y)
+    bm_ece = ece_binary(probs, y)
+
     lines = []
-    lines.append("=" * 64)
-    lines.append(" EVAL — GRU live-sequence vs baseline heuristic (calcNextGoalWindow 10')")
-    lines.append("=" * 64)
+    lines.append("=" * 72)
+    lines.append(" EVAL — GRU live-sequence (v1 fără momentum) · test 2026")
+    lines.append("=" * 72)
     lines.append(" Esantioane test: %d   | clase home/away/none = %d/%d/%d" % (
         len(y), dist[0], dist[1], dist[2]))
     lines.append(" Temperature scaling: T=%.3f" % temp)
     lines.append("")
-    lines.append(" %-28s %12s %12s" % ("Metrică (mai mic = mai bun)", "MODEL GRU", "BASELINE"))
-    lines.append(" " + "-" * 54)
-    lines.append(" %-28s %12.5f %12.5f" % ("Brier multiclass (3 clase)", bm, bb))
-    lines.append(" %-28s %12.5f %12.5f" % ("Brier binar (gol vs niciun)", bm_bin, bb_bin))
-    delta = (bb - bm)
+    lines.append(" %-26s %12s %12s %10s" % (
+        "Model / Baseline", "Brier_mc", "Brier_bin", "ECE_bin"))
+    lines.append(" " + "-" * 62)
+    lines.append(" %-26s %12.5f %12.5f %10.4f  <= MODEL" % (
+        "GRU live-sequence", bm, bm_bin, bm_ece))
+    for name, base in baselines:
+        lines.append(" %-26s %12.5f %12.5f %10.4f" % (
+            name, multiclass_brier(base, y), binary_brier_goal(base, y), ece_binary(base, y)))
     lines.append("")
-    lines.append(" Δ Brier multiclass (baseline - model) = %+.5f  (%s)" % (
-        delta, "model mai bun" if delta > 0 else "baseline mai bun/egal"))
+    for name, base in baselines:
+        d_mc = multiclass_brier(base, y) - bm
+        lines.append(" Δ Brier_mc vs %-22s = %+.5f  (%s)" % (
+            name, d_mc, "model CÂȘTIGĂ" if d_mc > 0 else "model PIERDE/egal"))
     lines.append("")
-    lines.append(" RELIABILITY (p_gol vs frecvență reală gol în 10'):")
-    lines.append(" %-14s %8s %12s %12s" % ("bin p_gol", "n", "pred_mediu", "real"))
+    lines.append(" RELIABILITY model (p_gol vs frecvență reală gol în 10'):")
+    lines.append(" %-14s %10s %12s %12s" % ("bin p_gol", "n", "pred_mediu", "real"))
     for (lo, hi, n, pm, rl) in reliability_table(probs, y):
         if n == 0:
-            lines.append(" %4.2f-%4.2f      %8d %12s %12s" % (lo, hi, n, "-", "-"))
+            lines.append(" %4.2f-%4.2f      %10d %12s %12s" % (lo, hi, n, "-", "-"))
         else:
-            lines.append(" %4.2f-%4.2f      %8d %12.3f %12.3f" % (lo, hi, n, pm, rl))
-    lines.append("=" * 64)
+            lines.append(" %4.2f-%4.2f      %10d %12.3f %12.3f" % (lo, hi, n, pm, rl))
+    lines.append("=" * 72)
     out = "\n".join(lines)
     print(out)
     if report_path:
@@ -967,7 +1146,9 @@ def main():
     ap.add_argument("--extract", action="store_true", help="citește DB, exportă dataset (director .npy)")
     ap.add_argument("--smoke", action="store_true", help="train+eval rapid pe CPU (dovadă)")
     ap.add_argument("--train", action="store_true", help="antrenare completă")
-    ap.add_argument("--eval", action="store_true", help="evaluare din checkpoint")
+    ap.add_argument("--eval", action="store_true", help="evaluare din checkpoint (model vs base-rate + Poisson)")
+    ap.add_argument("--eval-livesubset", dest="eval_livesubset", action="store_true",
+                    help="(c) VPS: head-to-head vs calcNextGoalWindow(10) pe subsetul cu live_stats")
     ap.add_argument("--merge", action="store_true", help="concatenează shard-uri (directoare)")
 
     ap.add_argument("--limit", type=int, default=None, help="extract: nr max fixture-uri")
@@ -993,6 +1174,8 @@ def main():
         cmd_train(args, smoke=False)
     elif args.eval:
         cmd_eval(args)
+    elif args.eval_livesubset:
+        cmd_eval_livesubset(args)
     else:
         ap.print_help()
 
