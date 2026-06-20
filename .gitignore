@@ -5,3 +5,7 @@ node_modules/
 # Python bytecode cache
 __pycache__/
 *.pyc
+
+# Dev-only design assets (UI skill) — nu cod de app
+.claude/skills/
+design-system/

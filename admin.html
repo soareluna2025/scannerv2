@@ -27,13 +27,13 @@ html,body{width:100%;overflow-x:hidden}
   --surface-3:     rgba(28,34,46,0.85);
   --bd:            rgba(255,255,255,0.06);
   --bd-2:          rgba(255,255,255,0.10);
-  --bd-acc:        rgba(34,211,238,0.22);
+  --bd-acc:        rgba(0,214,125,0.22);
 
-  --ac:            #22D3EE;
-  --ac-2:          #06B6D4;
-  --ac-3:          #0891B2;
-  --ac-soft:       rgba(34,211,238,0.10);
-  --ac-glow:       rgba(34,211,238,0.20);
+  --ac:            #00D67D;
+  --ac-2:          #06B48A;
+  --ac-3:          #048A6B;
+  --ac-soft:       rgba(0,214,125,0.10);
+  --ac-glow:       rgba(0,214,125,0.20);
 
   --tx:            #F2F4F7;
   --tx-2:          #A0AABA;
@@ -55,7 +55,7 @@ html,body{width:100%;overflow-x:hidden}
     inset 0 1px 0 rgba(255,255,255,0.09),
     inset 0 -1px 0 rgba(0,0,0,0.3),
     0 2px 4px rgba(0,0,0,0.5),
-    0 14px 36px rgba(34,211,238,0.06),
+    0 14px 36px rgba(0,214,125,0.06),
     0 32px 80px rgba(0,0,0,0.45);
 
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -90,18 +90,18 @@ body{
 }
 .orb-1{
   width:620px;height:620px;left:-180px;top:-160px;
-  background:radial-gradient(circle,#22D3EE 0%,transparent 70%);
+  background:radial-gradient(circle,#00D67D 0%,transparent 70%);
   animation:drift1 42s ease-in-out infinite;
 }
 .orb-2{
   width:780px;height:780px;right:-260px;top:32%;
-  background:radial-gradient(circle,#1A3D6E 0%,transparent 70%);
+  background:radial-gradient(circle,#064E3B 0%,transparent 70%);
   animation:drift2 52s ease-in-out infinite;
   opacity:.28;
 }
 .orb-3{
   width:520px;height:520px;left:35%;bottom:-220px;
-  background:radial-gradient(circle,#22D3EE 0%,transparent 70%);
+  background:radial-gradient(circle,#00D67D 0%,transparent 70%);
   animation:drift3 48s ease-in-out infinite;
   opacity:.22;
 }
@@ -155,14 +155,14 @@ body{
 .brand-2 .online{
   display:inline-flex;align-items:center;gap:6px;
   padding:3px 10px;border-radius:20px;
-  background:rgba(34,211,238,0.08);
+  background:rgba(0,214,125,0.08);
   color:var(--ac);font-weight:600;letter-spacing:1px;font-size:9px;
-  border:1px solid rgba(34,211,238,0.18);
+  border:1px solid rgba(0,214,125,0.18);
   text-transform:uppercase;
 }
 .brand-2 .online .dot{
   width:6px;height:6px;border-radius:50%;background:var(--ac);
-  box-shadow:0 0 8px rgba(34,211,238,0.6);
+  box-shadow:0 0 8px rgba(0,214,125,0.6);
   animation:soft-pulse 2s ease-in-out infinite;
 }
 @keyframes soft-pulse{
@@ -185,7 +185,7 @@ body{
 }
 .sec-dots{display:flex;gap:4px;align-items:center}
 .sec-dots i{
-  width:4px;height:4px;border-radius:50%;background:rgba(34,211,238,0.4);
+  width:4px;height:4px;border-radius:50%;background:rgba(0,214,125,0.4);
   animation:dotwave 1.8s ease-in-out infinite;
 }
 .sec-dots i:nth-child(1){animation-delay:0s}
@@ -206,9 +206,9 @@ body{
 }
 
 .btn-c{
-  background:linear-gradient(180deg,rgba(34,211,238,0.12),rgba(6,182,212,0.05));
+  background:linear-gradient(180deg,rgba(0,214,125,0.12),rgba(6,182,212,0.05));
   color:var(--tx);
-  border:1px solid rgba(34,211,238,0.35);border-radius:10px;
+  border:1px solid rgba(0,214,125,0.35);border-radius:10px;
   padding:9px 20px;font-size:12px;font-weight:600;letter-spacing:.3px;
   cursor:pointer;
   font-family:inherit;
@@ -216,9 +216,9 @@ body{
   transition:all .25s var(--ease);
 }
 .btn-c:hover{
-  background:linear-gradient(180deg,rgba(34,211,238,0.22),rgba(6,182,212,0.08));
-  border-color:rgba(34,211,238,0.55);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,0.1),0 4px 16px rgba(34,211,238,0.2),0 2px 8px rgba(0,0,0,0.3);
+  background:linear-gradient(180deg,rgba(0,214,125,0.22),rgba(6,182,212,0.08));
+  border-color:rgba(0,214,125,0.55);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.1),0 4px 16px rgba(0,214,125,0.2),0 2px 8px rgba(0,0,0,0.3);
   transform:translateY(-1px);
 }
 .btn-c:active{transform:translateY(0)}
@@ -245,8 +245,8 @@ body{
 }
 .key-input::placeholder{color:var(--mu)}
 .key-input:focus{
-  border-color:rgba(34,211,238,0.4);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 0 0 3px rgba(34,211,238,0.1),0 2px 8px rgba(0,0,0,0.3);
+  border-color:rgba(0,214,125,0.4);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 0 0 3px rgba(0,214,125,0.1),0 2px 8px rgba(0,0,0,0.3);
 }
 
 /* ===== META BAR ===== */
@@ -258,7 +258,7 @@ body{
 }
 .meta-bar .dot{
   width:6px;height:6px;border-radius:50%;background:var(--ac);
-  box-shadow:0 0 8px rgba(34,211,238,0.5);
+  box-shadow:0 0 8px rgba(0,214,125,0.5);
   animation:soft-pulse 2s ease-in-out infinite;
   flex:none;
 }
@@ -277,7 +277,7 @@ body{
   border:1px solid var(--bd);
   border-radius:22px;
   padding:24px 24px;
-  box-shadow:var(--shadow-card),0 0 0 1px rgba(34,211,238,.04);
+  box-shadow:var(--shadow-card),0 0 0 1px rgba(0,214,125,.04);
   transform:translateZ(0);
   transition:transform .4s var(--ease),box-shadow .4s var(--ease),border-color .3s;
   isolation:isolate;
@@ -287,7 +287,7 @@ body{
   content:'';position:absolute;inset:0;border-radius:inherit;
   padding:1px;
   background:linear-gradient(135deg,
-    rgba(34,211,238,0.25) 0%,
+    rgba(0,214,125,0.25) 0%,
     rgba(255,255,255,0.05) 25%,
     transparent 55%);
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
@@ -310,7 +310,7 @@ body{
 .card-h .ic{
   width:26px;height:26px;color:var(--ac);
   display:inline-flex;align-items:center;justify-content:center;flex:none;
-  filter:drop-shadow(0 0 8px rgba(34,211,238,0.35));
+  filter:drop-shadow(0 0 8px rgba(0,214,125,0.35));
 }
 .card-h .ic svg{width:100%;height:100%}
 .card-h h2{
@@ -330,7 +330,7 @@ body{
   transition:background .2s,border-color .2s;
   padding:0;
 }
-.card-chev:hover{background:rgba(34,211,238,.10);border-color:var(--bd-acc)}
+.card-chev:hover{background:rgba(0,214,125,.10);border-color:var(--bd-acc)}
 .card-chev svg{width:16px;height:16px;transition:transform .3s cubic-bezier(.4,0,.2,1)}
 .card:not(.collapsed) .card-chev svg{transform:rotate(180deg)}
 .card.collapsed{padding:14px 22px}
@@ -360,7 +360,7 @@ body{
   border-color:var(--bd-acc);
   transform:translateY(-2px);
 }
-.status-cell .ic{width:22px;height:22px;color:var(--ac);opacity:.9;filter:drop-shadow(0 0 6px rgba(34,211,238,0.25))}
+.status-cell .ic{width:22px;height:22px;color:var(--ac);opacity:.9;filter:drop-shadow(0 0 6px rgba(0,214,125,0.25))}
 .status-cell .ic svg{width:100%;height:100%}
 .status-cell .lbl{
   font-size:11px;color:var(--mu);font-weight:500;letter-spacing:.3px;
@@ -405,12 +405,12 @@ body{
 .env-badge.ok{
   background:linear-gradient(180deg,var(--ac),var(--ac-2));
   color:#03110A;
-  box-shadow:0 1px 3px rgba(34,211,238,0.35),inset 0 1px 0 rgba(255,255,255,0.2),0 0 14px rgba(34,211,238,.25);
+  box-shadow:0 1px 3px rgba(0,214,125,0.35),inset 0 1px 0 rgba(255,255,255,0.2),0 0 14px rgba(0,214,125,.25);
   animation:envSetPulse 3s ease-in-out infinite;
 }
 @keyframes envSetPulse{
-  0%,100%{box-shadow:0 1px 3px rgba(34,211,238,0.35),inset 0 1px 0 rgba(255,255,255,0.2),0 0 14px rgba(34,211,238,.25)}
-  50%{box-shadow:0 1px 3px rgba(34,211,238,0.5),inset 0 1px 0 rgba(255,255,255,0.3),0 0 20px rgba(34,211,238,.45)}
+  0%,100%{box-shadow:0 1px 3px rgba(0,214,125,0.35),inset 0 1px 0 rgba(255,255,255,0.2),0 0 14px rgba(0,214,125,.25)}
+  50%{box-shadow:0 1px 3px rgba(0,214,125,0.5),inset 0 1px 0 rgba(255,255,255,0.3),0 0 20px rgba(0,214,125,.45)}
 }
 .env-badge.no{
   background:linear-gradient(180deg,var(--red),#E54B61);
@@ -423,12 +423,12 @@ body{
 .env-art{
   width:160px;height:auto;max-width:100%;
   object-fit:contain;opacity:.95;
-  filter:drop-shadow(0 8px 24px rgba(34,211,238,0.12)) drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  filter:drop-shadow(0 8px 24px rgba(0,214,125,0.12)) drop-shadow(0 2px 4px rgba(0,0,0,0.5));
   transition:transform .5s var(--ease),filter .3s;
 }
 .env-art:hover{
   transform:translateY(-3px) scale(1.02);
-  filter:drop-shadow(0 14px 32px rgba(34,211,238,0.18)) drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+  filter:drop-shadow(0 14px 32px rgba(0,214,125,0.18)) drop-shadow(0 4px 8px rgba(0,0,0,0.5));
 }
 
 /* ===== BAZA DE DATE ===== */
@@ -449,9 +449,9 @@ body{
 .db-cell:hover{
   transform:translateY(-4px);
   border-color:var(--bd-acc);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,0.06),0 10px 24px rgba(0,0,0,0.4),0 4px 14px rgba(34,211,238,0.12);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.06),0 10px 24px rgba(0,0,0,0.4),0 4px 14px rgba(0,214,125,0.12);
 }
-.db-cell .ic{width:28px;height:28px;color:var(--ac);margin-bottom:4px;opacity:.95;filter:drop-shadow(0 0 6px rgba(34,211,238,0.25))}
+.db-cell .ic{width:28px;height:28px;color:var(--ac);margin-bottom:4px;opacity:.95;filter:drop-shadow(0 0 6px rgba(0,214,125,0.25))}
 .db-cell .ic svg{width:100%;height:100%}
 .db-cell .val{
   font-family:'Rajdhani',sans-serif;font-weight:700;
@@ -477,7 +477,7 @@ body{
 .card:not(.collapsed){position:relative;overflow:hidden}
 .card:not(.collapsed)::after{
   content:'';position:absolute;inset:-2px;border-radius:24px;pointer-events:none;
-  background:radial-gradient(circle at 70% 30%,rgba(34,211,238,.08) 0%,transparent 50%);
+  background:radial-gradient(circle at 70% 30%,rgba(0,214,125,.08) 0%,transparent 50%);
   animation:cardBreath 5s ease-in-out infinite;
   z-index:0;
 }
@@ -490,9 +490,9 @@ body{
 /* Pulse pe valori accent care primesc countup */
 .value-pulse{animation:valuePulse .5s ease-out}
 @keyframes valuePulse{
-  0%{text-shadow:0 0 0 rgba(34,211,238,0)}
-  50%{text-shadow:0 0 16px rgba(34,211,238,.7)}
-  100%{text-shadow:0 0 8px rgba(34,211,238,.3)}
+  0%{text-shadow:0 0 0 rgba(0,214,125,0)}
+  50%{text-shadow:0 0 16px rgba(0,214,125,.7)}
+  100%{text-shadow:0 0 8px rgba(0,214,125,.3)}
 }
 .api-wrap{display:flex;gap:18px;align-items:center;position:relative;z-index:1}
 .api-rows{flex:0 0 55%;display:flex;flex-direction:column;gap:9px}
@@ -509,7 +509,7 @@ body{
 }
 .api-row .v.ac{
   color:var(--ac);
-  text-shadow:0 0 12px rgba(34,211,238,.4);
+  text-shadow:0 0 12px rgba(0,214,125,.4);
 }
 .api-bar{
   position:relative;
@@ -523,7 +523,7 @@ body{
   height:100%;
   background:linear-gradient(90deg,var(--ac-3),var(--ac),#67E8F9);
   border-radius:4px;
-  box-shadow:0 0 12px rgba(34,211,238,0.5),0 0 4px rgba(34,211,238,0.8);
+  box-shadow:0 0 12px rgba(0,214,125,0.5),0 0 4px rgba(0,214,125,0.8);
   transition:width 1.4s cubic-bezier(.25,.46,.45,.94);
   overflow:hidden;
 }
@@ -539,7 +539,7 @@ body{
 .api-bar-info{
   color:var(--ac);font-size:11px;font-weight:700;
   margin-top:8px;letter-spacing:.5px;
-  text-shadow:0 0 8px rgba(34,211,238,.4);
+  text-shadow:0 0 8px rgba(0,214,125,.4);
 }
 .circ{
   flex:0 0 45%;position:relative;
@@ -548,18 +548,18 @@ body{
 }
 .circ svg{
   transform:rotate(-90deg);
-  filter:drop-shadow(0 4px 14px rgba(34,211,238,0.45));
+  filter:drop-shadow(0 4px 14px rgba(0,214,125,0.45));
   animation:circGlow 3s ease-in-out infinite;
 }
 @keyframes circGlow{
-  0%,100%{filter:drop-shadow(0 4px 14px rgba(34,211,238,0.45))}
-  50%{filter:drop-shadow(0 6px 22px rgba(34,211,238,0.75)) drop-shadow(0 0 8px rgba(103,232,249,0.4))}
+  0%,100%{filter:drop-shadow(0 4px 14px rgba(0,214,125,0.45))}
+  50%{filter:drop-shadow(0 6px 22px rgba(0,214,125,0.75)) drop-shadow(0 0 8px rgba(103,232,249,0.4))}
 }
 .circ-bg{fill:none;stroke:rgba(255,255,255,0.06);stroke-width:10}
 .circ-fg{
   fill:none;stroke:url(#greenGrad);stroke-width:10;stroke-linecap:round;
   transition:stroke-dashoffset 1.6s cubic-bezier(.25,.46,.45,.94);
-  filter:drop-shadow(0 0 8px rgba(34,211,238,.6));
+  filter:drop-shadow(0 0 8px rgba(0,214,125,.6));
 }
 .circ-txt{
   position:absolute;inset:0;
@@ -572,7 +572,7 @@ body{
   -webkit-background-clip:text;background-clip:text;
   -webkit-text-fill-color:transparent;
   line-height:1;font-variant-numeric:tabular-nums;
-  text-shadow:0 0 30px rgba(34,211,238,.3);
+  text-shadow:0 0 30px rgba(0,214,125,.3);
 }
 .circ-txt .p .u{
   font-size:16px;color:var(--ac);margin-left:2px;font-weight:600;
@@ -587,15 +587,15 @@ body{
 /* ===== MECIURI LIVE ===== */
 .live-counter{
   display:inline-flex;align-items:center;gap:6px;
-  background:linear-gradient(180deg,rgba(34,211,238,0.14),rgba(6,182,212,0.08));
+  background:linear-gradient(180deg,rgba(0,214,125,0.14),rgba(6,182,212,0.08));
   color:var(--ac);font-size:10.5px;font-weight:600;
   padding:5px 11px;border-radius:14px;letter-spacing:.5px;
-  border:1px solid rgba(34,211,238,0.22);
+  border:1px solid rgba(0,214,125,0.22);
   text-transform:uppercase;
 }
 .live-counter::before{
   content:'';width:6px;height:6px;border-radius:50%;background:var(--ac);
-  box-shadow:0 0 6px rgba(34,211,238,0.6);
+  box-shadow:0 0 6px rgba(0,214,125,0.6);
   animation:soft-pulse 1.6s ease-in-out infinite;
 }
 .sport-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
@@ -622,13 +622,13 @@ body{
   background:rgba(255,255,255,0.05);
 }
 .sport-tab.active{
-  background:linear-gradient(180deg,rgba(34,211,238,0.22),rgba(6,182,212,0.10));
-  border-color:rgba(34,211,238,0.5);
+  background:linear-gradient(180deg,rgba(0,214,125,0.22),rgba(6,182,212,0.10));
+  border-color:rgba(0,214,125,0.5);
   color:var(--ac);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,0.10),0 4px 12px rgba(34,211,238,0.15);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.10),0 4px 12px rgba(0,214,125,0.15);
 }
 .sport-tab.active .sb{
-  background:rgba(34,211,238,0.20);
+  background:rgba(0,214,125,0.20);
   color:var(--ac);
 }
 .live-list{display:flex;flex-direction:column;gap:7px}
@@ -701,8 +701,8 @@ body{
 .badge-yl{background:linear-gradient(180deg,var(--yellow),#E5B53F);color:#1A1100}
 .badge-gr{background:rgba(255,255,255,0.06);color:var(--mu)}
 .btn-mini{
-  background:rgba(34,211,238,0.08);
-  border:1px solid rgba(34,211,238,0.25);
+  background:rgba(0,214,125,0.08);
+  border:1px solid rgba(0,214,125,0.25);
   color:var(--ac);
   font-size:10.5px;font-weight:600;
   padding:5px 11px;border-radius:7px;
@@ -711,8 +711,8 @@ body{
   letter-spacing:.3px;
 }
 .btn-mini:hover{
-  background:rgba(34,211,238,0.15);
-  border-color:rgba(34,211,238,0.4);
+  background:rgba(0,214,125,0.15);
+  border-color:rgba(0,214,125,0.4);
   transform:translateY(-1px);
 }
 
@@ -758,7 +758,7 @@ body{
   background:linear-gradient(90deg,var(--ac-3),var(--ac),#67E8F9);
   border-radius:3px;
   transition:width 1s cubic-bezier(.25,.46,.45,.94);
-  box-shadow:0 0 10px rgba(34,211,238,0.45);
+  box-shadow:0 0 10px rgba(0,214,125,0.45);
   overflow:hidden;
 }
 .bf-bar-fill::after{
@@ -784,7 +784,7 @@ body{
 .bf-start:hover{
   background:linear-gradient(180deg,#1AE08C,var(--ac));
   transform:translateY(-1px);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 6px 14px rgba(34,211,238,0.25);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 6px 14px rgba(0,214,125,0.25);
 }
 .bf-stop{
   background:linear-gradient(180deg,var(--red),#E54B61);color:#fff;
@@ -796,17 +796,17 @@ body{
 }
 
 .hc-btn{
-  background:rgba(34,211,238,0.08);
+  background:rgba(0,214,125,0.08);
   color:var(--ac);
-  border:1px solid rgba(34,211,238,0.3);border-radius:9px;
+  border:1px solid rgba(0,214,125,0.3);border-radius:9px;
   padding:7px 14px;font-size:10.5px;font-weight:600;letter-spacing:.5px;
   cursor:pointer;font-family:inherit;
   transition:all .25s var(--ease);
   margin-left:auto;text-transform:uppercase;
 }
 .hc-btn:hover{
-  background:rgba(34,211,238,0.16);
-  border-color:rgba(34,211,238,0.5);
+  background:rgba(0,214,125,0.16);
+  border-color:rgba(0,214,125,0.5);
   transform:translateY(-1px);
 }
 .hc-btn:disabled{opacity:.5;cursor:not-allowed}
@@ -855,13 +855,13 @@ body{
 .bnav a.active{
   color:var(--ac);
 }
-.bnav a.active .ic svg{filter:drop-shadow(0 0 6px rgba(34,211,238,0.4))}
+.bnav a.active .ic svg{filter:drop-shadow(0 0 6px rgba(0,214,125,0.4))}
 .bnav a.active::before{
   content:'';position:absolute;top:-1px;left:50%;
   transform:translateX(-50%);
   width:40px;height:2px;border-radius:0 0 2px 2px;
   background:linear-gradient(90deg,transparent,var(--ac),transparent);
-  box-shadow:0 0 10px rgba(34,211,238,0.5);
+  box-shadow:0 0 10px rgba(0,214,125,0.5);
 }
 
 /* ===== TOAST ===== */
@@ -871,9 +871,9 @@ body{
   background:linear-gradient(180deg,rgba(15,20,28,0.95),rgba(8,12,18,0.9));
   backdrop-filter:blur(20px);
   color:var(--tx);
-  border:1px solid rgba(34,211,238,0.4);border-radius:12px;
+  border:1px solid rgba(0,214,125,0.4);border-radius:12px;
   padding:11px 20px;font-size:12.5px;font-weight:500;
-  box-shadow:0 8px 24px rgba(0,0,0,0.5),0 0 20px rgba(34,211,238,0.15);
+  box-shadow:0 8px 24px rgba(0,0,0,0.5),0 0 20px rgba(0,214,125,0.15);
   z-index:200;
   animation:toastIn .3s var(--ease);
 }
@@ -921,8 +921,135 @@ body{
 #splash.spl-exit{animation:splBgFade .35s ease-in .4s forwards}
 @keyframes splBgFade{to{opacity:0}}
 </style>
+
+<!-- ════ EXPLOSIVE THEME — app-shell (sidebar desktop + grid) · green-dominant ════ -->
+<style id="explosive-theme">
+/* OLED canvas + radial neon-green bloom (peste --bg #000) */
+body.ux2{
+  background:
+    radial-gradient(1100px 720px at 16% -12%, rgba(0,214,125,0.11), transparent 60%),
+    radial-gradient(900px 640px at 102% 108%, rgba(0,214,125,0.07), transparent 56%),
+    radial-gradient(700px 700px at 50% 50%, rgba(6,180,138,0.03), transparent 70%),
+    #050709;
+  background-attachment:fixed;
+}
+
+/* status-led dot reutilizat în sidebar */
+.sb2-on{
+  display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:var(--ac);box-shadow:0 0 8px rgba(0,214,125,.75);
+  margin-right:6px;vertical-align:middle;flex:none;
+  animation:soft-pulse 2s ease-in-out infinite;
+}
+
+/* ── MOBILE-FIRST: sidebar ascuns, rămâne bottom-nav (.bnav) ── */
+.sb2{display:none}
+
+/* ── DESKTOP ≥1100px: app-shell cu sidebar fix + grid de carduri ── */
+@media (min-width:1100px){
+  .sb2{
+    display:flex;flex-direction:column;
+    position:fixed;top:0;left:0;bottom:0;width:248px;z-index:120;
+    padding:24px 16px;
+    background:linear-gradient(180deg,rgba(8,12,17,0.97),rgba(5,8,11,0.99));
+    backdrop-filter:blur(30px) saturate(140%);
+    -webkit-backdrop-filter:blur(30px) saturate(140%);
+    border-right:1px solid rgba(0,214,125,0.14);
+    box-shadow:1px 0 0 rgba(0,214,125,.05),10px 0 44px rgba(0,0,0,.55);
+    overflow-y:auto;
+  }
+  .sb2-brand{
+    display:flex;flex-direction:column;gap:7px;
+    padding:4px 10px 18px;border-bottom:1px solid var(--bd);margin-bottom:14px;
+  }
+  .sb2-logo{
+    font-family:'Rajdhani',sans-serif;font-weight:600;
+    font-size:24px;letter-spacing:1px;color:var(--tx);line-height:1;
+  }
+  .sb2-logo b{
+    background:linear-gradient(135deg,var(--ac),var(--ac-3));
+    -webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;
+  }
+  .sb2-sub{
+    font-size:9px;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--mu);font-weight:600;display:flex;align-items:center;
+  }
+  .sb2-nav{display:flex;flex-direction:column;gap:3px;flex:1 1 auto;min-height:0}
+  .sb2-i{
+    display:flex;align-items:center;gap:11px;
+    padding:9px 12px;border-radius:10px;
+    color:var(--tx-2);text-decoration:none;
+    font-size:12.5px;font-weight:500;letter-spacing:.2px;
+    border:1px solid transparent;
+    transition:background .2s var(--ease),color .2s,border-color .2s;
+  }
+  .sb2-i svg{
+    width:18px;height:18px;flex:none;
+    fill:none;stroke:currentColor;stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round;
+    color:var(--mu);transition:color .2s,filter .2s;
+  }
+  .sb2-i:hover{background:rgba(0,214,125,0.06);color:var(--tx);border-color:rgba(0,214,125,0.12)}
+  .sb2-i:hover svg{color:var(--ac)}
+  .sb2-i:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+  .sb2-i.is-active{
+    background:linear-gradient(90deg,rgba(0,214,125,0.16),rgba(0,214,125,0.03));
+    color:var(--tx);border-color:rgba(0,214,125,0.30);
+    box-shadow:inset 0 0 0 1px rgba(0,214,125,.06),0 0 18px rgba(0,214,125,.12);
+  }
+  .sb2-i.is-active svg{color:var(--ac);filter:drop-shadow(0 0 6px rgba(0,214,125,.6))}
+  .sb2-foot{
+    margin-top:14px;padding:12px 12px 4px;border-top:1px solid var(--bd);
+    font-size:9.5px;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--mu);font-weight:600;display:flex;align-items:center;
+  }
+
+  /* fă loc sidebar-ului; lărgește conținutul la un grid real de app */
+  body.ux2 .page{max-width:none;margin:0 0 0 248px}
+  body.ux2 .header{padding-left:36px;padding-right:36px}
+  body.ux2 .wrap{
+    max-width:1340px;
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:22px;align-items:start;
+    padding:24px 36px 40px;
+  }
+  /* carduri „late" + bara meta ocupă ambele coloane */
+  body.ux2 .meta-bar,
+  body.ux2 .key-input-wrap,
+  body.ux2 #cardStatus,
+  body.ux2 #cardDB,
+  body.ux2 #cardVsApi,
+  body.ux2 #cardLeagues{grid-column:1 / -1}
+
+  /* pe desktop ascundem bottom-nav-ul mobil */
+  body.ux2 .bnav{display:none}
+  body.ux2{padding-bottom:0}
+}
+
+/* ── WIDE ≥1500px: 3 coloane ── */
+@media (min-width:1500px){
+  body.ux2 .wrap{grid-template-columns:repeat(3,minmax(0,1fr))}
+  body.ux2 #cardStatus,
+  body.ux2 #cardDB,
+  body.ux2 #cardVsApi,
+  body.ux2 #cardLeagues{grid-column:span 2}
+}
+
+/* bloom suplimentar pe valorile-cheie (deja verzi) */
+body.ux2 .status-cell .val{text-shadow:0 0 22px rgba(0,214,125,0.16)}
+
+/* respectă prefers-reduced-motion (specificitate body.ux2 > clasele de bază) */
+@media (prefers-reduced-motion:reduce){
+  body.ux2 *,
+  body.ux2 *::before,
+  body.ux2 *::after{
+    animation-duration:.001ms;animation-iteration-count:1;
+    transition-duration:.001ms;scroll-behavior:auto;
+  }
+}
+</style>
 </head>
-<body>
+<body class="ux2">
 
 <!-- SPLASH SCREEN -->
 <div id="splash" onclick="splashTap()">
@@ -970,6 +1097,36 @@ body{
   <div class="orb orb-2"></div>
   <div class="orb orb-3"></div>
 </div>
+
+<!-- ════ SIDEBAR (desktop) — pe mobil se ascunde, preia .bnav de jos ════ -->
+<aside class="sb2" aria-label="Navigare admin">
+  <div class="sb2-brand">
+    <span class="sb2-logo">ALOHA<b>ADMIN</b></span>
+    <span class="sb2-sub">ADMIN PANEL <i class="sb2-on"></i> ONLINE</span>
+  </div>
+  <nav class="sb2-nav">
+    <a href="#cardStatus" class="sb2-i is-active" onclick="document.getElementById('cardStatus')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Dashboard</span></a>
+    <a href="#cardEnv" class="sb2-i" onclick="document.getElementById('cardEnv')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><path d="M6 4h11M6 4l7 8-7 8h11"/></svg><span>Variabile ENV</span></a>
+    <a href="#cardDB" class="sb2-i" onclick="document.getElementById('cardDB')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="2.6"/><path d="M4 5v14c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5V5M4 12c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5"/></svg><span>Baza de date</span></a>
+    <a href="#cardAPI" class="sb2-i" onclick="document.getElementById('cardAPI')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5M15 7l5 5-5 5M13 5l-2 14"/></svg><span>API Usage</span></a>
+    <a href="#cardLive" class="sb2-i" onclick="document.getElementById('cardLive')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><circle cx="12" cy="18" r="1.6"/><path d="M8 14a6 6 0 0 1 8 0M5 11a10 10 0 0 1 14 0"/></svg><span>Meciuri Live</span></a>
+    <a href="#cardStabilize" class="sb2-i" onclick="document.getElementById('cardStabilize')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v4h4"/></svg><span>Stabilizare DB</span></a>
+    <a href="#cardCron" class="sb2-i" onclick="document.getElementById('cardCron')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Cron Jobs</span></a>
+    <a href="#cardErrors" class="sb2-i" onclick="document.getElementById('cardErrors')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><path d="M12 3l10 18H2zM12 10v4M12 17v1"/></svg><span>Erori</span></a>
+    <a href="#cardBackfill" class="sb2-i" onclick="document.getElementById('cardBackfill')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><path d="M4 7v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7M4 7l8-4 8 4M9 12l3 3 3-3M12 15V9"/></svg><span>Backfill Istoric</span></a>
+    <a href="#cardBackfillPlayers" class="sb2-i" onclick="document.getElementById('cardBackfillPlayers')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5 20a7 7 0 0 1 14 0"/></svg><span>Backfill Jucători</span></a>
+    <a href="#cardExtractTeam" class="sb2-i" onclick="document.getElementById('cardExtractTeam')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span>Extragere Echipă</span></a>
+    <a href="#cardHealth" class="sb2-i" onclick="document.getElementById('cardHealth')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg><span>Health Check</span></a>
+    <a href="#cardWinRate" class="sb2-i" onclick="document.getElementById('cardWinRate')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M14 7h7v7"/></svg><span>Win Rate</span></a>
+    <a href="#cardCalibration" class="sb2-i" onclick="document.getElementById('cardCalibration')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg><span>Calibrare</span></a>
+    <a href="#cardVsApi" class="sb2-i" onclick="document.getElementById('cardVsApi')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><path d="M12 3 2 9l10 6 10-6zM2 15l10 6 10-6"/></svg><span>Noi vs API</span></a>
+    <a href="#cardScannerControl" class="sb2-i" onclick="document.getElementById('cardScannerControl')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M10 8l6 4-6 4z"/></svg><span>Scanner</span></a>
+    <a href="#cardApiTrend" class="sb2-i" onclick="document.getElementById('cardApiTrend')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M14 7h7v7"/></svg><span>Trend API</span></a>
+    <a href="#cardDbCleanup" class="sb2-i" onclick="document.getElementById('cardDbCleanup')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg><span>Cleanup DB</span></a>
+    <a href="#cardLeagues" class="sb2-i" onclick="document.getElementById('cardLeagues')?.scrollIntoView({behavior:'smooth'});return false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg><span>Inteligență Ligi</span></a>
+  </nav>
+  <div class="sb2-foot"><i class="sb2-on"></i> SISTEM ACTIV</div>
+</aside>
 
 <div class="page">
 
@@ -1070,8 +1227,8 @@ body{
         <svg width="140" height="140" viewBox="0 0 130 130">
           <defs>
             <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#22D3EE"/>
-              <stop offset="100%" stop-color="#0891B2"/>
+              <stop offset="0%" stop-color="#00D67D"/>
+              <stop offset="100%" stop-color="#048A6B"/>
             </linearGradient>
           </defs>
           <circle class="circ-bg" cx="65" cy="65" r="56"/>
@@ -2545,7 +2702,7 @@ async function loadVsApi() {
       : null;
     h += '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin-bottom:16px">';
     // Noi
-    h += '<div style="background:rgba(34,211,238,.07);border:1px solid rgba(34,211,238,.18);border-radius:14px;padding:18px 12px;text-align:center' + (winner==='noi'?';box-shadow:0 0 20px rgba(34,211,238,.2)':'') + '">';
+    h += '<div style="background:rgba(0,214,125,.07);border:1px solid rgba(0,214,125,.18);border-radius:14px;padding:18px 12px;text-align:center' + (winner==='noi'?';box-shadow:0 0 20px rgba(0,214,125,.2)':'') + '">';
     h += '<div style="font-size:10px;color:var(--mu);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">🤖 Sistemul Nostru</div>';
     h += '<div style="font-family:Rajdhani,sans-serif;font-size:38px;font-weight:800;color:' + wrClr(ourAcc) + ';line-height:1">' + (ourAcc !== null ? ourAcc.toFixed(1) + '%' : '—') + '</div>';
     h += '<div style="font-size:10px;color:var(--mu);margin-top:4px">' + d.our.wins + ' / ' + d.our.total + ' · Over 1.5</div>';
@@ -2632,7 +2789,7 @@ async function loadVsApi() {
         h += '</tr>';
       });
       h += '</tbody></table></div>';
-      h += '<div style="font-size:10px;color:var(--mu);margin-top:8px;padding:8px;background:rgba(34,211,238,.04);border-left:2px solid var(--ac);border-radius:4px;line-height:1.5">ℹ️ Noi = Over/Under 1.5 goals (prag 50%). API = 1X2 winner (prob maximă). Sunt piețe diferite — comparația arată direcția generală.</div>';
+      h += '<div style="font-size:10px;color:var(--mu);margin-top:8px;padding:8px;background:rgba(0,214,125,.04);border-left:2px solid var(--ac);border-radius:4px;line-height:1.5">ℹ️ Noi = Over/Under 1.5 goals (prag 50%). API = 1X2 winner (prob maximă). Sunt piețe diferite — comparația arată direcția generală.</div>';
     }
 
     el.innerHTML = h;
