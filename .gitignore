@@ -9,3 +9,6 @@ __pycache__/
 # Dev-only design assets (UI skill) — nu cod de app
 .claude/skills/
 design-system/
+
+# Deep-dive generated reports (run on VPS, not code)
+ml/deepdive_*_report.txt
