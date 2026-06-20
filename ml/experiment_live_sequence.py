@@ -213,37 +213,60 @@ def baseline_distribution(home_xg, away_xg, mn):
 # ════════════════════════════════════════════════════════════════════════════
 #  EXTRACT — reconstrucție secvențe din DB
 # ════════════════════════════════════════════════════════════════════════════
-def _fetch_pool(cur, limit, seasons):
-    """Fixture-uri finalizate, cu live_stats prezent (momentum), excl. youth/amicale."""
+def _pool_from_where(seasons):
+    """
+    Sursa POOL-ului = BACKFILL: fixtures_history ∩ match_events(goluri), NU `fixtures`
+    (acela are doar ~2508 rânduri live/recent → max 27). Cerințe: are evenimente +
+    rezultat final (home/away_goals NOT NULL) + season. elo_history/leagues = LEFT JOIN
+    cu fallback (1500 / tier 3). live_stats NU mai e filtru — momentum e OPȚIONAL
+    (NULL-safe în _build_match_states). Întoarce (from_where_sql, params).
+    """
     excl = ",".join(str(int(x)) for x in CONFIG["exclude_league_ids"]) or "-1"
-    done = ",".join("'%s'" % s for s in CONFIG["done_status"])
     season_clause = ""
     params = []
     if seasons:
-        season_clause = "AND f.season = ANY(%s)"
+        season_clause = "AND fh.season = ANY(%s)"
         params.append(list(seasons))
-    sql = """
-        SELECT f.fixture_id, f.season, f.league_id,
-               f.home_team_id, f.away_team_id,
-               COALESCE(eh.home_elo, 1500)  AS home_elo,
-               COALESCE(eh.away_elo, 1500)  AS away_elo,
-               COALESCE(eh.elo_diff, 0)     AS elo_diff,
-               COALESCE(lg.tier, 3)         AS tier
-          FROM fixtures f
-          LEFT JOIN elo_history eh ON eh.fixture_id = f.fixture_id
-          LEFT JOIN leagues     lg ON lg.league_id  = f.league_id
-         WHERE f.status_short IN (%s)
-           AND f.league_id NOT IN (%s)
-           AND f.season IS NOT NULL
-           AND EXISTS (SELECT 1 FROM live_stats ls WHERE ls.fixture_id = f.fixture_id)
+    where = """
+          FROM fixtures_history fh
+          LEFT JOIN elo_history eh ON eh.fixture_id = fh.fixture_id
+          LEFT JOIN leagues     lg ON lg.league_id  = fh.league_id
+         WHERE fh.season IS NOT NULL
+           AND fh.home_goals IS NOT NULL AND fh.away_goals IS NOT NULL
+           AND fh.league_id NOT IN (%s)
            AND EXISTS (SELECT 1 FROM match_events me
-                        WHERE me.fixture_id = f.fixture_id AND me.type='Goal')
+                        WHERE me.fixture_id = fh.fixture_id AND me.type='Goal')
            %s
-         ORDER BY f.match_date ASC
-    """ % (done, excl, season_clause)
+    """ % (excl, season_clause)
+    return where, params
+
+
+def _samples_per_fixture():
+    return len(range(CONFIG["t_min"], CONFIG["t_max"] + 1, CONFIG["minute_stride"]))
+
+
+def _fetch_pool(cur, limit, seasons):
+    """Pool ancorat pe BACKFILL (fixtures_history). Dedupe pe fixture_id (DISTINCT ON)."""
+    where, params = _pool_from_where(seasons)
+    # DISTINCT ON dedupe (fixtures_history are PK pe `id`, fixture_id se poate repeta),
+    # apoi reordonare CRONOLOGICĂ (match_date ASC) pt split temporal corect.
+    sql = """
+        SELECT * FROM (
+          SELECT DISTINCT ON (fh.fixture_id)
+                 fh.fixture_id, fh.season, fh.league_id,
+                 fh.home_team_id, fh.away_team_id,
+                 COALESCE(eh.home_elo, 1500)  AS home_elo,
+                 COALESCE(eh.away_elo, 1500)  AS away_elo,
+                 COALESCE(eh.elo_diff, 0)     AS elo_diff,
+                 COALESCE(lg.tier, 3)         AS tier,
+                 fh.match_date
+          %s
+          ORDER BY fh.fixture_id, fh.match_date DESC
+        ) q ORDER BY q.match_date ASC
+    """ % where
     if limit:
         sql += " LIMIT %s"
-        params.append(int(limit))
+        params = params + [int(limit)]
     cur.execute(sql, params)
     cols = [c[0] for c in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
@@ -380,6 +403,49 @@ def _label_at(goals, T):
     return in_win[0][1]  # side 0=home,1=away
 
 
+def cmd_count(args):
+    """
+    Raportează NUMĂRUL REAL (fără să construiască dataset, fără torch): câte fixturi
+    eligibile pe BACKFILL, ~câte eșantioane, distribuția pe sezon. Pt decizia de scală.
+    """
+    seasons = None
+    if args.seasons:
+        seasons = [int(s) for s in args.seasons.split(",") if s.strip()]
+    where, params = _pool_from_where(seasons)
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT COUNT(DISTINCT fh.fixture_id) %s" % where, params)
+    nfix = int(cur.fetchone()[0])
+    spf = _samples_per_fixture()
+    log("POOL backfill (fixtures_history ∩ match_events, momentum OPȚIONAL):")
+    log("  fixturi eligibile           = %d" % nfix)
+    log("  eșantioane/fixtur (T %d..%d pas %d) = %d" % (
+        CONFIG["t_min"], CONFIG["t_max"], CONFIG["minute_stride"], spf))
+    log("  ~eșantioane TOTAL            = %d" % (nfix * spf))
+
+    cur.execute(
+        "SELECT fh.season, COUNT(DISTINCT fh.fixture_id) %s GROUP BY fh.season ORDER BY fh.season"
+        % where, params)
+    log("  distribuție pe sezon:")
+    for season, c in cur.fetchall():
+        log("    %s : %6d fixturi  (~%d eșantioane)" % (season, int(c), int(c) * spf))
+
+    # câte au momentum (live_stats) vs elo — pur informativ
+    cur.execute(
+        """SELECT
+             COUNT(DISTINCT fh.fixture_id) FILTER (WHERE EXISTS
+                (SELECT 1 FROM live_stats ls WHERE ls.fixture_id=fh.fixture_id)) AS with_live,
+             COUNT(DISTINCT fh.fixture_id) FILTER (WHERE EXISTS
+                (SELECT 1 FROM elo_history eh2 WHERE eh2.fixture_id=fh.fixture_id)) AS with_elo
+           %s""" % where, params)
+    wl, we = cur.fetchone()
+    log("  din care: cu momentum live_stats = %d | cu elo_history = %d (rest fallback 1500)" % (
+        int(wl or 0), int(we or 0)))
+    cur.close()
+    conn.close()
+
+
 def cmd_extract(args):
     log("EXTRACT start (limit=%s, seasons=%s)" % (args.limit, args.seasons))
     seasons = None
@@ -389,9 +455,9 @@ def cmd_extract(args):
     conn = get_conn()
     cur = conn.cursor()
     pool = _fetch_pool(cur, args.limit, seasons)
-    log("pool: %d fixture-uri eligibile" % len(pool))
+    log("pool: %d fixture-uri eligibile (sursă: fixtures_history ∩ match_events)" % len(pool))
     if not pool:
-        log("EROARE: 0 fixture-uri. Verifică live_stats/match_events/.env.")
+        log("EROARE: 0 fixture-uri. Verifică fixtures_history/match_events/.env.")
         sys.exit(2)
 
     seq_cap = CONFIG["seq_cap"]
@@ -912,6 +978,7 @@ def _evaluate(model, pack, device, temp, report_path=None):
 # ════════════════════════════════════════════════════════════════════════════
 def main():
     ap = argparse.ArgumentParser(description="Experiment GRU live next-goal (10').")
+    ap.add_argument("--count", action="store_true", help="doar numărul real (pool backfill), fără dataset/torch")
     ap.add_argument("--extract", action="store_true", help="citește DB, exportă .npz")
     ap.add_argument("--smoke", action="store_true", help="train+eval rapid pe CPU (dovadă)")
     ap.add_argument("--train", action="store_true", help="antrenare completă")
@@ -927,7 +994,9 @@ def main():
     ap.add_argument("--report", type=str, default="ml/live_seq_eval.txt", help="raport eval")
     args = ap.parse_args()
 
-    if args.extract:
+    if args.count:
+        cmd_count(args)
+    elif args.extract:
         cmd_extract(args)
     elif args.merge:
         if not args.inputs:

@@ -8,9 +8,12 @@ E **doar cercetare** — NU înlocuiește heuristica Poisson live validată
 - **Baseline** = portul fidel al `calcNextGoalWindow(f, 10)` din `live-score.js`, recalculat
   pe exact aceleași stări de eval (apples-to-apples), plus colaps binar „gol vs niciun gol".
 - **Date** (toate reale, ZERO cote — respectă zidul anti-cote):
-  `match_events` (goluri/cartonașe/schimbări → scor-în-timp + etichete),
-  `live_stats` (xG/șuturi/SOT/atacuri periculoase/posesie/cornere → momentum + intensitate 10'),
-  `elo_history` (ELO point-in-time, fără lookahead), `leagues.tier`.
+  POOL-ul = **BACKFILL**: `fixtures_history ∩ match_events(goluri)` (NU `fixtures`, care
+  are doar ~2508 rânduri live/recent → ar da max 27). `match_events`
+  (goluri/cartonașe/schimbări → scor-în-timp + etichete), `elo_history`/`leagues.tier` =
+  LEFT JOIN cu fallback (1500 / tier 3).
+  `live_stats` (xG/șuturi/SOT/atacuri periculoase/posesie/cornere) = **momentum OPȚIONAL**
+  (LEFT JOIN, NULL-safe — NU mai e filtru; doar ~921 fixturi îl au).
 - **Anti-leakage**: split pe **sezon** (vechi=train, recent=test); un fixture e într-un singur
   sezon ⇒ niciodată în ambele split-uri. Encoders + scaler fit **doar pe train**. Temperature
   scaling pe ultima felie temporală din train.
@@ -21,6 +24,12 @@ E **doar cercetare** — NU înlocuiește heuristica Poisson live validată
 ```
 python3 -m venv /root/seqvenv && /root/seqvenv/bin/pip install -U pip numpy psycopg2-binary && /root/seqvenv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
 ```
+
+### 0b) NUMĂRUL REAL al pool-ului (fără dataset/torch, doar psycopg2) — o singură linie
+```
+cd /root/scannerv2 && /root/seqvenv/bin/python ml/experiment_live_sequence.py --count
+```
+(Scoate: fixturi eligibile pe backfill, ~eșantioane, distribuție pe sezon, câte au momentum/elo.)
 
 ### 1) SMOKE pe VPS (dovadă cap-coadă, CPU, subset mic) — o singură linie fiecare
 ```
