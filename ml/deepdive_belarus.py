@@ -71,15 +71,57 @@ def _qall(cur, sql, params=()):
         return [("ERR", str(ex).splitlines()[0][:60])]
 
 
-# ── rezolvare ligă ───────────────────────────────────────────────────────────
+# ── rezolvare ligă (robustă: name + country + aliasuri) ──────────────────────
+# aliasuri per cheie de țară/ligă (case-insensitive, fragmente LIKE)
+LEAGUE_ALIASES = {
+    "belarus": ["belarus", "belarusian", "vysshaya", "vysheyshaya", "vyshava",
+                "wysschaja", "belarus premier", "belarusian premier", "high league"],
+}
+
+
+def _resolve_query(cur, patterns):
+    """Caută în name SAU country (lower LIKE) pe o listă de fragmente. Robust dacă
+    lipsește coloana country (fallback name-only)."""
+    pats = list(patterns)
+    rows = _qall(cur,
+        "SELECT league_id, name, country, tier FROM leagues "
+        "WHERE EXISTS (SELECT 1 FROM unnest(%s::text[]) p "
+        "             WHERE lower(name) LIKE p OR lower(COALESCE(country,'')) LIKE p) "
+        "ORDER BY COALESCE(tier,9), league_id", (pats,))
+    if rows and rows[0][0] == "ERR":   # ex. country lipsă → name-only
+        rows = _qall(cur,
+            "SELECT league_id, name, country, tier FROM leagues "
+            "WHERE EXISTS (SELECT 1 FROM unnest(%s::text[]) p WHERE lower(name) LIKE p) "
+            "ORDER BY league_id", (pats,))
+    return rows
+
+
 def resolve_league(cur, name, lid):
+    """Întoarce (status, rows). status: 'ok' (≥1 potrivire), 'none' (0)."""
     if lid is not None:
         rows = _qall(cur, "SELECT league_id, name, country, tier FROM leagues WHERE league_id=%s", (lid,))
-    else:
-        rows = _qall(cur,
-            "SELECT league_id, name, country, tier FROM leagues WHERE name ILIKE %s OR name ILIKE %s ORDER BY league_id",
-            ("%" + name + "%", "%vysshaya%"))
-    return rows
+        return ("ok" if rows and rows[0][0] != "ERR" else "none", rows)
+    term = (name or "").strip().lower()
+    pats = set()
+    if term:
+        pats.add("%" + term + "%")
+    for key, al in LEAGUE_ALIASES.items():
+        if key in term or term in key:
+            pats |= set("%" + a + "%" for a in al)
+    if not pats:
+        pats.add("%")
+    rows = _resolve_query(cur, pats)
+    rows = [r for r in rows if r and r[0] != "ERR"]
+    return ("ok" if rows else "none", rows)
+
+
+def list_all_played_leagues(cur):
+    """Fallback: toate ligile care AU meciuri în fixtures_history (id|name|country|N)."""
+    return _qall(cur,
+        "SELECT l.league_id, l.name, l.country, COUNT(fh.fixture_id) AS n "
+        "  FROM leagues l JOIN fixtures_history fh ON fh.league_id = l.league_id "
+        " GROUP BY l.league_id, l.name, l.country HAVING COUNT(fh.fixture_id) > 0 "
+        " ORDER BY l.country NULLS LAST, l.name")
 
 
 # ── FAZA 0 — inventar ────────────────────────────────────────────────────────
@@ -267,15 +309,31 @@ def main():
     seasons = [int(s) for s in args.seasons.split(",") if s.strip()]
 
     conn = B.get_conn(); cur = conn.cursor()
-    cands = resolve_league(cur, args.league, args.league_id)
-    if not cands or (cands and cands[0][0] == "ERR"):
-        print("Liga negăsită pt '%s'/%s. Detaliu: %s" % (args.league, args.league_id, cands)); sys.exit(2)
+    status, cands = resolve_league(cur, args.league, args.league_id)
+
+    if status != "ok" or not cands:
+        # liga NU există pt termenul dat → arătăm clar + listă de ales manual
+        print("✗ LIGA NU EXISTĂ în `leagues` pentru '%s'%s (căutat în name ȘI country + aliasuri)." % (
+            args.league, "" if args.league_id is None else " / id=%s" % args.league_id))
+        allp = list_all_played_leagues(cur)
+        if allp and allp[0][0] != "ERR":
+            print("\nLigi cu meciuri în fixtures_history (alege cu --league-id N):")
+            print("   %-7s %-34s %-18s %s" % ("id", "name", "country", "N_meciuri"))
+            for r in allp:
+                print("   %-7s %-34s %-18s %s" % (r[0], str(r[1])[:34], str(r[2] or "")[:18], r[3]))
+        else:
+            print("   (nu am putut lista ligile cu meciuri: %s)" % allp)
+        cur.close(); conn.close(); sys.exit(2)
+
     if len(cands) > 1:
-        print("Mai multe ligi potrivite — alege cu --league-id:")
+        print("✓ Mai multe ligi potrivite pt '%s' — alege cu --league-id:" % args.league)
+        print("   %-7s %-34s %-18s %s" % ("id", "name", "country", "tier"))
         for c in cands:
-            print("   id=%s | %s | %s | tier=%s" % (c[0], c[1], c[2], c[3]))
-        sys.exit(0)
+            print("   %-7s %-34s %-18s %s" % (c[0], str(c[1])[:34], str(c[2] or "")[:18], c[3]))
+        cur.close(); conn.close(); sys.exit(0)
+
     lid, lname, lcountry, ltier = cands[0]
+    print("✓ Ligă rezolvată: id=%s | %s | %s | tier=%s" % (lid, lname, lcountry, ltier))
     meta = {"league_id": lid, "name": lname, "country": lcountry, "tier": ltier}
     slug = re.sub(r"[^a-z0-9]+", "_", str(lname).lower()).strip("_")[:30] or "league"
 
