@@ -9,3 +9,10 @@ __pycache__/
 # Dev-only design assets (UI skill) — nu cod de app
 .claude/skills/
 design-system/
+
+# ML experiment artifacts (dataseturi/checkpoints generate — NU cod)
+ml/live_seq*/
+ml/*.npy
+ml/*.npz
+ml/*.pt
+ml/live_seq*_eval.txt

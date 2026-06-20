@@ -56,16 +56,16 @@ CONFIG = {
     "label_window_min": 10,        # „următorul gol în următoarele 10'"
     "t_min": 5,                    # nu eșantionăm sub minutul 5 (zgomot)
     "t_max": 85,                   # nici peste 85 (fereastra ar depăși 95')
-    "minute_stride": 3,            # eșantionăm câte un T la fiecare 3 minute
-    "seq_cap": 30,                 # GRU vede ULTIMELE 30 stări-minut (momentum recent)
+    "minute_stride": 6,            # pas 6' (rărit din 3 -> ~2× mai puține eșantioane)
+    "seq_cap": 30,                 # GRU vede ULTIMELE 30 stări-minut
 
-    # ── split temporal pe SEZON (anti-leakage) ──
-    # None => auto: ținem ca TEST cele mai RECENTE sezoane ce acoperă ~test_frac
-    # din eșantioane; restul = train. Un fixture aparține unui singur sezon =>
+    # ── focalizare / split temporal pe SEZON (anti-leakage) ──
+    # v1 focalizat pe sezoanele recente. Un fixture aparține unui singur sezon =>
     # niciodată în ambele split-uri.
-    "test_seasons": None,
-    "test_frac": 0.20,
-    "val_frac_time": 0.15,         # ultima felie temporală din train → validare (temp scaling)
+    "focus_seasons": [2024, 2025, 2026],   # extragem DOAR astea (override la --seasons)
+    "test_seasons": [2026],                # TEST = 2026 ; TRAIN = 2024 + 2025
+    "test_frac": 0.20,                     # folosit doar dacă test_seasons=None
+    "val_frac_time": 0.15,         # ultima felie temporală din train (2025) → validare
 
     # ── encoders ──
     "min_team_freq": 30,           # echipe sub acest nr de apariții => bucket UNK
@@ -95,18 +95,19 @@ CONFIG = {
     "env_path": "/root/scannerv2/.env",
     "done_status": ("FT", "AET", "PEN"),
     "exclude_league_ids": (10,),   # league_id=10 = youth/amicale (regulă ML), exclus
+
+    # ── I/O ──
+    "seq_dtype": "float16",        # secvențele pe disc (valori mici, exacte în fp16)
+    "flush_fixtures": 4000,        # extract incremental: progres/flush la fiecare N fixturi
 }
 
-# Numele feature-urilor DINAMICE (ordine fixă; salvate în meta). 31 coloane.
+# Numele feature-urilor DINAMICE (ordine fixă; salvate în meta). v1 FĂRĂ MOMENTUM
+# (live_stats scos complet — acoperă <0.5% din date). Doar semnale din match_events. 12 col.
 DYN_FEATURES = [
     "minute", "half2_flag", "goalless_flag",
-    "home_goals", "away_goals", "goal_diff",
+    "home_goals", "away_goals", "goal_diff", "total_goals",
+    "min_since_last_goal",
     "reds_home", "reds_away", "subs_home", "subs_away",
-    "home_xg", "away_xg", "home_sot", "away_sot", "home_shots", "away_shots",
-    "home_da", "away_da", "home_poss", "home_corners", "away_corners",
-    "d_home_xg", "d_away_xg", "d_home_sot", "d_away_sot",
-    "d_home_shots", "d_away_shots", "d_home_da", "d_away_da",
-    "snap_age_min", "has_snapshot",
 ]
 # Feature-uri STATICE (ordine fixă). 4 coloane.
 STATIC_FEATURES = ["home_elo", "away_elo", "elo_diff", "league_tier"]
@@ -281,47 +282,12 @@ def _fetch_events(cur, fid):
     return cur.fetchall()
 
 
-def _fetch_snapshots(cur, fid):
-    cur.execute(
-        """SELECT elapsed,
-                  COALESCE(home_xg,0), COALESCE(away_xg,0),
-                  COALESCE(home_sot,0), COALESCE(away_sot,0),
-                  COALESCE(home_shots,0), COALESCE(away_shots,0),
-                  COALESCE(home_da,0), COALESCE(away_da,0),
-                  COALESCE(home_possession,50), COALESCE(home_corners,0), COALESCE(away_corners,0)
-             FROM live_stats
-            WHERE fixture_id=%s AND elapsed IS NOT NULL
-            ORDER BY elapsed ASC, id ASC""", (fid,))
-    snaps = {}
-    for r in cur.fetchall():
-        e = int(r[0])
-        # ultima citire la același minut câștigă (cea mai proaspătă)
-        snaps[e] = {
-            "home_xg": float(r[1]), "away_xg": float(r[2]),
-            "home_sot": float(r[3]), "away_sot": float(r[4]),
-            "home_shots": float(r[5]), "away_shots": float(r[6]),
-            "home_da": float(r[7]), "away_da": float(r[8]),
-            "home_poss": float(r[9]), "home_corners": float(r[10]), "away_corners": float(r[11]),
-        }
-    return snaps
-
-
-def _snapshot_at(snaps, minute):
-    """Cel mai recent snapshot cu elapsed <= minute (carry-forward). (snap, age) sau (None, None)."""
-    best_e = None
-    for e in snaps:
-        if e <= minute and (best_e is None or e > best_e):
-            best_e = e
-    if best_e is None:
-        return None, None
-    return snaps[best_e], (minute - best_e)
-
-
-def _build_match_states(meta, events, snaps):
+def _build_match_states(meta, events):
     """
     Construiește matricea de stări minut-cu-minut M[1..t_max] (listă de vectori
     DYN_FEATURES) + scor cumulativ pt etichete. Returnează (states, goals_timeline).
     goals_timeline = listă (elapsed, side) cu side 0=home,1=away.
+    v1 FĂRĂ MOMENTUM — doar semnale din match_events (scor/timing/roșii/schimbări).
     """
     hid, aid = meta["home_team_id"], meta["away_team_id"]
 
@@ -339,6 +305,8 @@ def _build_match_states(meta, events, snaps):
     for m in range(1, t_max + 1):
         hg = sum(1 for (e, s) in goals if e <= m and s == 0)
         ag = sum(1 for (e, s) in goals if e <= m and s == 1)
+        last_goal_m = max([e for (e, s) in goals if e <= m], default=0)
+        min_since_goal = float(m - last_goal_m)  # =m dacă niciun gol încă
 
         reds_h = reds_a = subs_h = subs_a = 0
         for (elp, tid, typ, det) in events:
@@ -357,37 +325,13 @@ def _build_match_states(meta, events, snaps):
                 elif tid == aid:
                     subs_a += 1
 
-        snap, age = _snapshot_at(snaps, m)
-        snap10, _ = _snapshot_at(snaps, m - CONFIG["label_window_min"])
-        if snap is None:
-            mom = {k: 0.0 for k in (
-                "home_xg", "away_xg", "home_sot", "away_sot", "home_shots",
-                "away_shots", "home_da", "away_da", "home_poss", "home_corners", "away_corners")}
-            mom["home_poss"] = 50.0
-            has_snap = 0.0
-            snap_age = float(CONFIG["seq_cap"])  # „foarte vechi"
-        else:
-            mom = snap
-            has_snap = 1.0
-            snap_age = float(age if age is not None else 0)
-
-        def d(key):
-            if snap is None or snap10 is None:
-                return 0.0
-            return float(mom.get(key, 0.0) - snap10.get(key, 0.0))
-
         vec = [
             float(m),                              # minute
             1.0 if m > 45 else 0.0,                # half2_flag
             1.0 if (hg + ag) == 0 else 0.0,        # goalless_flag
-            float(hg), float(ag), float(hg - ag),  # goals + diff
+            float(hg), float(ag), float(hg - ag), float(hg + ag),  # scor + diff + total
+            min_since_goal,                        # timing: minute de la ultimul gol
             float(reds_h), float(reds_a), float(subs_h), float(subs_a),
-            mom["home_xg"], mom["away_xg"], mom["home_sot"], mom["away_sot"],
-            mom["home_shots"], mom["away_shots"], mom["home_da"], mom["away_da"],
-            mom["home_poss"], mom["home_corners"], mom["away_corners"],
-            d("home_xg"), d("away_xg"), d("home_sot"), d("away_sot"),
-            d("home_shots"), d("away_shots"), d("home_da"), d("away_da"),
-            snap_age, has_snap,
         ]
         states.append(vec)
     return states, goals
@@ -446,131 +390,171 @@ def cmd_count(args):
     conn.close()
 
 
+# ── DATASET I/O (DIRECTOR de .npy-uri; X_seq memmap pt RAM mic pe VPS 2GB) ──
+DATASET_KEYS = ["X_seq", "X_len", "X_static", "home_team_id", "away_team_id",
+                "league_id", "y", "baseline", "season", "fixture_id", "minute"]
+# dtype-uri compacte (secvențele = fp16; restul minim necesar)
+SMALL_DTYPE = {
+    "X_len": np.int16, "X_static": np.float32,
+    "home_team_id": np.int64, "away_team_id": np.int64, "league_id": np.int64,
+    "y": np.int8, "baseline": np.float16,
+    "season": np.int16, "fixture_id": np.int64, "minute": np.int16,
+}
+
+
+def _ds_dir(path):
+    return path[:-1] if path.endswith("/") else path
+
+
+def load_dataset(path, mmap=False):
+    """Încarcă dataset din DIRECTOR (.npy) — X_seq memmap dacă mmap=True — sau .npz (compat)."""
+    if os.path.isdir(path):
+        out = {}
+        for k in DATASET_KEYS:
+            f = os.path.join(path, k + ".npy")
+            out[k] = np.load(f, mmap_mode="r" if (mmap and k == "X_seq") else None)
+        return out
+    return np.load(path)   # .npz fallback (datasetul sintetic de smoke)
+
+
 def cmd_extract(args):
     log("EXTRACT start (limit=%s, seasons=%s)" % (args.limit, args.seasons))
-    seasons = None
     if args.seasons:
         seasons = [int(s) for s in args.seasons.split(",") if s.strip()]
+    else:
+        seasons = list(CONFIG["focus_seasons"])   # implicit: focalizat 2024-2026
+    log("focalizare sezoane: %s" % seasons)
 
     conn = get_conn()
     cur = conn.cursor()
     pool = _fetch_pool(cur, args.limit, seasons)
-    log("pool: %d fixture-uri eligibile (sursă: fixtures_history ∩ match_events)" % len(pool))
+    n_fix = len(pool)
+    log("pool: %d fixture-uri eligibile (fixtures_history ∩ match_events)" % n_fix)
     if not pool:
         log("EROARE: 0 fixture-uri. Verifică fixtures_history/match_events/.env.")
         sys.exit(2)
 
     seq_cap = CONFIG["seq_cap"]
     n_dyn = len(DYN_FEATURES)
+    Ts = list(range(CONFIG["t_min"], CONFIG["t_max"] + 1, CONFIG["minute_stride"]))
+    spf = len(Ts)
+    total = n_fix * spf      # EXACT: fiecare (fixtur, T) => un eșantion (T>=t_min => L>=1)
+    seq_dtype = np.dtype(CONFIG["seq_dtype"])
+    log("eșantioane preconizate: %d fix × %d T = %d (pas %d')" % (
+        n_fix, spf, total, CONFIG["minute_stride"]))
 
-    X_seq, X_len, X_static = [], [], []
-    home_idx_raw, away_idx_raw, league_idx_raw = [], [], []
-    y, base, season_arr, fixture_arr, minute_arr = [], [], [], [], []
+    out = _ds_dir(args.out)
+    os.makedirs(out, exist_ok=True)
+    # X_seq = memmap pe disc (NU în RAM): se umple incremental
+    X_seq = np.lib.format.open_memmap(
+        os.path.join(out, "X_seq.npy"), mode="w+", dtype=seq_dtype,
+        shape=(total, seq_cap, n_dyn))
+    # restul = arrays mici, în RAM (prealocate la dimensiunea exactă)
+    small = {k: np.zeros((total, 3) if k == "baseline" else
+                         ((total, len(STATIC_FEATURES)) if k == "X_static" else (total,)),
+                         dtype=SMALL_DTYPE[k]) for k in SMALL_DTYPE}
 
     t0 = time.time()
+    w = 0
     for i, meta in enumerate(pool):
         fid = meta["fixture_id"]
         events = _fetch_events(cur, fid)
-        snaps = _fetch_snapshots(cur, fid)
-        states, goals = _build_match_states(meta, events, snaps)
-
-        static_vec = np.array([
-            float(meta["home_elo"]), float(meta["away_elo"]),
-            float(meta["elo_diff"]), float(meta["tier"]),
-        ], dtype=np.float32)
-
-        for T in range(CONFIG["t_min"], CONFIG["t_max"] + 1, CONFIG["minute_stride"]):
-            lab = _label_at(goals, T)
-            # secvența = ultimele seq_cap stări până la T inclusiv (index T-1 în states)
+        states, goals = _build_match_states(meta, events)   # FĂRĂ momentum
+        static_vec = (float(meta["home_elo"]), float(meta["away_elo"]),
+                      float(meta["elo_diff"]), float(meta["tier"]))
+        hid = int(meta["home_team_id"] or 0)
+        aid = int(meta["away_team_id"] or 0)
+        lid = int(meta["league_id"] or 0)
+        ssn = int(meta["season"])
+        for T in Ts:
             start = max(0, T - seq_cap)
-            seq = states[start:T]            # listă de vectori
-            L = len(seq)
-            if L == 0:
-                continue
-            arr = np.zeros((seq_cap, n_dyn), dtype=np.float32)
-            arr[:L] = np.array(seq, dtype=np.float32)   # left-aligned, pad la coadă
-
-            # baseline din snapshot-ul de la T
-            snap_T, _ = _snapshot_at(snaps, T)
-            hxg = snap_T["home_xg"] if snap_T else 0.0
-            axg = snap_T["away_xg"] if snap_T else 0.0
-
-            X_seq.append(arr)
-            X_len.append(L)
-            X_static.append(static_vec)
-            home_idx_raw.append(int(meta["home_team_id"] or 0))
-            away_idx_raw.append(int(meta["away_team_id"] or 0))
-            league_idx_raw.append(int(meta["league_id"] or 0))
-            y.append(lab)
-            base.append(baseline_distribution(hxg, axg, T))
-            season_arr.append(int(meta["season"]))
-            fixture_arr.append(int(fid))
-            minute_arr.append(int(T))
-
-        if (i + 1) % 200 == 0:
-            log("  procesat %d/%d fixture-uri, %d esantioane (%.0fs)" % (
-                i + 1, len(pool), len(y), time.time() - t0))
+            seq = states[start:T]
+            L = len(seq)                       # >=1 pt T>=t_min
+            X_seq[w, :L, :] = np.asarray(seq, dtype=seq_dtype)
+            # restul rândului rămâne 0 (memmap proaspăt = zero-filled)
+            small["X_len"][w] = L
+            small["X_static"][w] = static_vec
+            small["home_team_id"][w] = hid
+            small["away_team_id"][w] = aid
+            small["league_id"][w] = lid
+            small["y"][w] = _label_at(goals, T)
+            small["baseline"][w] = baseline_distribution(0.0, 0.0, T)  # heuristică fără momentum
+            small["season"][w] = ssn
+            small["fixture_id"][w] = fid
+            small["minute"][w] = T
+            w += 1
+        if (i + 1) % CONFIG["flush_fixtures"] == 0:
+            X_seq.flush()
+            log("  %d/%d fixturi · %d/%d eșantioane · %.0fs · [mem %.0fMB]" % (
+                i + 1, n_fix, w, total, time.time() - t0, _rss_mb()))
 
     cur.close()
     conn.close()
-    if not y:
-        log("EROARE: 0 esantioane generate.")
-        sys.exit(2)
+    assert w == total, "nepotrivire eșantioane: %d vs %d" % (w, total)
+    X_seq.flush()
+    del X_seq   # închide memmap-ul
 
-    X_seq = np.asarray(X_seq, dtype=np.float32)
-    X_static = np.asarray(X_static, dtype=np.float32)
-    X_len = np.asarray(X_len, dtype=np.int32)
-    y = np.asarray(y, dtype=np.int64)
-    base = np.asarray(base, dtype=np.float32)
-    season_arr = np.asarray(season_arr, dtype=np.int32)
-    fixture_arr = np.asarray(fixture_arr, dtype=np.int64)
-    minute_arr = np.asarray(minute_arr, dtype=np.int32)
-    home_idx_raw = np.asarray(home_idx_raw, dtype=np.int64)
-    away_idx_raw = np.asarray(away_idx_raw, dtype=np.int64)
-    league_idx_raw = np.asarray(league_idx_raw, dtype=np.int64)
+    for k, arr in small.items():
+        np.save(os.path.join(out, k + ".npy"), arr)
 
-    dist = np.bincount(y, minlength=N_CLASSES)
-    log("esantioane: %d | clase home/away/none = %d/%d/%d" % (len(y), dist[0], dist[1], dist[2]))
-
+    dist = np.bincount(small["y"].astype(np.int64), minlength=N_CLASSES)
+    seasons_present = sorted(set(int(s) for s in np.unique(small["season"]).tolist()))
     meta_json = {
-        "config": CONFIG,
-        "dyn_features": DYN_FEATURES,
-        "static_features": STATIC_FEATURES,
-        "n_classes": N_CLASSES,
-        "n_samples": int(len(y)),
-        "class_dist": [int(x) for x in dist],
-        "seasons_present": sorted(set(int(s) for s in season_arr.tolist())),
-        "created_at": datetime.datetime.now().isoformat(),
-        "note": "team/league index encoders + scaler se FIT-uiesc la --train (doar pe train split).",
+        "config": CONFIG, "dyn_features": DYN_FEATURES, "static_features": STATIC_FEATURES,
+        "n_classes": N_CLASSES, "n_samples": int(total), "n_fixtures": int(n_fix),
+        "samples_per_fixture": int(spf), "class_dist": [int(x) for x in dist],
+        "seasons_present": seasons_present, "seq_dtype": str(seq_dtype),
+        "momentum": False, "created_at": datetime.datetime.now().isoformat(),
+        "note": "v1 FĂRĂ momentum (live_stats scos). Encoders+scaler se fit-uiesc la --train.",
     }
-
-    out = args.out
-    np.savez_compressed(
-        out,
-        X_seq=X_seq, X_len=X_len, X_static=X_static,
-        home_team_id=home_idx_raw, away_team_id=away_idx_raw, league_id=league_idx_raw,
-        y=y, baseline=base, season=season_arr, fixture_id=fixture_arr, minute=minute_arr,
-    )
-    with open(out.replace(".npz", "") + "_meta.json", "w") as fh:
+    with open(os.path.join(out, "meta.json"), "w") as fh:
         json.dump(meta_json, fh, indent=2, default=str)
 
-    sz = os.path.getsize(out) / (1024 * 1024)
-    log("SCRIS %s (%.1f MB) + meta. GATA extract." % (out, sz))
+    sz = sum(os.path.getsize(os.path.join(out, f)) for f in os.listdir(out)) / (1024 * 1024)
+    log("esantioane: %d | clase home/away/none = %d/%d/%d" % (total, dist[0], dist[1], dist[2]))
+    log("SCRIS dir %s (%.0f MB total) + meta.json. GATA extract." % (out, sz))
 
 
 def cmd_merge(args):
-    """Concatenează shard-uri .npz (extrase pe sezoane) într-un singur dataset."""
-    keys = ["X_seq", "X_len", "X_static", "home_team_id", "away_team_id",
-            "league_id", "y", "baseline", "season", "fixture_id", "minute"]
-    acc = {k: [] for k in keys}
-    for path in args.inputs:
-        d = np.load(path)
-        for k in keys:
-            acc[k].append(d[k])
-        log("  + %s (%d esantioane)" % (path, len(d["y"])))
-    merged = {k: np.concatenate(acc[k], axis=0) for k in keys}
-    np.savez_compressed(args.out, **merged)
-    log("MERGE -> %s (%d esantioane total)" % (args.out, len(merged["y"])))
+    """Concatenează shard-uri (directoare) într-un dataset, STREAMING (X_seq prin memmap)."""
+    dirs = [_ds_dir(p) for p in args.inputs]
+    metas = [load_dataset(d, mmap=True) for d in dirs]
+    sizes = [int(m["y"].shape[0]) for m in metas]
+    total = sum(sizes)
+    seq0 = metas[0]["X_seq"]
+    seq_cap, n_dyn = seq0.shape[1], seq0.shape[2]
+    out = _ds_dir(args.out)
+    os.makedirs(out, exist_ok=True)
+    log("MERGE %d shard-uri -> %d eșantioane total" % (len(dirs), total))
+
+    Xout = np.lib.format.open_memmap(
+        os.path.join(out, "X_seq.npy"), mode="w+", dtype=seq0.dtype,
+        shape=(total, seq_cap, n_dyn))
+    off = 0
+    for d, m, n in zip(dirs, metas, sizes):
+        src = m["X_seq"]
+        for s in range(0, n, 50000):              # copiere în bucăți (RAM mic)
+            e = min(s + 50000, n)
+            Xout[off + s:off + e] = src[s:e]
+        Xout.flush()
+        off += n
+        log("  + %s (%d) [mem %.0fMB]" % (d, n, _rss_mb()))
+    del Xout
+    # arrays mici: concatenare în RAM (sunt mici)
+    for k in DATASET_KEYS:
+        if k == "X_seq":
+            continue
+        np.save(os.path.join(out, k + ".npy"),
+                np.concatenate([np.asarray(m[k]) for m in metas], axis=0))
+    # meta combinat
+    base_meta = {}
+    mp = os.path.join(dirs[0], "meta.json")
+    if os.path.exists(mp):
+        base_meta = json.load(open(mp))
+    base_meta.update({"n_samples": total, "merged_from": dirs,
+                      "created_at": datetime.datetime.now().isoformat()})
+    json.dump(base_meta, open(os.path.join(out, "meta.json"), "w"), indent=2, default=str)
+    log("MERGE -> dir %s (%d eșantioane)" % (out, total))
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -620,7 +604,7 @@ def fit_scaler(X_seq_train, X_len_train, X_static_train):
 
 
 def scale_seq(X_seq, X_len, scaler):
-    out = X_seq.copy()
+    out = np.asarray(X_seq).astype(np.float32)   # fp16 (disc) -> fp32 pt aritmetică
     dm, ds = scaler["dyn_mean"], scaler["dyn_std"]
     for i in range(out.shape[0]):
         L = int(X_len[i])
@@ -732,12 +716,12 @@ def reliability_table(probs, y, bins=10):
 #  TRAIN / EVAL
 # ════════════════════════════════════════════════════════════════════════════
 def _prepare(data, smoke=False):
-    """Încarcă npz, split temporal, encoders+scaler (fit pe train), tensori."""
+    """Încarcă dataset (dir/.npz), split temporal, encoders+scaler (fit pe train), tensori."""
     import torch
-    d = np.load(data)
-    X_seq, X_len, X_static = d["X_seq"], d["X_len"], d["X_static"]
-    y, baseline, season = d["y"], d["baseline"], d["season"]
-    hid_raw, aid_raw, lid_raw = d["home_team_id"], d["away_team_id"], d["league_id"]
+    d = load_dataset(data, mmap=True)
+    X_seq, X_len, X_static = d["X_seq"], np.asarray(d["X_len"]), np.asarray(d["X_static"])
+    y, baseline, season = np.asarray(d["y"]), np.asarray(d["baseline"]), np.asarray(d["season"])
+    hid_raw = np.asarray(d["home_team_id"]); aid_raw = np.asarray(d["away_team_id"]); lid_raw = np.asarray(d["league_id"])
 
     tr, te, test_seasons = temporal_split(season, y)
     log("split pe sezon: TRAIN=%d  TEST=%d  (test_seasons=%s)" % (tr.sum(), te.sum(), test_seasons))
@@ -765,8 +749,8 @@ def _prepare(data, smoke=False):
             "hid": torch.tensor(apply_encoder(hid_raw[mask], team_map)),
             "aid": torch.tensor(apply_encoder(aid_raw[mask], team_map)),
             "lid": torch.tensor(apply_encoder(lid_raw[mask], lg_map)),
-            "y": torch.tensor(y[mask]),
-            "baseline": baseline[mask],
+            "y": torch.tensor(y[mask].astype(np.int64)),
+            "baseline": np.asarray(baseline[mask]).astype(np.float32),
             "season": season[mask],
         }
 
@@ -904,13 +888,14 @@ def cmd_eval(args):
     enc = ck["encoders"]
 
     # reconstruim test split din data + encoders salvate (FĂRĂ re-fit)
-    d = np.load(args.data)
-    X_seq, X_len, X_static = d["X_seq"], d["X_len"], d["X_static"]
-    y, baseline, season = d["y"], d["baseline"], d["season"]
-    hid_raw, aid_raw, lid_raw = d["home_team_id"], d["away_team_id"], d["league_id"]
+    d = load_dataset(args.data, mmap=True)
+    X_seq = d["X_seq"]
+    X_len, X_static = np.asarray(d["X_len"]), np.asarray(d["X_static"])
+    y, baseline, season = np.asarray(d["y"]), np.asarray(d["baseline"]), np.asarray(d["season"])
+    hid_raw = np.asarray(d["home_team_id"]); aid_raw = np.asarray(d["away_team_id"]); lid_raw = np.asarray(d["league_id"])
     _, te, _ = temporal_split(season, y)
     if te.sum() == 0:
-        order = np.argsort(d["fixture_id"]); cut = int(0.8 * len(order))
+        order = np.argsort(np.asarray(d["fixture_id"])); cut = int(0.8 * len(order))
         te = np.zeros(len(y), dtype=bool); te[order[cut:]] = True
 
     scaler = {k: np.array(v, dtype=np.float32) for k, v in enc["scaler"].items()}
@@ -921,8 +906,8 @@ def cmd_eval(args):
         "hid": torch.tensor(apply_encoder(hid_raw[te], {int(k): v for k, v in enc["team_map"].items()})),
         "aid": torch.tensor(apply_encoder(aid_raw[te], {int(k): v for k, v in enc["team_map"].items()})),
         "lid": torch.tensor(apply_encoder(lid_raw[te], {int(k): v for k, v in enc["lg_map"].items()})),
-        "y": torch.tensor(y[te]),
-        "baseline": baseline[te],
+        "y": torch.tensor(y[te].astype(np.int64)),
+        "baseline": np.asarray(baseline[te]).astype(np.float32),
     }
     model = _build_model(ck["n_dyn"], ck["n_static"], enc["n_team"], enc["n_league"]).to(device)
     model.load_state_dict(ck["state_dict"])
@@ -979,17 +964,17 @@ def _evaluate(model, pack, device, temp, report_path=None):
 def main():
     ap = argparse.ArgumentParser(description="Experiment GRU live next-goal (10').")
     ap.add_argument("--count", action="store_true", help="doar numărul real (pool backfill), fără dataset/torch")
-    ap.add_argument("--extract", action="store_true", help="citește DB, exportă .npz")
+    ap.add_argument("--extract", action="store_true", help="citește DB, exportă dataset (director .npy)")
     ap.add_argument("--smoke", action="store_true", help="train+eval rapid pe CPU (dovadă)")
     ap.add_argument("--train", action="store_true", help="antrenare completă")
     ap.add_argument("--eval", action="store_true", help="evaluare din checkpoint")
-    ap.add_argument("--merge", action="store_true", help="concatenează shard-uri .npz")
+    ap.add_argument("--merge", action="store_true", help="concatenează shard-uri (directoare)")
 
     ap.add_argument("--limit", type=int, default=None, help="extract: nr max fixture-uri")
-    ap.add_argument("--seasons", type=str, default=None, help="extract: lista sezoane '2023,2024'")
-    ap.add_argument("--out", type=str, default="ml/live_seq.npz", help="extract/merge: output")
-    ap.add_argument("--inputs", nargs="+", default=None, help="merge: shard-uri input")
-    ap.add_argument("--data", type=str, default="ml/live_seq.npz", help="train/eval: dataset")
+    ap.add_argument("--seasons", type=str, default=None, help="extract: lista sezoane '2024' (implicit focus 2024-2026)")
+    ap.add_argument("--out", type=str, default="ml/live_seq", help="extract/merge: DIRECTOR output")
+    ap.add_argument("--inputs", nargs="+", default=None, help="merge: directoare shard input (ordine cronologică!)")
+    ap.add_argument("--data", type=str, default="ml/live_seq", help="train/eval: dataset (dir sau .npz)")
     ap.add_argument("--ckpt", type=str, default="ml/live_seq.pt", help="checkpoint model")
     ap.add_argument("--report", type=str, default="ml/live_seq_eval.txt", help="raport eval")
     args = ap.parse_args()
