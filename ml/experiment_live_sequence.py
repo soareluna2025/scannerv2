@@ -91,6 +91,15 @@ CONFIG = {
     "smoke_epochs": 2,
     "smoke_batch_size": 128,
 
+    # ── MOD RAPID CPU (--fast) ──
+    "early_stopping": False,       # activat de --fast: oprește pe val Brier
+    "es_patience": 2,              # N epoci fără îmbunătățire => stop
+    "es_min_delta": 1e-4,          # îmbunătățire minimă val Brier mc
+    "fast_epochs": 12,             # plafon epoci în mod rapid
+    "fast_batch_size": 1024,       # batch mare = throughput CPU
+    "fast_gru_hidden": 64,         # model mic pt CPU
+    "fast_gru_layers": 1,
+
     # ── DB ──
     "env_path": "/root/scannerv2/.env",
     "done_status": ("FT", "AET", "PEN"),
@@ -584,18 +593,20 @@ def apply_encoder(ids, mapping):
 def fit_scaler(X_seq_train, X_len_train, X_static_train):
     """
     Standardizare (mean/std). Pt secvențe: doar pașii REALI (mascați după lungime).
-    Returnează dicturi cu mean/std pt dyn și static.
+    Vectorizat pe BUCĂȚI (chunk) → rapid pe CPU + RAM mărginit. Returnează mean/std.
     """
-    n_dyn = X_seq_train.shape[2]
-    sums = np.zeros(n_dyn, dtype=np.float64)
-    sqs = np.zeros(n_dyn, dtype=np.float64)
+    N, cap, F = X_seq_train.shape
+    ar = np.arange(cap)
+    sums = np.zeros(F, dtype=np.float64)
+    sqs = np.zeros(F, dtype=np.float64)
     cnt = 0
-    for i in range(X_seq_train.shape[0]):
-        L = int(X_len_train[i])
-        real = X_seq_train[i, :L, :]
-        sums += real.sum(axis=0)
-        sqs += (real.astype(np.float64) ** 2).sum(axis=0)
-        cnt += L
+    for c0 in range(0, N, 100000):
+        c1 = min(c0 + 100000, N)
+        xb = np.asarray(X_seq_train[c0:c1]).astype(np.float32)
+        mb = (ar[None, :] < np.asarray(X_len_train[c0:c1])[:, None])[:, :, None]
+        sums += (xb * mb).sum(axis=(0, 1))
+        sqs += ((xb * xb) * mb).sum(axis=(0, 1))
+        cnt += int(mb.sum())
     mean = sums / max(cnt, 1)
     var = np.maximum(sqs / max(cnt, 1) - mean ** 2, 1e-6)
     dyn_mean, dyn_std = mean.astype(np.float32), np.sqrt(var).astype(np.float32)
@@ -609,12 +620,14 @@ def fit_scaler(X_seq_train, X_len_train, X_static_train):
 
 
 def scale_seq(X_seq, X_len, scaler):
-    out = np.asarray(X_seq).astype(np.float32)   # fp16 (disc) -> fp32 pt aritmetică
+    """Standardizare vectorizată (fp16 disc -> fp32), padding la 0 după lungime."""
+    out = np.asarray(X_seq).astype(np.float32)
     dm, ds = scaler["dyn_mean"], scaler["dyn_std"]
-    for i in range(out.shape[0]):
-        L = int(X_len[i])
-        out[i, :L, :] = (out[i, :L, :] - dm) / ds
-        out[i, L:, :] = 0.0  # padding la 0 (ignorat oricum de pack)
+    cap = out.shape[1]
+    ar = np.arange(cap)
+    mask = (ar[None, :] < np.asarray(X_len)[:, None])[:, :, None]   # (N,cap,1)
+    out = (out - dm) / ds
+    out *= mask        # zero pe pași de padding
     return out
 
 
@@ -781,7 +794,38 @@ def _goals_at_T(raw_seq, lens):
 # ════════════════════════════════════════════════════════════════════════════
 #  TRAIN / EVAL
 # ════════════════════════════════════════════════════════════════════════════
-def _prepare(data, smoke=False):
+def _stratified_subsample(tr_mask, y, season, target):
+    """
+    Reduce TRAIN la ~target eșantioane, STRATIFICAT pe (clasă × sezon) ca să NU strice
+    distribuția. target = int (nr) sau float în (0,1] (frac). Ordinea (cronologică) se
+    păstrează. Testul NU se atinge.
+    """
+    idx = np.where(tr_mask)[0]
+    n = len(idx)
+    if target is None:
+        return tr_mask
+    if 0 < target <= 1.0:
+        target = int(round(target * n))
+    target = int(target)
+    if target >= n:
+        log("train-sample %d >= train %d → fără subsample" % (target, n))
+        return tr_mask
+    rng = np.random.default_rng(CONFIG["seed"])
+    groups = {}
+    for i in idx:
+        groups.setdefault((int(y[i]), int(season[i])), []).append(i)
+    keep = []
+    for g, members in groups.items():
+        k = max(1, int(round(len(members) * target / n)))   # proporțional
+        k = min(k, len(members))
+        keep.extend(rng.choice(members, size=k, replace=False).tolist())
+    new = np.zeros(len(y), dtype=bool)
+    new[np.array(sorted(keep))] = True       # sortat => ordine cronologică păstrată
+    log("subsample STRATIFICAT (clasă×sezon): TRAIN %d → %d" % (n, int(new.sum())))
+    return new
+
+
+def _prepare(data, smoke=False, train_sample=None):
     """Încarcă dataset (dir/.npz), split temporal, encoders+scaler (fit pe train), tensori."""
     import torch
     d = load_dataset(data, mmap=True)
@@ -798,6 +842,10 @@ def _prepare(data, smoke=False):
         cut = int(0.8 * len(order))
         tr = np.zeros(len(y), dtype=bool); te = np.zeros(len(y), dtype=bool)
         tr[order[:cut]] = True; te[order[cut:]] = True
+
+    # subsample STRATIFICAT pe train (testul rămâne ÎNTREG)
+    if train_sample is not None:
+        tr = _stratified_subsample(tr, y, season, train_sample)
 
     # encoders DOAR pe train
     team_map, n_team = build_encoder(
@@ -907,6 +955,12 @@ def _train_loop(train, test, enc, epochs, bs, device):
                            weight_decay=CONFIG["weight_decay"])
     crit = nn.CrossEntropyLoss()
 
+    val = {k: train[k][cut:n] for k in
+           ("X_seq", "X_len", "X_static", "hid", "aid", "lid", "y")}
+    y_val = val["y"].numpy() if hasattr(val["y"], "numpy") else np.asarray(val["y"])
+    es_on = CONFIG["early_stopping"] and (n - cut) > 10
+    best_brier, best_state, bad = float("inf"), None, 0
+
     for ep in range(epochs):
         model.train()
         perm = np.random.permutation(tr_idx)
@@ -921,10 +975,29 @@ def _train_loop(train, test, enc, epochs, bs, device):
             opt.step()
             tot += float(loss.item()) * len(batch["y"])
             seen += len(batch["y"])
-        log("epoca %2d/%d  loss=%.4f" % (ep + 1, epochs, tot / max(seen, 1)))
+        msg = "epoca %2d/%d  loss=%.4f" % (ep + 1, epochs, tot / max(seen, 1))
 
-    val = {k: train[k][cut:n] for k in
-           ("X_seq", "X_len", "X_static", "hid", "aid", "lid", "y")}
+        if es_on:
+            # EARLY STOPPING pe Brier multiclass val (T=1, înainte de temp scaling)
+            vp = _predict_probs(model, val, device, temp=1.0)
+            vb = multiclass_brier(vp, y_val)
+            msg += "  val_brier=%.5f" % vb
+            if vb < best_brier - CONFIG["es_min_delta"]:
+                best_brier, bad = vb, 0
+                best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            else:
+                bad += 1
+            log(msg)
+            if bad >= CONFIG["es_patience"]:
+                log("EARLY STOP (val Brier fără îmbunătățire %d epoci) la epoca %d" % (bad, ep + 1))
+                break
+        else:
+            log(msg)
+
+    if es_on and best_state is not None:
+        model.load_state_dict(best_state)   # restaurează cel mai bun model pe val
+        log("restaurat best model (val_brier=%.5f)" % best_brier)
+
     temp = _fit_temperature(model, val, device) if (n - cut) > 10 else 1.0
     log("temperature scaling: T=%.3f" % temp)
     return model, temp
@@ -933,11 +1006,39 @@ def _train_loop(train, test, enc, epochs, bs, device):
 def cmd_train(args, smoke=False):
     import torch
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    log("DEVICE=%s | data=%s | smoke=%s" % (device, args.data, smoke))
-    train, test, enc = _prepare(args.data, smoke=smoke)
 
-    epochs = CONFIG["smoke_epochs"] if smoke else CONFIG["epochs"]
-    bs = CONFIG["smoke_batch_size"] if smoke else CONFIG["batch_size"]
+    # MOD RAPID CPU (--fast): model mic + batch mare + early stopping (corectitudinea
+    # rămâne: split temporal, temperature scaling, eval cu baseline-uri NEatinse).
+    fast = getattr(args, "fast", False)
+    if fast:
+        CONFIG["gru_hidden"] = CONFIG["fast_gru_hidden"]
+        CONFIG["gru_layers"] = CONFIG["fast_gru_layers"]
+        CONFIG["early_stopping"] = True
+        log("MOD RAPID: gru_hidden=%d layers=%d early_stopping(patience=%d) epoci<=%d batch=%d" % (
+            CONFIG["gru_hidden"], CONFIG["gru_layers"], CONFIG["es_patience"],
+            CONFIG["fast_epochs"], CONFIG["fast_batch_size"]))
+
+    # toate core-urile CPU
+    if device.type == "cpu":
+        nthreads = os.cpu_count() or 1
+        torch.set_num_threads(nthreads)
+        log("torch.set_num_threads(%d)" % nthreads)
+
+    ts = getattr(args, "train_sample", None)
+    train_sample = None
+    if ts is not None:
+        train_sample = float(ts) if ("." in str(ts) and float(ts) <= 1.0) else int(float(ts))
+
+    log("DEVICE=%s | data=%s | smoke=%s | fast=%s | train_sample=%s" % (
+        device, args.data, smoke, fast, train_sample))
+    train, test, enc = _prepare(args.data, smoke=smoke, train_sample=train_sample)
+
+    if smoke:
+        epochs, bs = CONFIG["smoke_epochs"], CONFIG["smoke_batch_size"]
+    elif fast:
+        epochs, bs = CONFIG["fast_epochs"], CONFIG["fast_batch_size"]
+    else:
+        epochs, bs = CONFIG["epochs"], CONFIG["batch_size"]
     model, temp = _train_loop(train, test, enc, epochs, bs, device)
 
     ckpt = args.ckpt
@@ -955,10 +1056,21 @@ def cmd_train(args, smoke=False):
     _evaluate(model, test, device, temp, report_path=args.report)
 
 
+def _restore_arch(ck):
+    """Aliniază arhitectura globală la cea din checkpoint (ex: --fast a folosit hidden 64)
+    ca _build_model să reconstruiască EXACT modelul salvat (altfel load_state_dict pică)."""
+    saved = ck.get("config", {}) or {}
+    for k in ("gru_hidden", "gru_layers", "gru_dropout", "mlp_hidden",
+              "emb_team_dim", "emb_league_dim", "dropout"):
+        if k in saved:
+            CONFIG[k] = saved[k]
+
+
 def cmd_eval(args):
     import torch
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ck = torch.load(args.ckpt, map_location=device, weights_only=False)
+    _restore_arch(ck)
     enc = ck["encoders"]
 
     # reconstruim test split din data + encoders salvate (FĂRĂ re-fit)
@@ -1001,6 +1113,7 @@ def cmd_eval_livesubset(args):
     import torch
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ck = torch.load(args.ckpt, map_location=device, weights_only=False)
+    _restore_arch(ck)
     enc = ck["encoders"]
     d = load_dataset(args.data, mmap=True)
     X_seq = d["X_seq"]
@@ -1146,6 +1259,9 @@ def main():
     ap.add_argument("--extract", action="store_true", help="citește DB, exportă dataset (director .npy)")
     ap.add_argument("--smoke", action="store_true", help="train+eval rapid pe CPU (dovadă)")
     ap.add_argument("--train", action="store_true", help="antrenare completă")
+    ap.add_argument("--fast", action="store_true", help="mod rapid CPU (model mic + batch mare + early stopping)")
+    ap.add_argument("--train-sample", dest="train_sample", default=None,
+                    help="subsample train STRATIFICAT: nr (ex 400000) sau frac (ex 0.4). Testul rămâne întreg.")
     ap.add_argument("--eval", action="store_true", help="evaluare din checkpoint (model vs base-rate + Poisson)")
     ap.add_argument("--eval-livesubset", dest="eval_livesubset", action="store_true",
                     help="(c) VPS: head-to-head vs calcNextGoalWindow(10) pe subsetul cu live_stats")

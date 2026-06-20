@@ -89,6 +89,26 @@ python3 ml/experiment_live_sequence.py --train --data ml/live_seq_full --ckpt ml
 python3 ml/experiment_live_sequence.py --eval --data ml/live_seq_full --ckpt ml/live_seq.pt --report ml/live_seq_eval.txt
 ```
 
+### 3b) MOD RAPID pe CPU (VPS 1-2 vCPU, fără GPU) — `--fast`
+Corectitudinea rămâne identică (split temporal, temperature scaling, eval cu baseline-uri).
+Defaults `--fast`: GRU hidden **64** / **1** strat (embeddings păstrate), batch **1024**,
+**early stopping** pe val Brier (patience **2**, max **12** epoci, restaurează best model),
+`torch.set_num_threads(toate core-urile)`. Scalerul e vectorizat pe chunk-uri (rapid).
+Opțional `--train-sample` (subsample STRATIFICAT pe clasă×sezon; **testul 2026 rămâne ÎNTREG**).
+
+Run rapid pe VPS (o singură linie; ~400k train stratificat):
+```
+cd /root/scannerv2 && /root/seqvenv/bin/python ml/experiment_live_sequence.py --train --fast --train-sample 400000 --data ml/live_seq_full --ckpt ml/live_seq.pt --report ml/live_seq_eval.txt
+```
+Tot setul de train (fără subsample), tot rapid:
+```
+cd /root/scannerv2 && /root/seqvenv/bin/python ml/experiment_live_sequence.py --train --fast --data ml/live_seq_full --ckpt ml/live_seq.pt --report ml/live_seq_eval.txt
+```
+Eval separat (rebuild-uiește automat modelul mic din checkpoint):
+```
+cd /root/scannerv2 && /root/seqvenv/bin/python ml/experiment_live_sequence.py --eval --data ml/live_seq_full --ckpt ml/live_seq.pt --report ml/live_seq_eval.txt
+```
+
 ### 4) BASELINE-uri în eval (setul fără momentum)
 - **(a) base-rate marginal** din train — pragul minim absolut; modelul TREBUIE să-l bată.
 - **(b) Poisson no-xG** — clasic, din golurile-de-până-acum + minutul curent (shrink Bayesian
