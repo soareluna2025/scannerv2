@@ -16,12 +16,16 @@ function teamInitials(name){
 }
 function teamLogo(logo,name,id,sz){
   sz=sz||24; var fs=Math.max(8,Math.round(sz*0.42));
-  var base='position:relative;display:inline-flex;align-items:center;justify-content:center;width:'+sz+'px;height:'+sz
-    +'px;border-radius:50%;flex-shrink:0;vertical-align:middle;background:'+teamBadgeColor(id)
-    +';color:#fff;font-weight:800;font-size:'+fs+'px;overflow:hidden';
-  var img=logo?('<img src="'+logo+'" width="'+sz+'" height="'+sz
-    +'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#0f1620" onerror="this.style.display=\'none\'">'):'';
-  return '<span style="'+base+'">'+teamInitials(name)+img+'</span>';
+  // Logo LIBER — forma naturală (scut=scut), fără cerc/ramă/fundal/crop.
+  if(logo){
+    return '<img src="'+logo+'" style="height:'+sz+'px;width:auto;max-width:'+Math.round(sz*1.3)
+      +'px;object-fit:contain;display:inline-block;vertical-align:middle;flex-shrink:0" '
+      +'onerror="this.style.display=\'none\'">';
+  }
+  // Placeholder (fără logo): inițiale discrete ~sz, fără cercul gros/fundal.
+  var ph='display:inline-flex;align-items:center;justify-content:center;height:'+sz+'px;min-width:'+sz
+    +'px;flex-shrink:0;vertical-align:middle;color:var(--mu2);font-weight:800;font-size:'+fs+'px';
+  return '<span style="'+ph+'">'+teamInitials(name)+'</span>';
 }
 function tLogo(team,sz){ if(!team) return teamLogo(null,'',0,sz); return teamLogo(team.logo,team.name,team.id,sz); }
 // [P06] Formator procent uniform (ca pc() din tabul ML): valoare invalidă → "—",
