@@ -299,6 +299,113 @@ def _verdict(noi, mkt):
     return "BATEM" if d < -1e-4 else ("PIERDEM" if d > 1e-4 else "egal")
 
 
+# ── „NOI vs REALITATE" (fără piață) — miezul pe Belarus ───────────────────────
+EVENT_PROB_MODULES = {"NGP", "OVER15", "OVER25", "GG"}   # predicted_value = P(eveniment=WIN)
+
+
+def multiclass_brier(P, O):
+    return float(np.mean(np.sum((P - O) ** 2, axis=1)))
+
+
+def _bucket_table(p, y, bins=10):
+    """Decile de probabilitate prezisă: (lo, hi, n, pred_mediu, rată_reală)."""
+    edges = np.linspace(0, 1, bins + 1)
+    out = []
+    for b in range(bins):
+        lo, hi = edges[b], edges[b + 1]
+        m = (p >= lo) & (p < hi if b < bins - 1 else p <= hi)
+        n = int(m.sum())
+        out.append((lo, hi, n,
+                    float(p[m].mean()) if n else float("nan"),
+                    float(y[m].mean()) if n else float("nan")))
+    return out
+
+
+def _ece_from_buckets(buckets, N):
+    return sum(abs(pm - rl) * n / N for lo, hi, n, pm, rl in buckets if n > 0)
+
+
+def skill_verdict(brier, brier_base):
+    if brier_base <= 1e-9:
+        return "n/a"
+    impr = (brier_base - brier) / brier_base * 100
+    if brier < brier_base - 1e-4:
+        return "BATE base-rate (+%.0f%%)" % impr
+    if brier > brier_base + 1e-4:
+        return "SUB base-rate (%.0f%%)" % impr
+    return "≈ base-rate"
+
+
+def measure_poisson_vs_result(cur, lid, seasons):
+    """PRE-MECI Poisson 1X2 vs REZULTAT real (NU cere cote — merge și fără piață)."""
+    sql = """SELECT fh.home_goals, fh.away_goals, p.home_win_prob, p.draw_prob, p.away_win_prob
+               FROM fixtures_history fh JOIN predictions p ON p.fixture_id=fh.fixture_id
+              WHERE fh.league_id=%s AND fh.home_goals IS NOT NULL AND fh.away_goals IS NOT NULL
+                AND p.home_win_prob IS NOT NULL AND p.draw_prob IS NOT NULL AND p.away_win_prob IS NOT NULL
+                AND fh.season = ANY(%s)"""
+    rows = _qall(cur, sql, (lid, list(seasons)))
+    if not rows or rows[0][0] == "ERR" or len(rows) < 5:
+        return None
+    P, outs = [], []
+    for hg, ag, ph, pd, pa in rows:
+        P.append([float(ph), float(pd), float(pa)])
+        outs.append(0 if hg > ag else (1 if hg == ag else 2))
+    P = B.normalize(np.array(P, float)); outs = np.array(outs)
+    O = np.zeros_like(P); O[np.arange(len(outs)), outs] = 1
+    base = np.bincount(outs, minlength=3) / len(outs)
+    Bb = np.tile(base, (len(outs), 1))
+    rel = _bucket_table(P.max(1), (P.argmax(1) == outs).astype(float))
+    return dict(N=len(P), brier=multiclass_brier(P, O), brier_base=multiclass_brier(Bb, O),
+                rps=float(B.rps(P, O).mean()), rps_base=float(B.rps(Bb, O).mean()),
+                acc=float((P.argmax(1) == outs).mean()), acc_base=float(base.max()),
+                ece=ece_top1(P, outs), base=base.tolist(), reliability=rel)
+
+
+def measure_live_modules(cur, lid):
+    """Fiecare modul rezolvat din prediction_log vs REZULTAT (NU vs piață): per (modul, fază)."""
+    sql = """SELECT module, COALESCE(minute,0) AS minute, predicted_value, outcome
+               FROM prediction_log
+              WHERE league_id=%s AND outcome IN ('WIN','LOSS') AND predicted_value IS NOT NULL"""
+    rows = _qall(cur, sql, (lid,))
+    if not rows or rows[0][0] == "ERR":
+        return {}
+    agg = {}
+    for module, minute, pv, outcome in rows:
+        phase = "live" if (minute or 0) > 0 else "pre"
+        d = agg.setdefault((str(module), phase), {"p": [], "y": [], "min": []})
+        d["p"].append(float(pv) / 100.0)
+        d["y"].append(1.0 if outcome == "WIN" else 0.0)
+        d["min"].append(int(minute or 0))
+    res = {}
+    for key, d in agg.items():
+        module, phase = key
+        p = np.array(d["p"]); y = np.array(d["y"]); mn = np.array(d["min"]); N = len(p)
+        base = float(y.mean())
+        buckets = _bucket_table(p, y)
+        el = None
+        if phase == "live":
+            early, late = mn <= 60, mn > 60
+            if early.sum() >= 20 and late.sum() >= 20:
+                el = dict(en=int(early.sum()), eh=float(y[early].mean()),
+                          ln=int(late.sum()), lh=float(y[late].mean()))
+        res[key] = dict(N=N, brier=float(np.mean((p - y) ** 2)),
+                        brier_base=float(base * (1 - base)), base=base,
+                        acc=float(((p >= 0.5).astype(float) == y).mean()),
+                        ece=_ece_from_buckets(buckets, N), mean_pred=float(p.mean()),
+                        is_prob=(module in EVENT_PROB_MODULES), buckets=buckets, el=el)
+    return res
+
+
+def _fmt_reliability(buckets, label="p prezis"):
+    lines = ["   %-12s %8s %12s %12s" % ("bucket " + label, "n", "pred_mediu", "rată_reală")]
+    for lo, hi, n, pm, rl in buckets:
+        if n == 0:
+            lines.append("   %4.1f-%4.1f      %8d %12s %12s" % (lo, hi, n, "-", "-"))
+        else:
+            lines.append("   %4.1f-%4.1f      %8d %12.3f %12.3f" % (lo, hi, n, pm, rl))
+    return "\n".join(lines)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Disecție ligă pe toate creierele vs Bet365 (read-only).")
     ap.add_argument("--league", type=str, default="Belarus")
@@ -341,51 +448,92 @@ def main():
     blocks = [print_phase0(meta, inv)]
 
     if not args.phase0:
-        # FAZA 1 — măsurători (doar ce-i măsurabil)
-        pois = measure_poisson_1x2(cur, lid, seasons)
-        api = measure_api_1x2(cur, lid, seasons)
-        pl = measure_predlog_markets(cur, lid)
+        # MARKET disponibil? (Belarus: 0 cote → toată comparația vs piață e N/A)
+        mkt_avail = _num(inv.get("odds_b365_1x2")) > 0
+        pois_mkt = measure_poisson_1x2(cur, lid, seasons) if mkt_avail else None
+
+        # MIEZUL: NOI vs REALITATE (fără piață)
+        pvr = measure_poisson_vs_result(cur, lid, seasons)
+        live = measure_live_modules(cur, lid)
 
         T = []
         T.append("=" * 92)
-        T.append(" FAZA 2 — TABEL CONSOLIDAT (1X2: RPS · alte piețe: Brier vs REZULTAT)")
+        T.append(" FAZA 2 — NOI vs REALITATE pe %s (id=%s)   ·   PIAȚĂ: %s" % (
+            meta["name"], lid, "disponibilă" if mkt_avail else "INDISPONIBILĂ — 0 cote Bet365"))
         T.append("=" * 92)
-        T.append(" %-30s %7s %11s %11s %9s %s" % ("creier", "N", "NOI", "Bet365", "Δ", "verdict"))
-        T.append("-" * 92)
 
-        def row1x2(label, m):
-            if not m:
-                T.append(" %-30s %7s %11s %11s %9s %s" % (label, "—", "—", "—", "—", "NEMĂSURABIL"))
-                return
-            T.append(" %-30s %7d %11.5f %11.5f %+9.5f %s  (RPS)" % (
-                label, m["N"], m["rps"], m["rps_mkt"], m["rps"]-m["rps_mkt"], _verdict(m["rps"], m["rps_mkt"])))
-
-        row1x2("(a) Poisson pre-meci 1X2", pois)
-        row1x2("(b↳) API-Football 1X2 [extern]", api)
-        T.append(" %-30s %7s %11s %11s %9s %s" % ("(b) ML pre-meci 1X2", "—", "—", "—", "—", "NEMĂSURABIL (nelogat)"))
-        T.append("-" * 92)
-        T.append(" PIEȚE prediction_log (Brier vs REZULTAT real — NU există cote Bet365 pe acestea/live):")
-        if pl:
-            for k in sorted(pl):
-                d = pl[k]
-                T.append("   %-26s N=%-6d Brier=%.4f  win-rate=%.1f%%" % (k, d["N"], d["brier"], 100*d["winrate"]))
+        # ── PRE-MECI Poisson 1X2 vs rezultat ──
+        T.append("── PRE-MECI · Poisson 1X2 vs REZULTAT (fixtures_history) ──")
+        if not pvr:
+            T.append("   NEMĂSURABIL — sub 5 meciuri cu predicție 1X2 + rezultat.")
         else:
-            T.append("   (niciun modul rezolvat pe ligă)")
-        T.append(" %-30s %s" % ("(c/d) LIVE vs Bet365 live", "NEMĂSURABIL — nu stocăm cote live/inplay"))
-        T.append(" %-30s %s" % ("(e) DL/GRU next-goal", "PARȚIAL — necesită extract+train Belarus (alt branch, GPU)"))
-        T.append("-" * 92)
+            b = pvr
+            T.append("   N=%d" % b["N"])
+            T.append("   Brier mc : %.5f   | base-rate: %.5f   → %s" % (
+                b["brier"], b["brier_base"], skill_verdict(b["brier"], b["brier_base"])))
+            T.append("   RPS      : %.5f   | base-rate: %.5f   → %s" % (
+                b["rps"], b["rps_base"], skill_verdict(b["rps"], b["rps_base"])))
+            T.append("   Acuratețe: %.1f%%    | base-rate(majoritate): %.1f%%" % (
+                100 * b["acc"], 100 * b["acc_base"]))
+            T.append("   ECE(top-1): %.4f   | base-rate reală H/D/A = %.0f/%.0f/%.0f%%" % (
+                b["ece"], 100 * b["base"][0], 100 * b["base"][1], 100 * b["base"][2]))
+            T.append("   reliability (top-1 încredere):")
+            T.append(_fmt_reliability(b["reliability"], "încredere"))
+            if mkt_avail and pois_mkt:
+                T.append("   [vs piață] RPS noi %.5f vs Bet365 %.5f (%s)" % (
+                    pois_mkt["rps"], pois_mkt["rps_mkt"], _verdict(pois_mkt["rps"], pois_mkt["rps_mkt"])))
+            else:
+                T.append("   [vs piață] N/A — 0 cote Bet365 pe ligă.")
 
-        # sumar
-        def vtxt(m):
-            return "n/a" if not m else ("%.5f vs %.5f (%s)" % (m["rps"], m["rps_mkt"], _verdict(m["rps"], m["rps_mkt"])))
-        T.append(" SUMAR:")
-        T.append("  • PRE-MECI 1X2 Poisson: %s" % vtxt(pois))
-        if pois:
-            T.append("    interpretare: RPS %.5f [reper ~%.2f elită, ~%.2f casă]" % (pois["rps"], ELITE, HOUSE))
-        T.append("  • PRE-MECI 1X2 API-Football (extern): %s" % vtxt(api))
-        T.append("  • LIVE: măsurabil DOAR vs rezultat (Brier piețe prediction_log); vs Bet365 live = lipsesc cote.")
-        T.append("  • DL/GRU: de evaluat separat (extract pe ligă + train) — vezi nota.")
-        T.append("  • POTENȚIAL: pe pre-meci 1X2, Δ vs piață spune direct dacă liga merită push (sub 0 = batem).")
+        # ── LIVE + alte module din prediction_log ──
+        T.append("")
+        T.append("── LIVE / MOTOR · module prediction_log vs REZULTAT (base-rate OBLIGATORIU lângă Brier) ──")
+        if not live:
+            T.append("   (niciun modul rezolvat pe ligă)")
+        else:
+            order = sorted(live.keys(), key=lambda k: (k[1] != "live", k[0]))   # live întâi
+            for key in order:
+                module, phase = key
+                d = live[key]
+                tag = "" if d["is_prob"] else "  [confidență direcțională — Brier orientativ]"
+                T.append("  • %-10s [%-4s] N=%-6d  pred_mediu=%.1f%%  rată_reală=%.1f%%%s" % (
+                    module, phase, d["N"], 100 * d["mean_pred"], 100 * d["base"], tag))
+                T.append("      Brier=%.4f | base-rate=%.4f → %s | acc(@.5)=%.1f%% | ECE=%.4f" % (
+                    d["brier"], d["brier_base"], skill_verdict(d["brier"], d["brier_base"]),
+                    100 * d["acc"], d["ece"]))
+                if d["el"]:
+                    e = d["el"]
+                    T.append("      fază: devreme(≤60') n=%d hit=%.1f%%  vs  târziu(>60') n=%d hit=%.1f%%" % (
+                        e["en"], 100 * e["eh"], e["ln"], 100 * e["lh"]))
+                T.append("      calibrare (decile prob prezisă — cand zice X%, se intampla ~X%?):")
+                T.append(_fmt_reliability(d["buckets"], "prob"))
+
+        # ── alte creiere (status) ──
+        T.append("")
+        T.append("── ALTE CREIERE ──")
+        T.append("   (b) ML pre-meci 1X2: NEMĂSURABIL (nelogat).  ↳ API-Football 1X2: %s" % (
+            "vezi mai jos" if mkt_avail else "N/A fără piață (e benchmark vs cote)"))
+        T.append("   (c/d) LIVE vs Bet365 live: NEMĂSURABIL — nu stocăm cote live/inplay.")
+        T.append("   (e) DL/GRU next-goal: PARȚIAL — necesită extract+train Belarus (alt branch, GPU).")
+
+        # ── SUMAR ──
+        T.append("")
+        T.append("── SUMAR (cât de bun e motorul pe %s, în ABSOLUT) ──" % meta["name"])
+        if pvr:
+            T.append("  • PRE-MECI 1X2: Brier %.4f vs base-rate %.4f → %s (RPS %.4f vs %.4f). %s." % (
+                pvr["brier"], pvr["brier_base"], skill_verdict(pvr["brier"], pvr["brier_base"]),
+                pvr["rps"], pvr["rps_base"],
+                "calibrat OK" if pvr["ece"] < 0.05 else "calibrare de îmbunătățit (ECE %.3f)" % pvr["ece"]))
+        else:
+            T.append("  • PRE-MECI 1X2: nemăsurabil.")
+        if live:
+            beats = [("%s/%s" % k) for k, d in live.items() if d["is_prob"] and d["brier"] < d["brier_base"] - 1e-4]
+            loses = [("%s/%s" % k) for k, d in live.items() if d["is_prob"] and d["brier"] > d["brier_base"] + 1e-4]
+            T.append("  • LIVE — module cu SKILL (bat base-rate): %s" % (", ".join(beats) or "niciunul"))
+            T.append("  • LIVE — module FĂRĂ skill (≤ base-rate): %s" % (", ".join(loses) or "niciunul"))
+            wc = [k for k, d in live.items() if d["is_prob"] and d["ece"] > 0.05]
+            T.append("  • Calibrare slabă (ECE>0.05): %s" % (", ".join("%s/%s" % k for k in wc) or "—"))
+        T.append("  • Piață: %s." % ("disponibilă" if mkt_avail else "indisponibilă (0 cote) — comparația e cu REALITATEA, nu cu casa"))
         T.append("=" * 92)
         T.append(" STRICT READ-ONLY: zero scrieri în DB, zero producție atinsă.")
         blocks.append("\n".join(T))
