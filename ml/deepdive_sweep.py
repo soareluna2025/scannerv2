@@ -36,10 +36,21 @@ CAL_OK = 0.05            # ECE sub care zicem „calibrat"
 
 
 def _dpct(brier, base):
-    """Δ% îmbunătățire vs base-rate: (base − brier)/base × 100 (pozitiv = skill)."""
+    """Δ% îmbunătățire vs base-rate: (base − brier)/base × 100 (pozitiv = skill).
+    Întoarce None CURAT când baza e None/0 sau brier None (nu aruncă)."""
     if base is None or base <= 1e-9 or brier is None:
         return None
     return (base - brier) / base * 100.0
+
+
+def fmt_pct(x):
+    """Formatare sigură pt celule Δ%: '-' dacă None, altfel '+N' (fără semn %, header zice Δ%)."""
+    return "-" if x is None else "%+.0f" % x
+
+
+def _dpct_brier(d):
+    """Δ% Brier vs base-rate pt un modul (dict) — None-safe dacă dictul lipsește."""
+    return _dpct(d["brier"], d["brier_base"]) if d else None
 
 
 # ── selecție ligi calificate ─────────────────────────────────────────────────
@@ -158,8 +169,10 @@ def build_report(res, pool_early, pool_late, ngp_perleague, n_qual, seasons,
         "ligă", "N_pre", "BrΔ%", "RPSΔ%", "ECEpre", "mkt", "NGP_N", "NGPΔ%", "ECEngp",
         "OV_N", "OVΔ%", "CF_N", "CFΔ%", "earlyH", "lateH"))
     L.append("-" * 118)
-    rows_sorted = sorted(res, key=lambda r: (r["pre"] is None,
-                         -(_dpct(r["pre"]["brier"], r["pre"]["brier_base"]) if r["pre"] else -999)))
+    def _sortkey(r):
+        d = _dpct(r["pre"]["brier"], r["pre"]["brier_base"]) if r["pre"] else None
+        return (r["pre"] is None, -(d if d is not None else -999))
+    rows_sorted = sorted(res, key=_sortkey)
     for r in rows_sorted:
         pre = r["pre"]; ngp = r["ngp"]; ov = r["over"]; cf = r["conf"]; mk = r["mkt"]
         npre = pre["N"] if pre else 0
@@ -172,17 +185,17 @@ def build_report(res, pool_early, pool_late, ngp_perleague, n_qual, seasons,
         L.append(" %-22s%1s%4s %8s %7s %7s %6s | %6s %8s %7s %6s %6s | %6s %6s | %6s %6s" % (
             (str(r["name"] or "")[:20] + "/" + str(r["country"] or "")[:1]) if r["name"] else "id%s" % r["lid"],
             unsure, npre if pre else "-",
-            "%+.0f" % brd if brd is not None else "-",
-            "%+.0f" % rpd if rpd is not None else "-",
+            fmt_pct(brd),
+            fmt_pct(rpd),
             "%.3f" % pre["ece"] if pre else "-",
             ("%dvs%d" % (round(100*mk["rps_noi"]), round(100*mk["rps_mkt"]))) if mk else "-",
             ngp["N"] if ngp else "-",
-            "%+.0f" % _dpct(ngp["brier"], ngp["brier_base"]) if ngp else "-",
+            fmt_pct(_dpct_brier(ngp)),
             "%.3f" % ngp["ece"] if ngp else "-",
             ov["N"] if ov else "-",
-            "%+.0f" % _dpct(ov["brier"], ov["brier_base"]) if ov else "-",
+            fmt_pct(_dpct_brier(ov)),
             cf["N"] if cf else "-",
-            "%+.0f" % _dpct(cf["brier"], cf["brier_base"]) if cf else "-",
+            fmt_pct(_dpct_brier(cf)),
             "%.0f" % eH if eH is not None else "-",
             "%.0f" % lH if lH is not None else "-"))
     L.append("   (* = NESIGUR: N_pre < %d.  BrΔ%%/RPSΔ%% = îmbunătățire vs base-rate, + = skill.)" % min_pre)
@@ -198,12 +211,12 @@ def build_report(res, pool_early, pool_late, ngp_perleague, n_qual, seasons,
     beat = [r for r in pres if r["pre"]["brier"] < r["pre"]["brier_base"] - 1e-4]
     trust = [r for r in beat if r["pre"]["ece"] < CAL_OK]
     over = [r for r in pres if r["pre"]["ece"] >= CAL_OK]
-    deltas = [_dpct(r["pre"]["brier"], r["pre"]["brier_base"]) for r in pres]
+    deltas = [d for d in (_dpct(r["pre"]["brier"], r["pre"]["brier_base"]) for r in pres) if d is not None]
     L.append("(A) PRE-MECI 1X2 (N_pre≥%d: %d ligi):" % (min_pre, len(pres)))
     L.append("    bat base-rate: %d/%d | ȘI calibrate (ECE<%.2f) = ZONĂ DE ÎNCREDERE: %d → %s" % (
         len(beat), len(pres), CAL_OK, len(trust),
-        ", ".join("%s(%+.0f%%)" % (r["name"], _dpct(r["pre"]["brier"], r["pre"]["brier_base"])) for r in
-                  sorted(trust, key=lambda r: -_dpct(r["pre"]["brier"], r["pre"]["brier_base"]))[:12]) or "—"))
+        ", ".join("%s(%s%%)" % (r["name"], fmt_pct(_dpct(r["pre"]["brier"], r["pre"]["brier_base"]))) for r in
+                  sorted(trust, key=lambda r: -(_dpct(r["pre"]["brier"], r["pre"]["brier_base"]) or 0))[:12]) or "—"))
     L.append("    median Δ Brier vs base-rate = %s%% | overconfident (ECE≥%.2f): %d ligi" % (
         ("%+.1f" % statistics.median(deltas)) if deltas else "n/a", CAL_OK, len(over)))
 
