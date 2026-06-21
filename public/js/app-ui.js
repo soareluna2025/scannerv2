@@ -1605,7 +1605,18 @@ function mdRenderML(d){
   add(team('Peste 0.5 — '+an,'Goluri '+an,'match','away',1, gp('away',0.5,'over05_away')));
   add(team('Peste 1.5 — '+an,'Goluri '+an,'match','away',2, gp('away',1.5,'over15_away')));
   add(team('Peste 2.5 — '+an,'Goluri '+an,'match','away',3, gp('away',2.5,'over25_away')));
-  var bttsM=btts('Ambele marchează (DA)','BTTS','match','', _preLive?lp('btts_final'):sp('btts_total'));
+  // FIX consistență BTTS (DOAR meci întreg, strat de PREZENTARE): când o echipă a marcat
+  // deja, BTTS-DA ≡ team-total „Peste 0.5" al echipei care N-A marcat (score-aware via gp/g2,
+  // EXACT aceleași gp() ca rândurile team-total 1602/1605). NU atinge modele/scoring.
+  var _bttsBase=_preLive?lp('btts_final'):sp('btts_total');
+  var th=gp('home',0.5,'over05_home'), ta=gp('away',0.5,'over05_away');
+  var bttsDA;
+  if(hg>0&&ag>0)         bttsDA=100;          // ambele au marcat deja
+  else if(ag>0&&hg===0)  bttsDA=th;           // gazda trebuie să marcheze ≥1
+  else if(hg>0&&ag===0)  bttsDA=ta;           // oaspeții trebuie să marcheze ≥1
+  else                   bttsDA=_bttsBase;    // 0-0: nereductibil → valoarea existentă
+  if(bttsDA==null)       bttsDA=_bttsBase;    // gardă null → fallback existent
+  var bttsM=btts('Ambele marchează (DA)','BTTS','match','', bttsDA);
   add(bttsM);
   add({kind:'bttsno',label:'Ambele marchează (NU)',group:'BTTS',src:bttsM,p:(bttsM.p!=null?100-bttsM.p:null)});
   add(result('Rezultat final','Rezultat','match',['1 '+hn,'X Egal','2 '+an],
