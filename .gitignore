@@ -9,3 +9,6 @@ __pycache__/
 # Dev-only design assets (UI skill) — nu cod de app
 .claude/skills/
 design-system/
+
+# NGP fix offline report (run on VPS, not code)
+ml/fix_ngp_timedecay_report.txt
