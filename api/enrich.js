@@ -11,6 +11,20 @@ const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
 const FINISHED_STATUSES = new Set(['FT','AET','PEN','SUSP','ABD','AWD','WO']);
 const SEASON = new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1;
 
+// [NEUTRAL_VENUE_FIX] Flag-gated (default OFF). Pe teren neutru (ex: Cupa Mondială)
+// niciuna dintre echipe nu joacă „acasă": (1) homeAdvantage→1.0 în calcPoisson și
+// (2) folosim forma GENERALĂ a ambelor echipe (ultimele 10 meciuri, indiferent de
+// venue) în loc de split acasă/deplasare. Cu flag OFF comportamentul e IDENTIC cu
+// producția. Activare: env NEUTRAL_VENUE_FIX=1.
+// Sursa de „teren neutru" = league_id (singurul semnal de încredere care intră deja
+// în enrich, via param `lgid`). Lista = competiții internaționale cu gazdă unică /
+// teren neutru. World Cup (API-Football league_id=1) confirmat în api/worldcup.js.
+const NEUTRAL_VENUE_FIX  = process.env.NEUTRAL_VENUE_FIX === '1';
+const NEUTRAL_LEAGUE_IDS = new Set([1]); // 1 = FIFA World Cup (finals). Extensibil.
+function isNeutralVenue(leagueId) {
+  return NEUTRAL_LEAGUE_IDS.has(Number(leagueId));
+}
+
 // [C3] Cache in-memory pentru /api/enrich — taie recalculul (~17 query-uri DB
 // + posibile apeluri API) la fiecare tap / refresh live. Key: h-a-fid.
 // TTL: 60s live, 600s pre-meci/FT. Evicție FIFO la >200 intrări.
@@ -147,7 +161,7 @@ function calcDynamicLambda(lambdaBase, elapsed, currentGoals, sot) {
   return { lambda: currentGoals + lambdaRemaining, dynamic: true };
 }
 
-export function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agParam, sothParam, sotaParam, lgHome = 1.2, lgAway = 1.2, leagueStats = null) {
+export function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam, agParam, sothParam, sotaParam, lgHome = 1.2, lgAway = 1.2, leagueStats = null, neutral = false) {
   // Sprint 4D — clamp scoruri extreme: orice meci cu total > 5 goluri
   // se tratează proporțional ca și cum totalul ar fi 5. Previne outliers
   // (ex: 6-0 demolare sau 5-3 carnaval) să infleze artificial lambdaHome/lambdaAway
@@ -215,7 +229,10 @@ export function calcPoisson(hGames, aGames, h2h, hId, aId, elapsedParam, hgParam
   // Normalizare față de media ligii elimină bias-ul cross-league (Premier League ≠ Liga 3 Finlanda)
   const lgHomeAvg = parseFloat(leagueStats?.avg_home_goals) || lgHome || 1.35;
   const lgAwayAvg = parseFloat(leagueStats?.avg_away_goals) || lgAway || 1.10;
-  const homeAdvantage = 1.25;
+  // [NEUTRAL_VENUE_FIX] Pe teren neutru (flag ON) nu există avantaj de gazdă → 1.0.
+  // Pentru meciuri normale valoarea rămâne NESCHIMBATĂ (1.25). Cu flag OFF, `neutral`
+  // e mereu false, deci homeAdvantage e mereu 1.25 — comportament identic cu producția.
+  const homeAdvantage = (NEUTRAL_VENUE_FIX && neutral) ? 1.0 : 1.25;
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
   const hAttStr = lgHomeAvg > 0 ? homeAvgScored   / lgHomeAvg : 1.0;
@@ -791,6 +808,30 @@ async function getAwayForm(teamId) {
   } catch (_) { return []; }
 }
 
+// [NEUTRAL_VENUE_FIX] Formă GENERALĂ — ultimele 10 meciuri FT ale echipei,
+// indiferent dacă a jucat acasă sau în deplasare. Folosită DOAR pe teren neutru,
+// în locul split-ului getHomeForm/getAwayForm (care presupune avantaj de gazdă).
+async function getRecentForm(teamId) {
+  try {
+    const r = await query(
+      `SELECT home_team_id, away_team_id, home_goals, away_goals, match_date
+       FROM fixtures_history
+       WHERE (home_team_id = $1 OR away_team_id = $1)
+         AND status_short = 'FT'
+         AND home_goals IS NOT NULL
+         AND match_date >= NOW() - INTERVAL '2 years'
+       ORDER BY match_date DESC
+       LIMIT 10`,
+      [teamId]
+    );
+    return r.rows.map(row => ({
+      teams: { home: { id: row.home_team_id }, away: { id: row.away_team_id } },
+      goals: { home: row.home_goals ?? 0, away: row.away_goals ?? 0 },
+      match_date: row.match_date,
+    }));
+  } catch (_) { return []; }
+}
+
 async function getH2HFromDB(homeId, awayId) {
   // [SPEED A T4] H2H e fix după kickoff → cache per pereche (TTL 3h). Rezultat identic.
   const _hk = (homeId && awayId) ? `${Math.min(homeId, awayId)}-${Math.max(homeId, awayId)}` : null;
@@ -1320,9 +1361,19 @@ export default async function handler(req, res) {
     // și suprascriem λ din predictions mai jos. Elimină apelurile API duplicate.
     const havePred = dbLambda && dbLambda.lambda_home != null && dbLambda.lambda_away != null;
 
+    // [NEUTRAL_VENUE_FIX] Teren neutru (flag ON + league_id neutru): înlocuim forma
+    // venue-split (getHomeForm/getAwayForm) cu forma GENERALĂ a ambelor echipe.
+    // Cu flag OFF → _neutral=false → nHForm/nAForm === sbHForm/sbAForm (identic).
+    const _neutral = NEUTRAL_VENUE_FIX && isNeutralVenue(lgid);
+    let nHForm = sbHForm, nAForm = sbAForm;
+    if (_neutral) {
+      const [grH, grA] = await Promise.all([getRecentForm(hId), getRecentForm(aId)]);
+      nHForm = grH; nAForm = grA;
+    }
+
     // --- Batch 2: API-Football fallbacks only where DB had insufficient data ---
-    const needHForm = !havePred && sbHForm.length  < 3;
-    const needAForm = !havePred && sbAForm.length  < 3;
+    const needHForm = !havePred && nHForm.length  < 3;
+    const needAForm = !havePred && nAForm.length  < 3;
     const needH2H   = !havePred && sbH2H.length    < 3;
 
     const [apiFbHForm, apiFbAForm, apiFbH2H, injuredScores] = await Promise.all([
@@ -1338,8 +1389,8 @@ export default async function handler(req, res) {
       const d = m?.fixture?.date || m?.date;
       return d ? new Date(d) >= _cutoff : true;
     });
-    const hGames = needHForm ? _fresh(apiFbHForm?.response).slice(0, 10) : sbHForm;
-    const aGames = needAForm ? _fresh(apiFbAForm?.response).slice(0, 10) : sbAForm;
+    const hGames = needHForm ? _fresh(apiFbHForm?.response).slice(0, 10) : nHForm;
+    const aGames = needAForm ? _fresh(apiFbAForm?.response).slice(0, 10) : nAForm;
     const h2h = needH2H
       ? _fresh(apiFbH2H?.response).slice(0, 10)
       : h2hToFixtures(sbH2H);
@@ -1356,7 +1407,7 @@ export default async function handler(req, res) {
     // --- Calculations ---
     const lgHome = parseFloat(leagueStats?.avg_home_goals) || 1.2;
     const lgAway = parseFloat(leagueStats?.avg_away_goals) || 1.2;
-    const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota, lgHome, lgAway, leagueStats);
+    const result = calcPoisson(hGames, aGames, h2h, hId, aId, elapsed, hg, ag, soth, sota, lgHome, lgAway, leagueStats, _neutral);
     // Fix h2hSample: când fallback API se activează dar și DB combinat are date,
     // h2hSample trebuie să reflecte ARRAYUL FINAL real folosit în calcPoisson.
     // calcPoisson primește h2h care e: needH2H ? API : h2hToFixtures(sbH2H combinat).
