@@ -2250,3 +2250,16 @@ export default async function handler(req, res) {
     res.status(500).json({ error: e.message });
   }
 }
+
+// [NEUTRAL_VENUE_FIX] Export-uri pentru scripturi de shadow/diagnostic (ex:
+// scripts/shadow-neutral.js). NU schimbă comportamentul rutei — doar expun
+// helperele reale ca să fie reutilizate fără a dubla formula.
+export {
+  getLeagueStats,
+  getHomeForm,
+  getAwayForm,
+  getRecentForm,
+  getH2HFromDB,
+  h2hToFixtures,
+  isNeutralVenue,
+};
