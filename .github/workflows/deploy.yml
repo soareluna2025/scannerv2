@@ -15,7 +15,7 @@ jobs:
           host: ${{ secrets.VPS_IP }}
           username: root
           password: ${{ secrets.VPS_PASSWORD }}
-          envs: API_FOOTBALL_KEY,POSTGRES_URL,ANTHROPIC_API_KEY,XAI_API_KEY,BACKUP_TOKEN
+          envs: API_FOOTBALL_KEY,POSTGRES_URL,ANTHROPIC_API_KEY,XAI_API_KEY,BACKUP_TOKEN,FEATURE_NGP_TIMEDECAY
           command_timeout: 8m
           script: |
             export PATH="/snap/bin:$PATH"
@@ -60,10 +60,10 @@ jobs:
               CRON_VAL="$EXISTING_CRON"
               CRON_STATUS="existent"
             fi
-            printf 'API_FOOTBALL_KEY=%s\nPOSTGRES_URL=%s\nANTHROPIC_API_KEY=%s\nXAI_API_KEY=%s\nADMIN_API_KEY=%s\nCRON_SECRET=%s\n' \
-              "$API_FOOTBALL_KEY" "$POSTGRES_URL" "$ANTHROPIC_API_KEY" "$XAI_API_KEY" "$NEW_KEY" "$CRON_VAL" \
+            printf 'API_FOOTBALL_KEY=%s\nPOSTGRES_URL=%s\nANTHROPIC_API_KEY=%s\nXAI_API_KEY=%s\nADMIN_API_KEY=%s\nCRON_SECRET=%s\nFEATURE_NGP_TIMEDECAY=%s\n' \
+              "$API_FOOTBALL_KEY" "$POSTGRES_URL" "$ANTHROPIC_API_KEY" "$XAI_API_KEY" "$NEW_KEY" "$CRON_VAL" "${FEATURE_NGP_TIMEDECAY:-false}" \
               > /root/scannerv2/.env
-            echo "ENV scris: 6 chei, ADMIN_API_KEY: $KEY_STATUS, CRON_SECRET: $CRON_STATUS"
+            echo "ENV scris: 7 chei, ADMIN_API_KEY: $KEY_STATUS, CRON_SECRET: $CRON_STATUS, NGP_TIMEDECAY: ${FEATURE_NGP_TIMEDECAY:-false}"
             chmod 600 /root/scannerv2/.env
             echo "ENV OK: $(wc -l < /root/scannerv2/.env) chei"
 
@@ -104,3 +104,5 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           BACKUP_TOKEN: ${{ secrets.BACKUP_TOKEN }}
+          # Feature flag — default 'false' dacă secretul nu e setat (zero impact).
+          FEATURE_NGP_TIMEDECAY: ${{ secrets.FEATURE_NGP_TIMEDECAY }}
