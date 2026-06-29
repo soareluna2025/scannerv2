@@ -13,7 +13,7 @@ import { logPrediction } from '../log-prediction.js';
 import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 import { isAllowedMatch } from '../utils/league-filter.js';
 import { calcFeatures, calcNextGoal, calcNextGoalWindow, calcGG, calcMarkets } from '../utils/live-score.js';
-import { calibrateNgp } from '../utils/ngp-calibration.js';
+import { calibrateNgp, isShadowFixture, calibrateNgpWithTimedecay } from '../utils/ngp-calibration.js';
 import { trackElapsed, freezeReason, maybeLogFrozen, clearFreeze, snapshotFreeze, restoreFreeze } from '../utils/freeze-state.js';
 
 const FOOTBALL_KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
@@ -618,7 +618,19 @@ async function scanLive10s() {
       const ngRaw = calcNextGoal(f);
       const ng15Raw = calcNextGoalWindow(f, 15);
       // Hide NGP în primele 10 min (date insuficiente pentru încredere)
-      let ng = f.mn < 10 ? 0 : calibrateNgp(ngRaw);
+      // [FEATURE_NGP_TIMEDECAY] Shadow determinist 10% (id%100<10) DOAR când flag-ul
+      // e ON. Off (default) → calibrateNgp existent → comportament IDENTIC cu producția.
+      const _ngTimedecay = process.env.FEATURE_NGP_TIMEDECAY === 'true' && isShadowFixture(id);
+      let ng;
+      if (f.mn < 10) {
+        ng = 0;
+      } else if (_ngTimedecay) {
+        const _ngBase = calibrateNgp(ngRaw);
+        ng = calibrateNgpWithTimedecay(ngRaw, f.mn);
+        log(`[NGP-SHADOW] fixture=${id} min=${f.mn} raw=${ngRaw} base=${_ngBase} td=${ng}`);
+      } else {
+        ng = calibrateNgp(ngRaw);
+      }
       let ng15 = f.mn < 10 ? 0 : ng15Raw;  // ng15 e deja calibrat prin formula (cap 60)
       // FIX 4: smoothing adaptiv. Pre-minutul 75 = ±5pp (anti-oscilație
       // standard). Min 75-85 = ±15pp (semnale mai responsive în final).
