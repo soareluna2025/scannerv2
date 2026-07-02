@@ -1,9 +1,8 @@
 import { query } from './db.js';
+import { seasonForDate } from './utils/season.js';
 
-const currentSeason = () => {
-  const m = new Date().getMonth(); // 0=Jan
-  return m >= 7 ? new Date().getFullYear() : new Date().getFullYear() - 1;
-};
+// Cutoff unificat (august) — sursă unică în utils/season.js.
+const currentSeason = () => seasonForDate();
 
 // Coloanele complete (inclusiv group_name/form/description — necesare pt modul grupă).
 const COLS = `team_id, team_name, team_logo, rank, played, win, draw, lose,

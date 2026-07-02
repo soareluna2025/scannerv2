@@ -3,15 +3,10 @@
 // Rulează zilnic la 04:00 — zero apeluri API, calcul local din DB
 
 import { query } from '../db.js';
+import { seasonForDate } from '../utils/season.js';
 
-function getCurrentSeason() {
-  const now   = new Date();
-  const month = now.getMonth() + 1; // 1-12
-  const year  = now.getFullYear();
-  return month < 8 ? year - 1 : year; // înainte de august → sezon anterior
-}
-
-const SEASON = getCurrentSeason();
+// Cutoff unificat (august) — sursă unică în utils/season.js.
+const SEASON = seasonForDate();
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
