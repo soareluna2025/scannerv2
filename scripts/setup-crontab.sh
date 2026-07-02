@@ -49,6 +49,8 @@ NEW_CRONTAB=$(cat <<EOF
 0 4 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/league-stats >> ${LOG} 2>&1
 0 4 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/coach-stats >> ${LOG} 2>&1
 30 4 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/referee-stats >> ${LOG} 2>&1
+# Optimizare DB — VACUUM (ANALYZE) rapid pe tabelele mari, zilnic 04:45 (după backup 03:30, înainte de train 05:30).
+45 4 * * * curl -sf -H "${HDR}" "${BASE}/api/cron/optimize-db?mode=rapid" >> ${LOG} 2>&1
 30 3 * * * curl -sf --max-time 120 -H "${HDR}" ${BASE}/api/cron/collect-venues >> ${LOG} 2>&1
 45 3 * * * curl -sf --max-time 120 -H "${HDR}" ${BASE}/api/cron/collect-coaches >> ${LOG} 2>&1
 30 3 * * * curl -sf -X POST -H "${HDR}" ${BASE}/api/cron/learning-analysis >> ${LOG} 2>&1
