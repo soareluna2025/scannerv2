@@ -178,6 +178,19 @@ function ngpColor(p){return p>=80?'#00d4a8':p>=60?'#ffd166':'#ff6b6b';}
 
 
 
+// Wilson score interval — lower bound (proporție 0..1). Penalizează n mic:
+// la 3/3 (100% brut) LB≈0.44, la 70/100 LB≈0.60. Folosit pt decizia badge-ului ⚡
+// ca să nu arate „forte" ligi cu eșantion neconcludent. Strat pur de prezentare.
+function wilsonLower(wins,n,z){
+  z=z||1.96; n=+n||0; if(n<=0)return 0;
+  var p=(+wins||0)/n, z2=z*z;
+  var denom=1+z2/n;
+  var centre=p+z2/(2*n);
+  var margin=z*Math.sqrt((p*(1-p)+z2/(4*n))/n);
+  var lb=(centre-margin)/denom;
+  return lb<0?0:lb>1?1:lb;
+}
+
 function buildCardHtml(m,lgName){
   var s=m._s||{};var mk=s.mk||{};
   var hg=s.hg||0;var ag=s.ag||0;var mn=s.mn||0;var ng=s.ng||0;
@@ -190,7 +203,9 @@ function buildCardHtml(m,lgName){
   var goodLg=GOOD_LEAGUES[lgId2];  // proven win rate >=75% pe Over 1.5
   var badLg=goodLg?null:BAD_LEAGUES[lgId2];  // win rate <=50%, evita
   var lgBadge='';
-  if(goodLg)lgBadge='<span class="good-lg-badge" title="Liga cu '+goodLg.wr+'% win rate pe Over 1.5 (n='+goodLg.n+')">⚡'+goodLg.wr+'%</span>';
+  // Badge ⚡ DOAR când Wilson lower-bound (95%) ≥ 70% — filtrează n mic fals-încrezător.
+  var _glLB=goodLg?wilsonLower(Math.round(goodLg.wr*goodLg.n/100),goodLg.n):0;
+  if(goodLg&&_glLB>=0.70)lgBadge='<span class="good-lg-badge" title="Liga cu '+goodLg.wr+'% win rate pe Over 1.5 (n='+goodLg.n+', Wilson LB: '+Math.round(_glLB*100)+'%)">⚡'+goodLg.wr+'%</span>';
   else if(badLg)lgBadge='<span class="bad-lg-badge" title="Liga slaba: doar '+badLg.wr+'% win rate pe Over 1.5 (n='+badLg.n+'). Evita.">⚠'+badLg.wr+'%</span>';
   var hRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.home&&m.teams.home.id);});
   var aRed=(m.events||[]).some(function(ev){return ev.type==='Card'&&(ev.detail==='Red Card'||ev.detail==='Second Yellow Card')&&ev.team&&ev.team.id===(m.teams&&m.teams.away&&m.teams.away.id);});
