@@ -7,15 +7,27 @@
 // Cache per league_id pe durata procesului (un singur fetch/ligă/rulare).
 // Fallback (API down): formula veche, cu AVERTISMENT în log.
 //
-// Folosit DOAR de scripturile de COLECTARE. NU atinge enrich/scoring.
+// Calea DINAMICĂ (seasonForLeague/seasonForTeam, cu API) = scripturi de COLECTARE.
+// Calea STATICĂ (seasonForDate) = helper partajat pt calculul anului (enrich/
+// standings/league-stats). NICIUNA nu atinge scoring-ul (score1-7/Lambda/MonteCarlo).
 
 import { fetchApiFootball } from './fetch-api.js';
 import { query } from '../db.js';
 
-// Formula europeană veche — păstrată DOAR ca fallback de ultimă instanță.
+// Sezon STATIC unificat pentru o dată dată. Cutoff pe AUGUST (getMonth()>=7 →
+// anul curent; altfel anul-1): majoritatea ligilor europene încep în august, iar
+// ligile pe an calendaristic sunt tratate de calea DINAMICĂ (seasonForLeague).
+// Sursă UNICĂ de adevăr pt calculul static al anului de sezon — folosită și de
+// enrich.js / standings-data.js / league-stats.js ca să NU mai diveargă cutoff-ul.
+export function seasonForDate(date = new Date()) {
+  const d = (date instanceof Date) ? date : new Date(date);
+  return d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;
+}
+
+// Formula europeană — fallback de ultimă instanță al căii dinamice. Delegă la
+// seasonForDate (cutoff august unificat) ca să nu existe două cutoff-uri diferite.
 export function fallbackSeason() {
-  const d = new Date();
-  return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1;
+  return seasonForDate();
 }
 
 const _leagueSeasonCache = new Map(); // league_id → year

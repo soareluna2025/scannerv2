@@ -5,11 +5,12 @@ import { logPrediction } from './log-prediction.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
 import { getWeight } from './weights.js';
 import { timingBody } from './utils/goal-timing-sql.js';
+import { seasonForDate } from './utils/season.js';
 
 const PRE_MATCH_STATUSES = new Set(['NS']);
 const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
 const FINISHED_STATUSES = new Set(['FT','AET','PEN','SUSP','ABD','AWD','WO']);
-const SEASON = new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+const SEASON = seasonForDate();  // cutoff unificat (august) — vezi utils/season.js
 
 // [C3] Cache in-memory pentru /api/enrich — taie recalculul (~17 query-uri DB
 // + posibile apeluri API) la fiecare tap / refresh live. Key: h-a-fid.
