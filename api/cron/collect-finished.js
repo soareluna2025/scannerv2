@@ -49,7 +49,7 @@ async function updateEloForFixture(fx) {
   return true;
 }
 
-async function collectFixture(fixtureId) {
+export async function collectFixture(fixtureId) {
   const r = await fetchApiFootball(`/fixtures/players?fixture=${fixtureId}`);
   const data = await r.json();
   const teams = data.response || [];
