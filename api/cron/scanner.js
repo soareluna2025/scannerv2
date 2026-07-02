@@ -620,7 +620,10 @@ async function scanLive10s() {
       // Hide NGP în primele 10 min (date insuficiente pentru încredere)
       // [FEATURE_NGP_TIMEDECAY] Shadow determinist 10% (id%100<10) DOAR când flag-ul
       // e ON. Off (default) → calibrateNgp existent → comportament IDENTIC cu producția.
-      const _ngTimedecay = process.env.FEATURE_NGP_TIMEDECAY === 'true' && isShadowFixture(id);
+      // [NGP_SHADOW_PCT] Prag shadow configurabil (0-100). Default 10 dacă lipsește/invalid.
+      const _shadowPct = Number(process.env.NGP_SHADOW_PCT);
+      const _pct = (Number.isFinite(_shadowPct) && _shadowPct >= 0 && _shadowPct <= 100) ? _shadowPct : 10;
+      const _ngTimedecay = process.env.FEATURE_NGP_TIMEDECAY === 'true' && isShadowFixture(id, _pct);
       let ng;
       if (f.mn < 10) {
         ng = 0;
