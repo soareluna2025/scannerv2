@@ -6,15 +6,16 @@ const LIMIT = parseInt(getArg('limit', '500'), 10);
 const YEAR = parseInt(getArg('year', '2022'), 10);
 const COMMIT = args.includes('--commit');
 const DRY = !COMMIT;
+const N = (v) => v == null ? null : Number(v);
 function calcStr(rows) {
   if (!Array.isArray(rows) || rows.length < 10) return null;
   const rated = rows.filter(r => r.rating);
   const avgRating = rated.length ? rated.reduce((s, r) => s + Number(r.rating), 0) / rated.length : 5;
-  const goalsPerGame = rows.reduce((s, r) => s + (r.goals || 0), 0) / rows.length;
+  const goalsPerGame = rows.reduce((s, r) => s + (Number(r.goals) || 0), 0) / rows.length;
   const withPass = rows.filter(r => r.pass_accuracy != null);
   const avgPassAcc = withPass.length ? withPass.reduce((s, r) => s + Number(r.pass_accuracy), 0) / withPass.length : 50;
-  const avgSot = rows.reduce((s, r) => s + (r.shots_on_target || 0), 0) / rows.length;
-  const topScorer = Math.max(...rows.map(r => r.goals || 0), 0);
+  const avgSot = rows.reduce((s, r) => s + (Number(r.shots_on_target) || 0), 0) / rows.length;
+  const topScorer = Math.max(...rows.map(r => Number(r.goals) || 0), 0);
   return Math.round((avgRating/10*100)*0.35 + Math.min(100,goalsPerGame*35)*0.25 + avgPassAcc*0.20 + Math.min(100,avgSot*12)*0.10 + Math.min(100,topScorer*20)*0.10);
 }
 function calcScore7(h, a) {
@@ -55,9 +56,10 @@ async function main() {
     const strH = calcStr(rH.rows), strA = calcStr(rA.rows);
     const score7 = calcScore7(strH, strA);
     if (score7 == null) s7_null++; else s7_calc++;
-    const score6 = calcConvergence([p.score1, p.score2, p.score3, score7]);
-    const confN = calcConfidence(p.score1, p.score2, p.score3, score6, score7);
-    rezV.push({ conf: p.conf_vechi, real: p.result_over15 });
+    const s1 = N(p.score1), s2 = N(p.score2), s3 = N(p.score3);
+    const score6 = calcConvergence([s1, s2, s3, score7]);
+    const confN = calcConfidence(s1, s2, s3, score6, score7);
+    rezV.push({ conf: N(p.conf_vechi), real: p.result_over15 });
     rezN.push({ conf: confN, real: p.result_over15 });
     if (COMMIT && score7 != null) { await client.query('UPDATE predictions SET score7=$1, score6=$2, confidence=$3 WHERE fixture_id=$4', [score7, score6, confN, p.fixture_id]); updated++; }
     processed++;
