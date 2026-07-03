@@ -7,6 +7,7 @@ const YEAR = parseInt(getArg('year', '2022'), 10);
 const COMMIT = args.includes('--commit');
 const DRY = !COMMIT;
 const N = (v) => v == null ? null : Number(v);
+const okNum = (v) => v != null && !isNaN(v);
 function calcStr(rows) {
   if (!Array.isArray(rows) || rows.length < 10) return null;
   const rated = rows.filter(r => r.rating);
@@ -25,7 +26,7 @@ function calcScore7(h, a) {
   return Math.max(0, Math.min(100, Math.round((hd+ad)/2*1.5)));
 }
 function calcConvergence(all) {
-  const act = all.filter(v => v != null);
+  const act = all.filter(v => v != null && !isNaN(v));
   if (act.length < 2) return null;
   const m = act.reduce((s,v)=>s+v,0)/act.length;
   const va = act.reduce((s,v)=>s+(v-m)*(v-m),0)/act.length;
@@ -33,9 +34,9 @@ function calcConvergence(all) {
 }
 function calcConfidence(s1, s2, s3, s6, s7) {
   const L = [{s:s1,w:0.30},{s:s2,w:0.25},{s:s3,w:0.15},{s:s7,w:0.25},{s:s6,w:0.05}];
-  const f = L.filter(l => l.s !== null && l.w > 0);
+  const f = L.filter(l => l.s !== null && !isNaN(l.s) && l.w > 0);
   const tw = f.reduce((s,l)=>s+l.w,0);
-  if (tw === 0) return 50;
+  if (tw === 0) return null;
   return Math.max(5, Math.min(100, Math.round(f.reduce((s,l)=>s+l.s*(l.w/tw),0))));
 }
 async function main() {
@@ -61,7 +62,7 @@ async function main() {
     const confN = calcConfidence(s1, s2, s3, score6, score7);
     rezV.push({ conf: N(p.conf_vechi), real: p.result_over15 });
     rezN.push({ conf: confN, real: p.result_over15 });
-    if (COMMIT && score7 != null) { await client.query('UPDATE predictions SET score7=$1, score6=$2, confidence=$3 WHERE fixture_id=$4', [score7, score6, confN, p.fixture_id]); updated++; }
+    if (COMMIT && score7 != null && confN != null) { await client.query('UPDATE predictions SET score7=$1, score6=$2, confidence=$3 WHERE fixture_id=$4', [score7, score6, confN, p.fixture_id]); updated++; }
     processed++;
     if (processed % 100 === 0) process.stdout.write('  ...' + processed + '/' + preds.length + '\r');
   }
@@ -70,13 +71,13 @@ async function main() {
   console.log('  score7 calculat: ' + s7_calc);
   console.log('  score7 null: ' + s7_null);
   console.log('  UPDATE scrise: ' + (COMMIT ? updated : '0 (DRY-RUN)'));
-  const brier = (arr) => { const v = arr.filter(x => x.conf != null); if (!v.length) return null; return v.reduce((s,x)=>s+((x.conf/100)-(x.real?1:0))*((x.conf/100)-(x.real?1:0)),0)/v.length; };
+  const brier = (arr) => { const v = arr.filter(x => okNum(x.conf)); if (!v.length) return null; return v.reduce((s,x)=>s+((x.conf/100)-(x.real?1:0))*((x.conf/100)-(x.real?1:0)),0)/v.length; };
   const bV = brier(rezV), bN = brier(rezN);
   console.log('\n-- CALIBRARE (Brier confidence vs over15, orientativ) --');
   console.log('  Brier VECHI (score7=null): ' + (bV != null ? bV.toFixed(5) : 'n/a'));
   console.log('  Brier NOU   (score7 pit):  ' + (bN != null ? bN.toFixed(5) : 'n/a'));
   if (bV != null && bN != null) { const d = bV - bN; console.log('  Delta: ' + (d>=0?'+':'') + d.toFixed(5) + '  ' + (d>0.001?'-> score7 AJUTA':d<-0.001?'-> score7 INRAUTATESTE':'-> neglijabil')); }
-  const buckets = (arr) => { const b = {}; for (const x of arr.filter(y => y.conf != null)) { const k = x.conf<55?'1_sub55':x.conf<65?'2_55-64':x.conf<75?'3_65-74':'4_75plus'; if (!b[k]) b[k]={n:0,w:0,c:0}; b[k].n++; b[k].w+=x.real?1:0; b[k].c+=x.conf; } return b; };
+  const buckets = (arr) => { const b = {}; for (const x of arr.filter(y => okNum(y.conf))) { const k = x.conf<55?'1_sub55':x.conf<65?'2_55-64':x.conf<75?'3_65-74':'4_75plus'; if (!b[k]) b[k]={n:0,w:0,c:0}; b[k].n++; b[k].w+=x.real?1:0; b[k].c+=x.conf; } return b; };
   const pr = (lbl, b) => { console.log('\n  ' + lbl + ':'); console.log('    bucket    n     conf_med  over15_real'); for (const k of Object.keys(b).sort()) { const x = b[k]; console.log('    ' + k.padEnd(9) + ' ' + String(x.n).padEnd(5) + ' ' + (x.c/x.n).toFixed(1).padEnd(9) + ' ' + (x.w*100/x.n).toFixed(1) + '%'); } };
   pr('VECHE (score7=null)', buckets(rezV));
   pr('NOUA (score7 pit)', buckets(rezN));
