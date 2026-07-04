@@ -13,6 +13,12 @@ module.exports = {
                                     // SIGINT/SIGTERM de mai multe ori/noapte. ⚠ verifică `free -m`:
                                     // sigur pe VPS ≥2GB (PG local ~0.5G + OS); pe 4GB+ poate urca la 1800M.
     env_file: '/root/scannerv2/.env',
+    env: {
+      // P4b/P5: poartă adaptivă în mod SHADOW (loghează divergențe în adaptive_shadow_log;
+      // decizia rămâne pe pragul static 70 → zero schimbare vizibilă). 'OFF' dezactivează
+      // complet; 'ON' folosește pragul învățat. Vezi api/adaptive-threshold.js.
+      ADAPTIVE_THRESHOLD: 'SHADOW',
+    },
     error_file: '/root/.pm2/logs/alohascan-error.log',
     out_file: '/root/.pm2/logs/alohascan-out.log',
     log_date_format: 'YYYY-MM-DD HH:mm:ss',
