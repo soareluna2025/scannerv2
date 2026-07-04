@@ -706,21 +706,33 @@ async function scanLive10s() {
         }
 
         // Log to prediction_log for self-learning
-        logPrediction({
-          fixture_id:      id,
-          league_id:       m.league?.id,
-          league_name:     m.league?.name,
-          home_team:       m.teams?.home?.name,
-          away_team:       m.teams?.away?.name,
-          minute:          currMin,
-          score:           `${currHome}-${currAway}`,
-          module:          alertType === 'HIGH_NGP' ? 'NGP' : 'OVER15',
-          predicted_value: alertType === 'HIGH_NGP' ? ng : mk.over15,
-          threshold_used:  70,
-          ngp_value:       ng,
-          lambda_home:     null,
-          lambda_away:     null,
-        }).catch(() => {});
+        // P1a: NU loga OVER15 tautologic — dacă scorul are deja total>=2, over15 e
+        //      decis (hit 100% fals). NGP rămâne (regula = gol DUPĂ alertă, sănătoasă).
+        // P1b/d: dedup — max 1 rând per (fixture, modul, bandă de 5 min), via liveCache,
+        //        ca să nu explodeze log-ul la cadența de 2s (era NEdeduplicat).
+        const _logModule  = alertType === 'HIGH_NGP' ? 'NGP' : 'OVER15';
+        const _curTotal   = (currHome || 0) + (currAway || 0);
+        const _over15Taut = _logModule === 'OVER15' && _curTotal >= 2;
+        if (!liveCache[id]._logged) liveCache[id]._logged = {};
+        const _logKey = `${_logModule}_${Math.floor(currMin / 5)}`;
+        if (!_over15Taut && !liveCache[id]._logged[_logKey]) {
+          liveCache[id]._logged[_logKey] = 1;
+          logPrediction({
+            fixture_id:      id,
+            league_id:       m.league?.id,
+            league_name:     m.league?.name,
+            home_team:       m.teams?.home?.name,
+            away_team:       m.teams?.away?.name,
+            minute:          currMin,
+            score:           `${currHome}-${currAway}`,
+            module:          _logModule,
+            predicted_value: alertType === 'HIGH_NGP' ? ng : mk.over15,
+            threshold_used:  70,
+            ngp_value:       ng,
+            lambda_home:     null,
+            lambda_away:     null,
+          }).catch(() => {});
+        }
         } // end else (_full — semnal real de bani)
       }
     }
