@@ -33,11 +33,15 @@ export async function getAdaptiveThreshold(module, leagueId) {
       `SELECT weight_value FROM model_weights
        WHERE module=$1 AND context_key=$2 AND weight_name='threshold'
          AND confidence_level='HIGH' AND sample_size>=50
+         AND weight_value > 70
        LIMIT 1`,
       [module, `league_${leagueId}`]
     );
     if (rows[0] && rows[0].weight_value != null) val = Number(rows[0].weight_value);
   } catch (_) { val = null; }
+  // RAISE-ONLY: coborârile sub 70 nemăsurabile până la shadow logging sub prag (§7 audit).
+  // Doar RIDICĂRILE (prag>70) sunt validate de backtest; <=70 → null → fallback static 70.
+  if (val != null && val <= 70) val = null;
   _cache.set(key, { val, ts: Date.now() });
   return val;
 }
