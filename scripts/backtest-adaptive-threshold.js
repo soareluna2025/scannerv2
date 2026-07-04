@@ -36,8 +36,9 @@ async function main() {
   console.log('='.repeat(78));
   if (!rows.length) { console.log('Niciun prag adaptiv <> 70 în model_weights (rulează întâi cronul P4c).'); await pool.end(); return; }
 
+  const pad = (v, n) => String(v).padEnd(n);
   console.log('\nPrimele 20 ligi:');
-  console.log('%-12s %-10s %-6s %-9s %-9s %-9s %-9s', 'modul','liga','thr','hit_stat','vol_stat','hit_adpt','vol_adpt');
+  console.log(pad('modul',12)+pad('liga',10)+pad('thr',6)+pad('hit_stat',9)+pad('vol_stat',9)+pad('hit_adpt',9)+'vol_adpt');
   const agg = {};
   for (const r of rows) {
     const mod = r.module, hs = r.hit_static, ha = r.hit_adaptiv;
@@ -53,17 +54,16 @@ async function main() {
     agg[mod].va += Number(r.vol_adaptiv) || 0;
   }
   rows.slice(0, 20).forEach(r => {
-    console.log('%-12s %-10s %-6s %-9s %-9s %-9s %-9s',
-      r.module, r.context_key.replace('league_',''), String(r.thr_nou),
-      r.hit_static ?? 'n/a', String(r.vol_static), r.hit_adaptiv ?? 'n/a', String(r.vol_adaptiv));
+    console.log(pad(r.module,12)+pad(r.context_key.replace('league_',''),10)+pad(r.thr_nou,6)+
+      pad(r.hit_static ?? 'n/a',9)+pad(r.vol_static,9)+pad(r.hit_adaptiv ?? 'n/a',9)+String(r.vol_adaptiv));
   });
 
   console.log('\n' + '-'.repeat(78));
   console.log('AGREGAT per modul (ligi cu prag<>70):');
-  console.log('%-12s %-7s %-9s %-9s %-9s %-10s %-10s', 'modul','ligi','adaptiv+','adaptiv-','egal','vol_stat','vol_adpt');
+  console.log(pad('modul',12)+pad('ligi',7)+pad('adaptiv+',9)+pad('adaptiv-',9)+pad('egal',9)+pad('vol_stat',10)+'vol_adpt');
   for (const mod of MODULES) {
-    const a = agg[mod]; if (!a) { console.log('%-12s (fără ligi cu prag<>70)', mod); continue; }
-    console.log('%-12s %-7d %-9d %-9d %-9d %-10d %-10d', mod, a.n, a.better, a.worse, a.equal, a.vs, a.va);
+    const a = agg[mod]; if (!a) { console.log(pad(mod,12)+'(fără ligi cu prag<>70)'); continue; }
+    console.log(pad(mod,12)+pad(a.n,7)+pad(a.better,9)+pad(a.worse,9)+pad(a.equal,9)+pad(a.vs,10)+String(a.va));
   }
 
   console.log('\nVERDICT recomandat (heuristic — decizia finală pe shadow 24-48h):');

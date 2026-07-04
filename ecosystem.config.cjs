@@ -14,10 +14,11 @@ module.exports = {
                                     // sigur pe VPS ≥2GB (PG local ~0.5G + OS); pe 4GB+ poate urca la 1800M.
     env_file: '/root/scannerv2/.env',
     env: {
-      // P4b/P5: poartă adaptivă în mod SHADOW (loghează divergențe în adaptive_shadow_log;
-      // decizia rămâne pe pragul static 70 → zero schimbare vizibilă). 'OFF' dezactivează
-      // complet; 'ON' folosește pragul învățat. Vezi api/adaptive-threshold.js.
-      ADAPTIVE_THRESHOLD: 'SHADOW',
+      // Poartă adaptivă ON — RAISE-ONLY: doar ridicările de prag (>70) validate de backtest
+      // se aplică; restul ligilor cad pe fallback static 70. Coborârile sub 70 sunt blocate
+      // (nemăsurabile până la shadow logging sub prag). 'OFF'/'SHADOW' comutabile. Vezi
+      // api/adaptive-threshold.js.
+      ADAPTIVE_THRESHOLD: 'ON',
     },
     error_file: '/root/.pm2/logs/alohascan-error.log',
     out_file: '/root/.pm2/logs/alohascan-out.log',
