@@ -2,6 +2,7 @@ import { query } from './db.js';
 import { fetchApiFootball } from './utils/fetch-api.js';
 import { ALLOWED_LEAGUE_IDS } from './leagues.js';
 import { isAllowedMatch } from './utils/league-filter.js';
+import { getMode, getAdaptiveThreshold, logShadowDivergence } from './adaptive-threshold.js';
 
 const KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
 const LIVE_S = new Set(['1H','HT','2H','ET','BT','P','SUSP','INT','LIVE']);
@@ -285,8 +286,10 @@ export default async function handler(req, res) {
         predMap = Object.fromEntries(pRows.map(r => [r.fixture_id, r]));
       }
     } else {
-      // PREMATCH — top 10 din predictions cu confidence >=70 și over15_prob >=70
-      const { rows } = await query(
+      // PREMATCH — top 10 din predictions cu confidence >=70 și over15_prob >=70.
+      // P4b: poartă adaptivă flag-gated. OFF = query original (identic). SHADOW/ON =
+      // candidați lărgiți (>=55) + prag per-ligă din model_weights (fallback 70).
+      const _pmSql = (minConf, minO15, lim) =>
         `SELECT p.fixture_id, p.home_team, p.away_team, p.league_name AS pred_league_name,
                 p.lambda_home, p.lambda_away, p.lambda_total,
                 p.over15_prob, p.over25_prob, p.gg_prob,
@@ -308,11 +311,40 @@ export default async function handler(req, res) {
            LEFT JOIN teams ta  ON ta.team_id  = f.away_team_id
           WHERE f.status_short = 'NS'
             AND f.match_date BETWEEN NOW() AND NOW() + INTERVAL '36 hours'
-            AND p.confidence  >= 70
-            AND p.over15_prob >= 70
+            AND p.confidence  >= ${minConf}
+            AND p.over15_prob >= ${minO15}
           ORDER BY p.confidence DESC
-          LIMIT 10`
-      );
+          LIMIT ${lim}`;
+
+      const _mode = getMode();
+      let rows;
+      if (_mode === 'OFF') {
+        ({ rows } = await query(_pmSql(70, 70, 10)));
+      } else {
+        // Candidați lărgiți; decizie per rând cu prag adaptiv (fallback 70).
+        const { rows: cand } = await query(_pmSql(55, 55, 60));
+        const kept = [];
+        for (const r of cand) {
+          const lg   = r.league_id;
+          const conf = Number(r.confidence), o15 = Number(r.over15_prob);
+          const thrConf = (await getAdaptiveThreshold('CONFIDENCE', lg)) ?? 70;
+          const thrO15  = (await getAdaptiveThreshold('OVER15', lg)) ?? 70;
+          const sStatic = conf >= 70 && o15 >= 70;
+          const sAdapt  = conf >= thrConf && o15 >= thrO15;
+          if (_mode === 'SHADOW') {
+            if ((conf >= 70) !== (conf >= thrConf)) await logShadowDivergence({
+              fixture_id: r.fixture_id, module: 'CONFIDENCE', league_id: lg,
+              static_thr: 70, adaptive_thr: thrConf, predicted_value: conf,
+              static_decision: conf >= 70, adaptive_decision: conf >= thrConf });
+            if ((o15 >= 70) !== (o15 >= thrO15)) await logShadowDivergence({
+              fixture_id: r.fixture_id, module: 'OVER15', league_id: lg,
+              static_thr: 70, adaptive_thr: thrO15, predicted_value: o15,
+              static_decision: o15 >= 70, adaptive_decision: o15 >= thrO15 });
+          }
+          if ((_mode === 'SHADOW' ? sStatic : sAdapt) && kept.length < 10) kept.push(r);
+        }
+        rows = kept;
+      }
 
       rawMatches = rows.map(row => {
         predMap[row.fixture_id] = row;
