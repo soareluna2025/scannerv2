@@ -30,6 +30,7 @@ jobs:
             cp ml/model_export.json /tmp/model_export.json.bak 2>/dev/null || true
             cp ml/calibration_export.json /tmp/calibration_export.json.bak 2>/dev/null || true
             cp ml/calibration_live_export.json /tmp/calibration_live_export.json.bak 2>/dev/null || true
+            cp ml/gg_calibration.json /tmp/gg_calibration.json.bak 2>/dev/null || true
 
             git fetch origin
             git reset --hard origin/main
@@ -39,6 +40,7 @@ jobs:
             cp /tmp/model_export.json.bak ml/model_export.json 2>/dev/null || true
             cp /tmp/calibration_export.json.bak ml/calibration_export.json 2>/dev/null || true
             cp /tmp/calibration_live_export.json.bak ml/calibration_live_export.json 2>/dev/null || true
+            cp /tmp/gg_calibration.json.bak ml/gg_calibration.json 2>/dev/null || true
 
             npm install --silent
 
