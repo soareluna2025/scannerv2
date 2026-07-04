@@ -53,6 +53,10 @@ export default async function handler(req, res) {
   const log       = [];
 
   try {
+    // P2: asigură tabela de excludere (idempotent) — ligi scoase din learning.
+    await query(`CREATE TABLE IF NOT EXISTS learning_exclusions (
+      league_id INT PRIMARY KEY, reason TEXT, added_at TIMESTAMPTZ DEFAULT NOW())`).catch(() => {});
+
     // ── PASUL 1: Per ligă per modul ─────────────────────────────
     const { rows: byLeague } = await query(`
       SELECT league_id, module,
@@ -99,9 +103,10 @@ export default async function handler(req, res) {
           COUNT(*) AS total,
           SUM(CASE WHEN outcome='WIN' THEN 1 ELSE 0 END) AS wins
         FROM prediction_log
-        WHERE outcome != 'PENDING'
+        WHERE outcome IN ('WIN','LOSS')
           AND minute >= $1 AND minute < $2
           AND created_at > NOW() - INTERVAL '90 days'
+          AND league_id NOT IN (SELECT league_id FROM learning_exclusions)
         GROUP BY module
         HAVING COUNT(*) >= ${MIN_SAMPLES}
       `, [lo, hi]);
@@ -132,9 +137,10 @@ export default async function handler(req, res) {
         COUNT(*) AS total,
         SUM(CASE WHEN outcome='WIN' THEN 1 ELSE 0 END) AS wins
       FROM prediction_log
-      WHERE outcome != 'PENDING'
+      WHERE outcome IN ('WIN','LOSS')
         AND score_at_prediction IS NOT NULL
         AND created_at > NOW() - INTERVAL '90 days'
+        AND league_id NOT IN (SELECT league_id FROM learning_exclusions)
       GROUP BY score_at_prediction, module
       HAVING COUNT(*) >= ${MIN_SAMPLES}
     `);
@@ -171,9 +177,10 @@ export default async function handler(req, res) {
         COUNT(*) AS total
       FROM prediction_log
       WHERE module = 'CONFIDENCE'
-        AND outcome != 'PENDING'
+        AND outcome IN ('WIN','LOSS')
         AND created_at > NOW() - INTERVAL '90 days'
         AND layer1_score IS NOT NULL
+        AND league_id NOT IN (SELECT league_id FROM learning_exclusions)
     `);
 
     if (layerStats[0] && Number(layerStats[0].total) >= MIN_SAMPLES) {
