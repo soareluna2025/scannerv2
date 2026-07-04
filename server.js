@@ -16,6 +16,7 @@ process.on('warning', (w) => { console.warn('[node warning]', w && w.message); }
 process.on('exit', (code) => { console.error('[FATAL] process exit, code=', code); });
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { timingSafeEqual } from 'crypto';
 import { query } from './api/db.js';
 import { initBackfillProgress, startBackfill, stopBackfill, getBackfillStatus, resumeOnStartup } from './api/backfill.js';
 import { startScanner } from './api/cron/scanner.js';
@@ -26,11 +27,49 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ── [SECURITY P0] Helpers auth intern (timing-safe) + limitare endpointuri scumpe ──
+function eqSecret(a, b) {
+  if (!a || !b) return false;
+  const ba = Buffer.from(String(a)), bb = Buffer.from(String(b));
+  return ba.length === bb.length && timingSafeEqual(ba, bb);
+}
+// Autentificare INTERNĂ: acceptă x-cron-secret (crontab) SAU X-Api-Key = INTERNAL/ADMIN.
+function isInternalAuthed(req) {
+  const xk = req.headers['x-api-key'], xc = req.headers['x-cron-secret'];
+  return eqSecret(xc, process.env.CRON_SECRET)
+      || eqSecret(xk, process.env.INTERNAL_API_KEY)
+      || eqSecret(xk, process.env.ADMIN_API_KEY);
+}
+// /api/* care SCRIU DB / nu-s necesare frontendului public → auth intern obligatoriu.
+const PROTECTED_API = new Set(['update-results']);
+// Publice DAR scumpe (Claude API / API-Football) → limitare per-IP (NU cheie — frontendul le folosește).
+const RATE_LIMITED_API = new Set(['agent', 'simulate']);
+const _expBuckets = new Map();
+function allowExpensive(req) {
+  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '?').split(',')[0].trim();
+  const now = Date.now();
+  const e = _expBuckets.get(ip);
+  if (!e || now > e.resetAt) { _expBuckets.set(ip, { count: 1, resetAt: now + 60_000 }); return true; }
+  if (e.count >= 20) return false;   // 20 req/min/IP pentru agent+simulate
+  e.count++; return true;
+}
+// Căi de SURSĂ/config care NU trebuie servite static (divulgare cod). NU prinde rutele /api
+// reale (fără extensie) — doar fișiere .js/.py/... sub dir-uri de sursă + fișiere-cheie din root.
+const _SRC_BLOCK = /(^\/(api|ml|scripts|docs|node_modules)\/.*\.[a-z0-9]+$)|(\.(cjs|mjs|py|sql|sh|lock|ya?ml|log|map|env)$)|(^\/(server\.js|package(-lock)?\.json|ecosystem\.config\.cjs|audit_lineups\.js|verify_score4\.js)$)/i;
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Static files (index.html, icons, manifest, service-worker)
-app.use(express.static(__dirname, { index: 'index.html' }));
+// [SECURITY P0 — FIX1] Blochează servirea codului sursă/config ÎNAINTE de static.
+// GET /server.js /api/enrich.js /ml/calibrate.py /.env /package.json → 404.
+app.use((req, res, next) => {
+  if ((req.method === 'GET' || req.method === 'HEAD') && _SRC_BLOCK.test(req.path)) {
+    return res.status(404).end();
+  }
+  next();
+});
+// Static files (index.html, icons, manifest, service-worker) — sursa deja blocată mai sus.
+app.use(express.static(__dirname, { index: 'index.html', dotfiles: 'deny' }));
 // Public static (CSS extras, future JS modules)
 // Forțează browserul să reîncarce mereu modulele JS din public/js/ (fără cache)
 // — restul fișierelor din public/ păstrează caching-ul implicit serve-static.
@@ -60,6 +99,13 @@ const apiFiles = [
 
 for (const name of apiFiles) {
   app.all(`/api/${name}`, async (req, res) => {
+    // [SECURITY P0 — FIX2] mutante → auth intern; publice-scumpe → limitare per-IP.
+    if (PROTECTED_API.has(name) && !isInternalAuthed(req)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    if (RATE_LIMITED_API.has(name) && !allowExpensive(req)) {
+      return res.status(429).json({ ok: false, error: 'Rate limit (20/min)' });
+    }
     try {
       const mod = await import(`./api/${name}.js`);
       await mod.default(req, res);
@@ -77,12 +123,14 @@ for (const name of cronFiles) {
   app.all(`/api/cron/${name}`, async (req, res) => {
     // Auth cron — blochează apelurile externe neautorizate (cotă API / DELETE-uri).
     // Crontab-ul local trimite header x-cron-secret (vezi scripts/setup-crontab.sh).
+    // [SECURITY P0 — FIX3] CRON_SECRET OBLIGATORIU (fără el → 503, nu deschis);
+    // DOAR header x-cron-secret (fără fallback ?_secret= care ajungea în logs); timing-safe.
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-      const provided = req.headers['x-cron-secret'] || req.query._secret;
-      if (provided !== cronSecret) {
-        return res.status(401).json({ ok: false, error: 'Unauthorized' });
-      }
+    if (!cronSecret) {
+      return res.status(503).json({ ok: false, error: 'CRON_SECRET not configured' });
+    }
+    if (!eqSecret(req.headers['x-cron-secret'], cronSecret)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
     }
     try {  // catch-block jos logheaza in cron_logs
       const _t0 = Date.now();
@@ -114,6 +162,7 @@ app.get('/health', (req, res) => {
 
 // Backfill routes
 app.post('/api/backfill/start', async (req, res) => {
+  if (!isInternalAuthed(req)) return res.status(401).json({ error: 'Unauthorized' });  // [SECURITY P0]
   try {
     // FIX6 — param opțional league_id / season (query sau body) pentru start țintit.
     const leagueId = req.query.league_id || req.body?.league_id || null;
@@ -127,6 +176,7 @@ app.post('/api/backfill/start', async (req, res) => {
 });
 
 app.post('/api/backfill/stop', async (req, res) => {
+  if (!isInternalAuthed(req)) return res.status(401).json({ error: 'Unauthorized' });  // [SECURITY P0]
   try {
     const result = await stopBackfill();
     res.json(result);
@@ -137,6 +187,7 @@ app.post('/api/backfill/stop', async (req, res) => {
 });
 
 app.get('/api/backfill/status', async (req, res) => {
+  if (!isInternalAuthed(req)) return res.status(401).json({ error: 'Unauthorized' });  // [SECURITY P0]
   try {
     const result = await getBackfillStatus();
     res.json(result);
@@ -149,6 +200,14 @@ app.get('/api/backfill/status', async (req, res) => {
 // SPA fallback — toate rutele necunoscute servesc index.html
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, 'index.html'));
+});
+
+// [SECURITY P0 — BONUS] Error handler: NU divulga stack trace (ex. URIError la path-traversal
+// %c0%af). Loghează intern, răspunde sec. Trebuie ultimul (middleware cu 4 argumente).
+app.use((err, req, res, next) => {
+  console.error('[err]', req.method, req.originalUrl, err && err.message);
+  if (res.headersSent) return next(err);
+  res.status(err instanceof URIError ? 400 : 500).json({ error: 'Bad request' });
 });
 
 // [C1] Aplică idempotent indecșii de performanță la pornire (scripts/add-indexes.sql).

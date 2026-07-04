@@ -19,6 +19,12 @@ module.exports = {
       // (nemăsurabile până la shadow logging sub prag). 'OFF'/'SHADOW' comutabile. Vezi
       // api/adaptive-threshold.js.
       ADAPTIVE_THRESHOLD: 'ON',
+      // [SECURITY P0] Cheie pentru automatizări EXTERNE care lovesc endpointurile protejate
+      // (/api/update-results, /api/backfill/*). NU e necesară pt fluxul curent: crontab-ul
+      // trimite deja x-cron-secret, iar panoul admin trimite X-Api-Key=ADMIN_API_KEY — ambele
+      // sunt acceptate de isInternalAuthed(). NU pune 'CHANGE_ME' (ar fi o cheie slabă vie);
+      // dacă ai nevoie, decomentează cu o valoare REALĂ (openssl rand -hex 32) + pm2 restart.
+      // INTERNAL_API_KEY: '<openssl rand -hex 32>',
     },
     error_file: '/root/.pm2/logs/alohascan-error.log',
     out_file: '/root/.pm2/logs/alohascan-out.log',
