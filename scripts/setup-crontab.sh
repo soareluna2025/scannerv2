@@ -41,6 +41,9 @@ NEW_CRONTAB=$(cat <<EOF
 30 0 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/auto-predict >> ${LOG} 2>&1
 0 3 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/build-ml-features >> ${LOG} 2>&1
 0 2 * * * curl -sf -H "${HDR}" ${BASE}/api/update-results >> ${LOG} 2>&1
+# PIT safety-net: fixture-urile noi terminate primesc pit_* (score7/6/confidence) în ml_features.
+# 02:30, DUPĂ update-results (02:00). Reluabil (doar pit_players_n IS NULL) → delta zilnic = secunde.
+30 2 * * * cd ${APP_DIR} && node scripts/pit-recompute.js --years=2025-2027 --batch=1000 >> ${APP_DIR}/logs/pit-recompute-daily.log 2>&1
 5 2 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/collect-squads >> ${LOG} 2>&1
 0 23 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/collect-finished >> ${LOG} 2>&1
 0 6 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/collect-daily >> ${LOG} 2>&1
