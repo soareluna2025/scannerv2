@@ -47,10 +47,10 @@ async function resolvePredictionLogFromHistory() {
      actual_value=CASE WHEN fh.home_goals>0 AND fh.away_goals>0 THEN 1 ELSE 0 END`));
   counts.GG = r.rowCount;
 
-  // CONFIDENCE — aceeași regulă direcțională ca în loop-ul existent (predicted_value)
+  // CONFIDENCE — P0: prag UNIC 50 (elimină banda moartă [45,55) care ieșea mereu LOSS).
   r = await query(base('CONFIDENCE',
-    `outcome=CASE WHEN (pl.predicted_value>=55 AND (fh.home_goals+fh.away_goals)>=2)
-                    OR (pl.predicted_value<45  AND (fh.home_goals+fh.away_goals)<2)
+    `outcome=CASE WHEN (pl.predicted_value>=50 AND (fh.home_goals+fh.away_goals)>=2)
+                    OR (pl.predicted_value<50  AND (fh.home_goals+fh.away_goals)<2)
                   THEN 'WIN' ELSE 'LOSS' END,
      actual_value=fh.home_goals+fh.away_goals`));
   counts.CONFIDENCE = r.rowCount;
@@ -199,8 +199,8 @@ export default async function handler(req, res) {
           // Resolve GG
           query(`UPDATE prediction_log SET outcome=CASE WHEN $1 THEN 'WIN' ELSE 'LOSS' END, actual_value=$2, resolved_at=NOW() WHERE fixture_id=$3 AND module='GG' AND outcome='PENDING'`,
             [isGG, isGG ? 1 : 0, pred.fixture_id]).catch(() => {});
-          // Resolve CONFIDENCE — WIN if over15 was correct (same logic as pre_match_snapshots)
-          query(`UPDATE prediction_log SET outcome=CASE WHEN (predicted_value>=55 AND $1) OR (predicted_value<45 AND NOT $1) THEN 'WIN' ELSE 'LOSS' END, actual_value=$2, resolved_at=NOW() WHERE fixture_id=$3 AND module='CONFIDENCE' AND outcome='PENDING'`,
+          // Resolve CONFIDENCE — P0: prag UNIC 50 (fără banda moartă 45-55)
+          query(`UPDATE prediction_log SET outcome=CASE WHEN (predicted_value>=50 AND $1) OR (predicted_value<50 AND NOT $1) THEN 'WIN' ELSE 'LOSS' END, actual_value=$2, resolved_at=NOW() WHERE fixture_id=$3 AND module='CONFIDENCE' AND outcome='PENDING'`,
             [isOver15, hg + ag, pred.fixture_id]).catch(() => {});
           // Resolve NGP — WIN if total goals at end > total goals at prediction time
           query(`UPDATE prediction_log SET
