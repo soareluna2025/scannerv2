@@ -34,6 +34,9 @@ const [Y0, Y1] = (() => {
 })();
 
 const N = (v) => v == null ? null : Number(v);
+// FIX1: orice rezultat non-finit → NULL. Cauza NaN: unele player_stats.rating sunt
+// numeric 'NaN' în DB → AVG(rating) propagă NaN → Number('NaN')=NaN → ajungea în pit_score7.
+const fin = (v) => Number.isFinite(v) ? v : null;
 
 // ── Formule VERBATIM din validat/enrich.js ────────────────────────────────────
 // calcStr, dar din agregatele calculate în SQL peste ACEEAȘI fereastră top-110.
@@ -45,8 +48,9 @@ function calcStrFromAgg(a) {
   const avgPassAcc  = Number(a.n_pass) > 0 ? Number(a.avg_pass) : 50;
   const avgSot      = Number(a.sot_sum) / n;
   const topScorer   = Number(a.top_scorer) || 0;
-  return Math.round((avgRating / 10 * 100) * 0.35 + Math.min(100, goalsPerGame * 35) * 0.25
+  const out = Math.round((avgRating / 10 * 100) * 0.35 + Math.min(100, goalsPerGame * 35) * 0.25
     + avgPassAcc * 0.20 + Math.min(100, avgSot * 12) * 0.10 + Math.min(100, topScorer * 20) * 0.10);
+  return Number.isFinite(out) ? out : null;   // FIX1: rating 'NaN' → AVG NaN → null (nu NaN în DB)
 }
 function calcScore7(h, a) {
   if (h == null && a == null) return null;
@@ -121,11 +125,11 @@ async function main() {
     for (const r of rows) {
       const strH = calcStrFromAgg({ n: r.h_n, n_rating: r.h_nr, avg_rating: r.h_ar, goals_sum: r.h_gs, n_pass: r.h_np, avg_pass: r.h_ap, sot_sum: r.h_ss, top_scorer: r.h_ts });
       const strA = calcStrFromAgg({ n: r.a_n, n_rating: r.a_nr, avg_rating: r.a_ar, goals_sum: r.a_gs, n_pass: r.a_np, avg_pass: r.a_ap, sot_sum: r.a_ss, top_scorer: r.a_ts });
-      const s7 = calcScore7(strH, strA);
+      const s7 = fin(calcScore7(strH, strA));                       // FIX1: non-finit → null
       const s1 = N(r.score1), s2 = N(r.score2), s3 = N(r.score3);
       const hasPreds = s1 != null || s2 != null || s3 != null;
-      const s6 = hasPreds ? calcConvergence([s1, s2, s3, s7]) : null;
-      const conf = hasPreds ? calcConfidence(s1, s2, s3, s6, s7) : null;
+      const s6 = fin(hasPreds ? calcConvergence([s1, s2, s3, s7]) : null);
+      const conf = fin(hasPreds ? calcConfidence(s1, s2, s3, s6, s7) : null);
       const playersN = Math.min(Number(r.h_n) || 0, Number(r.a_n) || 0);
       if (s7 == null) totalNull++; else totalS7++;
       fx.push(r.fixture_id); as7.push(s7); as6.push(s6); aconf.push(conf); an.push(playersN);
