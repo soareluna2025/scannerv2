@@ -732,7 +732,9 @@ async function scanLive10s() {
             score:           `${currHome}-${currAway}`,
             module:          _logModule,
             predicted_value: alertType === 'HIGH_NGP' ? ng : mk.over15,
-            threshold_used:  70,
+            // Pragul REAL folosit de poarta adaptivă (_ngThr/_o15Thr rezolvate la :670-671),
+            // nu 70 hardcodat → prediction_log reflectă exact ce prag a decis alerta.
+            threshold_used:  Math.round(_logModule === 'NGP' ? _ngThr : _o15Thr),
             ngp_value:       ng,
             lambda_home:     null,
             lambda_away:     null,
