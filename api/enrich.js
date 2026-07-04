@@ -6,6 +6,7 @@ import { fetchApiFootball } from './utils/fetch-api.js';
 import { getWeight } from './weights.js';
 import { timingBody } from './utils/goal-timing-sql.js';
 import { seasonForDate } from './utils/season.js';
+import { calibrateGg } from './utils/gg-calibration.js';
 
 const PRE_MATCH_STATUSES = new Set(['NS']);
 const LIVE_STATUSES = new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
@@ -1952,6 +1953,11 @@ export default async function handler(req, res) {
         }
       } catch (_) { /* ELO indisponibil → predicție neschimbată */ }
     }
+
+    // ── [GG_CALIBRATION] Strat isotonic DEASUPRA ggProb servit (flag-gated) ───
+    // Aplicat DUPĂ toate ajustările (CS/H2H/venue/coach/ELO), ÎNAINTE de expunere/log/store.
+    // OFF (default) sau tabel nevalidat → identitate (zero schimbare). NU atinge Poisson/λ.
+    if (payload.ggProb != null) payload.ggProb = calibrateGg(payload.ggProb);
 
     // ── ML PREDICTIONS (afișare suplimentară; NU atinge scoring) ──────────────
     // Inferență LR din ml/model_export.json. Silent-fail dacă exportul lipsește.
