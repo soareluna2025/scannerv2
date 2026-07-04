@@ -14,6 +14,7 @@ import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 import { isAllowedMatch } from '../utils/league-filter.js';
 import { calcFeatures, calcNextGoal, calcNextGoalWindow, calcGG, calcMarkets } from '../utils/live-score.js';
 import { calibrateNgp, isShadowFixture, calibrateNgpWithTimedecay } from '../utils/ngp-calibration.js';
+import { resolveThreshold } from '../adaptive-threshold.js';
 import { trackElapsed, freezeReason, maybeLogFrozen, clearFreeze, snapshotFreeze, restoreFreeze } from '../utils/freeze-state.js';
 
 const FOOTBALL_KEY = process.env.FOOTBALL_API_KEY || process.env.APIFOOTBALL_KEY || process.env.API_FOOTBALL_KEY;
@@ -663,10 +664,14 @@ async function scanLive10s() {
 
       processedMatches.push({ ...m, _ng: ng, _ng15: ng15, _mk: mk });
 
-      // Alerte — o singura data per meci cand NGP trece de 70%
-      if (ng > 70 || mk.over15 > 70) {
-        const alertType = ng > 70 ? 'HIGH_NGP' : 'HIGH_OVER15';
-        const conf      = ng > 70 ? ng / 100 : mk.over15 / 100;
+      // Alerte — poartă prag static 70; adaptiv opțional (flag ADAPTIVE_THRESHOLD).
+      // OFF (default) → _ngThr=_o15Thr=70, zero query → comportament IDENTIC cu azi.
+      const _lgId   = m.league?.id;
+      const _ngThr  = await resolveThreshold('NGP',    _lgId, 70, ng,        id);
+      const _o15Thr = await resolveThreshold('OVER15', _lgId, 70, mk.over15, id);
+      if (ng > _ngThr || mk.over15 > _o15Thr) {
+        const alertType = ng > _ngThr ? 'HIGH_NGP' : 'HIGH_OVER15';
+        const conf      = ng > _ngThr ? ng / 100 : mk.over15 / 100;
         const msg       = `${m.teams?.home?.name} vs ${m.teams?.away?.name} — ${alertType} ${Math.round(conf * 100)}% min ${currMin}`;
 
         // Variant A — filtru de OUTPUT (NU calcConfidence): în modul calibrare,
@@ -680,13 +685,13 @@ async function scanLive10s() {
           query(
             `INSERT INTO signal_observations (fixture_id, alert_type, market, message, confidence, data_completeness, minute)
              VALUES ($1,$2,$3,$4,$5,'partial',$6)`,
-            [id, alertType, ng > 70 ? 'ng' : 'over15', msg, conf, currMin]
+            [id, alertType, ng > _ngThr ? 'ng' : 'over15', msg, conf, currMin]
           ).catch(() => {});
         } else {
-          saveAlert(id, alertType, ng > 70 ? 'ng' : 'over15', msg, conf).catch(() => {});
+          saveAlert(id, alertType, ng > _ngThr ? 'ng' : 'over15', msg, conf).catch(() => {});
 
         // Track in predictions for header W/L/P counter
-        if (ng > 70 && !liveCache[id]?.ngpAlertScore) {
+        if (ng > _ngThr && !liveCache[id]?.ngpAlertScore) {
           const alertScore = `${currHome}-${currAway}`;
           liveCache[id].ngpAlertScore = alertScore;
           query(
@@ -706,21 +711,33 @@ async function scanLive10s() {
         }
 
         // Log to prediction_log for self-learning
-        logPrediction({
-          fixture_id:      id,
-          league_id:       m.league?.id,
-          league_name:     m.league?.name,
-          home_team:       m.teams?.home?.name,
-          away_team:       m.teams?.away?.name,
-          minute:          currMin,
-          score:           `${currHome}-${currAway}`,
-          module:          alertType === 'HIGH_NGP' ? 'NGP' : 'OVER15',
-          predicted_value: alertType === 'HIGH_NGP' ? ng : mk.over15,
-          threshold_used:  70,
-          ngp_value:       ng,
-          lambda_home:     null,
-          lambda_away:     null,
-        }).catch(() => {});
+        // P1a: NU loga OVER15 tautologic — dacă scorul are deja total>=2, over15 e
+        //      decis (hit 100% fals). NGP rămâne (regula = gol DUPĂ alertă, sănătoasă).
+        // P1b/d: dedup — max 1 rând per (fixture, modul, bandă de 5 min), via liveCache,
+        //        ca să nu explodeze log-ul la cadența de 2s (era NEdeduplicat).
+        const _logModule  = alertType === 'HIGH_NGP' ? 'NGP' : 'OVER15';
+        const _curTotal   = (currHome || 0) + (currAway || 0);
+        const _over15Taut = _logModule === 'OVER15' && _curTotal >= 2;
+        if (!liveCache[id]._logged) liveCache[id]._logged = {};
+        const _logKey = `${_logModule}_${Math.floor(currMin / 5)}`;
+        if (!_over15Taut && !liveCache[id]._logged[_logKey]) {
+          liveCache[id]._logged[_logKey] = 1;
+          logPrediction({
+            fixture_id:      id,
+            league_id:       m.league?.id,
+            league_name:     m.league?.name,
+            home_team:       m.teams?.home?.name,
+            away_team:       m.teams?.away?.name,
+            minute:          currMin,
+            score:           `${currHome}-${currAway}`,
+            module:          _logModule,
+            predicted_value: alertType === 'HIGH_NGP' ? ng : mk.over15,
+            threshold_used:  70,
+            ngp_value:       ng,
+            lambda_home:     null,
+            lambda_away:     null,
+          }).catch(() => {});
+        }
         } // end else (_full — semnal real de bani)
       }
     }

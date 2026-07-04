@@ -1,5 +1,11 @@
 // POST /api/cron/learning-analysis
 // Runs daily at 03:30 — analyzes prediction_log and updates model_weights
+//
+// P3: GG este EXCLUS din threshold-ul adaptiv (vezi api/adaptive-threshold.js —
+// ELIGIBLE_MODULES = {NGP, OVER15, CONFIDENCE}). Motiv: calibrare INVERSATĂ sus
+// (60-65→60% hit, 70-75→46%), pentru că GG se loghează pre-meci/live la 0-0 și
+// prob e umflată de timp. GG așteaptă recalibrare isotonic separată. Pașii de
+// learning pot atinge GG, dar GG NU intră în poarta de selecție adaptivă (P4b).
 import { query } from '../db.js';
 
 const MIN_SAMPLES     = 20;
@@ -16,33 +22,16 @@ function maxAdj(n) {
   return n < 30 ? MAX_ADJ_LOW : n <= 100 ? MAX_ADJ_MEDIUM : MAX_ADJ_HIGH;
 }
 
-async function clampedThresholdUpdate(module, contextKey, currentVal, winRate, n) {
-  const adj     = maxAdj(n);
-  let newVal;
-  if (winRate < 0.45) {
-    // Bad — raise threshold (be more selective)
-    newVal = currentVal * (1 + adj);
-  } else if (winRate > 0.75) {
-    // Great — lower threshold slightly (capture more)
-    newVal = currentVal * (1 - adj * 0.5);
-  } else {
-    return null; // no change needed
-  }
-  newVal = Math.min(THRESHOLD_MAX, Math.max(THRESHOLD_MIN, newVal));
-  const cl = confidenceLevel(n);
-  await query(
-    `INSERT INTO model_weights (module, context_key, weight_name, weight_value, default_value, sample_size, win_rate, confidence_level, last_updated)
-     VALUES ($1, $2, 'threshold', $3, $4, $5, $6, $7, NOW())
-     ON CONFLICT (module, context_key, weight_name) DO UPDATE SET
-       weight_value     = EXCLUDED.weight_value,
-       sample_size      = EXCLUDED.sample_size,
-       win_rate         = EXCLUDED.win_rate,
-       confidence_level = EXCLUDED.confidence_level,
-       last_updated     = NOW()`,
-    [module, contextKey, +newVal.toFixed(2), +currentVal.toFixed(2), n, +(winRate * 100).toFixed(1), cl]
-  );
-  return newVal;
-}
+// P4c: clampedThresholdUpdate() ELIMINAT — formula veche era ruptă (comparatoare
+// universale 0.45/0.75 vs base-rate diferit per modul → saturare garantată la clamp
+// [50,95]). Înlocuită cu calcul DIRECT de prag din hit-rate real (vezi PASUL 1 nou).
+
+// P4c: candidați de prag + ținte de hit-rate per modul (GG exclus — P3).
+const THR_CANDIDATES = [60, 65, 70, 75, 80, 85, 90];
+const THR_TARGETS    = { NGP: 0.80, OVER15: 0.80, CONFIDENCE: 0.75 };
+const THR_MODULES    = ['NGP', 'OVER15', 'CONFIDENCE'];
+const THR_MIN_LEAGUE = 100;  // min predicții rezolvate/ligă ca să calculăm prag
+const THR_MIN_BAND   = 20;   // min sample la un prag candidat ca să-l acceptăm
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -53,38 +42,59 @@ export default async function handler(req, res) {
   const log       = [];
 
   try {
-    // ── PASUL 1: Per ligă per modul ─────────────────────────────
-    const { rows: byLeague } = await query(`
-      SELECT league_id, module,
-        COUNT(*) AS total,
-        SUM(CASE WHEN outcome='WIN' THEN 1 ELSE 0 END) AS wins,
-        AVG(predicted_value) AS avg_predicted
-      FROM prediction_log
-      WHERE outcome != 'PENDING'
-        AND created_at > NOW() - INTERVAL '90 days'
-        AND league_id IS NOT NULL
-      GROUP BY league_id, module
-      HAVING COUNT(*) >= ${MIN_SAMPLES}
-    `);
+    // P2: asigură tabela de excludere (idempotent) — ligi scoase din learning.
+    await query(`CREATE TABLE IF NOT EXISTS learning_exclusions (
+      league_id INT PRIMARY KEY, reason TEXT, added_at TIMESTAMPTZ DEFAULT NOW())`).catch(() => {});
 
-    for (const row of byLeague) {
-      const n       = Number(row.total);
-      const winRate = Number(row.wins) / n;
-      const ctxKey  = `league_${row.league_id}`;
-      analyzed     += n;
+    // ── PASUL 1 (P4c): threshold ADAPTIV per (modul, ligă) din hit-rate real ─────
+    // threshold = cel mai MIC prag candidat la care hit-rate(predicted_value>=prag)
+    // atinge ținta modulului. Dacă niciunul → 95 (ligă practic închisă pe modul).
+    // Exclude TAINTED (P1) și learning_exclusions (P2). Fereastră 365 zile.
+    const _bandCols = THR_CANDIDATES.map(p =>
+      `COUNT(*) FILTER (WHERE predicted_value >= ${p}) AS n_${p},
+       COUNT(*) FILTER (WHERE predicted_value >= ${p} AND outcome='WIN') AS w_${p}`
+    ).join(',\n');
 
-      // Get current threshold (specific or global fallback)
-      const { rows: cur } = await query(
-        `SELECT weight_value FROM model_weights
-         WHERE module=$1 AND context_key IN ($2,'global') AND weight_name='threshold'
-         ORDER BY CASE WHEN context_key=$2 THEN 0 ELSE 1 END LIMIT 1`,
-        [row.module, ctxKey]
-      );
-      const curVal = cur[0] ? Number(cur[0].weight_value) : 65;
-      const result = await clampedThresholdUpdate(row.module, ctxKey, curVal, winRate, n);
-      if (result != null) {
+    for (const mod of THR_MODULES) {
+      const target = THR_TARGETS[mod];
+      const { rows: byLeague } = await query(`
+        SELECT league_id, COUNT(*) AS n_total, ${_bandCols}
+        FROM prediction_log
+        WHERE module=$1
+          AND outcome IN ('WIN','LOSS')
+          AND league_id IS NOT NULL
+          AND created_at > NOW() - INTERVAL '365 days'
+          AND league_id NOT IN (SELECT league_id FROM learning_exclusions)
+        GROUP BY league_id
+        HAVING COUNT(*) >= ${THR_MIN_LEAGUE}
+      `, [mod]);
+
+      for (const row of byLeague) {
+        analyzed += Number(row.n_total);
+        let chosen = null, chosenN = 0, chosenHit = 0;
+        for (const p of THR_CANDIDATES) {
+          const np = Number(row[`n_${p}`]) || 0;
+          const wp = Number(row[`w_${p}`]) || 0;
+          if (np >= THR_MIN_BAND && (wp / np) >= target) {
+            chosen = p; chosenN = np; chosenHit = wp / np; break;
+          }
+        }
+        if (chosen == null) {
+          chosen = 95;
+          const n90 = Number(row.n_90) || 0, w90 = Number(row.w_90) || 0;
+          chosenN = n90; chosenHit = n90 > 0 ? w90 / n90 : 0;
+        }
+        const cl = confidenceLevel(chosenN);
+        await query(
+          `INSERT INTO model_weights (module, context_key, weight_name, weight_value, default_value, sample_size, win_rate, confidence_level, last_updated)
+           VALUES ($1, $2, 'threshold', $3, 70, $4, $5, $6, NOW())
+           ON CONFLICT (module, context_key, weight_name) DO UPDATE SET
+             weight_value=EXCLUDED.weight_value, sample_size=EXCLUDED.sample_size,
+             win_rate=EXCLUDED.win_rate, confidence_level=EXCLUDED.confidence_level, last_updated=NOW()`,
+          [mod, `league_${row.league_id}`, chosen, chosenN, +(chosenHit * 100).toFixed(1), cl]
+        );
         adjustments++;
-        log.push({ type: 'league', module: row.module, league_id: row.league_id, old: curVal, new: +result.toFixed(2), win_rate: +(winRate*100).toFixed(1), n });
+        log.push({ type: 'threshold', module: mod, league_id: row.league_id, thr: chosen, hit: +(chosenHit*100).toFixed(1), n: chosenN, cl });
       }
     }
 
@@ -99,9 +109,10 @@ export default async function handler(req, res) {
           COUNT(*) AS total,
           SUM(CASE WHEN outcome='WIN' THEN 1 ELSE 0 END) AS wins
         FROM prediction_log
-        WHERE outcome != 'PENDING'
+        WHERE outcome IN ('WIN','LOSS')
           AND minute >= $1 AND minute < $2
           AND created_at > NOW() - INTERVAL '90 days'
+          AND league_id NOT IN (SELECT league_id FROM learning_exclusions)
         GROUP BY module
         HAVING COUNT(*) >= ${MIN_SAMPLES}
       `, [lo, hi]);
@@ -132,9 +143,10 @@ export default async function handler(req, res) {
         COUNT(*) AS total,
         SUM(CASE WHEN outcome='WIN' THEN 1 ELSE 0 END) AS wins
       FROM prediction_log
-      WHERE outcome != 'PENDING'
+      WHERE outcome IN ('WIN','LOSS')
         AND score_at_prediction IS NOT NULL
         AND created_at > NOW() - INTERVAL '90 days'
+        AND league_id NOT IN (SELECT league_id FROM learning_exclusions)
       GROUP BY score_at_prediction, module
       HAVING COUNT(*) >= ${MIN_SAMPLES}
     `);
@@ -157,7 +169,9 @@ export default async function handler(req, res) {
       adjustments++;
     }
 
-    // ── PASUL 4: Re-calibrare greutăți layere Confidence ─────────
+    // ── PASUL 4: DEZACTIVAT (P4c) — greutățile layer CONFIDENCE sunt IMUTABILE
+    //    (constituție: .30/.25/.15/.25/.05 în enrich.js, NEcitite din model_weights).
+    //    Blocul citește corelațiile (inofensiv) dar NU mai scrie (guard `false`).
     const { rows: layerStats } = await query(`
       SELECT
         AVG(CASE WHEN outcome='WIN' THEN 1.0 ELSE 0.0 END) AS overall_wr,
@@ -171,12 +185,13 @@ export default async function handler(req, res) {
         COUNT(*) AS total
       FROM prediction_log
       WHERE module = 'CONFIDENCE'
-        AND outcome != 'PENDING'
+        AND outcome IN ('WIN','LOSS')
         AND created_at > NOW() - INTERVAL '90 days'
         AND layer1_score IS NOT NULL
+        AND league_id NOT IN (SELECT league_id FROM learning_exclusions)
     `);
 
-    if (layerStats[0] && Number(layerStats[0].total) >= MIN_SAMPLES) {
+    if (false && layerStats[0] && Number(layerStats[0].total) >= MIN_SAMPLES) {  // P4c: scriere OPRITĂ
       const row = layerStats[0];
       const corrs = [1,2,3,4,5,6,7].map(i => Math.max(0, Number(row[`corr${i}`]) || 0));
       const total = corrs.reduce((s, v) => s + v, 0);

@@ -2043,6 +2043,11 @@ export default async function handler(req, res) {
 
         // Log OVER15 prediction for self-learning
         if (payload.over15Prob > 0) {
+          // P1a: NU loga OVER15 tautologic — dacă scorul curent are deja total>=2,
+          //      over15 e deja decis (hit ~100% fals). GG/CONFIDENCE rămân neatinse.
+          const _o15CurTot = (parseInt(elapsed) || 0) > 0
+            ? (parseInt(req.query.hg) || 0) + (parseInt(req.query.ag) || 0) : 0;
+          if (_o15CurTot < 2)
           logPrediction({
             fixture_id: Number(fid), league_id: lgid ? Number(lgid) : null,
             league_name: lg, home_team: hn, away_team: an, match_date: dt || null,
