@@ -1,5 +1,11 @@
 // POST /api/cron/learning-analysis
 // Runs daily at 03:30 — analyzes prediction_log and updates model_weights
+//
+// P3: GG este EXCLUS din threshold-ul adaptiv (vezi api/adaptive-threshold.js —
+// ELIGIBLE_MODULES = {NGP, OVER15, CONFIDENCE}). Motiv: calibrare INVERSATĂ sus
+// (60-65→60% hit, 70-75→46%), pentru că GG se loghează pre-meci/live la 0-0 și
+// prob e umflată de timp. GG așteaptă recalibrare isotonic separată. Pașii de
+// learning pot atinge GG, dar GG NU intră în poarta de selecție adaptivă (P4b).
 import { query } from '../db.js';
 
 const MIN_SAMPLES     = 20;
