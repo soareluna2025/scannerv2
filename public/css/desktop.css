@@ -104,3 +104,41 @@
   .league-group-body{ margin-bottom:22px; }
   .stats{ padding-block:12px; gap:28px; }
 }
+
+/* ─── 5. HOVER STATES (P2) ───────────────────────────────────────────────────
+   Doar pe dispozitive cu mouse (pointer:fine) ȘI desktop → NU se activează pe
+   mobil (touch = pointer:coarse, plus pragul de lățime). Micro-interacțiuni
+   discrete = senzație de app desktop, păstrând accentul teal. */
+@media (min-width:1024px) and (pointer:fine){
+  .card,
+  .pm-card{
+    cursor:pointer;
+    transition:transform .18s ease, border-color .2s ease,
+               box-shadow .25s ease, background .25s ease;
+  }
+  .card:hover,
+  .pm-card:hover{
+    transform:translateY(-3px);
+    border-color:rgba(0,212,168,.35);
+    box-shadow:0 12px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(0,212,168,.12);
+  }
+  .nav-btn{ transition:background .15s ease, transform .15s ease; }
+  .nav-btn:hover{ background:rgba(255,255,255,.04); }
+  .nav-btn:hover .nav-icon{ transform:translateY(-1px); }
+  .nav-btn:hover .nav-label{ color:var(--mu2); }
+  .btn-connect{ transition:transform .15s ease, box-shadow .2s ease; }
+  .btn-connect:hover{ transform:translateY(-1px); box-shadow:0 6px 24px rgba(0,212,168,.4); }
+}
+
+/* Respectă reduced-motion — dar DOAR pe desktop, ca să nu ating stilul mobil
+   (transformările/tranzițiile de mai sus există exclusiv ≥1024px). */
+@media (min-width:1024px) and (prefers-reduced-motion:reduce){
+  .card,
+  .pm-card,
+  .nav-btn,
+  .btn-connect{ transition:none; }
+  .card:hover,
+  .pm-card:hover,
+  .btn-connect:hover,
+  .nav-btn:hover .nav-icon{ transform:none; }
+}
