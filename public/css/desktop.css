@@ -1,0 +1,53 @@
+/* ============================================================================
+   AlohaScan — DESKTOP LAYER  (fix/desktop-layout)
+   ----------------------------------------------------------------------------
+   REGULA DE AUR: mobilul rămâne NEATINS. FIECARE regulă din acest fișier
+   trăiește într-un @media (min-width:1024px) [+ 1440px / pointer:fine]. Nimic
+   NU se activează sub 1024px → sub prag, aplicația e byte-identică cu înainte.
+
+   Concept: aplicația e un shell mobil full-bleed (header/nav/feed pe toată
+   lățimea). Pe laptop asta lăsa ~60% ecran gol. Aici aliniem TOTUL la o
+   „coloană-spină" centrată (1200px la 1024, 1400px la 1440) și transformăm
+   listele de carduri în grilă multi-coloană — identitatea glass+teal rămâne.
+   ============================================================================ */
+
+/* ─── 1. CONTAINER LĂȚIME + CENTRARE (P0 — cauza principală) ──────────────────
+   Coloana-spină: lățime maximă centrată. Barele fixe (header/nav/stats) primesc
+   padding lateral care aliniază conținutul lor la aceeași coloană cu feed-ul,
+   fără wrapper HTML nou (max() păstrează un gutter minim pe ecrane „mici"). */
+@media (min-width:1024px){
+  :root{ --dk-w:1200px; --dk-gut:24px; }
+
+  /* Feed + toate tab-urile: centrate pe coloana-spină. */
+  .tab-content{
+    max-width:var(--dk-w);
+    margin-inline:auto;
+  }
+
+  /* Bare fixe full-bleed — conținutul lor se aliniază la coloană. */
+  .hdr{
+    padding-inline:max(var(--dk-gut), calc((100% - var(--dk-w)) / 2));
+  }
+  .nav{
+    padding-inline:max(var(--dk-gut), calc((100% - var(--dk-w)) / 2));
+    justify-content:center;
+    gap:8px;
+  }
+  /* Butoanele de navigație nu se mai întind pe tot ecranul: grup centrat. */
+  .nav-btn{
+    flex:0 1 132px;
+    max-width:150px;
+    border-radius:12px;
+  }
+
+  /* Stats bar: aceeași aliniere la coloană (ticker-ul rămâne marquee full-width
+     — nu-l atingem, animația translateX -50% depinde de lățimea plină). */
+  .stats{
+    padding-inline:max(var(--dk-gut), calc((100% - var(--dk-w)) / 2));
+    justify-content:center;
+  }
+}
+
+@media (min-width:1440px){
+  :root{ --dk-w:1400px; }
+}
