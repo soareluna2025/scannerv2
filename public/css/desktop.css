@@ -142,3 +142,24 @@
   .btn-connect:hover,
   .nav-btn:hover .nav-icon{ transform:none; }
 }
+
+/* ─── 6. GLASSMORPHISM DESKTOP (P2) ──────────────────────────────────────────
+   Pe fundal negru plat (--bg:#000), blur-ul barelor fixe n-avea ce refracta pe
+   lat → arăta plat. Adăugăm un glow teal foarte discret la topul feed-ului (are
+   ce „prinde" glass-ul) + urcăm ușor blur/saturate pe header și nav. Păstrăm
+   stilul glass existent (cerut) — doar îi dăm profunzime pe ecran mare. */
+@media (min-width:1024px){
+  .hdr{
+    backdrop-filter:blur(24px) saturate(150%);
+    -webkit-backdrop-filter:blur(24px) saturate(150%);
+  }
+  .nav{
+    backdrop-filter:blur(24px) saturate(150%);
+    -webkit-backdrop-filter:blur(24px) saturate(150%);
+  }
+  /* Ambient glow în spatele conținutului — subtil, doar sus-centru. */
+  .page{
+    background:radial-gradient(1100px 520px at 50% -8%,
+              rgba(0,212,168,.06), transparent 62%);
+  }
+}
