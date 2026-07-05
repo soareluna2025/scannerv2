@@ -76,3 +76,21 @@
     gap:18px;
   }
 }
+
+/* ─── 3. TIPOGRAFIE SCALABILĂ (P1) ───────────────────────────────────────────
+   Fonturile sunt dimensionate pentru 390px → mici/pierdute pe laptop. Urcăm
+   ierarhia „hero" (logo + bara de stats, primul lucru vizibil) ca să aibă impact
+   pe ecran mare. Doar în breakpoint desktop; internele cardurilor rămân intacte. */
+@media (min-width:1024px){
+  .logo{ font-size:22px; letter-spacing:-.6px; }
+  .stat-v{ font-size:22px; }
+  .stat-l{ font-size:10px; letter-spacing:.6px; }
+  .dp-item{ font-size:13px; }
+  .nav-label{ font-size:9px; }
+  .nav-icon{ font-size:20px; }
+}
+
+@media (min-width:1440px){
+  .logo{ font-size:24px; }
+  .stat-v{ font-size:24px; }
+}
