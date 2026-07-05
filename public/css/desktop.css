@@ -1,0 +1,165 @@
+/* ============================================================================
+   AlohaScan — DESKTOP LAYER  (fix/desktop-layout)
+   ----------------------------------------------------------------------------
+   REGULA DE AUR: mobilul rămâne NEATINS. FIECARE regulă din acest fișier
+   trăiește într-un @media (min-width:1024px) [+ 1440px / pointer:fine]. Nimic
+   NU se activează sub 1024px → sub prag, aplicația e byte-identică cu înainte.
+
+   Concept: aplicația e un shell mobil full-bleed (header/nav/feed pe toată
+   lățimea). Pe laptop asta lăsa ~60% ecran gol. Aici aliniem TOTUL la o
+   „coloană-spină" centrată (1200px la 1024, 1400px la 1440) și transformăm
+   listele de carduri în grilă multi-coloană — identitatea glass+teal rămâne.
+   ============================================================================ */
+
+/* ─── 1. CONTAINER LĂȚIME + CENTRARE (P0 — cauza principală) ──────────────────
+   Coloana-spină: lățime maximă centrată. Barele fixe (header/nav/stats) primesc
+   padding lateral care aliniază conținutul lor la aceeași coloană cu feed-ul,
+   fără wrapper HTML nou (max() păstrează un gutter minim pe ecrane „mici"). */
+@media (min-width:1024px){
+  :root{ --dk-w:1200px; --dk-gut:24px; }
+
+  /* Feed + toate tab-urile: centrate pe coloana-spină. */
+  .tab-content{
+    max-width:var(--dk-w);
+    margin-inline:auto;
+  }
+
+  /* Bare fixe full-bleed — conținutul lor se aliniază la coloană. */
+  .hdr{
+    padding-inline:max(var(--dk-gut), calc((100% - var(--dk-w)) / 2));
+  }
+  .nav{
+    padding-inline:max(var(--dk-gut), calc((100% - var(--dk-w)) / 2));
+    justify-content:center;
+    gap:8px;
+  }
+  /* Butoanele de navigație nu se mai întind pe tot ecranul: grup centrat. */
+  .nav-btn{
+    flex:0 1 132px;
+    max-width:150px;
+    border-radius:12px;
+  }
+
+  /* Stats bar: aceeași aliniere la coloană (ticker-ul rămâne marquee full-width
+     — nu-l atingem, animația translateX -50% depinde de lățimea plină). */
+  .stats{
+    padding-inline:max(var(--dk-gut), calc((100% - var(--dk-w)) / 2));
+    justify-content:center;
+  }
+}
+
+@media (min-width:1440px){
+  :root{ --dk-w:1400px; }
+}
+
+/* ─── 2. GRID MULTI-COLOANĂ (P0) ─────────────────────────────────────────────
+   Ambele feed-uri (LIVE buildCardHtml→.card, PRE-MECI buildPmCard→.pm-card)
+   randează cardurile în `.league-group-body`. Îl facem grilă: umple lățimea cu
+   3-4 carduri/rând la 1024, 4-5 la 1440. Antetul de ligă rămâne rând full-width
+   (e sibling, în afara grilei). `.collapsed` (specificitate .2.0) rămâne
+   display:none peste display:grid (.1.0) → colapsarea funcționează în continuare. */
+@media (min-width:1024px){
+  .league-group-body{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));
+    gap:16px;
+    align-items:start;   /* cardurile nu se întind la înălțimea celui mai înalt */
+  }
+  /* În grilă, spațierea o dă `gap` — anulăm marginile verticale ale cardurilor. */
+  .league-group-body > .card,
+  .league-group-body > .pm-card{ margin-bottom:0; }
+}
+
+@media (min-width:1440px){
+  .league-group-body{
+    grid-template-columns:repeat(auto-fill, minmax(320px, 1fr));
+    gap:18px;
+  }
+}
+
+/* ─── 3. TIPOGRAFIE SCALABILĂ (P1) ───────────────────────────────────────────
+   Fonturile sunt dimensionate pentru 390px → mici/pierdute pe laptop. Urcăm
+   ierarhia „hero" (logo + bara de stats, primul lucru vizibil) ca să aibă impact
+   pe ecran mare. Doar în breakpoint desktop; internele cardurilor rămân intacte. */
+@media (min-width:1024px){
+  .logo{ font-size:22px; letter-spacing:-.6px; }
+  .stat-v{ font-size:22px; }
+  .stat-l{ font-size:10px; letter-spacing:.6px; }
+  .dp-item{ font-size:13px; }
+  .nav-label{ font-size:9px; }
+  .nav-icon{ font-size:20px; }
+}
+
+@media (min-width:1440px){
+  .logo{ font-size:24px; }
+  .stat-v{ font-size:24px; }
+}
+
+/* ─── 4. SPACING DESKTOP (P1) ────────────────────────────────────────────────
+   Spațierea gândită pentru mobil (padding 12px) e prea strânsă pe lat. Aerisim
+   conținutul în coloană; doar în media query. */
+@media (min-width:1024px){
+  .tab-content{ padding:24px 24px 20px; }
+  #tab-live{ padding-top:20px; }
+  .league-group-body{ margin-bottom:22px; }
+  .stats{ padding-block:12px; gap:28px; }
+}
+
+/* ─── 5. HOVER STATES (P2) ───────────────────────────────────────────────────
+   Doar pe dispozitive cu mouse (pointer:fine) ȘI desktop → NU se activează pe
+   mobil (touch = pointer:coarse, plus pragul de lățime). Micro-interacțiuni
+   discrete = senzație de app desktop, păstrând accentul teal. */
+@media (min-width:1024px) and (pointer:fine){
+  .card,
+  .pm-card{
+    cursor:pointer;
+    transition:transform .18s ease, border-color .2s ease,
+               box-shadow .25s ease, background .25s ease;
+  }
+  .card:hover,
+  .pm-card:hover{
+    transform:translateY(-3px);
+    border-color:rgba(0,212,168,.35);
+    box-shadow:0 12px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(0,212,168,.12);
+  }
+  .nav-btn{ transition:background .15s ease, transform .15s ease; }
+  .nav-btn:hover{ background:rgba(255,255,255,.04); }
+  .nav-btn:hover .nav-icon{ transform:translateY(-1px); }
+  .nav-btn:hover .nav-label{ color:var(--mu2); }
+  .btn-connect{ transition:transform .15s ease, box-shadow .2s ease; }
+  .btn-connect:hover{ transform:translateY(-1px); box-shadow:0 6px 24px rgba(0,212,168,.4); }
+}
+
+/* Respectă reduced-motion — dar DOAR pe desktop, ca să nu ating stilul mobil
+   (transformările/tranzițiile de mai sus există exclusiv ≥1024px). */
+@media (min-width:1024px) and (prefers-reduced-motion:reduce){
+  .card,
+  .pm-card,
+  .nav-btn,
+  .btn-connect{ transition:none; }
+  .card:hover,
+  .pm-card:hover,
+  .btn-connect:hover,
+  .nav-btn:hover .nav-icon{ transform:none; }
+}
+
+/* ─── 6. GLASSMORPHISM DESKTOP (P2) ──────────────────────────────────────────
+   Pe fundal negru plat (--bg:#000), blur-ul barelor fixe n-avea ce refracta pe
+   lat → arăta plat. Adăugăm un glow teal foarte discret la topul feed-ului (are
+   ce „prinde" glass-ul) + urcăm ușor blur/saturate pe header și nav. Păstrăm
+   stilul glass existent (cerut) — doar îi dăm profunzime pe ecran mare. */
+@media (min-width:1024px){
+  .hdr{
+    backdrop-filter:blur(24px) saturate(150%);
+    -webkit-backdrop-filter:blur(24px) saturate(150%);
+  }
+  .nav{
+    backdrop-filter:blur(24px) saturate(150%);
+    -webkit-backdrop-filter:blur(24px) saturate(150%);
+  }
+  /* Ambient glow în spatele conținutului — subtil, doar sus-centru. */
+  .page{
+    background:radial-gradient(1100px 520px at 50% -8%,
+              rgba(0,212,168,.06), transparent 62%);
+  }
+}
