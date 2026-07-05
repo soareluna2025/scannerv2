@@ -94,3 +94,13 @@
   .logo{ font-size:24px; }
   .stat-v{ font-size:24px; }
 }
+
+/* ─── 4. SPACING DESKTOP (P1) ────────────────────────────────────────────────
+   Spațierea gândită pentru mobil (padding 12px) e prea strânsă pe lat. Aerisim
+   conținutul în coloană; doar în media query. */
+@media (min-width:1024px){
+  .tab-content{ padding:24px 24px 20px; }
+  #tab-live{ padding-top:20px; }
+  .league-group-body{ margin-bottom:22px; }
+  .stats{ padding-block:12px; gap:28px; }
+}
