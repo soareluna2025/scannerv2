@@ -966,30 +966,56 @@ var PM_FLAG_MAP = {
 
 // Cache pt lookup case-insensitive (cheile mapei lowercased o singură dată).
 var _PM_FLAG_LC = null;
-function countryToFlag(country){
-  if (!country) return '';
-  // 1) exact
-  var v = PM_FLAG_MAP[country];
-  // 2) case-insensitive
-  if (!v){
-    if (!_PM_FLAG_LC){
-      _PM_FLAG_LC = {};
-      for (var k in PM_FLAG_MAP) _PM_FLAG_LC[k.toLowerCase()] = PM_FLAG_MAP[k];
-    }
-    v = _PM_FLAG_LC[String(country).toLowerCase()];
-  }
-  // 5) fallback → drapel alb
+// Sub-naționale UK — api-sports servește drapele SVG dedicate (gb-eng/gb-sct/gb-wls).
+var PM_FLAG_ISO_SPECIAL = { 'england':'gb-eng', 'scotland':'gb-sct', 'wales':'gb-wls' };
+
+// Emoji-ul „vechi" al unei valori din PM_FLAG_MAP — folosit DOAR ca fallback
+// (dacă SVG-ul cade / continente fără ISO). Aceeași logică ca înainte.
+function _countryFlagEmoji(v){
   if (!v) return '🏳️';
-  // 3) emoji direct (England/World/Asia/CONCACAF etc) — orice NU e cod ISO2 (2 litere
-  //    ASCII). NOTĂ: emoji glob 🌍/🌏/🌎 au .length===2 (surrogate pair), deci NU mă
-  //    pot baza pe length — folosesc regex pe 2 litere A-Z.
-  if (!/^[A-Za-z]{2}$/.test(v)) return v;
-  // 4) ISO 2-letter code → regional indicators (A=0x1F1E6)
+  if (!/^[A-Za-z]{2}$/.test(v)) return v;               // deja emoji (continent / UK tag-seq)
   var A = 0x1F1E6;
   var c0 = v.toUpperCase().charCodeAt(0) - 65;
   var c1 = v.toUpperCase().charCodeAt(1) - 65;
   if (c0 < 0 || c0 > 25 || c1 < 0 || c1 > 25) return '🏳️';
   return String.fromCodePoint(A + c0) + String.fromCodePoint(A + c1);
+}
+
+// FIX DESKTOP (bug vechi, structural): drapelele de țară erau EMOJI (regional
+// indicators). Emoji-urile de drapel se randează pe iOS/macOS/Android, dar NU pe
+// Windows/Linux (fără font de flag-emoji) → drapelele dispăreau pe laptop, deși
+// pe mobil (Apple) arătau perfect. Acum întoarcem un <img> SVG de la api-sports
+// (ACELAȘI host + pattern ca wcFlag, deja folosit pt Cupa Mondială), cu fallback
+// la emoji prin onerror. Randare identică pe TOATE platformele. Continentele /
+// necunoscutele (fără cod ISO) rămân emoji (rare).
+function countryToFlag(country, sz){
+  if (!country) return '';
+  sz = sz || 18;
+  var lc = String(country).toLowerCase();
+  // valoarea din mapă (exact, apoi case-insensitive)
+  var v = PM_FLAG_MAP[country];
+  if (!v){
+    if (!_PM_FLAG_LC){
+      _PM_FLAG_LC = {};
+      for (var k in PM_FLAG_MAP) _PM_FLAG_LC[k.toLowerCase()] = PM_FLAG_MAP[k];
+    }
+    v = _PM_FLAG_LC[lc];
+  }
+  // slug api-sports: special UK → gb-xxx; altfel cod ISO2 (2 litere) → lowercase.
+  var slug = PM_FLAG_ISO_SPECIAL[lc] || null;
+  if (!slug && v && /^[A-Za-z]{2}$/.test(v)) slug = v.toLowerCase();
+  var emoji = _countryFlagEmoji(v);
+  // avem slug → drapel SVG real (fallback emoji pe onerror).
+  if (slug){
+    var url = 'https://media.api-sports.io/flags/' + slug + '.svg';
+    var h = Math.round(sz * 0.72);
+    var emojiSpan = '<span style="vertical-align:middle">' + emoji + '</span>';
+    return '<img src="' + url + '" width="' + sz + '" height="' + h + '" ' +
+      'style="border-radius:2px;object-fit:cover;vertical-align:middle;flex-shrink:0" ' +
+      'onerror="this.outerHTML=decodeURIComponent(\'' + encodeURIComponent(emojiSpan) + '\')">';
+  }
+  // continent / necunoscut → emoji (rar; 🏳️ pentru necunoscut, ca înainte).
+  return emoji;
 }
 
 // Format dată scurt românesc: DU/LU/MA/MI/JO/VI/SA + zi luna
