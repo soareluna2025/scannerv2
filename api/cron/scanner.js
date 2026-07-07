@@ -703,6 +703,20 @@ async function scanLive10s() {
         } else {
           saveAlert(id, alertType, ng > _ngThr ? 'ng' : 'over15', msg, conf).catch(() => {});
 
+          // ── NGP pe echipe — alerte SEPARATE „Gazde/Oaspeți dau următorul gol" ──
+          // Split-ul NGP (ngHome/ngAway ≤ ng) trece pragul NGP adaptiv (_ngThr, ACELAȘI
+          // modul). Fiindcă ngHome+ngAway=ng, cel mult UNA depășește 70 (ng≤97). NGP =
+          // „gol DUPĂ alertă" → nicio tautologie de scor (ca NGP total). saveAlert
+          // dedup intern pe (fixture, alert_type, 2h). NGP total rămâne neatins mai sus.
+          if (typeof ngHome === 'number' && ngHome > _ngThr) {
+            const msgH = `${m.teams?.home?.name} vs ${m.teams?.away?.name} — Gazde marchează ${Math.round(ngHome)}% min ${currMin}`;
+            saveAlert(id, 'HIGH_NGP_HOME', 'ngp_home', msgH, ngHome / 100).catch(() => {});
+          }
+          if (typeof ngAway === 'number' && ngAway > _ngThr) {
+            const msgA = `${m.teams?.home?.name} vs ${m.teams?.away?.name} — Oaspeți marchează ${Math.round(ngAway)}% min ${currMin}`;
+            saveAlert(id, 'HIGH_NGP_AWAY', 'ngp_away', msgA, ngAway / 100).catch(() => {});
+          }
+
         // Track in predictions for header W/L/P counter
         if (ng > _ngThr && !liveCache[id]?.ngpAlertScore) {
           const alertScore = `${currHome}-${currAway}`;
