@@ -1,0 +1,4 @@
+{
+  "_comment": "Mapare manuală nume-sursă-UEFA → API-Football team_id, pentru cazuri ambigue pe care fuzzy-match nu le prinde. Cheia = numele EXACT din sursă (lowercase). Completează după primul --dry-run --report pe VPS.",
+  "_exemplu": "Kauno Zalgiris: 12345"
+}
