@@ -130,14 +130,35 @@ export default async function handler(req, res) {
   if (fixIds.length > 0) {
     try {
       const { rows } = await query(
-        `SELECT fixture_id, ng, ng_15min FROM match_snapshots WHERE fixture_id = ANY($1)`,
+        `SELECT fixture_id, ng, ng_15min, ng_home, ng_away FROM match_snapshots WHERE fixture_id = ANY($1)`,
         [fixIds]
       );
-      for (const r of rows) snapMap[r.fixture_id] = { ng: r.ng, ng15: r.ng_15min };
+      for (const r of rows) snapMap[r.fixture_id] = {
+        ng: r.ng, ng15: r.ng_15min, ngHome: r.ng_home, ngAway: r.ng_away,
+      };
     } catch (e) {
       log(`match_snapshots read err: ${e.message}`);
     }
   }
+
+  // NGP pe echipe = split proporțional cu xG (fallback 50/50) — oglindă a
+  // splitNgp din scanner.js. Atașează _ngHome/_ngAway (numeric, ca WS) + _ngMarkets
+  // (market_type explicit) ca banda să știe CARE echipă dă următorul gol.
+  const _attachNgSplit = (m, ngTotal, hxg, axg, homeVal, awayVal) => {
+    let h = (typeof homeVal === 'number') ? homeVal : null;
+    let a = (typeof awayVal === 'number') ? awayVal : null;
+    if (h === null && a === null && typeof ngTotal === 'number' && ngTotal > 0) {
+      const hh = Math.max(0, hxg || 0), aa = Math.max(0, axg || 0), sum = hh + aa;
+      h = sum > 0 ? +(ngTotal * (hh / sum)).toFixed(2) : +(ngTotal / 2).toFixed(2);
+      a = sum > 0 ? +(ngTotal * (aa / sum)).toFixed(2) : +(ngTotal / 2).toFixed(2);
+    }
+    if (h === null && a === null) return;
+    m._ngHome = h; m._ngAway = a;
+    m._ngMarkets = [
+      { market_type: 'ngp_home', value: h },
+      { market_type: 'ngp_away', value: a },
+    ];
+  };
 
   for (const m of filtered) {
     const fid = m.fixture?.id;
@@ -145,6 +166,8 @@ export default async function handler(req, res) {
     if (fid && snapMap[fid] && typeof snapMap[fid].ng === 'number') {
       m._ng = snapMap[fid].ng;
       if (typeof snapMap[fid].ng15 === 'number') m._ng15 = snapMap[fid].ng15;
+      // ng_home/ng_away persistate de scanner → sursă autoritară a split-ului.
+      _attachNgSplit(m, snapMap[fid].ng, 0, 0, snapMap[fid].ngHome, snapMap[fid].ngAway);
       continue;
     }
     // Fallback: calc local cand snapshot lipseste (rar, doar la meciuri noi)
@@ -162,6 +185,8 @@ export default async function handler(req, res) {
     const awayFormGoals = (mn > 0 && aSOT > 0) ? (aSOT / mn) * 9 : 0.35;
     const ngRaw = calcNextGoal({ mn, txg, homeFormGoals, awayFormGoals });
     m._ng = mn < 10 ? 0 : calibrateNgp(ngRaw);
+    // Split local din xG live (fără snapshot).
+    _attachNgSplit(m, m._ng, hxg, axg, null, null);
   }
 
   // ── Optional enrichment ────────────────────────────────────────

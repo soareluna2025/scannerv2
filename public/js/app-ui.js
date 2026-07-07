@@ -41,32 +41,40 @@ function connectWS(){
     try{
       var msg=JSON.parse(ev.data);
       if(msg.type==='LIVE_UPDATE'&&msg.payload&&Array.isArray(msg.payload.matches)){
-        var _ed={};var _ngPrev={};var _ng15Prev={};ST.ms.forEach(function(m){
+        var _ed={};var _ngPrev={};var _ng15Prev={};var _nhPrev={};var _naPrev={};ST.ms.forEach(function(m){
           var fid=m.fixture&&m.fixture.id;
           if(m.enrichData)_ed[fid]=m.enrichData;
           if(typeof m._ng==='number')_ngPrev[fid]=m._ng;
           if(typeof m._ng15==='number')_ng15Prev[fid]=m._ng15;
+          if(typeof m._ngHome==='number')_nhPrev[fid]=m._ngHome;
+          if(typeof m._ngAway==='number')_naPrev[fid]=m._ngAway;
         });
         ST.ms=msg.payload.matches.map(function(m){
           var fid=m.fixture&&m.fixture.id;
           if(m._ng===undefined && _ngPrev[fid]!==undefined) m._ng=_ngPrev[fid];
           if(m._ng15===undefined && _ng15Prev[fid]!==undefined) m._ng15=_ng15Prev[fid];
+          if(m._ngHome===undefined && _nhPrev[fid]!==undefined) m._ngHome=_nhPrev[fid];
+          if(m._ngAway===undefined && _naPrev[fid]!==undefined) m._ngAway=_naPrev[fid];
           m._s=calcScore(m);
           var e=_ed[fid];if(e)m.enrichData=e;
           return m;
         });
         renderMatches();updateStats();trackWR();genUpdateBadge();
       } else if(msg.type==='LIVE_DELTA'&&msg.payload&&Array.isArray(msg.payload.changed)){
-        var _ed={};var _ngPrev={};var _ng15Prev={};ST.ms.forEach(function(m){
+        var _ed={};var _ngPrev={};var _ng15Prev={};var _nhPrev={};var _naPrev={};ST.ms.forEach(function(m){
           var fid=m.fixture&&m.fixture.id;
           if(m.enrichData)_ed[fid]=m.enrichData;
           if(typeof m._ng==='number')_ngPrev[fid]=m._ng;
           if(typeof m._ng15==='number')_ng15Prev[fid]=m._ng15;
+          if(typeof m._ngHome==='number')_nhPrev[fid]=m._ngHome;
+          if(typeof m._ngAway==='number')_naPrev[fid]=m._ngAway;
         });
         msg.payload.changed.forEach(function(m){
           var fid=m.fixture&&m.fixture.id;
           if(m._ng===undefined && _ngPrev[fid]!==undefined) m._ng=_ngPrev[fid];
           if(m._ng15===undefined && _ng15Prev[fid]!==undefined) m._ng15=_ng15Prev[fid];
+          if(m._ngHome===undefined && _nhPrev[fid]!==undefined) m._ngHome=_nhPrev[fid];
+          if(m._ngAway===undefined && _naPrev[fid]!==undefined) m._ngAway=_naPrev[fid];
           m._s=calcScore(m);
           var ed=_ed[fid];if(ed)m.enrichData=ed;
           var idx=ST.ms.findIndex(function(x){return x.fixture&&x.fixture.id===fid;});
@@ -236,6 +244,15 @@ function buildCardHtml(m,lgName){
   var _ngW=(!_ngHas||mn<10)?0:ng;
   o+='<div class="ngp-pct" style="color:'+c+'">'+_ngShow+'</div></div>';
   o+='<div class="ngp-bar"><div class="ngp-fill" style="width:'+_ngW+'%;background:'+c+'"></div></div>';
+  // NGP pe echipe (m._ngHome/_ngAway din feed/WS) — CINE dă următorul gol. Afișat
+  // doar când există + după min 10 (ca totalul). Nu strică nimic dacă lipsesc.
+  var _nh=(typeof m._ngHome==='number')?m._ngHome:null;
+  var _na=(typeof m._ngAway==='number')?m._ngAway:null;
+  if(_nh!==null&&_na!==null&&_ngHas&&mn>=10){
+    o+='<div style="display:flex;gap:12px;justify-content:center;margin-top:4px;font-size:10px;font-weight:700;color:var(--mu2)">'
+      +'<span title="Gazdele dau următorul gol">🏠 '+Math.round(_nh)+'%</span>'
+      +'<span title="Oaspeții dau următorul gol">✈️ '+Math.round(_na)+'%</span></div>';
+  }
   var tg=hg+ag;var _cc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
   var ed=m.enrichData||null;
   // [P24] O SINGURĂ sursă pentru Over: valoarea din enrich când există; recalculul frontend
