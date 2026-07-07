@@ -1168,6 +1168,24 @@ ALTER TABLE predictions ADD COLUMN IF NOT EXISTS api_cmp_poisson_away NUMERIC(5,
 ALTER TABLE predictions ADD COLUMN IF NOT EXISTS api_cmp_h2h_home     NUMERIC(5,2);
 ALTER TABLE predictions ADD COLUMN IF NOT EXISTS api_cmp_h2h_away     NUMERIC(5,2);
 
+-- ── uefa_club_coefficients ───────────────────────────────────────
+-- Coeficient UEFA de club (forță pe 5 sezoane) — feature cross-ligă pt meciuri
+-- europene (CL/EL/ECL). Populat de scripts/fetch-uefa-coefficients.js (săptămânal).
+-- team_id = NULL până la maparea pe API-Football (nume↔team_id); vezi scriptul.
+CREATE TABLE IF NOT EXISTS uefa_club_coefficients (
+    id              SERIAL PRIMARY KEY,
+    team_id         INTEGER,              -- API-Football team_id (NULL = nemapat)
+    team_name       TEXT NOT NULL,        -- numele din sursa UEFA (kassiesa)
+    country         TEXT,
+    coefficient     NUMERIC,              -- coeficient 5 sezoane
+    rank            INTEGER,              -- rang european
+    season          TEXT,                 -- ex. '2025/26'
+    match_score     NUMERIC,              -- încrederea mapării (0..1); NULL dacă nemapat
+    updated_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (season, team_name)
+);
+CREATE INDEX IF NOT EXISTS idx_uefa_coef_team ON uefa_club_coefficients (team_id) WHERE team_id IS NOT NULL;
+
 -- ================================================================
 --  VERIFICARE
 -- ================================================================

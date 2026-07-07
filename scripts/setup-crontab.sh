@@ -72,6 +72,9 @@ NEW_CRONTAB=$(cat <<EOF
 50 6 * * * cd /root/scannerv2 && python3 -u ml/calibrate.py >> /root/scannerv2/logs/calibrate.log 2>&1 && python3 -u ml/gg_calibrate_isotonic.py >> /root/scannerv2/logs/gg-calibrate.log 2>&1
 # Ponturile Zilei → public/daily_picks.json (08:00, DUPĂ auto-predict 00:30 + build-ml-features 03:00 + calibrate 06:50).
 */10 * * * * cd ${APP_DIR} && set -a && . ${APP_DIR}/.env && set +a && python3 ml/daily_picks.py --write >> ${APP_DIR}/logs/daily-picks.log 2>&1
+# Coeficienți UEFA de club → uefa_club_coefficients. Săptămânal vineri 07:00 (DUPĂ
+# rundele europene Marți/Miercuri/Joi). dotenv citește .env din cwd (cd ${APP_DIR}).
+0 7 * * 5 cd ${APP_DIR} && node scripts/fetch-uefa-coefficients.js >> ${APP_DIR}/logs/uefa-coef.log 2>&1
 EOF
 )
 
