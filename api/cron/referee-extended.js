@@ -7,7 +7,10 @@
 // - Cards markets pct (3.5, 4.5)
 //
 // Trigger: GET /api/cron/referee-extended
-// Cron: 45 4 * * * (zilnic 04:45, dupa referee-stats)
+// Cron: 45 4 * * * (zilnic 04:45, DUPĂ referee-stats 04:30) — ÎNREGISTRAT în
+// scripts/setup-crontab.sh (sursă canonică crontab). Sursă date = match_events
+// (DB/CPU, ZERO apeluri API), deci limit-ul poate fi generos.
+// Initial-fill (o dată, după deploy): bash scripts/referee-extended-loop.sh 200
 
 import { query } from '../db.js';
 

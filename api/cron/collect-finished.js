@@ -243,6 +243,33 @@ async function collectOdds(fixtureId) {
   return count;
 }
 
+// h2h INCREMENTAL — scrie meciul FT curent ca rând în h2h (row-per-fixture),
+// aceeași formă ca backfill.js (saveH2HFromFixture): team1/team2 = min/max(home,away),
+// idempotent prin ON CONFLICT (team1_id, team2_id, fixture_id) DO NOTHING.
+// ROBINET NOU: până acum h2h primea rânduri DOAR din backfill.js (istoric), deci
+// meciurile terminate zi-de-zi NU ajungeau în h2h (484 perechi din 369k = 0,13%).
+// Sursa = obiectul fixture din API (nu depinde de fixtures_history să fie deja populat).
+// NU atinge readerii (enrich.js:804/match.js/simulate.js/generator.js) și nici score3.
+async function saveH2H(fx) {
+  const fid = fx.fixture?.id;
+  const hId = fx.teams?.home?.id, aId = fx.teams?.away?.id;
+  const hg  = fx.goals?.home, ag = fx.goals?.away;
+  if (!fid || !hId || !aId || hId === aId || hg == null || ag == null) return 0;
+  const team1 = Math.min(hId, aId);
+  const team2 = Math.max(hId, aId);
+  const r = await query(
+    `INSERT INTO h2h
+       (team1_id, team2_id, fixture_id, home_team_id, away_team_id,
+        match_date, home_goals, away_goals, league_id, season)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     ON CONFLICT (team1_id, team2_id, fixture_id) DO NOTHING`,
+    [team1, team2, fid, hId, aId,
+     fx.fixture?.date || null, hg, ag,
+     fx.league?.id || null, fx.league?.season || null]
+  );
+  return r.rowCount || 0;
+}
+
 async function logCron(fixtures, players, status, errorMsg) {
   try {
     await Promise.resolve(/* cron_logs → dispecer */);
@@ -346,6 +373,16 @@ export default async function handler(req, res) {
       await sleep(200);
     }
 
+    // h2h INCREMENTAL — scrie fiecare meci FT din whitelist ca rând în h2h.
+    // Rulează pe TOATE fixturile whitelist FT (nu doar `toProcess`), fiindcă h2h e
+    // independent de player_stats/match_stats. Idempotent (ON CONFLICT DO NOTHING)
+    // → reluabil, zero duplicate, cost zero API (doar INSERT-uri locale).
+    let h2hWritten = 0;
+    for (const fx of fixtures) {
+      try { h2hWritten += await saveH2H(fx); }
+      catch (e) { console.error('saveH2H error:', fx.fixture?.id, e.message); }
+    }
+
     const failNote = (psFailed || msFailed || evFailed || oddsFailed)
       ? `failed ps:${psFailed} ms:${msFailed} ev:${evFailed} odds:${oddsFailed}`
       : null;
@@ -361,6 +398,7 @@ export default async function handler(req, res) {
       match_stats:  totalMatchStats,
       events:       totalEvents,
       odds:         totalOdds,
+      h2h:          h2hWritten,
       fails: { player_stats: psFailed, match_stats: msFailed, events: evFailed, odds: oddsFailed },
     });
   } catch (e) {

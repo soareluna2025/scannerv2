@@ -52,6 +52,10 @@ NEW_CRONTAB=$(cat <<EOF
 0 4 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/league-stats >> ${LOG} 2>&1
 0 4 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/coach-stats >> ${LOG} 2>&1
 30 4 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/referee-stats >> ${LOG} 2>&1
+# referee-extended — metrici arbitru extinși (card_bias_score, over 3.5/4.5 cartonașe,
+# yellow H1/H2, home/away/draw WR) din match_events. Sursă = DB/CPU, ZERO apeluri API →
+# limit generos (200) pt refresh săptămânal complet. 04:45, DUPĂ referee-stats (04:30).
+45 4 * * * curl -sf -H "${HDR}" "${BASE}/api/cron/referee-extended?limit=200" >> ${LOG} 2>&1
 # Optimizare DB — VACUUM (ANALYZE) rapid pe tabelele mari, zilnic 04:45 (după backup 03:30, înainte de train 05:30).
 45 4 * * * curl -sf -H "${HDR}" "${BASE}/api/cron/optimize-db?mode=rapid" >> ${LOG} 2>&1
 30 3 * * * curl -sf --max-time 120 -H "${HDR}" ${BASE}/api/cron/collect-venues >> ${LOG} 2>&1

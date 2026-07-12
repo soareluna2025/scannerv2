@@ -108,6 +108,15 @@ propriul shell nu sunt afectate de regulă.
 
 ---
 
+## DECIZII PERMANENTE
+
+- **injuries = OFF intenționat (12.07.2026)**: API `/injuries` întoarce gol pe probele
+  recente, tabela nefolosită în scoring, redundantă cu `prematch_data` (types injuries).
+  Writer-ul din `enrich.js:2023` rămâne în cod (inofensiv); reactivare doar cu decizie
+  explicită + re-probare API pe ligi top.
+
+---
+
 ## STACK
 
 - **Runtime:** Node.js ESM (`/snap/bin/node`)  ·  **Server:** Express (`server.js`), port 3000
