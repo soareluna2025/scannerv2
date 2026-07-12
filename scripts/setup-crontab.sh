@@ -67,9 +67,11 @@ NEW_CRONTAB=$(cat <<EOF
 0 3 * * 1 curl -sf -H "${HDR}" ${BASE}/api/cron/collect-national-history >> ${LOG} 2>&1
 0 3 1 * * curl -sf -H "${HDR}" ${BASE}/api/cron/cleanup-settings >> ${APP_DIR}/ml/cleanup.log 2>&1
 30 3 * * * /root/scripts/backup-db.sh >> /var/log/alohascan-backup.log 2>&1
-30 5 * * * cd ${APP_DIR} && set -a && . ${APP_DIR}/.env && set +a && python3 ml/train_model.py >> ${APP_DIR}/ml/train.log 2>&1
-30 6 * * * cd /root/scannerv2 && python3 -u ml/train_live_v2.py >> /root/.pm2/logs/train-live-v2.log 2>&1
-50 6 * * * cd /root/scannerv2 && python3 -u ml/calibrate.py >> /root/scannerv2/logs/calibrate.log 2>&1 && python3 -u ml/gg_calibrate_isotonic.py >> /root/scannerv2/logs/gg-calibrate.log 2>&1
+# WHITELIST ML: regenerează ml/allowed_leagues.json din api/leagues.js (sursă unică)
+# ÎNAINTE de fiecare antrenare → Python-ul antrenează exclusiv pe ligile oficiale.
+30 5 * * * cd ${APP_DIR} && set -a && . ${APP_DIR}/.env && set +a && node scripts/export-allowed-leagues.mjs && python3 ml/train_model.py >> ${APP_DIR}/ml/train.log 2>&1
+30 6 * * * cd /root/scannerv2 && node scripts/export-allowed-leagues.mjs && python3 -u ml/train_live_v2.py >> /root/.pm2/logs/train-live-v2.log 2>&1
+50 6 * * * cd /root/scannerv2 && node scripts/export-allowed-leagues.mjs && python3 -u ml/calibrate.py >> /root/scannerv2/logs/calibrate.log 2>&1 && python3 -u ml/gg_calibrate_isotonic.py >> /root/scannerv2/logs/gg-calibrate.log 2>&1
 # Ponturile Zilei → public/daily_picks.json (08:00, DUPĂ auto-predict 00:30 + build-ml-features 03:00 + calibrate 06:50).
 */10 * * * * cd ${APP_DIR} && set -a && . ${APP_DIR}/.env && set +a && python3 ml/daily_picks.py --write >> ${APP_DIR}/logs/daily-picks.log 2>&1
 # Coeficienți UEFA de club → uefa_club_coefficients. Săptămânal vineri 07:00 (DUPĂ

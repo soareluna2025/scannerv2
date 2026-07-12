@@ -79,10 +79,28 @@ def get_conn():
     )
 
 
+# ── WHITELIST (sursa de adevăr = api/leagues.js → ml/allowed_leagues.json) ──────
+# Model LIVE antrenat EXCLUSIV pe ligile oficiale (regenerat din masterul JS înainte
+# de fiecare antrenare). Lipsă/gol → fallback FĂRĂ filtru. IDs întregi de încredere.
+def _load_allowed_leagues():
+    p = os.path.join(ML_DIR, "allowed_leagues.json")
+    try:
+        with open(p) as f:
+            ids = json.load(f)
+        return sorted({int(x) for x in ids})
+    except Exception as e:
+        print(f"⚠ allowed_leagues.json indisponibil ({e}) → antrenez pe TOATE ligile (fallback).")
+        return []
+
+ALLOWED_LEAGUES = _load_allowed_leagues()
+_LEAGUE_FILTER = ("AND fh.league_id IN (" + ",".join(str(i) for i in ALLOWED_LEAGUES) + ")") if ALLOWED_LEAGUES else ""
+if ALLOWED_LEAGUES:
+    print(f"WHITELIST activă (live): {len(ALLOWED_LEAGUES)} ligi.")
+
 # Evenimente + label-uri de meci, doar 2023+, elapsed>=0, scor final cunoscut.
 # Ordonat pe (fixture_id, elapsed, elapsed_extra, id) ca reconstrucția să fie
 # strict cronologică.
-QUERY = """
+QUERY = f"""
 SELECT
     me.fixture_id,
     me.elapsed,
@@ -104,6 +122,7 @@ WHERE fh.match_date >= '2023-01-01'
   AND fh.away_goals IS NOT NULL
   AND fh.home_team_id IS NOT NULL
   AND fh.away_team_id IS NOT NULL
+  {_LEAGUE_FILTER}
 ORDER BY fh.match_date, me.fixture_id, me.elapsed, COALESCE(me.elapsed_extra, 0), me.id
 """
 
@@ -140,7 +159,7 @@ FEATURES = BASE_FEATURES + NEW_FEATURES   # 16 + 25 = 41
 
 # Query per-fixture pentru cele 25 features pre-meci (LEFT JOIN, point-in-time pe
 # fixture_id; standings/referee = snapshot CURENT, aproximare documentată).
-FEATURE_QUERY = """
+FEATURE_QUERY = f"""
 SELECT
   fh.fixture_id,
   mlf.home_yc_avg, mlf.away_yc_avg,
@@ -181,6 +200,7 @@ LEFT JOIN referee_stats rs ON rs.referee_name = fh.referee
 WHERE fh.match_date >= '2023-01-01'
   AND fh.home_goals IS NOT NULL AND fh.away_goals IS NOT NULL
   AND fh.home_team_id IS NOT NULL AND fh.away_team_id IS NOT NULL
+  {_LEAGUE_FILTER}
 """
 
 

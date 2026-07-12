@@ -68,8 +68,28 @@ def get_conn():
     )
 
 
+# ── WHITELIST (sursa de adevăr = api/leagues.js → ml/allowed_leagues.json) ──────
+# ML-ul se antrenează EXCLUSIV pe ligile oficiale. JSON-ul e regenerat din masterul
+# JS ÎNAINTE de fiecare antrenare (scripts/export-allowed-leagues.mjs în crontab),
+# deci nu poate diverge. Lipsă/gol → fallback FĂRĂ filtru (comportamentul vechi).
+# IDs = întregi dintr-un fișier local de încredere → interpolarea literală e sigură.
+def _load_allowed_leagues():
+    p = os.path.join(ML_DIR, "allowed_leagues.json")
+    try:
+        with open(p) as f:
+            ids = json.load(f)
+        return sorted({int(x) for x in ids})
+    except Exception as e:
+        print(f"⚠ allowed_leagues.json indisponibil ({e}) → antrenez pe TOATE ligile (fallback).")
+        return []
+
+ALLOWED_LEAGUES = _load_allowed_leagues()
+_LEAGUE_FILTER = ("AND fh.league_id IN (" + ",".join(str(i) for i in ALLOWED_LEAGUES) + ")") if ALLOWED_LEAGUES else ""
+if ALLOWED_LEAGUES:
+    print(f"WHITELIST activă: {len(ALLOWED_LEAGUES)} ligi (antrenare exclusiv pe ele).")
+
 # PASUL 1 — Query extins (adaptat la schema REALĂ: match_stats wide, match_events team_id)
-QUERY = """
+QUERY = f"""
 SELECT
     p.fixture_id,
     p.score1, p.score2, p.score3, p.score6, p.score7,
@@ -145,6 +165,7 @@ LEFT JOIN referee_stats rs ON rs.referee_name = fh.referee
 WHERE p.result_winner IS NOT NULL
   AND p.score1 IS NOT NULL
   AND fh.home_goals IS NOT NULL
+  {_LEAGUE_FILTER}
 ORDER BY p.created_at ASC
 """
 
