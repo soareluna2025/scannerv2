@@ -10,8 +10,13 @@
 // reluabil (procesează DOAR fixturile din predictions încă nematerializate).
 import { query } from '../db.js';
 import { timingBody } from '../utils/goal-timing-sql.js';
+import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
 
 const BATCH_SIZE = 5000;
+// WHITELIST (sursa de adevăr = api/leagues.js): ML-ul se materializează/antrenează
+// EXCLUSIV pe ligile oficiale. Fixturile din „ocean" (740 ligi ingerate) rămân
+// stocate, dar NU mai primesc rând în ml_features → nu intră la antrenare.
+const ALLOWED_LEAGUES = [...ALLOWED_LEAGUE_IDS];
 
 function log(msg) {
   console.log(`[cron/build-ml-features] ${new Date().toISOString()} ${msg}`);
@@ -62,6 +67,7 @@ FROM (
   SELECT pp.fixture_id, pp.created_at
     FROM predictions pp
    WHERE NOT EXISTS (SELECT 1 FROM ml_features mf WHERE mf.fixture_id = pp.fixture_id)
+     AND pp.league_id = ANY($2)   -- WHITELIST: doar ligile oficiale
    ORDER BY pp.created_at ASC
    LIMIT $1
 ) p
@@ -138,15 +144,17 @@ ON CONFLICT (fixture_id) DO NOTHING
 export default async function handler(req, res) {
   const t0 = Date.now();
   try {
-    const ins = await query(INSERT_SQL, [BATCH_SIZE]);
+    const ins = await query(INSERT_SQL, [BATCH_SIZE, ALLOWED_LEAGUES]);
     const inserted = ins.rowCount || 0;
 
-    // Câte mai rămân de procesat (predicții fără ml_features, dar prezente în
-    // fixtures_history = procesabile).
+    // Câte mai rămân de procesat (predicții WHITELIST fără ml_features, dar prezente
+    // în fixtures_history = procesabile). Filtrul pe ligă e ACELAȘI ca la insert.
     const rem = await query(
       `SELECT COUNT(*)::int AS n FROM predictions p
         WHERE NOT EXISTS (SELECT 1 FROM ml_features mf WHERE mf.fixture_id = p.fixture_id)
-          AND EXISTS (SELECT 1 FROM fixtures_history fh WHERE fh.fixture_id = p.fixture_id)`
+          AND p.league_id = ANY($1)
+          AND EXISTS (SELECT 1 FROM fixtures_history fh WHERE fh.fixture_id = p.fixture_id)`,
+      [ALLOWED_LEAGUES]
     );
     const remaining = rem.rows[0]?.n ?? 0;
     const durMs = Date.now() - t0;
