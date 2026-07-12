@@ -270,7 +270,9 @@ async function computeUpcomingPredictions(stats) {
            over15_prob=EXCLUDED.over15_prob, over25_prob=EXCLUDED.over25_prob,
            gg_prob=EXCLUDED.gg_prob, home_win_prob=EXCLUDED.home_win_prob,
            draw_prob=EXCLUDED.draw_prob, away_win_prob=EXCLUDED.away_win_prob,
-           source='collect-daily', updated_at=NOW()`,
+           source='collect-daily', updated_at=NOW()
+         WHERE predictions.result_over15 IS NULL
+           AND (predictions.match_date IS NULL OR predictions.match_date > NOW())`,
         [
           row.fixture_id, row.home_team_name, row.away_team_name, row.league_id, row.match_date,
           r2(lambdaHome), r2(lambdaAway), r2(lambdaHome + lambdaAway),

@@ -566,7 +566,9 @@ export default async function handler(req, res) {
           lambda_total = EXCLUDED.lambda_total, over15_prob = EXCLUDED.over15_prob,
           over25_prob = EXCLUDED.over25_prob, gg_prob = EXCLUDED.gg_prob,
           home_score_rate = EXCLUDED.home_score_rate, away_score_rate = EXCLUDED.away_score_rate,
-          h2h_over15 = EXCLUDED.h2h_over15`,
+          h2h_over15 = EXCLUDED.h2h_over15
+        WHERE predictions.result_over15 IS NULL
+          AND (predictions.match_date IS NULL OR predictions.match_date > NOW())`,
         [
           fixture.fixture?.id,
           fixture.teams?.home?.name || '',

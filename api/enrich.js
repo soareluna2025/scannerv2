@@ -2106,8 +2106,13 @@ export default async function handler(req, res) {
           }
         }
 
-        // Salveaza/actualizeaza predicția pre-meci — mereu ultima versiune (DO UPDATE)
-        // WHERE result_over15 IS NULL garanteaza ca nu suprascrie dupa ce meciul s-a jucat
+        // Salveaza/actualizeaza predicția pre-meci — ultima versiune ÎNAINTE de kickoff.
+        // ÎNGHEȚARE LA KICKOFF: DO UPDATE doar cât result_over15 IS NULL (nerezolvat) ȘI
+        // match_date > NOW() (kickoff în viitor). result_over15 singur NU ajungea — rămâne
+        // NULL de la creare până la update-results (02:00), deci un apel /api/enrich LIVE
+        // (modal meci live / re-enrich nocturn) suprascria over15_prob/confidence cu valori
+        // din meci → scurgere look-ahead în calibrare (măsurat: 19.8% predicții contaminate).
+        // match_date IS NULL → fallback la comportamentul vechi (nu regresăm rânduri fără dată).
         const apiHomePct = apiPred ? (parseFloat(apiPred.predictions?.percent?.home) || null) : null;
         const apiDrawPct = apiPred ? (parseFloat(apiPred.predictions?.percent?.draw) || null) : null;
         const apiAwayPct = apiPred ? (parseFloat(apiPred.predictions?.percent?.away) || null) : null;
@@ -2168,7 +2173,8 @@ export default async function handler(req, res) {
             elo_diff_ml=COALESCE(EXCLUDED.elo_diff_ml, predictions.elo_diff_ml),
             home_win_prob_elo=COALESCE(EXCLUDED.home_win_prob_elo, predictions.home_win_prob_elo),
             updated_at=NOW()
-          WHERE predictions.result_over15 IS NULL`,
+          WHERE predictions.result_over15 IS NULL
+            AND (predictions.match_date IS NULL OR predictions.match_date > NOW())`,
           [
             Number(fid), hn || '', an || '', lg || '', lgid ? Number(lgid) : null, dt || null,
             payload.lambdaHome, payload.lambdaAway, payload.lambdaTotal,
