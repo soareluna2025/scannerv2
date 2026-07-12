@@ -23,6 +23,10 @@ async function ensureColumns() {
   await query(`ALTER TABLE referee_stats ADD COLUMN IF NOT EXISTS avg_yellow_h1 NUMERIC(4,2)`).catch(() => {});
   await query(`ALTER TABLE referee_stats ADD COLUMN IF NOT EXISTS avg_yellow_h2 NUMERIC(4,2)`).catch(() => {});
   await query(`ALTER TABLE referee_stats ADD COLUMN IF NOT EXISTS card_bias_score NUMERIC(4,2)`).catch(() => {});
+  // Coloană DEDICATĂ acestui cron pentru gardul de prospețime. NU folosim `updated_at`
+  // fiindcă referee-stats (04:30, zilnic) o rescrie pe TOȚI arbitrii → toți par veșnic
+  // proaspeți → selecția extended pica la 0 (bug: 6695 așteaptă, 0 candidați).
+  await query(`ALTER TABLE referee_stats ADD COLUMN IF NOT EXISTS extended_updated_at TIMESTAMPTZ`).catch(() => {});
 }
 
 export default async function handler(req, res) {
@@ -31,8 +35,10 @@ export default async function handler(req, res) {
   try {
     await ensureColumns();
 
-    // 1. Home/Away/Draw win rates per referee din fixtures_history
-    // Doar arbitri neactualizati in ultimele 7 zile (evita loop infinit)
+    // 1. Home/Away/Draw win rates per referee din fixtures_history.
+    // Selecție: (a) întâi arbitrii NEUMPLUȚI (card_bias_score IS NULL) — umplere inițială;
+    // (b) apoi refresh pe cei umpluți, dar STALE pe coloana DEDICATĂ extended_updated_at
+    // (NU updated_at — aia e rescrisă zilnic de referee-stats → ar face selecția veșnic goală).
     const { rows: outcomes } = await query(`
       SELECT
         referee AS rname,
@@ -48,10 +54,18 @@ export default async function handler(req, res) {
         AND NOT EXISTS (
           SELECT 1 FROM referee_stats rs
           WHERE rs.referee_name = fixtures_history.referee
-            AND rs.updated_at > NOW() - INTERVAL '7 days'
+            AND rs.card_bias_score IS NOT NULL
+            AND rs.extended_updated_at > NOW() - INTERVAL '7 days'
         )
       GROUP BY referee
       HAVING COUNT(*) >= 5
+      ORDER BY
+        EXISTS (
+          SELECT 1 FROM referee_stats rs
+          WHERE rs.referee_name = fixtures_history.referee
+            AND rs.card_bias_score IS NOT NULL
+        ) ASC,                -- neumpluții (false) primii
+        COUNT(*) DESC         -- apoi cei cu cele mai multe meciuri
       LIMIT $1
     `, [limit]).catch((e) => {
       console.error('[ref-ext] outcomes query:', e.message);
@@ -122,8 +136,8 @@ export default async function handler(req, res) {
       const biasScore = +(homeWr - 45).toFixed(2);
 
       await query(`
-        INSERT INTO referee_stats (referee_name, total_matches, home_win_rate, away_win_rate, draw_rate, pct_over_3_5_cards, pct_over_4_5_cards, avg_yellow_h1, avg_yellow_h2, card_bias_score, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        INSERT INTO referee_stats (referee_name, total_matches, home_win_rate, away_win_rate, draw_rate, pct_over_3_5_cards, pct_over_4_5_cards, avg_yellow_h1, avg_yellow_h2, card_bias_score, updated_at, extended_updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
         ON CONFLICT (referee_name) DO UPDATE SET
           total_matches = GREATEST(referee_stats.total_matches, EXCLUDED.total_matches),
           home_win_rate = EXCLUDED.home_win_rate,
@@ -134,7 +148,8 @@ export default async function handler(req, res) {
           avg_yellow_h1 = EXCLUDED.avg_yellow_h1,
           avg_yellow_h2 = EXCLUDED.avg_yellow_h2,
           card_bias_score = EXCLUDED.card_bias_score,
-          updated_at = NOW()
+          updated_at = NOW(),
+          extended_updated_at = NOW()
       `, [o.rname, total, homeWr, awayWr, drawWr, pctO35, pctO45, avgYH1, avgYH2, biasScore]).catch(() => {});
       upserts++;
     }
@@ -152,7 +167,8 @@ export default async function handler(req, res) {
           AND NOT EXISTS (
             SELECT 1 FROM referee_stats rs
             WHERE rs.referee_name = fixtures_history.referee
-              AND rs.updated_at > NOW() - INTERVAL '7 days'
+              AND rs.card_bias_score IS NOT NULL
+              AND rs.extended_updated_at > NOW() - INTERVAL '7 days'
           )
         GROUP BY referee
         HAVING COUNT(*) >= 5
