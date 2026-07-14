@@ -39,7 +39,6 @@ NEW_CRONTAB=$(cat <<EOF
 */5 * * * * curl -sf -H "${HDR}" ${BASE}/api/cron/prematch-enrichment >> ${LOG} 2>&1
 */5 * * * * curl -sf -H "${HDR}" ${BASE}/api/cron/cazarma-router >> ${LOG} 2>&1
 30 0 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/auto-predict >> ${LOG} 2>&1
-0 3 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/build-ml-features >> ${LOG} 2>&1
 0 2 * * * curl -sf -H "${HDR}" ${BASE}/api/update-results >> ${LOG} 2>&1
 # PIT safety-net: fixture-urile noi terminate primesc pit_* (score7/6/confidence) în ml_features.
 # 02:30, DUPĂ update-results (02:00). Reluabil (doar pit_players_n IS NULL) → delta zilnic = secunde.
@@ -56,6 +55,11 @@ NEW_CRONTAB=$(cat <<EOF
 # yellow H1/H2, home/away/draw WR) din match_events. Sursă = DB/CPU, ZERO apeluri API →
 # limit generos (200) pt refresh săptămânal complet. 04:45, DUPĂ referee-stats (04:30).
 45 4 * * * curl -sf -H "${HDR}" "${BASE}/api/cron/referee-extended?limit=200" >> ${LOG} 2>&1
+# build-ml-features — materializează ml_features (driver = predictions NOT EXISTS ml_features,
+# INNER JOIN fixtures_history). DEPINDE de fixtures_history proaspăt: meciurile FT de ieri intră
+# în fixtures_history abia la referee-stats (04:30). Mutat de la 03:00 → 05:00 (DUPĂ referee-stats
+# 04:30, ÎNAINTE de train 05:30), altfel rula pe fixtures_history vechi → scria 0 rânduri.
+0 5 * * * curl -sf -H "${HDR}" ${BASE}/api/cron/build-ml-features >> ${LOG} 2>&1
 # Optimizare DB — VACUUM (ANALYZE) rapid pe tabelele mari, zilnic 04:45 (după backup 03:30, înainte de train 05:30).
 45 4 * * * curl -sf -H "${HDR}" "${BASE}/api/cron/optimize-db?mode=rapid" >> ${LOG} 2>&1
 30 3 * * * curl -sf --max-time 120 -H "${HDR}" ${BASE}/api/cron/collect-venues >> ${LOG} 2>&1
@@ -76,7 +80,7 @@ NEW_CRONTAB=$(cat <<EOF
 30 5 * * * cd ${APP_DIR} && set -a && . ${APP_DIR}/.env && set +a && node scripts/export-allowed-leagues.mjs && python3 ml/train_model.py >> ${APP_DIR}/ml/train.log 2>&1
 30 6 * * * cd /root/scannerv2 && node scripts/export-allowed-leagues.mjs && python3 -u ml/train_live_v2.py >> /root/.pm2/logs/train-live-v2.log 2>&1
 50 6 * * * cd /root/scannerv2 && node scripts/export-allowed-leagues.mjs && python3 -u ml/calibrate.py >> /root/scannerv2/logs/calibrate.log 2>&1 && python3 -u ml/gg_calibrate_isotonic.py >> /root/scannerv2/logs/gg-calibrate.log 2>&1
-# Ponturile Zilei → public/daily_picks.json (08:00, DUPĂ auto-predict 00:30 + build-ml-features 03:00 + calibrate 06:50).
+# Ponturile Zilei → public/daily_picks.json (08:00, DUPĂ auto-predict 00:30 + build-ml-features 05:00 + calibrate 06:50).
 */10 * * * * cd ${APP_DIR} && set -a && . ${APP_DIR}/.env && set +a && python3 ml/daily_picks.py --write >> ${APP_DIR}/logs/daily-picks.log 2>&1
 # Coeficienți UEFA de club → uefa_club_coefficients. Săptămânal vineri 07:00 (DUPĂ
 # rundele europene Marți/Miercuri/Joi). dotenv citește .env din cwd (cd ${APP_DIR}).
