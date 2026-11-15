@@ -7664,6 +7664,14 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   git checkout origin/main -- scripts/manual-deploy.sh && bash scripts/manual-deploy.sh
   Verificare: bash -n OK. ⚠ NErulat pe VPS.
 
+[15.11 07:00] - FEAT UI: simulator Polymarket in tab Simulator (comutator Perpetuals | Polymarket) | Commit: a25075a
+  Campuri: investitie USDC, pret cumparare/vanzare (cent), cursul zilei USDC->EUR (editabil).
+  Comision fix 5%: fee = actiuni x 5% x p x (1-p); cumparare retinut in actiuni, vanzare scazut
+  din incasare. Calcul local + localStorage (pm_state_v1), zero API/DB. Fisiere: index.html,
+  public/js/perp-sim.js, public/css/perp-sim.css. Verificare: node --check OK; 2500 USDC, 85c->
+  99.99999c, curs 0.892 = profit net 373,85 EUR, 16,76%, comisioane 18,75 USDC.
+  ⚠ NErulat live in browser. Constrangeri: NU am atins calcConfidence*/score1-7/Lambda/Monte Carlo.
+
 ═══════════════════════════════════════════════════════════════
 PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════
