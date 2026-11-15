@@ -23,6 +23,7 @@
 <link rel="stylesheet" href="/css/layout.css">
 <link rel="stylesheet" href="/css/cards.css">
 <link rel="stylesheet" href="/css/components.css">
+<link rel="stylesheet" href="/css/perp-sim.css">
 <!-- Strat DESKTOP — DOAR @media (min-width:1024px+); mobilul rămâne neatins. Load ultimul (override). -->
 <link rel="stylesheet" href="/css/desktop.css">
 </head>
@@ -138,6 +139,57 @@
   <div class="tab-content" id="tab-fav">
     <div id="fav-body">
       <div class="empty"><div class="empty-icon">⭐</div><div class="empty-t">Preferate</div><div class="empty-s">Apasă ⭐ pe orice meci pentru a-l salva</div></div>
+    </div>
+  </div>
+
+  <!-- TAB: SIMULATOR PERPETUALS -->
+  <div class="tab-content" id="tab-sim">
+    <div class="ps-card">
+      <div class="ps-title">Simulator Perpetuals</div>
+      <div class="ps-sub">Fiecare modificare recalculează instant. Valorile se păstrează pe acest telefon.</div>
+      <div class="ps-form">
+        <div><label class="ps-lbl" for="ps-capital">Capital USD</label><input class="ps-inp" id="ps-capital" type="text" inputmode="decimal" autocomplete="off"></div>
+        <div><label class="ps-lbl" for="ps-coin">Monedă</label><input class="ps-inp" id="ps-coin" type="text" autocomplete="off" autocapitalize="characters"></div>
+        <div class="ps-seg"><button type="button" id="ps-long" class="long on">LONG</button><button type="button" id="ps-short" class="short">SHORT</button></div>
+        <div>
+          <label class="ps-lbl" for="ps-lev">Levier</label>
+          <input class="ps-inp" id="ps-lev" type="text" inputmode="decimal" autocomplete="off">
+          <input class="ps-range" id="ps-range" type="range" min="1" max="100" step="1" aria-label="Levier">
+          <div class="ps-ticks"><span>1x</span><span>25x</span><span>50x</span><span>75x</span><span>100x</span></div>
+        </div>
+        <div class="ps-row2">
+          <div><label class="ps-lbl" for="ps-entry">Intrare USD</label><input class="ps-inp" id="ps-entry" type="text" inputmode="decimal" autocomplete="off"></div>
+          <div><label class="ps-lbl" for="ps-exit">Ieșire USD</label><input class="ps-inp" id="ps-exit" type="text" inputmode="decimal" autocomplete="off"></div>
+        </div>
+        <div class="ps-row2">
+          <div><label class="ps-lbl" for="ps-fee">Comision %</label><input class="ps-inp" id="ps-fee" type="text" inputmode="decimal" autocomplete="off"></div>
+          <div><label class="ps-lbl" for="ps-funding">Funding USD</label><input class="ps-inp" id="ps-funding" type="text" inputmode="decimal" autocomplete="off"></div>
+        </div>
+        <div><label class="ps-lbl" for="ps-mmr">Marjă mentenanță %</label><input class="ps-inp" id="ps-mmr" type="text" inputmode="decimal" autocomplete="off"></div>
+      </div>
+    </div>
+    <div class="ps-card">
+      <div class="ps-panel">
+        <div class="ps-eye">Valoarea poziției</div>
+        <div class="ps-big" id="ps-o-notional">–</div>
+        <div class="ps-line"><span>Cantitate</span><span id="ps-o-qty">–</span></div>
+        <div class="ps-line"><span>Profit brut</span><span id="ps-o-gross">–</span></div>
+        <div class="ps-line"><span>Comisioane totale</span><span id="ps-o-fees">–</span></div>
+        <div class="ps-line"><span>Funding</span><span id="ps-o-funding">–</span></div>
+        <hr class="ps-hr">
+        <div class="ps-eye">Profit / pierdere netă</div>
+        <div class="ps-big" id="ps-o-net">–</div>
+        <div class="ps-roi" id="ps-o-roi">–</div>
+        <div class="ps-line"><span>Capital final</span><span id="ps-o-final">–</span></div>
+        <hr class="ps-hr">
+        <div class="ps-line"><span>Lichidare aproximativă</span><span id="ps-o-liq">–</span></div>
+      </div>
+      <div class="ps-alert" id="ps-alert" style="display:none"></div>
+      <div class="ps-btns">
+        <button type="button" class="ps-btn pri" id="ps-copy">Copiază calculul</button>
+        <button type="button" class="ps-btn" id="ps-reset">Resetare manuală</button>
+      </div>
+      <div class="ps-note">Formule simplificate: lichidarea folosește marja de mentenanță introdusă și ignoră taxele de lichidare ale bursei. Rezultatele sunt orientative.</div>
     </div>
   </div>
 
@@ -443,9 +495,14 @@
     <span class="nav-icon">⚡</span>
     <span class="nav-label">Generează</span>
   </button>
+  <button class="nav-btn" id="nav-sim" onclick="setTab('sim')">
+    <span class="nav-icon">📈</span>
+    <span class="nav-label">Simulator</span>
+  </button>
 </nav>
 <script src="/js/app-state.js"></script>
 <script src="/js/app-ui.js"></script>
 <script src="/js/app-live.js"></script>
+<script src="/js/perp-sim.js"></script>
 </body>
 </html>

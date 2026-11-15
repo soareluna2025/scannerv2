@@ -1,0 +1,36 @@
+/* AlohaScan — Simulator Perpetuals (tab „Simulator")
+   Stiluri izolate sub #tab-sim; folosește variabilele din variables.css. */
+
+#tab-sim .ps-card{background:var(--sur);border:1px solid var(--bor);border-radius:16px;padding:14px;margin-bottom:12px}
+#tab-sim .ps-title{font-size:16px;font-weight:800;color:var(--tx)}
+#tab-sim .ps-sub{font-size:11px;color:var(--mu);margin:3px 0 12px}
+#tab-sim .ps-form{display:flex;flex-direction:column;gap:12px}
+#tab-sim .ps-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#tab-sim .ps-lbl{display:block;font-size:11px;color:var(--mu);margin-bottom:5px}
+#tab-sim .ps-inp{width:100%;min-width:0;background:var(--sur2);border:1px solid var(--bor);border-radius:12px;
+  color:var(--tx);font-size:15px;font-weight:600;padding:11px 12px;font-variant-numeric:tabular-nums;outline:none}
+#tab-sim .ps-inp:focus{border-color:var(--ac)}
+#tab-sim .ps-seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--sur2);border-radius:12px;padding:4px}
+#tab-sim .ps-seg button{border:0;background:transparent;color:var(--mu);font-size:13px;font-weight:800;
+  letter-spacing:.5px;padding:10px;border-radius:9px;cursor:pointer}
+#tab-sim .ps-seg button.on.long{background:var(--sur3);color:var(--green)}
+#tab-sim .ps-seg button.on.short{background:var(--sur3);color:var(--red)}
+#tab-sim .ps-range{width:100%;accent-color:var(--ac);margin-top:8px}
+#tab-sim .ps-ticks{display:flex;justify-content:space-between;font-size:10px;color:var(--mu)}
+#tab-sim .ps-panel{background:var(--sur2);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+#tab-sim .ps-eye{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--mu)}
+#tab-sim .ps-big{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:var(--tx)}
+#tab-sim .ps-line{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px}
+#tab-sim .ps-line span:first-child{color:var(--mu)}
+#tab-sim .ps-line span:last-child{font-weight:700;font-variant-numeric:tabular-nums;text-align:right;overflow-wrap:anywhere;color:var(--tx)}
+#tab-sim .ps-hr{border:0;border-top:1px solid var(--bor);width:100%}
+#tab-sim .ps-roi{font-size:18px;font-weight:800}
+#tab-sim .pos{color:var(--green)}
+#tab-sim .neg{color:var(--red)}
+#tab-sim .ps-alert{background:rgba(255,77,109,.12);border:1px solid rgba(255,77,109,.3);color:var(--red);
+  border-radius:12px;padding:10px 12px;font-size:12px;font-weight:700;margin-top:10px}
+#tab-sim .ps-btns{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+#tab-sim .ps-btn{border-radius:999px;padding:13px;font-size:13px;font-weight:800;cursor:pointer;
+  border:1px solid var(--bor);background:transparent;color:var(--tx)}
+#tab-sim .ps-btn.pri{background:var(--ac);border-color:var(--ac);color:#000}
+#tab-sim .ps-note{font-size:10.5px;color:var(--mu);margin-top:10px;line-height:1.4}

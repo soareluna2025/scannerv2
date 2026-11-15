@@ -283,7 +283,7 @@ function navBack(){
 // ── TABS ─────────────────────────────────────────────────────
 function setTab(t){
   _navStack.length=0;   // schimbare tab principal → reset stack navigare
-  ['live','pre','agent','fav'].forEach(function(x){
+  ['live','pre','agent','fav','sim'].forEach(function(x){
     document.getElementById('tab-'+x).classList.toggle('active',x===t);
     var nb=document.getElementById('nav-'+x);
     if(nb)nb.classList.toggle('active',x===t);
@@ -302,6 +302,7 @@ function setTab(t){
   if(t==='fav'){
     renderFavs();
   }
+  if(t==='sim' && typeof psInit==='function')psInit();   // Simulator Perpetuals (public/js/perp-sim.js)
   if (t === 'pre' && _pmMatches.length === 0) {
     // Bug fix: dacă userul a navigat pe altă zi în date picker (PM_DATE !== today),
     // NU forța loadPM() — ar suprascrie view-ul istoric/viitor cu meciurile de azi.
@@ -993,7 +994,7 @@ function _ptrContext(){
   return {el:document.getElementById('page'), refresh:refreshCurrentPage};
 }
 function _ptrActiveTab(){
-  var tabs=['live','pre','agent','fav'];
+  var tabs=['live','pre','agent','fav','sim'];
   for(var i=0;i<tabs.length;i++){
     var nb=document.getElementById('nav-'+tabs[i]);
     if(nb&&nb.classList.contains('active'))return tabs[i];
@@ -1006,6 +1007,7 @@ function refreshCurrentPage(){
   else if(t==='pre'&&typeof loadPM==='function')loadPM();
   else if(t==='fav'&&typeof renderFavs==='function')renderFavs();
   else if(t==='agent'){ if(typeof agUpdateStats==='function')agUpdateStats(); }
+  else if(t==='sim'){ /* calcul local — pull-to-refresh nu reîncarcă pagina */ }
   else window.location.reload();
 }
 function showPullSpinner(dy){
