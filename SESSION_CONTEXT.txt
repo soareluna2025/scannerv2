@@ -7646,6 +7646,16 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   in scripts/, commit+push, userul le ruleaza one-liner (git pull && bash scripts/x.sh).
   Comenzile rulate de Code in propriul shell NU sunt afectate. Pe branch claude/ola-czusgf.
 
+[15.11 06:40] - FEAT UI: tab „Simulator" (Perpetuals) in bara de jos | Commit: b29f453
+  Tab nou nav-sim + #tab-sim in index.html; fisiere noi public/js/perp-sim.js si
+  public/css/perp-sim.css. Calculator long/short (capital, levier, intrare/iesire, comision,
+  funding, marja mentenanta -> valoare pozitie, profit net, ROI, lichidare). Calcul local in
+  browser + localStorage, zero apeluri API/DB. setTab/_ptrActiveTab/refreshCurrentPage
+  (app-state.js) cunosc tab-ul sim. service-worker.js CACHE_NAME v2->v3 (cache-first).
+  Verificare: node --check OK; rulare calc cu valorile default = 15.000 USD pozitie,
+  profit net 10.364,42 USD, ROI 207,29%, lichidare 4,37 USD. ⚠ NErulat live in browser.
+  Constrangeri: NU am atins calcConfidence*/score1-7/score4/Lambda/Monte Carlo.
+
 ═══════════════════════════════════════════════════════════════
 PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════
