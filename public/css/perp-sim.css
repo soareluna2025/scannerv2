@@ -15,6 +15,7 @@
   letter-spacing:.5px;padding:10px;border-radius:9px;cursor:pointer}
 #tab-sim .ps-seg button.on.long{background:var(--sur3);color:var(--green)}
 #tab-sim .ps-seg button.on.short{background:var(--sur3);color:var(--red)}
+#tab-sim .ps-seg.ps-mode button.on{background:var(--sur3);color:var(--ac)}
 #tab-sim .ps-range{width:100%;accent-color:var(--ac);margin-top:8px}
 #tab-sim .ps-ticks{display:flex;justify-content:space-between;font-size:10px;color:var(--mu)}
 #tab-sim .ps-panel{background:var(--sur2);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}

@@ -85,6 +85,75 @@
     else fb();
   }
 
+  // ── Polymarket ───────────────────────────────────────────────
+  // fee = acțiuni × rată × p × (1−p); la cumpărare reținut în acțiuni, la vânzare scăzut din încasare.
+  var PM_FEE=0.05;
+  var PM_DEF={inv:'2500',buy:'85',sell:'99.99999',fx:'0.892'};
+  var PM_KEY='pm_state_v1';
+  var PM_IDS=['inv','buy','sell','fx'];
+  var pm=Object.assign({},PM_DEF);
+  var f4=fmt(4);
+  function eur(v){return f2.format(v)+' €';}
+  function usdc(v){return f2.format(v)+' USDC';}
+
+  function pmCalc(){
+    var inv=num(pm.inv),b=num(pm.buy)/100,s=num(pm.sell)/100,fx=num(pm.fx);
+    var shares0=b>0?inv/b:0;
+    var feeBuy=shares0*PM_FEE*b*(1-b);               // USDC
+    var shares1=b>0?shares0-feeBuy/b:0;
+    var gross=shares1*s;
+    var feeSell=shares1*PM_FEE*s*(1-s);              // USDC
+    var fin=gross-feeSell;
+    var profit=fin-inv;
+    return {inv:inv,fx:fx,shares0:shares0,shares1:shares1,feeBuy:feeBuy,feeSell:feeSell,
+            fees:feeBuy+feeSell,gross:gross,fin:fin,profit:profit,roi:inv>0?profit/inv*100:0};
+  }
+
+  function pmRender(){
+    var r=pmCalc();
+    $('pm-o-feebuy').textContent=usdc(r.feeBuy);
+    $('pm-o-feesell').textContent=usdc(r.feeSell);
+    $('pm-o-fees').textContent=usdc(r.fees);
+    var pe=r.profit*r.fx;
+    $('pm-o-profit-eur').textContent=(pe>0?'+':'')+eur(pe);
+    $('pm-o-roi').textContent=(r.roi>0?'+':'')+f2.format(r.roi)+'% randament net';
+    var c=r.profit>=0?'pos':'neg';
+    $('pm-o-profit-eur').className='ps-big '+c;
+    $('pm-o-roi').className='ps-roi '+c;
+    $('pm-d-shares0').textContent=f4.format(r.shares0);
+    $('pm-d-shares1').textContent=f4.format(r.shares1);
+    $('pm-d-gross').textContent=usdc(r.gross);
+    $('pm-d-final').textContent=usdc(r.fin);
+    $('pm-d-final-eur').textContent=eur(r.fin*r.fx);
+    $('pm-d-profit').textContent=usdc(r.profit);
+    $('pm-d-fees-eur').textContent=eur(r.fees*r.fx);
+    try{localStorage.setItem(PM_KEY,JSON.stringify(pm));}catch(e){}
+  }
+
+  function pmFill(){PM_IDS.forEach(function(id){$('pm-'+id).value=pm[id];});}
+
+  function setMode(m){
+    var poly=m==='poly';
+    $('ps-view-perp').style.display=poly?'none':'';
+    $('ps-view-poly').style.display=poly?'':'none';
+    $('ps-mode-perp').className=poly?'':'on';
+    $('ps-mode-poly').className=poly?'on':'';
+    try{localStorage.setItem('ps_mode',m);}catch(e){}
+  }
+
+  function pmInit(){
+    try{var s=JSON.parse(localStorage.getItem(PM_KEY)||'null');if(s)pm=Object.assign(pm,s);}catch(e){}
+    PM_IDS.forEach(function(id){
+      $('pm-'+id).addEventListener('input',function(){pm[id]=$('pm-'+id).value;pmRender();});
+    });
+    $('pm-reset').addEventListener('click',function(){pm=Object.assign({},PM_DEF);pmFill();pmRender();});
+    $('ps-mode-perp').addEventListener('click',function(){setMode('perp');});
+    $('ps-mode-poly').addEventListener('click',function(){setMode('poly');});
+    pmFill();pmRender();
+    var m='perp';try{m=localStorage.getItem('ps_mode')||'perp';}catch(e){}
+    setMode(m==='poly'?'poly':'perp');
+  }
+
   // Apelat din setTab('sim'); leagă evenimentele o singură dată.
   window.psInit=function(){
     if(inited){render();return;}
@@ -99,5 +168,6 @@
     $('ps-reset').addEventListener('click',function(){st=Object.assign({},DEF);fill();render();});
     $('ps-copy').addEventListener('click',copy);
     fill();render();
+    pmInit();
   };
 })();
