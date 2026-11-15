@@ -122,6 +122,7 @@ export default async function handler(req, res) {
 
       const allowed = raw.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
       log(`[Filter] ${raw.length} meciuri → ${allowed.length} după filtrare (db)`);
+      try { const _pm = await query("SELECT fixture_id, slug FROM polymarket_links WHERE fixture_id = ANY($1)", [allowed.map(m => m.fixture.id)]); const _pmm = Object.fromEntries(_pm.rows.map(r => [r.fixture_id, r.slug])); allowed.forEach(m => { if (_pmm[m.fixture.id]) m.polymarket_slug = _pmm[m.fixture.id]; }); } catch (e) { log("polymarket_links: " + e.message); }
 
       return res.status(200).json({
         response: allowed.sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date)),
