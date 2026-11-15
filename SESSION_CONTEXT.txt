@@ -7656,6 +7656,14 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   profit net 10.364,42 USD, ROI 207,29%, lichidare 4,37 USD. ⚠ NErulat live in browser.
   Constrangeri: NU am atins calcConfidence*/score1-7/score4/Lambda/Monte Carlo.
 
+[15.11 06:50] - SCRIPT: scripts/manual-deploy.sh (deploy manual cand Actions pica pe SSH) | Commit: 272ff75
+  Deploy Actions a picat 15.11 (ssh: unable to authenticate, metoda password) — cauza
+  secret VPS_PASSWORD/VPS_IP sau sshd; ultimul deploy OK: 14.07. Script nou = pasii de cod din
+  deploy.yml (backup ML, reset --hard origin/main, restore, npm install, pm2 restart, health).
+  NU scrie .env, NU atinge crontab. Rulare: cd /root/scannerv2 && git fetch origin &&
+  git checkout origin/main -- scripts/manual-deploy.sh && bash scripts/manual-deploy.sh
+  Verificare: bash -n OK. ⚠ NErulat pe VPS.
+
 ═══════════════════════════════════════════════════════════════
 PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════
