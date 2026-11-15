@@ -85,6 +85,7 @@ NEW_CRONTAB=$(cat <<EOF
 # Coeficienți UEFA de club → uefa_club_coefficients. Săptămânal vineri 07:00 (DUPĂ
 # rundele europene Marți/Miercuri/Joi). dotenv citește .env din cwd (cd ${APP_DIR}).
 0 7 * * 5 cd ${APP_DIR} && node scripts/fetch-uefa-coefficients.js >> ${APP_DIR}/logs/uefa-coef.log 2>&1
+*/30 * * * * cd ${APP_DIR} && /snap/bin/node --env-file=${APP_DIR}/.env api/cron/polymarket-sync.js >> ${APP_DIR}/logs/polymarket-sync.log 2>&1
 EOF
 )
 

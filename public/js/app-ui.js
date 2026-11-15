@@ -789,6 +789,7 @@ function renderPM(){
     var _pmcc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
     var o='';
     o+='<div class="pm-card" onclick="mdOpen('+fid+','+hid+','+aid+',this)" style="cursor:pointer;position:relative">';
+    if(m.polymarket_slug)o+='<a href="https://polym.trade/event/'+encodeURIComponent(m.polymarket_slug)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="position:absolute;top:8px;right:8px;z-index:5;display:flex;align-items:center;gap:4px;padding:3px 7px;border-radius:8px;background:#1e40af;text-decoration:none;color:#fff;font-size:10px;font-weight:700;line-height:1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"><path d="M4 5l16-2v8L4 13zM4 13l16-2v8L4 21z"/></svg>Polymarket<svg width="10" height="10" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#22c55e"/><path d="M6.5 12.5l3.5 3.5 7.5-8" fill="none" stroke="#fff" stroke-width="3"/></svg></a>';
     o+='<div class="pm-header">';
     o+='<div class="pm-kickoff"><button class="star-btn'+(isFav(fid)?' active':'')+'" onclick="event.stopPropagation();toggleFavPM('+fid+',this)">'+(isFav(fid)?'⭐':'☆')+'</button>'+flag+lg+' · '+matchStatusLabel(m)+'</div>';
     o+=mrRow(
@@ -4002,3 +4003,17 @@ function wcShowMatchDetail(fid){
 }
 function wcCloseMatchDetail(){ var ov=document.getElementById('wc-match-modal'); if(ov)ov.classList.remove('open'); }
 
+// PM-POLY-REFRESH: la 30 min actualizeaza insignele Polymarket pe cartonasele PRE-MECI (usor, fara reload complet)
+setInterval(function(){
+  try{
+    if(document.hidden||typeof _pmMatches==='undefined'||!_pmMatches||!_pmMatches.length)return;
+    fetch('/api/today').then(function(r){return r.json();}).then(function(d){
+      var raw=Array.isArray(d.response)?d.response:[];
+      var mp={};
+      raw.forEach(function(m){if(m&&m.polymarket_slug&&m.fixture)mp[m.fixture.id]=m.polymarket_slug;});
+      var ch=false;
+      _pmMatches.forEach(function(m){var sl=mp[m.fixture&&m.fixture.id];if(sl&&m.polymarket_slug!==sl){m.polymarket_slug=sl;ch=true;}});
+      if(ch&&typeof renderPM==='function')renderPM();
+    }).catch(function(){});
+  }catch(e){}
+},30*60*1000);
