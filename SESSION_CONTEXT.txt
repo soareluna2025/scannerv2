@@ -7672,6 +7672,14 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   99.99999c, curs 0.892 = profit net 373,85 EUR, 16,76%, comisioane 18,75 USDC.
   ⚠ NErulat live in browser. Constrangeri: NU am atins calcConfidence*/score1-7/Lambda/Monte Carlo.
 
+[15.11 07:15] - DIAG: Ponturile Zilei goale (banda rosie) — ml/diag_picks.py | Commit: 225e711
+  Observat pe VPS 15.11 06:40: daily_picks.json = {"picks": []}, cron */10 OK (log "Scris 0 ponturi"),
+  predictions in urmatoarele 24h = 112 (07:00 15.11 -> 01:10 16.11 UTC). Deci NU e crash/lipsa
+  predictii: niciun meci nu trece filtrul zona (liga x banda lambda): N>=200 SI R>=0.70.
+  daily_picks.json NU e in git (reset --hard nu-l atinge). Script nou read-only ml/diag_picks.py
+  arata per meci N/R si ce prag blocheaza. NU am modificat daily_picks.py/praguri.
+  Verificare: py_compile OK + test pe date sintetice. ⚠ NErulat pe VPS la momentul commit-ului.
+
 ═══════════════════════════════════════════════════════════════
 PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════
