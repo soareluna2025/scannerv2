@@ -59,6 +59,7 @@ g("cp-reset").addEventListener("click",function(){st=Object.assign({},DEF);fill(
 b.addEventListener("click",function(){showCp(true);try{localStorage.setItem("ps_mode","cp");}catch(e){}});
 g("ps-mode-perp").addEventListener("click",function(){showCp(false);});g("ps-mode-poly").addEventListener("click",function(){showCp(false);});
 render();if(m==="cp"){showCp(true);try{localStorage.setItem("ps_mode","cp");}catch(e){}}}
+window.cpApi={calc:calc,state:function(){return st;}};
 var orig=window.psInit;
 window.psInit=function(){var m="";try{m=localStorage.getItem("ps_mode")||"";}catch(e){}if(typeof orig==="function")orig.apply(this,arguments);try{cpInit(m);}catch(e){if(window.console)console.error("compus-sim",e);}};
 })();

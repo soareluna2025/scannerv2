@@ -1,0 +1,24 @@
+/* AlohaScan - Calendar Compus: completeaza perp-sim.css si compus-sim.css, nu le modifica */
+#tab-sim .cc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+#tab-sim .cc-fold{border:0;background:transparent;color:var(--mu);font-size:18px;padding:2px 6px;cursor:pointer}
+#tab-sim .cc-nav{display:flex;align-items:center;justify-content:space-between;margin:4px 0 10px}
+#tab-sim .cc-mn{font-size:20px;font-weight:800;color:var(--tx)}
+#tab-sim .cc-yr{font-size:14px;font-weight:600;color:var(--mu);margin-left:8px}
+#tab-sim .cc-btns{display:flex;align-items:center;gap:6px}
+#tab-sim .cc-b{border:1px solid var(--bor);background:transparent;color:var(--tx);border-radius:999px;padding:6px 11px;font-size:13px;font-weight:700;cursor:pointer}
+#tab-sim .cc-wd,#tab-sim .cc-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
+#tab-sim .cc-wd span{text-align:center;font-size:11px;font-weight:700;color:var(--mu);margin-bottom:4px}
+#tab-sim .cc-grid{border-top:1px solid var(--bor);padding-top:4px}
+#tab-sim .cc-d{display:flex;flex-direction:column;align-items:center;gap:4px;height:60px;padding:6px 0 0;border-radius:10px;background:transparent;border:1px solid transparent;color:var(--tx);cursor:pointer}
+#tab-sim .cc-d.sel{background:rgba(59,130,246,.16);border-color:var(--blue,#3b82f6)}
+#tab-sim .cc-d.tg{border-color:var(--green)}
+#tab-sim .cc-n{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+#tab-sim .cc-d.we .cc-n{color:var(--mu)}
+#tab-sim .cc-d.td .cc-n{background:var(--tx);color:var(--sur)}
+#tab-sim .cc-bars{display:flex;flex-direction:column;gap:3px;width:62%;margin-top:2px}
+#tab-sim .cc-bars i{display:block;height:4px;border-radius:2px;background:var(--mu);opacity:.35}
+#tab-sim .cc-leg{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font-size:11px;color:var(--mu)}
+#tab-sim .cc-dh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+#tab-sim .cc-dt{font-size:15px;font-weight:800;color:var(--tx)}
+#tab-sim .cc-dc{font-size:12px;color:var(--mu)}
+#tab-sim .cc-slot{border:1px dashed var(--bor);border-radius:12px;padding:12px;margin-top:8px;font-size:13px;color:var(--mu)}
