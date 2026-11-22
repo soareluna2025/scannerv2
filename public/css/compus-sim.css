@@ -1,0 +1,5 @@
+/* AlohaScan — Simulator Compus: completeaza perp-sim.css, nu il modifica */
+#tab-sim .ps-seg.ps-mode.cp-3{grid-template-columns:1fr 1fr 1fr}
+#tab-sim .ps-seg.ps-mode.cp-3 button{padding:10px 4px}
+#tab-sim .cp-chk{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx);cursor:pointer}
+#tab-sim .cp-chk input{width:20px;height:20px;accent-color:var(--ac);flex:0 0 auto}
