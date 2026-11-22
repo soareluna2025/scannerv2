@@ -91,7 +91,7 @@ import { logCronRun, ensureCronLogColumns } from './api/utils/cron-log.js';
 // UI — fișierele șterse) + elo, monte-carlo, match-momentum (fără apel HTTP; fișierele
 // rămân, importate direct de simulate.js).
 const apiFiles = [
-  'football', 'today', 'enrich', 'match',
+  'football', 'today', 'enrich', 'match', 'polymarket-links',
   'agent', 'update-results', 'health-check', 'simulate', 'generator',
   'standings-data', 'venue-weather', 'learning-leagues',
   'calibration', 'matches-history', 'model-accuracy', 'team', 'worldcup', 'worldcup-qualifiers'
