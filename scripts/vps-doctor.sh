@@ -32,7 +32,7 @@ else
   echo "FIȘIERUL LIPSEȘTE"
 fi
 echo "--- logs/daily-picks.log (ultimele 3) ---"
-tail -3 logs/daily-picks.log 2>/dev/null || echo "(fără log)"
+tail -3 logs/daily-picks.log 2>/dev/null | cut -c1-200 || echo "(fără log)"
 
 hr "DB (fixtures / predictions)"
 if [ -n "${POSTGRES_URL:-}" ]; then
@@ -45,13 +45,22 @@ else
   echo "POSTGRES_URL lipsește din .env"
 fi
 
+hr "TEST DIRECT: ponturi + calendar (ce vede aplicația)"
+echo "GET /daily_picks.json -> HTTP $(curl -s -o /tmp/dp.json -w '%{http_code}' -m 8 localhost:3000/daily_picks.json) | $(head -c 160 /tmp/dp.json)"
+for d in "$(date +%F)" "$(date -d '+1 day' +%F)" "$(date -d '-1 day' +%F)"; do
+  curl -s -m 15 "localhost:3000/api/matches-history?date=$d" -o /tmp/mh.json -w "calendar $d -> HTTP %{http_code} | " ; python3 -c "import json;d=json.load(open('/tmp/mh.json'));g=d.get('groups',[]);print('ok=',d.get('ok'),'ligi=',len(g),'meciuri=',sum(len(x.get('matches',[])) for x in g),'err=',d.get('error'))" 2>&1 | cut -c1-160
+done
+
+hr "DE CE E GOALĂ BANDA (diag_picks, primele 30 linii)"
+python3 ml/diag_picks.py 2>&1 | head -30 | cut -c1-180
+
 hr "CRON"
 echo "linii active în crontab: $(crontab -l 2>/dev/null | grep -vcE '^\s*#|^\s*$')"
 crontab -l 2>/dev/null | grep -E 'daily_picks|auto-predict|collect-daily|auto-deploy|watchdog' | cut -c1-110
 echo "--- logs/cron.log (ultimele 5) ---"
-tail -5 logs/cron.log 2>/dev/null || echo "(fără log)"
+tail -c 600 logs/cron.log 2>/dev/null | cut -c1-300; echo; echo "(cron.log modificat: $(stat -c %y logs/cron.log 2>/dev/null | cut -c1-19))"
 echo "--- logs/auto-deploy.log (ultimele 5) ---"
-tail -5 logs/auto-deploy.log 2>/dev/null || echo "(fără log)"
+tail -5 logs/auto-deploy.log 2>/dev/null | cut -c1-200 || echo "(fără log)"
 
 hr "SSH (setări relevante pentru GitHub Actions)"
 sshd -T 2>/dev/null | grep -Ei '^(permitrootlogin|passwordauthentication|pubkeyauthentication) ' || echo "(nu pot citi sshd -T)"
@@ -62,6 +71,6 @@ df -h / | tail -1
 free -m | head -2
 
 hr "ULTIMELE ERORI PM2"
-pm2 logs alohascan --nostream --lines 12 --err 2>&1 | tail -16
+pm2 logs alohascan --nostream --lines 12 --err 2>&1 | tail -16 | cut -c1-200
 echo
 echo "Doctor complet: $(date)"
