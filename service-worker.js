@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alohascan-v3';
+const CACHE_NAME = 'alohascan-v4'; // bump: index.html are fisiere noi (cal-events.js, pick-cal.css) — SW e cache-first
 
 // External API hostnames — never intercept these
 const BYPASS_HOSTS = [

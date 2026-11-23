@@ -19,14 +19,22 @@ if(dow===0||dow===6)cl+=" we";
 if(vy===ty&&vm===tm&&d===tdd)cl+=" td";
 if(sel&&sel.y===vy&&sel.m===vm&&sel.d===d)cl+=" sel";
 if(tg&&tg.getFullYear()===vy&&tg.getMonth()===vm&&tg.getDate()===d)cl+=" tg";
-for(var j=0;j<n;j++){b+="<i></i>";}
+var ev=window.calEv?window.calEv.onDay(vy,vm,d):[],tot=Math.max(n,ev.length);
+for(var j=0;j<tot;j++){b+=j<ev.length?'<i class="on"></i>':"<i></i>";}
 h+=`<button type="button" class="${cl}" data-d="${d}"><span class="cc-n">${d}</span><span class="cc-bars">${b}</span></button>`;
 }
 g("cc-grid").innerHTML=h;}
-function renderDay(p){var el=g("cc-day");if(!sel||!p){el.innerHTML="";return;}var dt=new Date(sel.y,sel.m,sel.d),n=slotsFor(dt.getDay(),p.wk,p.we);
-var h=`<div class="cc-dh"><span class="cc-dt">${DN[dt.getDay()]}, ${sel.d} ${MS[sel.m]} ${sel.y}</span><span class="cc-dc">0 / ${n} evenimente</span></div>`;
-for(var j=1;j<=n;j++){h+=`<div class="cc-slot">Loc ${j} \u00b7 eveniment liber</div>`;}
-if(n===0)h+=`<div class="cc-slot">Zi fără evenimente planificate</div>`;
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function evRow(e){
+var t=new Date(e.kickoff),hh=("0"+t.getHours()).slice(-2)+":"+("0"+t.getMinutes()).slice(-2),pct=e.p_cal!=null?Math.round(e.p_cal*100):null,
+pm=e.slug?`<a class="cc-pm" href="https://polym.trade/event/${encodeURIComponent(e.slug)}" target="_blank" rel="noopener">Polymarket</a>`:"",
+lg=[e.league_name,e.country].filter(Boolean).map(esc).join(" · "),cf=e.confidence!=null?Math.round(e.confidence)+"%":"—";
+return `<div class="cc-ev" data-fid="${e.fixture_id}"><div class="cc-evh"><span class="cc-evt">${hh}</span><span class="cc-evm">${esc(e.home)} vs ${esc(e.away)}</span>${pm}</div><div class="cc-evk">${esc(e.market)}${pct!=null?" · "+pct+"%":""}</div><div class="cc-evd" hidden>${lg?`<div>${lg}</div>`:""}<div>Încredere: ${cf}</div></div></div>`;}
+function renderDay(p){var el=g("cc-day");if(!sel||!p){el.innerHTML="";return;}var dt=new Date(sel.y,sel.m,sel.d),n=slotsFor(dt.getDay(),p.wk,p.we),ev=window.calEv?window.calEv.onDay(sel.y,sel.m,sel.d):[];
+var h=`<div class="cc-dh"><span class="cc-dt">${DN[dt.getDay()]}, ${sel.d} ${MS[sel.m]} ${sel.y}</span><span class="cc-dc">${ev.length} / ${n} evenimente</span></div>`;
+ev.forEach(function(e){h+=evRow(e);});
+for(var j=ev.length+1;j<=n;j++){h+=`<div class="cc-slot">Loc ${j} \u00b7 eveniment liber</div>`;}
+if(n===0&&!ev.length)h+=`<div class="cc-slot">Zi fără evenimente planificate</div>`;
 h+=`<div class="ps-note">Locurile urmează planificarea din Compus și se actualizează când o schimbi. Simulare teoretică.</div>`;
 el.innerHTML=h;}
 function refresh(){var p=null;try{p=getPlan();}catch(e){}renderInfo(p);renderGrid(p);renderDay(p);}
@@ -39,6 +47,8 @@ g("cc-grid").addEventListener("click",function(e){var b=e.target.closest("button
 g("cc-prev").addEventListener("click",function(){vm--;if(vm<0){vm=11;vy--;}refresh();});
 g("cc-next").addEventListener("click",function(){vm++;if(vm>11){vm=0;vy++;}refresh();});
 g("cc-today").addEventListener("click",function(){var t=new Date();vy=t.getFullYear();vm=t.getMonth();sel={y:vy,m:vm,d:t.getDate()};refresh();});
+g("cc-day").addEventListener("click",function(e){if(e.target.closest("a"))return;var r=e.target.closest(".cc-ev");if(!r)return;var d=r.querySelector(".cc-evd");if(d)d.hidden=!d.hidden;});
+window.ccRefresh=refresh;if(window.calEv)window.calEv.load();
 var fo=false;g("cc-fold").addEventListener("click",function(){fo=!fo;g("cc-body").style.display=fo?"none":"";this.textContent=fo?"\u25B8":"\u25BE";});
 ["input","change","click"].forEach(function(t){host.addEventListener(t,function(e){if(e.target.closest&&e.target.closest("#cc-wrap"))return;refresh();});});
 refresh();}

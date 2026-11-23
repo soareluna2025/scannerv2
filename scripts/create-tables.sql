@@ -1186,6 +1186,26 @@ CREATE TABLE IF NOT EXISTS uefa_club_coefficients (
 );
 CREATE INDEX IF NOT EXISTS idx_uefa_coef_team ON uefa_club_coefficients (team_id) WHERE team_id IS NOT NULL;
 
+-- ── calendar_events ──────────────────────────────────────────────
+-- Evenimente trimise din Ponturi in calendarul Compus (api/calendar-events.js).
+-- Un singur eveniment per meci (PK fixture_id) = o singura piata per meci. Se creeaza si
+-- automat la prima cerere (CREATE TABLE IF NOT EXISTS in handler).
+CREATE TABLE IF NOT EXISTS calendar_events (
+    fixture_id   BIGINT PRIMARY KEY,
+    kickoff      TIMESTAMPTZ NOT NULL,
+    home         TEXT NOT NULL,
+    away         TEXT NOT NULL,
+    home_id      INTEGER,
+    away_id      INTEGER,
+    league_name  TEXT,
+    country      TEXT,
+    market       TEXT NOT NULL,
+    p_cal        NUMERIC,
+    confidence   NUMERIC,
+    slug         TEXT,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ================================================================
 --  VERIFICARE
 -- ================================================================

@@ -192,14 +192,19 @@ function dpRenderPage(){
     var lgName=p.league_name?_dpEsc(p.league_name):'';
     var ctry=p.country?(' · '+_dpEsc(p.country)):'';
     var lgRow=lgName?('<div class="dp-league">'+flagHtml(p.flag, p.country)+lgName+ctry+'</div>'):'';
+    var _pcSent=!!(window.calEv&&calEv.sent(p.fixture_id));   // trimis în calendar → cartonaș verde
+    var _pcCls='wc-pont'+(_pcSent?' pc-sent':'');
     out+=_dpCanOpen(p)
-      ? '<div class="wc-pont" onclick="dpMatch('+p.fixture_id+')" style="cursor:pointer">'
-      : '<div class="wc-pont">';
+      ? '<div class="'+_pcCls+'" onclick="dpMatch('+p.fixture_id+')" style="cursor:pointer">'
+      : '<div class="'+_pcCls+'">';
     out+='<div class="wc-pont-match">'+logo(p.home_logo)+_dpEsc(p.home)+' vs '+logo(p.away_logo)+_dpEsc(p.away)+'</div>';
     out+='<div class="wc-pont-conf">'+conf+'</div>';
     out+='<div class="wc-pont-market">Piață recomandată: <b style="color:var(--gold)">'+mk+'</b></div>';
     out+=lgRow;
-    out+='<div style="display:flex;flex-direction:column;align-items:center;gap:14px;width:fit-content;margin:8px 0 0 auto">'+_dpTimeHtml(p)+(typeof _pmInline==='function'?_pmInline(p.fixture_id):'')+'</div>';
+    // Rând jos: stânga = butoane calendar (verde/roșu), dreapta = countdown + badge Polymarket.
+    out+='<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:8px">'
+      +(window.calEv?calEv.btns(p.fixture_id):'<span></span>')
+      +'<div style="display:flex;flex-direction:column;align-items:center;gap:14px;width:fit-content">'+_dpTimeHtml(p)+(typeof _pmInline==='function'?_pmInline(p.fixture_id):'')+'</div></div>';
     out+='</div>';
   });
   body.innerHTML=out;
