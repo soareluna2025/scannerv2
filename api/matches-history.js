@@ -3,8 +3,7 @@
 //
 // Branching:
 //   date < azi → fixtures_history (status_short='FT')
-//   date = azi → fixtures_history (FT) dacă există meciuri terminate azi;
-//                altfel fallback fixtures (meciurile NS de azi)
+//   date = azi → MERGE fixtures_history (terminate) + fixtures (restul zilei), dedup pe fixture_id
 //   date > azi → fixtures (status_short NS/TBD/PST)
 //
 // Filtru: doar ligile din ALLOWED_LEAGUE_IDS.
@@ -65,14 +64,18 @@ export default async function handler(req, res) {
       sourceTable = 'fixtures_history';
       ({ rows } = await query(buildSql(sourceTable), [dateParam, allowedIds]));
     } else if (isToday) {
-      // Azi → întâi fixtures_history (meciuri deja terminate cu scor real);
-      // dacă 0 → fallback la fixtures (meciurile NS de azi).
-      sourceTable = 'fixtures_history';
-      ({ rows } = await query(buildSql(sourceTable), [dateParam, allowedIds]));
-      if (!rows.length) {
-        sourceTable = 'fixtures';
-        ({ rows } = await query(buildSql(sourceTable), [dateParam, allowedIds]));
-      }
+      // Azi → MERGE: meciurile deja terminate (fixtures_history, scor real) + cele rămase
+      // (fixtures: NS/LIVE/etc.). Înainte, dacă existau ≥1 meciuri terminate azi, se returnau
+      // DOAR ele și restul zilei dispărea din calendar. Dedup pe fixture_id, istoricul are prioritate.
+      const hist = await query(buildSql('fixtures_history'), [dateParam, allowedIds]);
+      const fut  = await query(buildSql('fixtures'),         [dateParam, allowedIds]);
+      const seen = new Set(hist.rows.map(r => r.fixture_id));
+      rows = [...hist.rows, ...fut.rows.filter(r => !seen.has(r.fixture_id))];
+      rows.sort((a, b) =>
+        String(a.country || '').localeCompare(String(b.country || '')) ||
+        String(a.league_name || '').localeCompare(String(b.league_name || '')) ||
+        new Date(a.match_date) - new Date(b.match_date));
+      sourceTable = fut.rows.length ? (hist.rows.length ? 'fixtures_history+fixtures' : 'fixtures') : 'fixtures_history';
     } else {
       // Viitor → fixtures (NS/TBD/PST).
       sourceTable = 'fixtures';

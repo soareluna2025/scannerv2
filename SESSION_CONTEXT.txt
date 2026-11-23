@@ -7692,6 +7692,22 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Bootstrap UNIC pe VPS: manual-deploy.sh (o linie); dupa el, orice push pe main ajunge singur in <=3 min.
   Verificare: bash -n OK pe toate. NErulat pe VPS (sandbox fara acces).
 
+[23.11 20:40] - FIX Ponturile Zilei goale + Calendar azi incomplet (cauze CONFIRMATE din vps-doctor) | Commit: vezi git log
+  DEPLOY: auto-deploy.sh + watchdog.sh instalate si active pe VPS (HEAD == origin/main, 23.11 20:24).
+  CAUZA 1 — PONTURI: filtrul zona (liga x banda) N>=200 NU poate fi indeplinit: istoric 8475 predictii cu
+  lambda / ~900 zone, N maxim ~12 -> "AMBELE (pastrate): 0" pe toate cele 3 piete. Deci 0 ponturi MEREU
+  (nu a fost crash, nici lipsa de date: 161 fixtures 48h, 59 predictii 24h, lambda completat 59/59).
+  FIX (ml/daily_picks.py): FALLBACK pe banda AGREGATA pe toate ligile (N>=500 si R>=0.80), cu 2 garduri:
+  zona de liga cu N>=min_n sub prag => NU suprascrie; liga cu N>=10 si R < agregat-0.10 => NU suprascrie.
+  Strict ligaxbanda ramane prioritar. Dezactivare: --no-pooled. Praguri: --pooled-min-n/--pooled-min-rate.
+  Format daily_picks.json NEMODIFICAT. Testat pe date sintetice (0 -> 36 ponturi, max 2/tara).
+  ⚠ DECIZIE VLAD: ponturile noi sunt pe rata agregata a benzii de lambda (nu pe istoricul ligii) — confirma
+  ca asa vrei sa arate "validat" pt GoalDrop; altfel ridica --pooled-min-rate in setup-crontab.sh.
+  CAUZA 2 — CALENDAR: api/matches-history.js pe data de AZI returna DOAR fixtures_history daca exista >=1
+  meci terminat (azi: 6), restul zilei disparea. FIX: MERGE history + fixtures, dedup fixture_id.
+  SECUNDAR (netratat): collect-finished a dat api_total 0 pe 20-22.11 (weekend) — de investigat.
+  Verificare: node --check + py_compile OK; ⚠ nerulat pe date reale (sandbox fara DB).
+
 ═══════════════════════════════════════════════════════════════
 PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════

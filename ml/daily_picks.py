@@ -160,9 +160,35 @@ def build_reliability(hist, market, min_n, min_rate):
     return kept
 
 
+def build_pooled(hist, market, pooled_min_n, pooled_min_rate):
+    """FALLBACK pe bandă AGREGATĂ pe toate ligile: {band:(R,N)} cu N>=pooled_min_n ȘI R>=pooled_min_rate,
+    plus {(lid,band):(R,N)} cu TOATE zonele de ligă (pt verificarea de contradicție).
+    De ce: zonele (ligă × bandă) cu N>=200 NU EXISTĂ (istoric ~8.5k predicții / ~900 zone, N maxim ~12),
+    deci filtrul strict nu putea scoate niciun pont. Banda agregată are N de ordinul miilor."""
+    bands = MARKETS[market]["bands"]
+    lam = _market_lam_series(hist, market)
+    mask = lam.notna()
+    sub = hist[mask].copy()
+    if sub.empty:
+        return {}, {}
+    sub["_band"] = lam[mask].map(lambda v: band_of(v, bands))
+    sub["_hit"] = _market_hit_series(sub, market).to_numpy()
+    gb = sub.groupby("_band")["_hit"]
+    pooled = {b: (float(gb.mean()[b]), int(gb.size()[b])) for b in gb.mean().index
+              if int(gb.size()[b]) >= pooled_min_n and float(gb.mean()[b]) >= pooled_min_rate}
+    gl = sub.groupby(["league_id", "_band"])["_hit"]
+    league_all = {k: (float(gl.mean()[k]), int(gl.size()[k])) for k in gl.mean().index}
+    return pooled, league_all
+
+
 # ── PAS 2+3 — meciuri viitoare → selecție pe zone fiabile ────────────────────
-def select_today(hist, future, markets, min_n, min_rate):
+def select_today(hist, future, markets, min_n, min_rate,
+                 pooled_min_n=500, pooled_min_rate=0.80, use_pooled=True):
     rel = {m: build_reliability(hist, m, min_n, min_rate) for m in markets}
+    pooled, league_all = {}, {}
+    if use_pooled:
+        for m in markets:
+            pooled[m], league_all[m] = build_pooled(hist, m, pooled_min_n, pooled_min_rate)
     best_per_fixture = {}
     for _, row in future.iterrows():
         lid = row["league_id"]
@@ -173,6 +199,15 @@ def select_today(hist, future, markets, min_n, min_rate):
                 continue
             band = band_of(lamv, MARKETS[m]["bands"])
             zone = rel[m].get((lid, band))
+            if zone is None and use_pooled:
+                pz = pooled[m].get(band)
+                ls = league_all[m].get((lid, band))   # evidența specifică ligii (orice N)
+                if pz is not None:
+                    if ls is not None and ls[1] >= min_n:
+                        pz = None                      # ligă bine documentată și sub prag → NU suprascriem
+                    elif ls is not None and ls[1] >= 10 and ls[0] < pz[0] - 0.10:
+                        pz = None                      # liga contrazice clar rata agregată
+                zone = pz
             if zone is None:
                 continue
             R, N = zone
@@ -294,6 +329,9 @@ def main():
     ap.add_argument("--min-n", type=int, default=200, help="N minim pe zonă (default 200)")
     ap.add_argument("--min-rate", type=float, default=0.70, help="rată minimă pe zonă (default 0.70)")
     ap.add_argument("--hours", type=int, default=24, help="fereastră meciuri viitoare în ore (default 24)")
+    ap.add_argument("--pooled-min-n", type=int, default=500, help="fallback agregat: N minim pe bandă (default 500)")
+    ap.add_argument("--pooled-min-rate", type=float, default=0.80, help="fallback agregat: rată minimă pe bandă (default 0.80)")
+    ap.add_argument("--no-pooled", action="store_true", help="dezactivează fallback-ul agregat (comportamentul vechi, strict ligă×bandă)")
     args = ap.parse_args()
 
     markets = ALL_MARKETS if args.market == "all" else [args.market]
@@ -308,7 +346,8 @@ def main():
     hist = load_history(conn)
     future = load_future(conn, args.hours)
     conn.close()
-    picks = select_today(hist, future, markets, args.min_n, args.min_rate)
+    picks = select_today(hist, future, markets, args.min_n, args.min_rate,
+                         args.pooled_min_n, args.pooled_min_rate, not args.no_pooled)
     if args.write:
         write_json(picks)
     else:
