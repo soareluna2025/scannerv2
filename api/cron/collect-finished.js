@@ -300,10 +300,15 @@ export default async function handler(req, res) {
     const allFixtures = [];
     const seenFids    = new Set();
     let apiTotal = 0;
+    const apiErrors = [];
     for (const dt of dates) {
       const fxRes  = await fetchApiFootball(`/fixtures?date=${dt}&status=FT-AET-PEN`);
       const fxData = await fxRes.json();
       const list   = fxData.response || [];
+      // API-Football raporteaza erorile (limita, cheie, parametru) in `errors`, cu response=[] -> inainte
+      // apareau ca "0 meciuri". Acum le pastram si le returnam/logam.
+      const apiErr = fxData.errors && (Array.isArray(fxData.errors) ? fxData.errors.length : Object.keys(fxData.errors).length) ? fxData.errors : null;
+      if (apiErr) { apiErrors.push({ date: dt, errors: apiErr }); console.error('[collect-finished] API errors', dt, JSON.stringify(apiErr)); }
       apiTotal += list.length;
       for (const f of list) {
         const fid = f.fixture?.id;
@@ -320,9 +325,9 @@ export default async function handler(req, res) {
     );
 
     if (!fixtures.length) {
-      await logCron(0, 0, 'success', `no FT/AET/PEN fixtures after filters (api:${apiTotal})`);
+      await logCron(0, 0, apiErrors.length ? 'error' : 'success', `no FT/AET/PEN fixtures after filters (api:${apiTotal})${apiErrors.length ? ' API_ERRORS=' + JSON.stringify(apiErrors).slice(0, 300) : ''}`);
       return res.status(200).json({
-        ok: true, dates, api_total: apiTotal, after_filter: 0,
+        ok: true, dates, api_total: apiTotal, after_filter: 0, ...(apiErrors.length ? { api_errors: apiErrors } : {}),
         message: 'No allowed FT/AET/PEN fixtures across 3-day window',
       });
     }
