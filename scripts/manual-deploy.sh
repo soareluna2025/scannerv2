@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy MANUAL pe VPS — echivalentul pașilor de cod din .github/workflows/deploy.yml,
 # pentru când GitHub Actions nu poate face SSH (ex: parolă/IP schimbat).
-# NU scrie .env, NU atinge crontab-ul, NU atinge backup-urile — doar codul + PM2.
+# NU scrie .env. Instalează crontab-ul canonic (inclusiv auto-deploy + watchdog) + codul + PM2.
 #
 # Rulare (o singură linie, din Termius):
 #   cd /root/scannerv2 && git fetch origin && git checkout origin/main -- scripts/manual-deploy.sh && bash scripts/manual-deploy.sh
@@ -26,6 +26,11 @@ done
 
 echo "== 4/5 npm install =="
 npm install --silent || echo "ATENȚIE: npm install a dat eroare (verifică manual)"
+
+echo "== 4b. Salvez calea pm2 + instalez crontab (incl. auto-deploy + watchdog) =="
+command -v pm2 > /root/.pm2_bin 2>/dev/null || true
+mkdir -p /root/scripts && cp scripts/backup-db.sh /root/scripts/backup-db.sh 2>/dev/null && chmod +x /root/scripts/backup-db.sh
+bash scripts/setup-crontab.sh >/dev/null 2>&1 && echo "Crontab instalat" || echo "ATENȚIE: setup-crontab.sh a eșuat (CRON_SECRET lipsește din .env?)"
 
 echo "== 5/5 Restart PM2 =="
 pm2 restart alohascan || { pm2 start ecosystem.config.cjs && pm2 save; }

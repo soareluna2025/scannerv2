@@ -7680,6 +7680,18 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   arata per meci N/R si ce prag blocheaza. NU am modificat daily_picks.py/praguri.
   Verificare: py_compile OK + test pe date sintetice. ⚠ NErulat pe VPS la momentul commit-ului.
 
+[23.11 20:30] - DEPLOY PERMANENT pull-based + watchdog + doctor | Commit: vezi git log
+  PROBLEMA: GitHub Actions SSH (parola) pica din 15.11 -> VPS ramas pe cod vechi (ultimul deploy OK 14.07),
+  banda Ponturile Zilei + calendarul nu mai mergeau. Cauza exacta pe VPS = de confirmat cu vps-doctor.sh.
+  SOLUTIE: VPS-ul isi trage singur codul, fara SSH/parola/secret GitHub (repo public).
+  Fisiere noi: scripts/auto-deploy.sh (cron */3: git ls-remote -> reset --hard -> npm install ->
+  setup-crontab -> pm2 restart -> health; rollback automat + nu reincearca commit-ul picat),
+  scripts/watchdog.sh (cron */5: /health 2x -> pm2 restart), scripts/vps-doctor.sh (diagnostic READ-ONLY).
+  Modificat: scripts/setup-crontab.sh (+2 linii cron), scripts/manual-deploy.sh (+salveaza /root/.pm2_bin,
+  +ruleaza setup-crontab). .env NU e atins de auto-deploy (se rescrie doar din deploy.yml / la rotire secrete).
+  Bootstrap UNIC pe VPS: manual-deploy.sh (o linie); dupa el, orice push pe main ajunge singur in <=3 min.
+  Verificare: bash -n OK pe toate. NErulat pe VPS (sandbox fara acces).
+
 ═══════════════════════════════════════════════════════════════
 PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════
