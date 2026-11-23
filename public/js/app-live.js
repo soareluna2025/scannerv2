@@ -867,6 +867,28 @@ function clearAllFavs(){
   updateFavBadge();
   renderFavs();
 }
+function exportFavsList(){
+  var d=loadFavs();
+  if(!d.items.length){alert('Nu există meciuri salvate în Preferate.');return;}
+  var lines=d.items.map(function(item){
+    var m=item.m||{};
+    var teams=m.teams||{};
+    var home=teams.home&&teams.home.name||'Echipa gazdă necunoscută';
+    var away=teams.away&&teams.away.name||'Echipa oaspete necunoscută';
+    var league=m.league&&m.league.name||'';
+    var date=m.fixture&&m.fixture.date?new Date(m.fixture.date).toLocaleString('ro-RO'):'Data indisponibilă';
+    var state=item.type==='live'?'LIVE':'PROGRAMAT';
+    return date+' | '+state+' | '+league+' | '+home+' - '+away+' | ID: '+item.fid;
+  });
+  var output='ALOHA SCAN — LISTA MEA DE MECIURI PREFERATE\n'+lines.join('\n');
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(output).then(function(){
+      alert('Lista celor '+d.items.length+' meciuri a fost copiată. Revino în conversație și lipește-o aici.');
+    }).catch(function(){window.prompt('Copiază lista de mai jos:',output);});
+  }else{
+    window.prompt('Copiază lista de mai jos:',output);
+  }
+}
 function renderFavs(){
   var d=loadFavs();
   var body=document.getElementById('fav-body');
@@ -918,7 +940,7 @@ function renderFavs(){
     s+='</div>';
     return s;
   }
-  var html='<div class="fav-header"><span class="fav-header-t">'+d.items.length+' meciuri salvate</span><button class="fav-clear-btn" onclick="clearAllFavs()">Sterge toate</button></div>';
+  var html='<div class="fav-header"><span class="fav-header-t">'+d.items.length+' meciuri salvate</span><div style="display:flex;gap:6px;align-items:center"><button onclick="exportFavsList()" style="background:#16a34a;color:#fff;border:0;border-radius:7px;padding:7px 9px;font-size:11px;font-weight:700">EXPORTĂ LISTA</button><button class="fav-clear-btn" onclick="clearAllFavs()">Sterge toate</button></div></div>';
   var live=d.items.filter(function(x){return x.type==='live';});
   var pre=d.items.filter(function(x){return x.type==='pre';});
   if(live.length){
