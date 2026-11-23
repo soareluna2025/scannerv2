@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alohascan-v3';
+const CACHE_NAME = 'alohascan-v4';
 
 // External API hostnames — never intercept these
 const BYPASS_HOSTS = [
