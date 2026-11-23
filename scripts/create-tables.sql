@@ -1203,8 +1203,11 @@ CREATE TABLE IF NOT EXISTS calendar_events (
     p_cal        NUMERIC,
     confidence   NUMERIC,
     slug         TEXT,
-    created_at   TIMESTAMPTZ DEFAULT NOW()
+    created_at   TIMESTAMPTZ DEFAULT NOW(),
+    buy_price    NUMERIC,              -- pret cumparare Over 0.5 (Polymarket ask) la trimitere/actualizare
+    price_at     TIMESTAMPTZ
 );
+ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS buy_price NUMERIC, ADD COLUMN IF NOT EXISTS price_at TIMESTAMPTZ;
 
 -- ================================================================
 --  VERIFICARE

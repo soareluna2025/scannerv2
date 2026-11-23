@@ -24,14 +24,31 @@ for(var j=0;j<tot;j++){b+=j<ev.length?'<i class="on"></i>':"<i></i>";}
 h+=`<button type="button" class="${cl}" data-d="${d}"><span class="cc-n">${d}</span><span class="cc-bars">${b}</span></button>`;
 }
 g("cc-grid").innerHTML=h;}
+var f2=new Intl.NumberFormat("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2});
+function nv(s){var v=parseFloat(String(s).replace(/\s/g,"").replace(",","."));return isFinite(v)?v:0;}
+// Profit dacă ies TOATE evenimentele zilei: formula Compus (comision = acțiuni × rată × preț × (1 − preț), la cumpărare și vânzare),
+// cu prețul REAL de cumpărare Over 0.5 din Polymarket; preț de vânzare, comision, capital, curs și reinvestire din Compus.
+function dayCalc(ev){
+var a=window.cpApi;if(!a)return null;var st=a.state(),cap=nv(st.cap),s=nv(st.sell)/100,fee=nv(st.fee)/100,fx=nv(st.fx),re=st.re==="1";
+if(!(cap>0)||!(s>0&&s<=1)||fee<0||fee>1)return null;
+var L=ev.filter(function(e){var b=Number(e.buy_price);return e.buy_price!=null&&b>0&&b<1;}).sort(function(x,y){return new Date(x.kickoff)-new Date(y.kickoff);}),c=cap,tot=0,prob=1;
+L.forEach(function(e){var b=Number(e.buy_price),stk=re?c:cap,sh0=stk/b,fb=sh0*fee*b*(1-b),sh1=sh0-fb/b,fin=sh1*s-sh1*fee*s*(1-s),pr=fin-stk;tot+=pr;if(re)c+=pr;prob*=b;});
+return{n:L.length,miss:ev.length-L.length,profit:tot,fin:cap+tot,cap:cap,fx:fx,prob:prob};}
+function sumHtml(ev){
+var r=dayCalc(ev),btn=`<button type="button" class="cc-b" id="cc-refp">↻ Prețuri</button>`;
+if(!r)return "";
+if(!r.n)return `<div class="cc-sum"><div class="cc-sd">Fără prețuri Polymarket încă pentru evenimentele zilei.</div>${btn}</div>`;
+var sg=r.profit>=0?"+":"";
+return `<div class="cc-sum"><div class="cc-sl">Dacă ies toate ${r.n}</div><div class="cc-sv ${r.profit>=0?"up":"dn"}">${sg}${f2.format(r.profit)} USDC · ${sg}${f2.format(r.profit*r.fx)} €</div><div class="cc-sd">Capital ${f2.format(r.cap)} → ${f2.format(r.fin)} USDC · probabilitate implicită toate ${r.n}: ${(r.prob*100).toFixed(1).replace(".",",")}%${r.miss?` · ${r.miss} fără preț`:""}</div>${btn}</div>`;}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
 function evRow(e){
 var t=new Date(e.kickoff),hh=("0"+t.getHours()).slice(-2)+":"+("0"+t.getMinutes()).slice(-2),pct=e.p_cal!=null?Math.round(e.p_cal*100):null,
 pm=e.slug?`<a class="cc-pm" href="https://polym.trade/event/${encodeURIComponent(e.slug)}" target="_blank" rel="noopener">Polymarket</a>`:"",
 lg=[e.league_name,e.country].filter(Boolean).map(esc).join(" · "),cf=e.confidence!=null?Math.round(e.confidence)+"%":"—";
-return `<div class="cc-ev" data-fid="${e.fixture_id}"><div class="cc-evh"><span class="cc-evt">${hh}</span><span class="cc-evm">${esc(e.home)} vs ${esc(e.away)}</span>${pm}</div><div class="cc-evk">${esc(e.market)}${pct!=null?" · "+pct+"%":""}</div><div class="cc-evd" hidden>${lg?`<div>${lg}</div>`:""}<div>Încredere: ${cf}</div></div></div>`;}
+return `<div class="cc-ev" data-fid="${e.fixture_id}"><div class="cc-evh"><span class="cc-evt">${hh}</span><span class="cc-evm">${esc(e.home)} vs ${esc(e.away)}</span>${pm}</div><div class="cc-evk">${esc(e.market)}${pct!=null?" · "+pct+"%":""}${e.buy_price!=null?" · preț "+(Number(e.buy_price)*100).toFixed(1).replace(/\.0$/,"").replace(".",",")+"¢":""}</div><div class="cc-evd" hidden>${lg?`<div>${lg}</div>`:""}<div>Încredere: ${cf}</div></div></div>`;}
 function renderDay(p){var el=g("cc-day");if(!sel||!p){el.innerHTML="";return;}var dt=new Date(sel.y,sel.m,sel.d),n=slotsFor(dt.getDay(),p.wk,p.we),ev=window.calEv?window.calEv.onDay(sel.y,sel.m,sel.d):[];
 var h=`<div class="cc-dh"><span class="cc-dt">${DN[dt.getDay()]}, ${sel.d} ${MS[sel.m]} ${sel.y}</span><span class="cc-dc">${ev.length} / ${n} evenimente</span></div>`;
+if(ev.length)h+=sumHtml(ev);
 ev.forEach(function(e){h+=evRow(e);});
 for(var j=ev.length+1;j<=n;j++){h+=`<div class="cc-slot">Loc ${j} \u00b7 eveniment liber</div>`;}
 if(n===0&&!ev.length)h+=`<div class="cc-slot">Zi fără evenimente planificate</div>`;
@@ -47,7 +64,7 @@ g("cc-grid").addEventListener("click",function(e){var b=e.target.closest("button
 g("cc-prev").addEventListener("click",function(){vm--;if(vm<0){vm=11;vy--;}refresh();});
 g("cc-next").addEventListener("click",function(){vm++;if(vm>11){vm=0;vy++;}refresh();});
 g("cc-today").addEventListener("click",function(){var t=new Date();vy=t.getFullYear();vm=t.getMonth();sel={y:vy,m:vm,d:t.getDate()};refresh();});
-g("cc-day").addEventListener("click",function(e){if(e.target.closest("a"))return;var r=e.target.closest(".cc-ev");if(!r)return;var d=r.querySelector(".cc-evd");if(d)d.hidden=!d.hidden;});
+g("cc-day").addEventListener("click",function(e){if(e.target.closest("#cc-refp")){if(window.calEv)window.calEv.refreshPrices();return;}if(e.target.closest("a"))return;var r=e.target.closest(".cc-ev");if(!r)return;var d=r.querySelector(".cc-evd");if(d)d.hidden=!d.hidden;});
 window.ccRefresh=refresh;if(window.calEv)window.calEv.load();
 var fo=false;g("cc-fold").addEventListener("click",function(){fo=!fo;g("cc-body").style.display=fo?"none":"";this.textContent=fo?"\u25B8":"\u25BE";});
 ["input","change","click"].forEach(function(t){host.addEventListener(t,function(e){if(e.target.closest&&e.target.closest("#cc-wrap"))return;refresh();});});

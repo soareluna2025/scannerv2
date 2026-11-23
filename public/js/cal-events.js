@@ -117,6 +117,18 @@ function remove(fid){
   }).catch(function(){busy[fid]=0;toast("Fără conexiune la server");});
 }
 
+// Reia prețul Over 0.5 din Polymarket pentru evenimentele care nu au început (și le completează pe cele fără preț).
+function refreshPrices(){
+  if(busy.__p)return;busy.__p=1;
+  api("POST","/api/calendar-events?refresh_prices=1").then(function(r){
+    busy.__p=0;
+    if(r.cancel)return;
+    if(r.unauth){toast("Cheie respinsă — apasă din nou și introdu cheia corectă");return;}
+    if(!r.ok){toast("Eroare: "+(r.error||r.status));return;}
+    load(function(){toast("Prețuri actualizate: "+r.updated+" din "+r.checked);});
+  }).catch(function(){busy.__p=0;toast("Fără conexiune la server");});
+}
+
 var SVG_OK='<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 var SVG_NO='<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>';
 function sent(fid){return !!BY[fid];}
@@ -128,7 +140,7 @@ function btns(fid){
   return h+'</div>';
 }
 
-window.calEv={load:load,send:send,remove:remove,sent:sent,btns:btns,onDay:onDay,list:function(){return EV;}};
+window.calEv={load:load,send:send,remove:remove,sent:sent,btns:btns,onDay:onDay,refreshPrices:refreshPrices,list:function(){return EV;}};
 
 // La deschiderea paginii Ponturi reîncărcăm evenimentele (stare la zi, inclusiv trimise de pe alt dispozitiv).
 var od=window.dpOpen;

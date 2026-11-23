@@ -31,3 +31,10 @@
 #tab-sim .cc-evd{margin-top:8px;padding-top:8px;border-top:1px solid var(--bor);font-size:12px;color:var(--mu);display:flex;flex-direction:column;gap:3px}
 #tab-sim .cc-evd[hidden]{display:none}
 #tab-sim .cc-pm{flex:none;padding:3px 7px;border-radius:8px;background:#1e40af;color:#fff;font-size:10px;font-weight:700;text-decoration:none;line-height:1}
+#tab-sim .cc-sum{border:1px solid var(--bor);border-radius:12px;padding:12px;margin-top:8px;display:flex;flex-direction:column;gap:6px}
+#tab-sim .cc-sl{font-size:12px;font-weight:700;color:var(--mu)}
+#tab-sim .cc-sv{font-size:20px;font-weight:800}
+#tab-sim .cc-sv.up{color:var(--green)}
+#tab-sim .cc-sv.dn{color:#ef4444}
+#tab-sim .cc-sd{font-size:12px;color:var(--mu)}
+#tab-sim .cc-sum .cc-b{align-self:flex-start;margin-top:2px}
