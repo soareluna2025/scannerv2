@@ -109,7 +109,7 @@ function _dpEsc(s){return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function loadDailyPicks(){
   try{
-    fetch('/daily_picks.json?ts='+Date.now())
+    (window._pmLinks?Promise.resolve():fetch('/api/polymarket-links').then(function(r){return r.json();}).then(function(d){if(d&&d.links)window._pmLinks=d.links;}).catch(function(){})).then(function(){return fetch('/daily_picks.json?ts='+Date.now());})
       .then(function(r){return r.ok?r.json():null;}).then(function(d){
         _dpPicks=(d&&d.picks)||[];
         dpRenderTicker();
@@ -118,10 +118,12 @@ function loadDailyPicks(){
       }).catch(function(){ _dpPicks=[]; dpRenderTicker(); });
   }catch(e){}
 }
+function _dpTickerList(){var m=window._pmLinks||{},by={};_dpPicks.forEach(function(p){if(!m[p.fixture_id])return;var k=(p.country||'')+'|'+(p.league_name||'');(by[k]=by[k]||[]).push(p);});var out=[];Object.keys(by).forEach(function(k){by[k].sort(function(a,b){return (b.p_cal||0)-(a.p_cal||0);});out=out.concat(by[k].slice(0,2));});return out.sort(function(a,b){return (_dpKo(a)||9e15)-(_dpKo(b)||9e15);});}
 function dpRenderTicker(){
   var tk=document.getElementById('dp-ticker'), tr=document.getElementById('dp-track');
   if(!tk||!tr)return;
-  if(!_dpPicks.length){
+  var L=_dpTickerList();
+  if(!L.length){
     tk.classList.add('dp-empty');   // roșu
     var one='<span class="dp-item">LIPSĂ PONTURI</span><span class="dp-sep">•</span>';
     var rep=''; for(var i=0;i<12;i++){rep+=one;}   // umple banda
@@ -131,17 +133,34 @@ function dpRenderTicker(){
   tk.classList.remove('dp-empty');   // verde
   var item=function(p){
     var pct=Math.round((p.p_cal!=null?p.p_cal:0)*100);
+    // Banda NU deschide meciul direct: tap oriunde pe bandă → pagina Ponturi (dpOpen, ca înainte);
+    // meciul se alege apoi din cartonașele paginii Ponturi (dpMatch).
     return '<span class="dp-item">'+_dpEsc(p.home)+' vs '+_dpEsc(p.away)+
            ' · '+_dpEsc(p.market)+' · '+pct+'%</span>';
   };
-  var html=_dpPicks.map(item).join('<span class="dp-sep">•</span>');
+  var html=L.map(item).join('<span class="dp-sep">•</span>');
   tr.innerHTML=html+'<span class="dp-sep">•</span>'+html;
+}
+// Pont → cartonașul meciului. Refolosește mdOpen (același cartonaș ca în Pre-meci, cu ← sus-stânga).
+// md-overlay și dp-overlay au același z-index, iar dp-overlay e mai jos în DOM → ridicăm md-overlay
+// peste el (resetat în mdClose). ← revine la pagina de dinainte (Ponturi sau pagina cu banda).
+// Căutare după fixture_id (listele din bandă/pagină sunt filtrate și sortate, deci nu după index).
+function _dpCanOpen(p){ return !!(p && p.fixture_id && p.home_id && p.away_id); }
+function dpMatch(fid){
+  var p=null; for(var i=0;i<_dpPicks.length;i++){ if(_dpPicks[i].fixture_id==fid){p=_dpPicks[i];break;} }
+  if(!_dpCanOpen(p))return;
+  mdOpen(p.fixture_id,p.home_id,p.away_id,null);
+  var ov=document.getElementById('md-overlay'); if(ov)ov.style.zIndex='520';
 }
 function dpOpen(){ var ov=document.getElementById('dp-overlay'); if(!ov)return; dpRenderPage(); ov.classList.add('open'); }
 function dpClose(){ var ov=document.getElementById('dp-overlay'); if(ov)ov.classList.remove('open'); }
+function _dpKo(p){return p.kickoff?Date.parse(p.kickoff):NaN;}
+function _dpCd(d){var s=Math.max(0,Math.floor(d/1000));var h=Math.floor(s/3600);var m=Math.floor(s%3600/60);s=s%60;var f=function(n){return (n<10?"0":"")+n;};return f(h)+":"+f(m)+":"+f(s);}
+function _dpTimeHtml(p){var t=_dpKo(p);if(isNaN(t))return "";var d=t-Date.now();var st="font-size:22px;font-weight:800;line-height:1;text-align:center;width:100%;";if(d<=0)return "<div style="+st+"color:#ef4444>LIVE</div>";var c=d<1800000?"#ef4444":"#3b82f6";return "<div class=dp-cd data-ko="+t+" style="+st+"color:"+c+">"+_dpCd(d)+"</div>";}
+function _dpPolyOnly(){var m=window._pmLinks||{};return _dpPicks.filter(function(q){return m[q.fixture_id];}).sort(function(a,b){return (_dpKo(a)||9e15)-(_dpKo(b)||9e15);});}
 function dpRenderPage(){
   var body=document.getElementById('dp-page-body'); if(!body)return;
-  if(!_dpPicks.length){
+  if(!_dpPolyOnly().length){
     body.innerHTML='<div class="empty"><div class="empty-icon">🎯</div>'
       +'<div class="empty-t">Niciun pont de încredere azi</div></div>';
     return;
@@ -166,18 +185,26 @@ function dpRenderPage(){
     return '';
   };
   var out='';
-  _dpPicks.forEach(function(p){
+  _dpPolyOnly().forEach(function(p){
     var pct=Math.round((p.p_cal!=null?p.p_cal:0)*100);
     var conf=(p.confidence!=null?Math.round(p.confidence)+'%':'—');
     var mk=_dpEsc(p.market)+' ('+pct+'%)';
     var lgName=p.league_name?_dpEsc(p.league_name):'';
     var ctry=p.country?(' · '+_dpEsc(p.country)):'';
     var lgRow=lgName?('<div class="dp-league">'+flagHtml(p.flag, p.country)+lgName+ctry+'</div>'):'';
-    out+='<div class="wc-pont">';
+    var _pcSent=!!(window.calEv&&calEv.sent(p.fixture_id));   // trimis în calendar → cartonaș verde
+    var _pcCls='wc-pont'+(_pcSent?' pc-sent':'');
+    out+=_dpCanOpen(p)
+      ? '<div class="'+_pcCls+'" onclick="dpMatch('+p.fixture_id+')" style="cursor:pointer">'
+      : '<div class="'+_pcCls+'">';
     out+='<div class="wc-pont-match">'+logo(p.home_logo)+_dpEsc(p.home)+' vs '+logo(p.away_logo)+_dpEsc(p.away)+'</div>';
     out+='<div class="wc-pont-conf">'+conf+'</div>';
     out+='<div class="wc-pont-market">Piață recomandată: <b style="color:var(--gold)">'+mk+'</b></div>';
     out+=lgRow;
+    // Rând jos: stânga = butoane calendar (verde/roșu), dreapta = countdown + badge Polymarket.
+    out+='<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:8px">'
+      +(window.calEv?calEv.btns(p.fixture_id):'<span></span>')
+      +'<div style="display:flex;flex-direction:column;align-items:center;gap:14px;width:fit-content">'+_dpTimeHtml(p)+(typeof _pmInline==='function'?_pmInline(p.fixture_id):'')+'</div></div>';
     out+='</div>';
   });
   body.innerHTML=out;
@@ -1053,3 +1080,7 @@ document.addEventListener('touchend',function(){
   if(dy>=_ptr.threshold){ triggerPullRefresh(); }
   else { hidePullSpinner(); }
 },{passive:true});
+
+setInterval(function(){var ov=document.getElementById("dp-overlay");if(ov&&ov.classList.contains("open"))dpRenderPage();},60000);
+
+setInterval(function(){document.querySelectorAll(".dp-cd").forEach(function(e){var d=+e.getAttribute("data-ko")-Date.now();if(d<=0){e.textContent="LIVE";e.style.color="#ef4444";}else{e.textContent=_dpCd(d);e.style.color=d<1800000?"#ef4444":"#3b82f6";}});},1000);

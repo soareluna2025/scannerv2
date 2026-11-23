@@ -42,6 +42,8 @@ function isInternalAuthed(req) {
 }
 // /api/* care SCRIU DB / nu-s necesare frontendului public → auth intern obligatoriu.
 const PROTECTED_API = new Set(['update-results']);
+// GET public (read-only); orice altă metodă (POST/DELETE) cere auth intern (x-api-key).
+const WRITE_PROTECTED_API = new Set(['calendar-events']);
 // Publice DAR scumpe (Claude API / API-Football) → limitare per-IP (NU cheie — frontendul le folosește).
 const RATE_LIMITED_API = new Set(['agent', 'simulate']);
 const _expBuckets = new Map();
@@ -91,7 +93,7 @@ import { logCronRun, ensureCronLogColumns } from './api/utils/cron-log.js';
 // UI — fișierele șterse) + elo, monte-carlo, match-momentum (fără apel HTTP; fișierele
 // rămân, importate direct de simulate.js).
 const apiFiles = [
-  'football', 'today', 'enrich', 'match',
+  'football', 'today', 'enrich', 'match', 'polymarket-links', 'calendar-events',
   'agent', 'update-results', 'health-check', 'simulate', 'generator',
   'standings-data', 'venue-weather', 'learning-leagues',
   'calibration', 'matches-history', 'model-accuracy', 'team', 'worldcup', 'worldcup-qualifiers'
@@ -101,6 +103,9 @@ for (const name of apiFiles) {
   app.all(`/api/${name}`, async (req, res) => {
     // [SECURITY P0 — FIX2] mutante → auth intern; publice-scumpe → limitare per-IP.
     if (PROTECTED_API.has(name) && !isInternalAuthed(req)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    if (WRITE_PROTECTED_API.has(name) && req.method !== 'GET' && req.method !== 'HEAD' && !isInternalAuthed(req)) {
       return res.status(401).json({ ok: false, error: 'Unauthorized' });
     }
     if (RATE_LIMITED_API.has(name) && !allowExpensive(req)) {

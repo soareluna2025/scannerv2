@@ -1,0 +1,11 @@
+/* AlohaScan - butoane Trimite/Scoate din calendar pe cartonasele din Ponturi + toast */
+.pc-act{display:flex;align-items:center;gap:10px}
+.pc-b{width:42px;height:42px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pc-b.ok{border:2px solid #22c55e;color:#22c55e;background:rgba(34,197,94,.12)}
+.pc-b.ok.on{background:#22c55e;color:#fff}
+.pc-b.no{border:2px solid #ef4444;color:#ef4444;background:rgba(239,68,68,.12)}
+.pc-b:active{transform:scale(.94)}
+/* Cartonas trimis in calendar -> verde */
+.wc-pont.pc-sent{background:linear-gradient(135deg,rgba(34,197,94,.20),rgba(34,197,94,.06));border-color:rgba(34,197,94,.70)}
+#pc-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);max-width:88vw;padding:10px 16px;border-radius:12px;background:#111827;color:#fff;border:1px solid rgba(255,255,255,.18);font-size:14px;font-weight:700;text-align:center;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:9000}
+#pc-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}

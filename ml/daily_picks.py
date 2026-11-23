@@ -51,41 +51,30 @@ MARKETS = {
     "gazde":   {"col": "lambda_home",  "bands": TEAM_BANDS},
     "oaspeti": {"col": "lambda_away",  "bands": TEAM_BANDS},
     "over15":  {"col": None,           "bands": TOTAL_BANDS},
+    "over05":  {"col": None,           "bands": TOTAL_BANDS},
 }
-MARKET_LABEL = {"gazde": "Gazde marchează", "oaspeti": "Oaspeții marchează", "over15": "Over 1.5"}
-ALL_MARKETS = ["gazde", "oaspeti", "over15"]
+MARKET_LABEL = {"gazde": "Gazde marchează", "oaspeti": "Oaspeții marchează", "over15": "Over 1.5", "over05": "Over 0.5"}
+ALL_MARKETS = ["gazde", "oaspeti", "over15", "over05"]
 
 
-# Istoric: meciuri FT cu scor (fixtures_history) + lambda (predictions). Banding din
-# predictions.lambda_*; outcome din fixtures_history. Ordonat temporal pt split backtest.
 QUERY_HISTORY = """
-SELECT p.fixture_id, p.league_id, p.match_date,
-       fh.home_goals, fh.away_goals,
-       p.lambda_home, p.lambda_away
-FROM predictions p
-JOIN fixtures_history fh ON fh.fixture_id = p.fixture_id
-WHERE fh.status_short = 'FT'
-  AND fh.home_goals IS NOT NULL AND fh.away_goals IS NOT NULL
-ORDER BY p.match_date ASC
+SELECT fh.fixture_id, fh.league_id, fh.match_date, fh.home_goals, fh.away_goals, p.lambda_home, p.lambda_away
+FROM fixtures_history fh
+LEFT JOIN LATERAL (SELECT lambda_home, lambda_away FROM predictions WHERE fixture_id=fh.fixture_id ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1) p ON TRUE
+WHERE fh.status_short = $ft$FT$ft$ AND fh.home_goals IS NOT NULL AND fh.away_goals IS NOT NULL
+ORDER BY fh.match_date ASC
 """
 
-# Viitor: meciuri NEÎNCEPUTE în următoarele N ore (fereastră absolută, fără fus).
-# Banding din predictions.lambda_* — FĂRĂ ml_features (viitorul n-are xg).
-# Îmbogățire afișare: nume/țară/steag ligă (leagues) + logo echipe (teams pe nume).
 QUERY_FUTURE = """
-SELECT p.fixture_id, p.home_team, p.away_team, p.league_id,
-       l.name AS league_name, l.country AS country, l.flag AS flag,
-       th.logo AS home_logo, ta.logo AS away_logo,
-       p.lambda_home, p.lambda_away
-FROM predictions p
-LEFT JOIN leagues l ON l.league_id = p.league_id
-LEFT JOIN teams th ON th.name = p.home_team
-LEFT JOIN teams ta ON ta.name = p.away_team
-WHERE p.match_date >= NOW()
-  AND p.match_date <  NOW() + (%(hours)s || ' hours')::interval
-ORDER BY p.match_date ASC
+SELECT f.fixture_id, f.match_date AS kickoff, f.home_team_id AS home_id, f.away_team_id AS away_id, f.home_team_name AS home_team, f.away_team_name AS away_team, f.league_id, l.name AS league_name, l.country AS country, l.flag AS flag, th.logo AS home_logo, ta.logo AS away_logo, p.lambda_home, p.lambda_away
+FROM fixtures f
+LEFT JOIN LATERAL (SELECT lambda_home, lambda_away FROM predictions WHERE fixture_id=f.fixture_id ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1) p ON TRUE
+LEFT JOIN leagues l ON l.league_id=f.league_id
+LEFT JOIN LATERAL (SELECT logo FROM teams WHERE name=f.home_team_name LIMIT 1) th ON TRUE
+LEFT JOIN LATERAL (SELECT logo FROM teams WHERE name=f.away_team_name LIMIT 1) ta ON TRUE
+WHERE f.match_date >= NOW() AND f.match_date < NOW() + (%(hours)s || $$ hours $$)::interval
+ORDER BY f.match_date ASC
 """
-
 
 def band_of(x, bands):
     for lo, hi, lab in bands:
@@ -97,7 +86,7 @@ def band_of(x, bands):
 def _market_lam_series(df, market):
     """Seria lambda relevantă pt bandă, per piață. over15 = lambda_home+lambda_away
     (lambda_total e ~90% NULL); gazde/oaspeti = coloana proprie."""
-    if market == "over15":
+    if market in ("over15", "over05"):
         return (pd.to_numeric(df["lambda_home"], errors="coerce")
                 + pd.to_numeric(df["lambda_away"], errors="coerce"))
     return pd.to_numeric(df[MARKETS[market]["col"]], errors="coerce")
@@ -110,11 +99,13 @@ def _market_hit_series(df, market):
         return (hg >= 1).astype(int)
     if market == "oaspeti":
         return (ag >= 1).astype(int)
-    return ((hg + ag) >= 2).astype(int)
+    if market == "over15":
+        return ((hg + ag) >= 2).astype(int)
+    return ((hg + ag) >= 1).astype(int)
 
 
 def _future_lam(row, market):
-    if market == "over15":
+    if market in ("over15", "over05"):
         h = row.get("lambda_home"); a = row.get("lambda_away")
         h = float(h) if (h is not None and not pd.isna(h)) else None
         a = float(a) if (a is not None and not pd.isna(a)) else None
@@ -140,97 +131,62 @@ def load_future(conn, hours):
 
 # ── PASUL 1 — TABEL DE FIABILITATE (din istoric) ─────────────────────────────
 def build_reliability(hist, market, min_n, min_rate):
-    """Zone (league_id × bandă) cu R=hits/N. Întoarce dict {(lid,band):(R,N)} cu
-    DOAR zonele păstrate (N>=min_n ȘI R>=min_rate)."""
     bands = MARKETS[market]["bands"]
+    kept = {}
     lam = _market_lam_series(hist, market)
     mask = lam.notna()
     sub = hist[mask].copy()
-    if sub.empty:
-        return {}
-    sub["_band"] = lam[mask].map(lambda v: band_of(v, bands))
-    sub["_hit"] = _market_hit_series(sub, market).to_numpy()
-    g = sub.groupby(["league_id", "_band"])["_hit"]
-    R = g.mean(); N = g.size()
-    kept = {}
-    for key in R.index:
-        n = int(N[key]); r = float(R[key])
-        if n >= min_n and r >= min_rate:
-            kept[key] = (r, n)
+    if not sub.empty:
+        sub["_band"] = lam[mask].map(lambda v: band_of(v, bands))
+        sub["_hit"] = _market_hit_series(sub, market).to_numpy()
+        g = sub.groupby(["league_id", "_band"])["_hit"]
+        rates, counts = g.mean(), g.size()
+        for key in rates.index:
+            nn, rr = int(counts[key]), float(rates[key])
+            if nn >= min_n and rr >= min_rate:
+                kept[key] = (rr, nn)
+    base = hist.dropna(subset=["league_id", "home_goals", "away_goals"]).copy()
+    if not base.empty:
+        base["_hit"] = _market_hit_series(base, market).to_numpy()
+        g = base.groupby("league_id")["_hit"]
+        rates, counts = g.mean(), g.size()
+        for lid in rates.index:
+            nn, rr = int(counts[lid]), float(rates[lid])
+            if nn >= min_n and rr >= min_rate:
+                kept[(lid, "__general__")] = (rr, nn)
     return kept
 
 
-def build_pooled(hist, market, pooled_min_n, pooled_min_rate):
-    """FALLBACK pe bandă AGREGATĂ pe toate ligile: {band:(R,N)} cu N>=pooled_min_n ȘI R>=pooled_min_rate,
-    plus {(lid,band):(R,N)} cu TOATE zonele de ligă (pt verificarea de contradicție).
-    De ce: zonele (ligă × bandă) cu N>=200 NU EXISTĂ (istoric ~8.5k predicții / ~900 zone, N maxim ~12),
-    deci filtrul strict nu putea scoate niciun pont. Banda agregată are N de ordinul miilor."""
-    bands = MARKETS[market]["bands"]
-    lam = _market_lam_series(hist, market)
-    mask = lam.notna()
-    sub = hist[mask].copy()
-    if sub.empty:
-        return {}, {}
-    sub["_band"] = lam[mask].map(lambda v: band_of(v, bands))
-    sub["_hit"] = _market_hit_series(sub, market).to_numpy()
-    gb = sub.groupby("_band")["_hit"]
-    pooled = {b: (float(gb.mean()[b]), int(gb.size()[b])) for b in gb.mean().index
-              if int(gb.size()[b]) >= pooled_min_n and float(gb.mean()[b]) >= pooled_min_rate}
-    gl = sub.groupby(["league_id", "_band"])["_hit"]
-    league_all = {k: (float(gl.mean()[k]), int(gl.size()[k])) for k in gl.mean().index}
-    return pooled, league_all
-
-
-# ── PAS 2+3 — meciuri viitoare → selecție pe zone fiabile ────────────────────
-def select_today(hist, future, markets, min_n, min_rate,
-                 pooled_min_n=500, pooled_min_rate=0.80, use_pooled=True):
+def select_today(hist, future, markets, min_n, min_rate):
     rel = {m: build_reliability(hist, m, min_n, min_rate) for m in markets}
-    pooled, league_all = {}, {}
-    if use_pooled:
-        for m in markets:
-            pooled[m], league_all[m] = build_pooled(hist, m, pooled_min_n, pooled_min_rate)
     best_per_fixture = {}
     for _, row in future.iterrows():
         lid = row["league_id"]
         best = None
         for m in markets:
             lamv = _future_lam(row, m)
-            if lamv is None:
-                continue
-            band = band_of(lamv, MARKETS[m]["bands"])
-            zone = rel[m].get((lid, band))
-            if zone is None and use_pooled:
-                pz = pooled[m].get(band)
-                ls = league_all[m].get((lid, band))   # evidența specifică ligii (orice N)
-                if pz is not None:
-                    if ls is not None and ls[1] >= min_n:
-                        pz = None                      # ligă bine documentată și sub prag → NU suprascriem
-                    elif ls is not None and ls[1] >= 10 and ls[0] < pz[0] - 0.10:
-                        pz = None                      # liga contrazice clar rata agregată
-                zone = pz
+            band = band_of(lamv, MARKETS[m]["bands"]) if lamv is not None else None
+            zone = rel[m].get((lid, band)) if band is not None else None
+            if zone is None:
+                zone = rel[m].get((lid, "__general__"))
             if zone is None:
                 continue
             R, N = zone
             if best is None or R > best["R"]:
-                best = {"fixture_id": row["fixture_id"], "home": row["home_team"],
-                        "away": row["away_team"], "league_name": row.get("league_name"),
-                        "country": row.get("country"), "flag": row.get("flag"),
-                        "home_logo": row.get("home_logo"), "away_logo": row.get("away_logo"),
-                        "league_id": lid, "market": m, "R": R, "N": N, "band": band}
+                best = {"fixture_id": row["fixture_id"], "home_id": row.get("home_id"), "away_id": row.get("away_id"), "kickoff": (row.get("kickoff").isoformat() if hasattr(row.get("kickoff"),"isoformat") else None), "home": row["home_team"], "away": row["away_team"], "league_name": row.get("league_name"), "country": row.get("country"), "flag": row.get("flag"), "home_logo": row.get("home_logo"), "away_logo": row.get("away_logo"), "league_id": lid, "market": m, "R": R, "N": N, "band": band or "general"}
         if best is not None:
-            best_per_fixture[row["fixture_id"]] = best   # O singură piață/meci (R maxim)
+            best_per_fixture[row["fixture_id"]] = best
     picks = sorted(best_per_fixture.values(), key=lambda d: d["R"], reverse=True)
-    # Max 2 ponturi/ȚARĂ (country), FĂRĂ plafon total. country None → bucket propriu.
     out, cc = [], {}
     for p in picks:
         ckey = p.get("country") if p.get("country") else ("__none__", p["fixture_id"])
         if cc.get(ckey, 0) >= 2:
             continue
-        out.append(p); cc[ckey] = cc.get(ckey, 0) + 1
+        out.append(p)
+        cc[ckey] = cc.get(ckey, 0) + 1
     return out
 
 
-# ── PASUL 4 — output ─────────────────────────────────────────────────────────
 def _clean(v):
     """NaN/None/gol → None; altfel string curat (pt JSON: logo/flag/țară lipsă = None)."""
     if v is None:
@@ -244,8 +200,20 @@ def _clean(v):
     return s or None
 
 
+def _int_or_none(v):
+    """Id numeric (numpy/NaN safe) → int sau None; pt JSON (numpy int64 nu e serializabil)."""
+    try:
+        if v is None or pd.isna(v):
+            return None
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def write_json(picks, out_path=DAILY_PICKS_JSON):
     picks_list = [{
+        "fixture_id": int(p["fixture_id"]), "kickoff": p.get("kickoff"),
+        "home_id": _int_or_none(p.get("home_id")), "away_id": _int_or_none(p.get("away_id")),
         "home": p["home"], "away": p["away"],
         "league_name": _clean(p.get("league_name")),
         "country": _clean(p.get("country")), "flag": _clean(p.get("flag")),
@@ -329,9 +297,6 @@ def main():
     ap.add_argument("--min-n", type=int, default=200, help="N minim pe zonă (default 200)")
     ap.add_argument("--min-rate", type=float, default=0.70, help="rată minimă pe zonă (default 0.70)")
     ap.add_argument("--hours", type=int, default=24, help="fereastră meciuri viitoare în ore (default 24)")
-    ap.add_argument("--pooled-min-n", type=int, default=500, help="fallback agregat: N minim pe bandă (default 500)")
-    ap.add_argument("--pooled-min-rate", type=float, default=0.80, help="fallback agregat: rată minimă pe bandă (default 0.80)")
-    ap.add_argument("--no-pooled", action="store_true", help="dezactivează fallback-ul agregat (comportamentul vechi, strict ligă×bandă)")
     args = ap.parse_args()
 
     markets = ALL_MARKETS if args.market == "all" else [args.market]
@@ -346,8 +311,7 @@ def main():
     hist = load_history(conn)
     future = load_future(conn, args.hours)
     conn.close()
-    picks = select_today(hist, future, markets, args.min_n, args.min_rate,
-                         args.pooled_min_n, args.pooled_min_rate, not args.no_pooled)
+    picks = select_today(hist, future, markets, args.min_n, args.min_rate)
     if args.write:
         write_json(picks)
     else:
