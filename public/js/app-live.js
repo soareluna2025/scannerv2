@@ -880,7 +880,7 @@ function exportFavsList(){
     var state=item.type==='live'?'LIVE':'PROGRAMAT';
     return date+' | '+state+' | '+league+' | '+home+' - '+away+' | ID: '+item.fid;
   });
-  var output='ALOHA SCAN — LISTA ME meciurilor preferate\n'+lines.join('\n');
+  var output='ALOHA SCAN — LISTA MEA DE MECIURI PREFERATE\n'+lines.join('\n');
   if(navigator.clipboard&&navigator.clipboard.writeText){
     navigator.clipboard.writeText(output).then(function(){
       alert('Lista celor '+d.items.length+' meciuri a fost copiată. Revino în conversație și lipește-o aici.');
