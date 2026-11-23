@@ -133,10 +133,9 @@ function dpRenderTicker(){
   tk.classList.remove('dp-empty');   // verde
   var item=function(p){
     var pct=Math.round((p.p_cal!=null?p.p_cal:0)*100);
-    // Tap pe element → cartonașul meciului (ca la Pre-meci); stopPropagation ca să nu se
-    // deschidă și pagina Ponturi. JSON vechi fără id-uri → comportament neschimbat.
-    var tap=_dpCanOpen(p)?' onclick="event.stopPropagation();dpMatch('+p.fixture_id+')"':'';
-    return '<span class="dp-item"'+tap+'>'+_dpEsc(p.home)+' vs '+_dpEsc(p.away)+
+    // Banda NU deschide meciul direct: tap oriunde pe bandă → pagina Ponturi (dpOpen, ca înainte);
+    // meciul se alege apoi din cartonașele paginii Ponturi (dpMatch).
+    return '<span class="dp-item">'+_dpEsc(p.home)+' vs '+_dpEsc(p.away)+
            ' · '+_dpEsc(p.market)+' · '+pct+'%</span>';
   };
   var html=L.map(item).join('<span class="dp-sep">•</span>');
