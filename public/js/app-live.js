@@ -881,12 +881,28 @@ function exportFavsList(){
     return date+' | '+state+' | '+league+' | '+home+' - '+away+' | ID: '+item.fid;
   });
   var output='ALOHA SCAN — LISTA MEA DE MECIURI PREFERATE\n'+lines.join('\n');
-  if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(output).then(function(){
-      alert('Lista celor '+d.items.length+' meciuri a fost copiată. Revino în conversație și lipește-o aici.');
-    }).catch(function(){window.prompt('Copiază lista de mai jos:',output);});
+  // Clipboard API poate raporta succes fara sa scrie efectiv in clipboard pe iOS/PWA.
+  // Folosim copierea sincrona din gestul utilizatorului, compatibila cu Safari iOS.
+  var ta=document.createElement('textarea');
+  ta.value=output;
+  ta.setAttribute('readonly','');
+  ta.style.position='fixed';
+  ta.style.left='0';
+  ta.style.top='0';
+  ta.style.width='1px';
+  ta.style.height='1px';
+  ta.style.opacity='0.01';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  ta.setSelectionRange(0,ta.value.length);
+  var copied=false;
+  try{copied=document.execCommand('copy');}catch(e){}
+  document.body.removeChild(ta);
+  if(copied){
+    alert('Lista celor '+d.items.length+' meciuri a fost copiată. Revino în conversație și lipește-o aici.');
   }else{
-    window.prompt('Copiază lista de mai jos:',output);
+    window.prompt('Copierea automată nu a reușit. Ține apăsat pe text, selectează tot și apasă Copiază:',output);
   }
 }
 function renderFavs(){
