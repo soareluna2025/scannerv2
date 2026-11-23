@@ -83,6 +83,8 @@ async function getJson(url) {
 }
 const iso = ms => new Date(ms).toISOString().replace(/\.\d+Z$/, 'Z');
 const now = Date.now();
+await pool.query("CREATE TABLE IF NOT EXISTS polymarket_links (fixture_id BIGINT PRIMARY KEY, slug TEXT NOT NULL, title TEXT, matched_at TIMESTAMPTZ DEFAULT now())");   // idempotent: nu atinge tabela existenta
+
 const sports = await getJson(GAMMA + '/sports');
 const series = [...new Set(sports.filter(x => String(x.tags || '').split(',').includes('100350')).map(x => x.series).filter(Boolean))];
 console.log(new Date().toISOString(), 'ligi fotbal Polymarket:', series.length);

@@ -7708,6 +7708,26 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   SECUNDAR (netratat): collect-finished a dat api_total 0 pe 20-22.11 (weekend) — de investigat.
   Verificare: node --check + py_compile OK; ⚠ nerulat pe date reale (sandbox fara DB).
 
+[23.11 21:30] - RESTAURARE COMPLETA: branch-urile nemergeuite aduse in main | Commit: vezi git log
+  CAUZA RADACINA (confirmata): toata munca din 15.11 incoace statea DOAR pe branch-uri (feat-picks-calendar,
+  feat-polymarket-links-api) si era pusa pe VPS cu "git checkout origin/<branch> -- fisier". Orice push pe main
+  (deploy.yml = git reset --hard origin/main) o stergea de pe VPS: 23.11 12:49 (PR #27 favorite) a resetat VPS pe main
+  -> au disparut banda/ponturile Polymarket, insignele, calendarul Compus. Dovada: SIGINT PM2 la 10:30 / 10:56
+  (deploy branch) si 12:45 / 12:49 (deploy main). In plus, server.js de pe branch importa api/polymarket-links.js
+  care exista DOAR pe VPS (netrackuit) -> deploy curat = crash la pornire.
+  FACUT: merge feat-picks-calendar + feat-polymarket-links-api in main. Aduce: ponturi/banda DOAR cu eticheta
+  Polymarket (filtru in app-state.js via /api/polymarket-links), insigne Polymarket pe PRE-MECI + LIVE + ponturi
+  (link polym.trade/event/<slug>), simulator + calendar Compus, tap pe pont -> cartonas meci, butoane
+  Trimite/Scoate din calendar, pret Polymarket Over 0.5, api/polymarket-links.js, api/calendar-events.js,
+  polymarket-sync cu matcher imbunatatit, daily_picks.py (Over 0.5 + fallback general pe liga).
+  Conflicte: polymarket-sync/daily_picks -> varianta branch; app-ui.js -> ambele; crontab -> auto-deploy+watchdog
+  pastrate; service-worker v6. Fallback-ul "agregat" adaugat azi in daily_picks.py a fost INLOCUIT de varianta branch.
+  Calendar azi (merge history+fixtures, api/matches-history.js) PASTRAT.
+  PERMANENT: polymarket_links are CREATE TABLE IF NOT EXISTS in create-tables.sql si in polymarket-sync.js.
+  REGULA NOUA: NICIUN fisier pus pe VPS din branch fara merge in main in ACEEASI zi; main = singura sursa a deploy-ului.
+  Verificare: node --check pe tot, 20/20 rute API se incarca (test cu pg stub), index.html fara referinte lipsa.
+  ⚠ NErulat pe date reale; dupa deploy: rulat o data polymarket-sync + daily_picks --write.
+
 ═══════════════════════════════════════════════════════════════
 PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════

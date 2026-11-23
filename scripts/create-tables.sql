@@ -1216,3 +1216,11 @@ SELECT 'Tables created: ' || COUNT(*) FROM information_schema.tables
 WHERE table_schema = 'public' AND table_catalog = 'elefant';
 
 SELECT 'Leagues inserted: ' || COUNT(*) FROM leagues;
+
+-- Legaturi meci AlohaScan -> eveniment Polymarket (scrisa de api/cron/polymarket-sync.js, citita de /api/polymarket-links + /api/today)
+CREATE TABLE IF NOT EXISTS polymarket_links (
+    fixture_id  BIGINT PRIMARY KEY,
+    slug        TEXT NOT NULL,
+    title       TEXT,
+    matched_at  TIMESTAMPTZ DEFAULT now()
+);
