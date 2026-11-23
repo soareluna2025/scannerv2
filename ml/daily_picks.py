@@ -66,7 +66,7 @@ ORDER BY fh.match_date ASC
 """
 
 QUERY_FUTURE = """
-SELECT f.fixture_id, f.match_date AS kickoff, f.home_team_name AS home_team, f.away_team_name AS away_team, f.league_id, l.name AS league_name, l.country AS country, l.flag AS flag, th.logo AS home_logo, ta.logo AS away_logo, p.lambda_home, p.lambda_away
+SELECT f.fixture_id, f.match_date AS kickoff, f.home_team_id AS home_id, f.away_team_id AS away_id, f.home_team_name AS home_team, f.away_team_name AS away_team, f.league_id, l.name AS league_name, l.country AS country, l.flag AS flag, th.logo AS home_logo, ta.logo AS away_logo, p.lambda_home, p.lambda_away
 FROM fixtures f
 LEFT JOIN LATERAL (SELECT lambda_home, lambda_away FROM predictions WHERE fixture_id=f.fixture_id ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1) p ON TRUE
 LEFT JOIN leagues l ON l.league_id=f.league_id
@@ -173,7 +173,7 @@ def select_today(hist, future, markets, min_n, min_rate):
                 continue
             R, N = zone
             if best is None or R > best["R"]:
-                best = {"fixture_id": row["fixture_id"], "kickoff": (row.get("kickoff").isoformat() if hasattr(row.get("kickoff"),"isoformat") else None), "home": row["home_team"], "away": row["away_team"], "league_name": row.get("league_name"), "country": row.get("country"), "flag": row.get("flag"), "home_logo": row.get("home_logo"), "away_logo": row.get("away_logo"), "league_id": lid, "market": m, "R": R, "N": N, "band": band or "general"}
+                best = {"fixture_id": row["fixture_id"], "home_id": row.get("home_id"), "away_id": row.get("away_id"), "kickoff": (row.get("kickoff").isoformat() if hasattr(row.get("kickoff"),"isoformat") else None), "home": row["home_team"], "away": row["away_team"], "league_name": row.get("league_name"), "country": row.get("country"), "flag": row.get("flag"), "home_logo": row.get("home_logo"), "away_logo": row.get("away_logo"), "league_id": lid, "market": m, "R": R, "N": N, "band": band or "general"}
         if best is not None:
             best_per_fixture[row["fixture_id"]] = best
     picks = sorted(best_per_fixture.values(), key=lambda d: d["R"], reverse=True)
@@ -200,9 +200,20 @@ def _clean(v):
     return s or None
 
 
+def _int_or_none(v):
+    """Id numeric (numpy/NaN safe) → int sau None; pt JSON (numpy int64 nu e serializabil)."""
+    try:
+        if v is None or pd.isna(v):
+            return None
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def write_json(picks, out_path=DAILY_PICKS_JSON):
     picks_list = [{
         "fixture_id": int(p["fixture_id"]), "kickoff": p.get("kickoff"),
+        "home_id": _int_or_none(p.get("home_id")), "away_id": _int_or_none(p.get("away_id")),
         "home": p["home"], "away": p["away"],
         "league_name": _clean(p.get("league_name")),
         "country": _clean(p.get("country")), "flag": _clean(p.get("flag")),
