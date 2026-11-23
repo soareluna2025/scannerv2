@@ -1186,6 +1186,7 @@ function mdOpen(fid,hid,aid,srcEl){
 }
 function mdClose(){
   document.getElementById('md-overlay').classList.remove('open');
+  document.getElementById('md-overlay').style.zIndex=''; // resetat după deschiderea din Ponturi/bandă (dpMatch)
   if(_mdRefreshTimer){clearInterval(_mdRefreshTimer);_mdRefreshTimer=null;}
   _mlxEnteredFor=null;   // închiderea modalului → la redeschidere animația ML se rejoacă
   _scoringExpanded=null; // reset stare explicație la închidere

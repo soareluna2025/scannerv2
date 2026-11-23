@@ -129,13 +129,26 @@ function dpRenderTicker(){
     return;
   }
   tk.classList.remove('dp-empty');   // verde
-  var item=function(p){
+  var item=function(p,i){
     var pct=Math.round((p.p_cal!=null?p.p_cal:0)*100);
-    return '<span class="dp-item">'+_dpEsc(p.home)+' vs '+_dpEsc(p.away)+
+    // Tap pe element → cartonașul meciului (ca la Pre-meci); stopPropagation ca să nu
+    // se deschidă și pagina Ponturi. Fără id-uri în JSON (fișier vechi) → comportament vechi.
+    var tap=_dpCanOpen(p)?' onclick="event.stopPropagation();dpMatch('+i+')"':'';
+    return '<span class="dp-item"'+tap+'>'+_dpEsc(p.home)+' vs '+_dpEsc(p.away)+
            ' · '+_dpEsc(p.market)+' · '+pct+'%</span>';
   };
   var html=_dpPicks.map(item).join('<span class="dp-sep">•</span>');
   tr.innerHTML=html+'<span class="dp-sep">•</span>'+html;
+}
+// Pont → cartonașul meciului. Refolosește mdOpen (același cartonaș ca în Pre-meci, cu ← în
+// colțul stânga-sus). md-overlay și dp-overlay au același z-index, iar dp-overlay e mai jos
+// în DOM → ridicăm md-overlay peste el (resetat în mdClose). ← revine la pagina de dinainte
+// (pagina Ponturi dacă tap-ul a venit de acolo, altfel pagina cu banda).
+function _dpCanOpen(p){ return !!(p && p.fixture_id && p.home_id && p.away_id); }
+function dpMatch(i){
+  var p=_dpPicks[i]; if(!_dpCanOpen(p))return;
+  mdOpen(p.fixture_id,p.home_id,p.away_id,null);
+  var ov=document.getElementById('md-overlay'); if(ov)ov.style.zIndex='520';
 }
 function dpOpen(){ var ov=document.getElementById('dp-overlay'); if(!ov)return; dpRenderPage(); ov.classList.add('open'); }
 function dpClose(){ var ov=document.getElementById('dp-overlay'); if(ov)ov.classList.remove('open'); }
@@ -166,14 +179,16 @@ function dpRenderPage(){
     return '';
   };
   var out='';
-  _dpPicks.forEach(function(p){
+  _dpPicks.forEach(function(p,i){
     var pct=Math.round((p.p_cal!=null?p.p_cal:0)*100);
     var conf=(p.confidence!=null?Math.round(p.confidence)+'%':'—');
     var mk=_dpEsc(p.market)+' ('+pct+'%)';
     var lgName=p.league_name?_dpEsc(p.league_name):'';
     var ctry=p.country?(' · '+_dpEsc(p.country)):'';
     var lgRow=lgName?('<div class="dp-league">'+flagHtml(p.flag, p.country)+lgName+ctry+'</div>'):'';
-    out+='<div class="wc-pont">';
+    out+=_dpCanOpen(p)
+      ? '<div class="wc-pont" onclick="dpMatch('+i+')" style="cursor:pointer">'
+      : '<div class="wc-pont">';
     out+='<div class="wc-pont-match">'+logo(p.home_logo)+_dpEsc(p.home)+' vs '+logo(p.away_logo)+_dpEsc(p.away)+'</div>';
     out+='<div class="wc-pont-conf">'+conf+'</div>';
     out+='<div class="wc-pont-market">Piață recomandată: <b style="color:var(--gold)">'+mk+'</b></div>';

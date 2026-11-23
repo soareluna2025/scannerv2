@@ -76,9 +76,12 @@ QUERY_FUTURE = """
 SELECT p.fixture_id, p.home_team, p.away_team, p.league_id,
        l.name AS league_name, l.country AS country, l.flag AS flag,
        th.logo AS home_logo, ta.logo AS away_logo,
+       COALESCE(f.home_team_id, th.team_id) AS home_id,
+       COALESCE(f.away_team_id, ta.team_id) AS away_id,
        p.lambda_home, p.lambda_away
 FROM predictions p
 LEFT JOIN leagues l ON l.league_id = p.league_id
+LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
 LEFT JOIN teams th ON th.name = p.home_team
 LEFT JOIN teams ta ON ta.name = p.away_team
 WHERE p.match_date >= NOW()
@@ -181,6 +184,7 @@ def select_today(hist, future, markets, min_n, min_rate):
                         "away": row["away_team"], "league_name": row.get("league_name"),
                         "country": row.get("country"), "flag": row.get("flag"),
                         "home_logo": row.get("home_logo"), "away_logo": row.get("away_logo"),
+                        "home_id": row.get("home_id"), "away_id": row.get("away_id"),
                         "league_id": lid, "market": m, "R": R, "N": N, "band": band}
         if best is not None:
             best_per_fixture[row["fixture_id"]] = best   # O singură piață/meci (R maxim)
@@ -209,8 +213,20 @@ def _clean(v):
     return s or None
 
 
+def _int_or_none(v):
+    """Id numeric (numpy/NaN safe) → int sau None; pt JSON (numpy int64 nu e serializabil)."""
+    try:
+        if v is None or pd.isna(v):
+            return None
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def write_json(picks, out_path=DAILY_PICKS_JSON):
     picks_list = [{
+        "fixture_id": _int_or_none(p.get("fixture_id")),
+        "home_id": _int_or_none(p.get("home_id")), "away_id": _int_or_none(p.get("away_id")),
         "home": p["home"], "away": p["away"],
         "league_name": _clean(p.get("league_name")),
         "country": _clean(p.get("country")), "flag": _clean(p.get("flag")),
