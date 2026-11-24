@@ -175,7 +175,7 @@ def load_poly_ids(conn):
         return set()
 
 
-def select_today(hist, future, markets, min_n, min_rate, poly_ids=None, cap_poly=4, cap_other=2):
+def select_today(hist, future, markets, min_n, min_rate, poly_ids=None, cap_poly=6, cap_other=2):
     rel = {m: build_reliability(hist, m, min_n, min_rate) for m in markets}
     best_per_fixture = {}
     for _, row in future.iterrows():
@@ -322,7 +322,7 @@ def main():
     ap.add_argument("--min-n", type=int, default=200, help="N minim pe zonă (default 200)")
     ap.add_argument("--min-rate", type=float, default=0.70, help="rată minimă pe zonă (default 0.70)")
     ap.add_argument("--hours", type=int, default=36, help="fereastră meciuri viitoare în ore (default 36)")
-    ap.add_argument("--cap-poly", type=int, default=4, help="max ponturi/țară cu Polymarket (default 4)")
+    ap.add_argument("--cap-poly", type=int, default=6, help="max ponturi/țară cu Polymarket (default 6)")
     args = ap.parse_args()
 
     markets = ALL_MARKETS if args.market == "all" else [args.market]
