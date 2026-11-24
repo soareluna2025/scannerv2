@@ -7728,6 +7728,13 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   Verificare: node --check pe tot, 20/20 rute API se incarca (test cu pg stub), index.html fara referinte lipsa.
   ⚠ NErulat pe date reale; dupa deploy: rulat o data polymarket-sync + daily_picks --write.
 
+[24.11 05:10] - PROTECTIE LA DEPLOY: modificarile locale de pe VPS nu mai dispar fara urma | Commit: vezi git log
+  scripts/pre-deploy-backup.sh ruleaza INAINTE de git reset --hard (auto-deploy.sh, manual-deploy.sh, deploy.yml):
+  daca exista fisiere urmarite modificate pe VPS, le salveaza (patch + copii) in /root/deploy-backups/<data>/, ultimele 20.
+  Testat pe clona temporara (cu/fara modificari). CLAUDE.md: regula "NICIUN cod pe VPS din branch/direct; main = sursa".
+  collect-finished: API raspunde corect (918 meciuri pe 22.11, errors []) -> cele 0 din 20-22.11 = rulare esuata punctuala;
+  eroarea API e acum vizibila (api_errors). Rezultat rulare manuala: de confirmat de Vlad.
+
 ═══════════════════════════════════════════════════════════════
 PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════

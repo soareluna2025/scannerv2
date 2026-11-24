@@ -45,6 +45,7 @@ healthy() {
   return 1
 }
 apply_code() {   # $1 = commit țintă
+  bash scripts/pre-deploy-backup.sh 2>/dev/null || true   # salvează modificările locale de pe VPS (nu le șterge fără urmă)
   backup_ml
   git fetch -q origin || return 1
   git reset -q --hard "$1" || return 1

@@ -15,6 +15,7 @@ for f in model_live_export.json model_export.json calibration_export.json calibr
 done
 
 echo "== 2/5 git fetch + reset --hard origin/main =="
+bash scripts/pre-deploy-backup.sh 2>/dev/null || true
 git fetch origin || { echo "EROARE: git fetch a eșuat"; exit 1; }
 git reset --hard origin/main || { echo "EROARE: git reset a eșuat"; exit 1; }
 echo "Commit curent: $(git rev-parse --short HEAD)"

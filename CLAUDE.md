@@ -35,8 +35,11 @@ Modifică DOAR logica `score4` (live-only) și `getLiveStatsFromDB()`.
 - **Livrare DIRECT PE MAIN** (commit + push). Push pe main declanșează auto-deploy
   (GitHub Actions → SSH pe VPS → `git reset --hard origin/main` + `npm install` +
   `pm2 restart alohascan`). Branch `claude/...` DOAR la cererea explicită a userului.
-- **Când se lucrează pe branch** (cerere explicită): instrucțiunile pentru VPS folosesc
-  EXCLUSIV `git checkout origin/<branch> -- <fișier>` — NICIODATĂ comutare de branch pe VPS.
+- **NICIUN cod nu se pune pe VPS din branch sau direct.** `main` este SINGURA sursă a deploy-ului
+  (`git reset --hard origin/main` rulează la FIECARE push și la fiecare 3 min via `auto-deploy.sh`).
+  Tot ce e pe VPS și nu e în `main` DISPARE (incident 23.11.2026: banda/ponturile/etichetele Polymarket/calendarul
+  Compus stăteau doar pe branch-uri). Un branch se UNEȘTE în `main` ÎNAINTE de orice test pe VPS; schimbările
+  locale de pe VPS sunt salvate doar ca patch în `/root/deploy-backups/` (scripts/pre-deploy-backup.sh).
 - **`/root/scannerv2` pe VPS = PRODUCȚIA VIE**: PM2 servește din el; deploy-ul face
   `git reset --hard` pe MAIN la fiecare push. Nimic local pe VPS nu supraviețuiește deploy-ului.
 - **Experimente / scripturi noi** scriu output DOAR în `ml/` sau `/tmp` — nu modifică

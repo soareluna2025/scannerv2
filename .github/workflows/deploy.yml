@@ -32,6 +32,7 @@ jobs:
             cp ml/calibration_live_export.json /tmp/calibration_live_export.json.bak 2>/dev/null || true
             cp ml/gg_calibration.json /tmp/gg_calibration.json.bak 2>/dev/null || true
 
+            [ -f scripts/pre-deploy-backup.sh ] && bash scripts/pre-deploy-backup.sh || true   # salveaza modificarile locale inainte de reset
             git fetch origin
             git reset --hard origin/main
 
