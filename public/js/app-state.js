@@ -157,7 +157,7 @@ function dpClose(){ var ov=document.getElementById('dp-overlay'); if(ov)ov.class
 function _dpKo(p){return p.kickoff?Date.parse(p.kickoff):NaN;}
 function _dpCd(d){var s=Math.max(0,Math.floor(d/1000));var h=Math.floor(s/3600);var m=Math.floor(s%3600/60);s=s%60;var f=function(n){return (n<10?"0":"")+n;};return f(h)+":"+f(m)+":"+f(s);}
 function _dpTimeHtml(p){var t=_dpKo(p);if(isNaN(t))return "";var d=t-Date.now();var st="font-size:22px;font-weight:800;line-height:1;text-align:center;width:100%;";if(d<=0)return "<div style="+st+"color:#ef4444>LIVE</div>";var c=d<1800000?"#ef4444":"#3b82f6";return "<div class=dp-cd data-ko="+t+" style="+st+"color:"+c+">"+_dpCd(d)+"</div>";}
-function _dpPolyOnly(){var m=window._pmLinks||{};return _dpPicks.filter(function(q){return m[q.fixture_id];}).sort(function(a,b){return (_dpKo(a)||9e15)-(_dpKo(b)||9e15);});}
+function _dpPolyOnly(){var m=window._pmLinks||{};return _dpPicks.filter(function(q){return m[q.fixture_id];}).sort(function(a,b){var la=(a.lambda_total==null?-1:a.lambda_total),lb=(b.lambda_total==null?-1:b.lambda_total);if(lb!==la)return lb-la;return (_dpKo(a)||9e15)-(_dpKo(b)||9e15);});}   // lambda total DESC (cel mai mare primul), apoi ora
 function dpRenderPage(){
   var body=document.getElementById('dp-page-body'); if(!body)return;
   if(!_dpPolyOnly().length){
@@ -188,7 +188,7 @@ function dpRenderPage(){
   _dpPolyOnly().forEach(function(p){
     var pct=Math.round((p.p_cal!=null?p.p_cal:0)*100);
     var conf=(p.confidence!=null?Math.round(p.confidence)+'%':'—');
-    var mk=_dpEsc(p.market)+' ('+pct+'%)';
+    var mk=_dpEsc(p.market)+' ('+pct+'%)'+(p.lambda_total!=null?' <span style="opacity:.8;font-weight:600">· λ '+Number(p.lambda_total).toFixed(2)+'</span>':'');
     var lgName=p.league_name?_dpEsc(p.league_name):'';
     var ctry=p.country?(' · '+_dpEsc(p.country)):'';
     var lgRow=lgName?('<div class="dp-league">'+flagHtml(p.flag, p.country)+lgName+ctry+'</div>'):'';

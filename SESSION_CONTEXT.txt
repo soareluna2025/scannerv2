@@ -7755,6 +7755,10 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
 [24.11 11:15] - PONTURI: plafon pe tara cu Polymarket 4 -> 6 (--cap-poly) | Commit: vezi git log
   Motiv: 6 tari atinsesera plafonul 4 (34 ponturi in banda). Praguri calitate neatinse (--min-rate 0.70, --min-n 200).
 
+[24.11 11:25] - PONTURI: pagina Ponturi ordonata dupa lambda total DESC + λ afisat pe card | Commit: vezi git log
+  daily_picks.py scrie "lambda_total" (lambda_home+lambda_away) per pont; app-state.js _dpPolyOnly sorteaza lambda DESC,
+  apoi ora (fara lambda = la coada); card: "Piata recomandata: Over 1.5 (92%) · λ 3.42". Banda (ticker) ramane grupata pe liga. SW v8.
+
 ═══════════════════════════════════════════════════════════════
 PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════

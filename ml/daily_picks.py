@@ -157,6 +157,17 @@ def build_reliability(hist, market, min_n, min_rate):
     return kept
 
 
+def _lam_total(row):
+    """lambda total asteptat al meciului = lambda_home + lambda_away (None daca lipseste una)."""
+    try:
+        h = row.get("lambda_home"); a = row.get("lambda_away")
+        if h is None or a is None or pd.isna(h) or pd.isna(a):
+            return None
+        return float(h) + float(a)
+    except (TypeError, ValueError):
+        return None
+
+
 def load_poly_ids(conn):
     """fixture_id-urile care au legatura Polymarket (polymarket_links). Eroare/tabela lipsa -> set gol
     (comportament vechi). Folosit DOAR la ordonare/plafon: banda arata oricum doar ponturile cu Polymarket."""
@@ -191,7 +202,7 @@ def select_today(hist, future, markets, min_n, min_rate, poly_ids=None, cap_poly
                 continue
             R, N = zone
             if best is None or R > best["R"]:
-                best = {"fixture_id": row["fixture_id"], "home_id": row.get("home_id"), "away_id": row.get("away_id"), "kickoff": (row.get("kickoff").isoformat() if hasattr(row.get("kickoff"),"isoformat") else None), "home": row["home_team"], "away": row["away_team"], "league_name": row.get("league_name"), "country": row.get("country"), "flag": row.get("flag"), "home_logo": row.get("home_logo"), "away_logo": row.get("away_logo"), "league_id": lid, "market": m, "R": R, "N": N, "band": band or "general"}
+                best = {"fixture_id": row["fixture_id"], "home_id": row.get("home_id"), "away_id": row.get("away_id"), "kickoff": (row.get("kickoff").isoformat() if hasattr(row.get("kickoff"),"isoformat") else None), "home": row["home_team"], "away": row["away_team"], "league_name": row.get("league_name"), "country": row.get("country"), "flag": row.get("flag"), "home_logo": row.get("home_logo"), "away_logo": row.get("away_logo"), "league_id": lid, "market": m, "R": R, "N": N, "band": band or "general", "lam_total": _lam_total(row)}
         if best is not None:
             best_per_fixture[row["fixture_id"]] = best
     poly_ids = poly_ids or set()
@@ -246,6 +257,7 @@ def write_json(picks, out_path=DAILY_PICKS_JSON):
         "market": MARKET_LABEL[p["market"]],
         "p_cal": round(p["R"], 4), "p_poisson": round(p["R"], 4),
         "confidence": round(p["R"] * 100),
+        "lambda_total": (round(p["lam_total"], 2) if p.get("lam_total") is not None else None),
     } for p in picks]
     payload = {"generated_at": datetime.now(timezone.utc).isoformat(), "picks": picks_list}
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
