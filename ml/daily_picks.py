@@ -157,7 +157,25 @@ def build_reliability(hist, market, min_n, min_rate):
     return kept
 
 
-def select_today(hist, future, markets, min_n, min_rate):
+def load_poly_ids(conn):
+    """fixture_id-urile care au legatura Polymarket (polymarket_links). Eroare/tabela lipsa -> set gol
+    (comportament vechi). Folosit DOAR la ordonare/plafon: banda arata oricum doar ponturile cu Polymarket."""
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT fixture_id FROM polymarket_links")
+        ids = {int(r[0]) for r in cur.fetchall()}
+        cur.close()
+        return ids
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print(f"[poly] polymarket_links indisponibil ({e}); plafon pe tara ca inainte.")
+        return set()
+
+
+def select_today(hist, future, markets, min_n, min_rate, poly_ids=None, cap_poly=3, cap_other=2):
     rel = {m: build_reliability(hist, m, min_n, min_rate) for m in markets}
     best_per_fixture = {}
     for _, row in future.iterrows():
@@ -176,11 +194,16 @@ def select_today(hist, future, markets, min_n, min_rate):
                 best = {"fixture_id": row["fixture_id"], "home_id": row.get("home_id"), "away_id": row.get("away_id"), "kickoff": (row.get("kickoff").isoformat() if hasattr(row.get("kickoff"),"isoformat") else None), "home": row["home_team"], "away": row["away_team"], "league_name": row.get("league_name"), "country": row.get("country"), "flag": row.get("flag"), "home_logo": row.get("home_logo"), "away_logo": row.get("away_logo"), "league_id": lid, "market": m, "R": R, "N": N, "band": band or "general"}
         if best is not None:
             best_per_fixture[row["fixture_id"]] = best
-    picks = sorted(best_per_fixture.values(), key=lambda d: d["R"], reverse=True)
-    out, cc = [], {}
+    poly_ids = poly_ids or set()
+    picks = sorted(best_per_fixture.values(),
+                   key=lambda d: (int(d["fixture_id"]) in poly_ids, d["R"]), reverse=True)
+    out, cc_poly, cc_other = [], {}, {}
     for p in picks:
+        is_poly = int(p["fixture_id"]) in poly_ids
+        # Plafon pe tara SEPARAT: ponturile fara Polymarket (ascunse in banda) nu mai ocupa locurile celor cu Polymarket.
+        cc, cap = (cc_poly, cap_poly) if is_poly else (cc_other, cap_other if poly_ids else 2)
         ckey = p.get("country") if p.get("country") else ("__none__", p["fixture_id"])
-        if cc.get(ckey, 0) >= 2:
+        if cc.get(ckey, 0) >= cap:
             continue
         out.append(p)
         cc[ckey] = cc.get(ckey, 0) + 1
@@ -296,7 +319,8 @@ def main():
     ap.add_argument("--market", choices=["gazde", "oaspeti", "over15", "all"], default="all")
     ap.add_argument("--min-n", type=int, default=200, help="N minim pe zonă (default 200)")
     ap.add_argument("--min-rate", type=float, default=0.70, help="rată minimă pe zonă (default 0.70)")
-    ap.add_argument("--hours", type=int, default=24, help="fereastră meciuri viitoare în ore (default 24)")
+    ap.add_argument("--hours", type=int, default=36, help="fereastră meciuri viitoare în ore (default 36)")
+    ap.add_argument("--cap-poly", type=int, default=3, help="max ponturi/țară cu Polymarket (default 3)")
     args = ap.parse_args()
 
     markets = ALL_MARKETS if args.market == "all" else [args.market]
@@ -310,8 +334,9 @@ def main():
 
     hist = load_history(conn)
     future = load_future(conn, args.hours)
+    poly_ids = load_poly_ids(conn)
     conn.close()
-    picks = select_today(hist, future, markets, args.min_n, args.min_rate)
+    picks = select_today(hist, future, markets, args.min_n, args.min_rate, poly_ids, args.cap_poly)
     if args.write:
         write_json(picks)
     else:
