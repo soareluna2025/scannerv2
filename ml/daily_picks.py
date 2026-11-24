@@ -175,7 +175,7 @@ def load_poly_ids(conn):
         return set()
 
 
-def select_today(hist, future, markets, min_n, min_rate, poly_ids=None, cap_poly=3, cap_other=2):
+def select_today(hist, future, markets, min_n, min_rate, poly_ids=None, cap_poly=4, cap_other=2):
     rel = {m: build_reliability(hist, m, min_n, min_rate) for m in markets}
     best_per_fixture = {}
     for _, row in future.iterrows():
@@ -200,6 +200,8 @@ def select_today(hist, future, markets, min_n, min_rate, poly_ids=None, cap_poly
     out, cc_poly, cc_other = [], {}, {}
     for p in picks:
         is_poly = int(p["fixture_id"]) in poly_ids
+        if poly_ids and not is_poly:
+            continue   # DOAR ponturile cu Polymarket ajung in fisier (banda/pagina le arata oricum doar pe acestea)
         # Plafon pe tara SEPARAT: ponturile fara Polymarket (ascunse in banda) nu mai ocupa locurile celor cu Polymarket.
         cc, cap = (cc_poly, cap_poly) if is_poly else (cc_other, cap_other if poly_ids else 2)
         ckey = p.get("country") if p.get("country") else ("__none__", p["fixture_id"])
@@ -320,7 +322,7 @@ def main():
     ap.add_argument("--min-n", type=int, default=200, help="N minim pe zonă (default 200)")
     ap.add_argument("--min-rate", type=float, default=0.70, help="rată minimă pe zonă (default 0.70)")
     ap.add_argument("--hours", type=int, default=36, help="fereastră meciuri viitoare în ore (default 36)")
-    ap.add_argument("--cap-poly", type=int, default=3, help="max ponturi/țară cu Polymarket (default 3)")
+    ap.add_argument("--cap-poly", type=int, default=4, help="max ponturi/țară cu Polymarket (default 4)")
     args = ap.parse_args()
 
     markets = ALL_MARKETS if args.market == "all" else [args.market]
