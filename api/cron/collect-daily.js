@@ -1,7 +1,7 @@
 // api/cron/collect-daily.js
 // Rulează zilnic la 06:00
 // Colectează: standings, leagues, teams pentru toate ligile din whitelist
-// + upcoming fixtures pentru azi + următoarele 3 zile (date picker calendar)
+// + upcoming fixtures pentru azi + următoarele 7 zile (date picker calendar)
 
 import { query } from '../db.js';
 import { ALLOWED_LEAGUE_IDS } from '../leagues.js';
@@ -35,7 +35,7 @@ function dateOffsetUTC(offsetDays) {
 // Upsertate în tabela fixtures (același pattern ca api/today.js).
 async function collectUpcomingFixtures(stats) {
   const allowed = new Set([...ALLOWED_LEAGUE_IDS]);
-  const offsets = [0, 1, 2, 3];                  // azi + 3 zile înainte
+  const offsets = [0, 1, 2, 3, 4, 5, 6, 7];      // azi + 7 zile înainte (cate 1 cerere API/zi)
   let totalUpserted = 0;
   let totalScanned  = 0;
 
@@ -309,11 +309,17 @@ export default async function handler(req, res) {
   const stats = { leagues: 0, teams: 0, standings: 0, errors: [] };
 
   try {
-    // Pas 1 — upcoming fixtures (azi + 3 zile) → tab PRE-MECI / date picker
+    // Pas 1 — upcoming fixtures (azi + 7 zile) → tab PRE-MECI / date picker
     try {
       await collectUpcomingFixtures(stats);
     } catch (e) {
       stats.errors.push(`upcoming: ${e.message}`);
+    }
+
+    // ?only=upcoming → DOAR meciurile programate (+ predictiile lor), fara standings/echipe (rulare manuala usoara).
+    if (req.query && req.query.only === 'upcoming') {
+      try { await computeUpcomingPredictions(stats); } catch (e) { stats.errors.push(`predictions: ${e.message}`); }
+      return res.status(200).json({ ok: true, mode: 'upcoming-only', duration_s: Math.round((Date.now() - startTime) / 1000), ...stats });
     }
 
     // Pas 1b — CAZ SPECIAL WC: programul complet league=1 season=2026 (toate meciurile).

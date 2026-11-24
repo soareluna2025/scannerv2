@@ -901,7 +901,7 @@ function pmBuildDateBar(){
   var todayStr = pmTodayStr();
   if (!PM_DATE) PM_DATE = todayStr;
   var html = '';
-  for (var off = -3; off <= 3; off++) {
+  for (var off = -3; off <= 7; off++) {   // 3 zile in urma + azi + 7 zile inainte
     var dStr = pmDateAdd(todayStr, off);
     var d = new Date(dStr + 'T00:00:00');
     var active = dStr === PM_DATE;
@@ -915,6 +915,7 @@ function pmBuildDateBar(){
          +  '</button>';
   }
   bar.innerHTML = html;
+  try { var _a = bar.querySelector('.pm-datebtn.active'); if (_a && _a.scrollIntoView) _a.scrollIntoView({inline:'center', block:'nearest'}); } catch(e) {}
 }
 
 async function pmLoadDate(dateStr){

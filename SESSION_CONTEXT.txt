@@ -7747,6 +7747,11 @@ RULAT:  25.05.2026 ~14:55 direct pe VPS root@Aloha:~/scannerv2
   --cap-poly default 4. Daca polymarket_links e indisponibil/gol => comportament vechi (toate ponturile, plafon 2/tara),
   ca banda sa nu ramana goala din cauza unui sync cazut.
 
+[24.11 11:20] - PROGRAM MECIURI: colectare extinsa la azi + 7 zile (era +3) | Commit: vezi git log
+  api/cron/collect-daily.js offsets [0..7] (1 cerere API/zi/data); calendarul (app-ui.js pmBuildDateBar) -3..+7 cu auto-scroll pe ziua activa;
+  service-worker v7. Predictiile raman pe 4 zile (se calculeaza pe masura ce meciurile se apropie). Polymarket sync: fereastra 11 zile (neschimbat).
+  Rulare manuala usoara: GET /api/cron/collect-daily?only=upcoming (cu x-cron-secret) = doar programul + predictii, fara standings/echipe.
+
 ═══════════════════════════════════════════════════════════════
 PENDING — COEFICIENT CALITATE ADVERSAR (plan revizuit după analiza Claude Code)
 ═══════════════════════════════════════════════════════════════
