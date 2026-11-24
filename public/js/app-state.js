@@ -310,7 +310,7 @@ function navBack(){
 // ── TABS ─────────────────────────────────────────────────────
 function setTab(t){
   _navStack.length=0;   // schimbare tab principal → reset stack navigare
-  ['live','pre','agent','fav','sim'].forEach(function(x){
+  ['live','pre','agent','fav','cam','sim'].forEach(function(x){
     document.getElementById('tab-'+x).classList.toggle('active',x===t);
     var nb=document.getElementById('nav-'+x);
     if(nb)nb.classList.toggle('active',x===t);
@@ -329,6 +329,7 @@ function setTab(t){
   if(t==='fav'){
     renderFavs();
   }
+  if(t==='cam' && typeof camInit==='function')camInit();
   if(t==='sim' && typeof psInit==='function')psInit();   // Simulator Perpetuals (public/js/perp-sim.js)
   if (t === 'pre' && _pmMatches.length === 0) {
     // Bug fix: dacă userul a navigat pe altă zi în date picker (PM_DATE !== today),

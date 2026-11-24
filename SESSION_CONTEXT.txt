@@ -7784,3 +7784,4 @@ VALIDARE:
 CONDIȚII: Sesiune dedicată + aprobare explicită Vlad.
 NU implementa fără parcurgerea pașilor de mai sus.
 ═══════════════════════════════════════════════════════════════
+[24.11 22:00] - CAMERA (paper/alerta, live INEXISTENT): tabele camera_settings/camera_entries, api/camera.js (protejat x-api-key), api/utils/camera-core.js (reguli pure, testate), api/cron/camera-monitor.js (cron 1 min, doar citire Polymarket, decontare paper), tab Camera in UI (public/js/camera.js), SW v9. Telegram optional: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID in .env | Commit: vezi git log

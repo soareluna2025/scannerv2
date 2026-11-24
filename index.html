@@ -146,6 +146,8 @@
   </div>
 
   <!-- TAB: SIMULATOR PERPETUALS -->
+  <div class="tab-content" id="tab-cam"><div id="cam-root"></div></div>
+
   <div class="tab-content" id="tab-sim">
     <div class="ps-seg ps-mode" role="group" aria-label="Tip simulator" style="margin-bottom:12px">
       <button type="button" id="ps-mode-perp" class="on">Perpetuals</button>
@@ -546,6 +548,10 @@
     <span class="nav-icon">⚡</span>
     <span class="nav-label">Generează</span>
   </button>
+  <button class="nav-btn" id="nav-cam" onclick="setTab('cam')">
+    <span class="nav-icon">🎛️</span>
+    <span class="nav-label">Cameră</span>
+  </button>
   <button class="nav-btn" id="nav-sim" onclick="setTab('sim')">
     <span class="nav-icon">📈</span>
     <span class="nav-label">Simulator</span>
@@ -558,5 +564,6 @@
 <script src="/js/compus-sim.js"></script>
 <script src="/js/compus-cal.js"></script>
 <script src="/js/cal-events.js"></script>
+<script src="/js/camera.js"></script>
 </body>
 </html>

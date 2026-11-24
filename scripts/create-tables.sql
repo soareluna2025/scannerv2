@@ -1224,3 +1224,30 @@ CREATE TABLE IF NOT EXISTS polymarket_links (
     title       TEXT,
     matched_at  TIMESTAMPTZ DEFAULT now()
 );
+
+-- ── Camera (Aloha executa DOAR intrarile puse de utilizator; moduri: paper/alert; live oprit) ──
+CREATE TABLE IF NOT EXISTS camera_settings (
+    k TEXT PRIMARY KEY,
+    v JSONB NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS camera_entries (
+    id            SERIAL PRIMARY KEY,
+    fixture_id    BIGINT NOT NULL,
+    market        TEXT NOT NULL DEFAULT 'over05',
+    match_label   TEXT,
+    kickoff       TIMESTAMPTZ,
+    stake         NUMERIC,
+    pmin          INTEGER,
+    pmax          INTEGER,
+    status        TEXT NOT NULL DEFAULT 'waiting',
+    mode          TEXT,
+    trigger_price NUMERIC,
+    triggered_at  TIMESTAMPTZ,
+    last_price    NUMERIC,
+    result        TEXT,
+    pnl           NUMERIC,
+    note          TEXT,
+    created_at    TIMESTAMPTZ DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS camera_entries_fx_market_active ON camera_entries (fixture_id, market) WHERE status IN ('waiting','triggered');

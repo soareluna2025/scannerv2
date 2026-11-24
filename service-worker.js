@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alohascan-v8'; // bump: restaurare Polymarket/Ponturi/Calendar/Compus — SW e cache-first
+const CACHE_NAME = 'alohascan-v9'; // bump: restaurare Polymarket/Ponturi/Calendar/Compus — SW e cache-first
 
 // External API hostnames — never intercept these
 const BYPASS_HOSTS = [

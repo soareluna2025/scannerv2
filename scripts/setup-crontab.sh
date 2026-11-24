@@ -86,6 +86,7 @@ NEW_CRONTAB=$(cat <<EOF
 # rundele europene Marți/Miercuri/Joi). dotenv citește .env din cwd (cd ${APP_DIR}).
 0 7 * * 5 cd ${APP_DIR} && node scripts/fetch-uefa-coefficients.js >> ${APP_DIR}/logs/uefa-coef.log 2>&1
 */30 * * * * cd ${APP_DIR} && /snap/bin/node --env-file=${APP_DIR}/.env api/cron/polymarket-sync.js >> ${APP_DIR}/logs/polymarket-sync.log 2>&1
+* * * * * cd ${APP_DIR} && /snap/bin/node --env-file=${APP_DIR}/.env api/cron/camera-monitor.js >> ${APP_DIR}/logs/camera-monitor.log 2>&1
 # AUTO-DEPLOY pull-based (înlocuiește dependența de GitHub Actions SSH): la 3 min VPS-ul verifică origin/main
 # și se actualizează singur (rollback automat dacă /health pică). flock = fără rulări suprapuse.
 */3 * * * * flock -n /tmp/auto-deploy.lock bash ${APP_DIR}/scripts/auto-deploy.sh >> ${APP_DIR}/logs/auto-deploy.log 2>&1
