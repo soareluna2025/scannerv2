@@ -1,7 +1,7 @@
 import { query } from './db.js';
 
 // Pret live de CUMPARARE (best ask) pe piata Over 0.5, per meci — doar CITIRE din datele publice Polymarket.
-// GET /api/polymarket-prices?ids=1,2,3  ->  { ok, prices: { "<fixture_id>": { c: 88.5, ts } } }   (c = cenți)
+// GET /api/polymarket-prices?ids=1,2,3  ->  { ok, prices: { "<fixture_id>": { c: 88, t: "<token_id>", ts } } }   (c = cenți; t = tokenul pentru WebSocket-ul Polymarket)
 const GAMMA = 'https://gamma-api.polymarket.com', CLOB = 'https://clob.polymarket.com';
 const tokenCache = new Map();   // slug -> { token, at }   (15 min; negativ 2 min)
 const priceCache = new Map();   // token -> { c, at }      (4 s)
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     for (let i = 0; i < rows.length; i += 8) {   // max 8 cereri in paralel
       await Promise.all(rows.slice(i, i + 8).map(async (r) => {
         const token = await over05Token(r.slug);
-        prices[r.fixture_id] = { c: token ? await askCents(token) : null, ts: Date.now() };
+        prices[r.fixture_id] = { c: token ? await askCents(token) : null, t: token, ts: Date.now() };
       }));
     }
     res.setHeader('Cache-Control', 'no-store');

@@ -153,22 +153,73 @@ function dpMatch(fid){
   var ov=document.getElementById('md-overlay'); if(ov)ov.style.zIndex='520';
 }
 function dpOpen(){ var ov=document.getElementById('dp-overlay'); if(!ov)return; dpRenderPage(); ov.classList.add('open'); dpPxStart(); }
-// ── Pret live Polymarket (Over 0.5, pret de cumparare in cenți) pe cardurile din Ponturi; reimprospatat la 5 s cat timp pagina e deschisa ──
-var _dpPx={}, _dpPxT=null;
+// ── Pret live Polymarket (Over 0.5, best ask in cenți) prin WebSocket REAL (wss://ws-subscriptions-clob.polymarket.com), doar citire publica.
+// REST (/api/polymarket-prices) aduce tokenurile + preturile initiale si e plasa de siguranta cand WebSocket-ul pica. Punct in coltul cardului: verde = WS merge, rosu = nu merge.
+var _dpPx={}, _dpPxT=null, _dpWs=null, _dpWsTok={}, _dpWsLast=0, _dpWsNext=0, _dpWsFail=0, _dpWsN=0, _dpRest=0;
+var DP_WS_URL='wss://ws-subscriptions-clob.polymarket.com/ws/market';
 function _dpPxClass(c){return c==null?'dp-px na':(c>=89?'dp-px hi':'dp-px');}
+function _dpWsOk(){return !!(_dpWs&&_dpWs.readyState===1&&Date.now()-_dpWsLast<25000);}
+function _dpWsDotHtml(){var ok=_dpWsOk();return '<span class="dp-ws '+(ok?'ok':'bad')+'" data-ws title="'+(ok?'WebSocket Polymarket: conectat':'WebSocket Polymarket: deconectat')+'"></span>';}
 function _dpPxHtml(fid){var c=_dpPx[fid];return '<span class="'+_dpPxClass(c)+'" data-px="'+fid+'" aria-label="Preț Polymarket">'+(c==null?'—':c+'c')+'</span>';}
-function _dpPxPaint(){var els=document.querySelectorAll('#dp-page-body [data-px]');for(var i=0;i<els.length;i++){var c=_dpPx[els[i].getAttribute('data-px')];els[i].className=_dpPxClass(c);els[i].textContent=(c==null?'—':c+'c');}}
-function dpPxTick(){
-  var ov=document.getElementById('dp-overlay');
-  if(!ov||!ov.classList.contains('open')){clearInterval(_dpPxT);_dpPxT=null;return;}
-  if(document.hidden)return;
-  var ids=_dpPolyOnly().map(function(p){return p.fixture_id;}).slice(0,40);
-  if(!ids.length)return;
+function _dpPxPaint(){
+  var els=document.querySelectorAll('#dp-page-body [data-px]');
+  for(var i=0;i<els.length;i++){var c=_dpPx[els[i].getAttribute('data-px')];els[i].className=_dpPxClass(c);els[i].textContent=(c==null?'—':c+'c');}
+  var ok=_dpWsOk(),ds=document.querySelectorAll('#dp-page-body [data-ws]');
+  for(var j=0;j<ds.length;j++){ds[j].className='dp-ws '+(ok?'ok':'bad');ds[j].title=ok?'WebSocket Polymarket: conectat':'WebSocket Polymarket: deconectat';}
+}
+function _dpSetAsk(token,ask){
+  var fids=_dpWsTok[token];if(!fids||ask==null||!isFinite(ask))return;
+  var c=Math.round(Number(ask)*100);
+  for(var i=0;i<fids.length;i++)_dpPx[fids[i]]=c;
+}
+function _dpWsMsg(m){
+  if(!m||!m.event_type)return;
+  if(m.event_type==='book'){var best=null;(m.asks||[]).forEach(function(a){var p=Number(a.price);if(isFinite(p)&&(best==null||p<best))best=p;});_dpSetAsk(m.asset_id,best);}
+  else if(m.event_type==='price_change'){(m.price_changes||[]).forEach(function(c){if(c.best_ask!=null&&c.best_ask!=='')_dpSetAsk(c.asset_id,Number(c.best_ask));});}
+  else if(m.event_type==='best_bid_ask'){_dpSetAsk(m.asset_id,Number(m.best_ask));}
+}
+function _dpWsConnect(){
+  var toks=Object.keys(_dpWsTok);if(!toks.length||_dpWs||typeof WebSocket==='undefined')return;
+  var ws;try{ws=new WebSocket(DP_WS_URL);}catch(e){_dpWsFail++;_dpWsNext=Date.now()+Math.min(30000,2000*_dpWsFail);return;}
+  _dpWs=ws;
+  ws.onopen=function(){_dpWsFail=0;_dpWsLast=Date.now();try{ws.send(JSON.stringify({assets_ids:Object.keys(_dpWsTok),type:'market',custom_feature_enabled:true}));}catch(e){}_dpPxPaint();};
+  ws.onmessage=function(ev){
+    _dpWsLast=Date.now();
+    if(ev.data==='PONG')return;
+    try{var d=JSON.parse(ev.data);if(Array.isArray(d))d.forEach(_dpWsMsg);else _dpWsMsg(d);_dpPxPaint();}catch(e){}
+  };
+  var drop=function(){if(_dpWs===ws){_dpWs=null;_dpWsFail++;_dpWsNext=Date.now()+Math.min(30000,2000*_dpWsFail);_dpPxPaint();}};
+  ws.onclose=drop;ws.onerror=function(){try{ws.close();}catch(e){}drop();};
+}
+function _dpWsStop(){var w=_dpWs;_dpWs=null;if(w){try{w.onclose=null;w.onerror=null;w.close();}catch(e){}}}
+function _dpRestFetch(){
+  var ids=_dpPolyOnly().map(function(p){return p.fixture_id;}).slice(0,40);if(!ids.length)return;
+  _dpRest=Date.now();
   fetch('/api/polymarket-prices?ids='+ids.join(',')).then(function(r){return r.json();}).then(function(d){
-    if(d&&d.ok&&d.prices){Object.keys(d.prices).forEach(function(k){_dpPx[k]=d.prices[k].c;});_dpPxPaint();}
+    if(!d||!d.ok||!d.prices)return;
+    var fresh=[];
+    Object.keys(d.prices).forEach(function(k){
+      var it=d.prices[k];
+      if(it.c!=null&&!_dpWsOk())_dpPx[k]=it.c;          // REST doar cand WS nu merge (altfel WS e sursa)
+      if(it.t){if(!_dpWsTok[it.t]){_dpWsTok[it.t]=[];fresh.push(it.t);}if(_dpWsTok[it.t].indexOf(k)<0)_dpWsTok[it.t].push(k);}
+    });
+    if(fresh.length&&_dpWs&&_dpWs.readyState===1){try{_dpWs.send(JSON.stringify({assets_ids:fresh,operation:'subscribe'}));}catch(e){}}
+    _dpPxPaint();
   }).catch(function(){});
 }
-function dpPxStart(){dpPxTick();if(!_dpPxT)_dpPxT=setInterval(dpPxTick,5000);}
+function dpPxTick(){
+  var ov=document.getElementById('dp-overlay');
+  if(!ov||!ov.classList.contains('open')){clearInterval(_dpPxT);_dpPxT=null;_dpWsStop();return;}
+  if(document.hidden)return;
+  _dpWsN++;
+  if(_dpWs&&_dpWs.readyState===1&&_dpWsN%2===0){try{_dpWs.send('PING');}catch(e){}}   // heartbeat la 10 s
+  var ok=_dpWsOk();
+  if(!ok&&_dpWs&&_dpWs.readyState===1&&Date.now()-_dpWsLast>=25000){_dpWsStop();_dpWsFail++;_dpWsNext=Date.now()+2000;}   // tacut >25 s = mort
+  if(!ok&&!_dpWs&&Date.now()>=_dpWsNext)_dpWsConnect();
+  if(!ok||!Object.keys(_dpWsTok).length||Date.now()-_dpRest>60000)_dpRestFetch();    // REST: plasa de siguranta + tokenuri noi
+  _dpPxPaint();
+}
+function dpPxStart(){dpPxTick();if(!_dpPxT)_dpPxT=setInterval(dpPxTick,5000);_dpRestFetch();}
 function dpClose(){ var ov=document.getElementById('dp-overlay'); if(ov)ov.classList.remove('open'); }
 function _dpKo(p){return p.kickoff?Date.parse(p.kickoff):NaN;}
 function _dpCd(d){var s=Math.max(0,Math.floor(d/1000));var h=Math.floor(s/3600);var m=Math.floor(s%3600/60);s=s%60;var f=function(n){return (n<10?"0":"")+n;};return f(h)+":"+f(m)+":"+f(s);}
@@ -213,6 +264,7 @@ function dpRenderPage(){
     out+=_dpCanOpen(p)
       ? '<div class="'+_pcCls+'" onclick="dpMatch('+p.fixture_id+')" style="cursor:pointer">'
       : '<div class="'+_pcCls+'">';
+    out+=_dpWsDotHtml();
     out+='<div class="wc-pont-match">'+logo(p.home_logo)+_dpEsc(p.home)+' vs '+logo(p.away_logo)+_dpEsc(p.away)+'</div>';
     out+='<div class="wc-pont-conf">'+conf+'</div>';
     out+='<div class="wc-pont-market">Piață recomandată: <b style="color:var(--gold)">'+mk+'</b></div>';
