@@ -156,10 +156,17 @@ function dpOpen(){ var ov=document.getElementById('dp-overlay'); if(!ov)return; 
 // ── Pret live Polymarket (Over 0.5, best ask in cenți) prin WebSocket REAL (wss://ws-subscriptions-clob.polymarket.com), doar citire publica.
 // REST (/api/polymarket-prices) aduce tokenurile + preturile initiale si e plasa de siguranta cand WebSocket-ul pica. Punct in coltul cardului: verde = WS merge, rosu = nu merge.
 var _dpPx={}, _dpPxT=null, _dpWs=null, _dpWsTok={}, _dpWsLast=0, _dpWsNext=0, _dpWsFail=0, _dpWsN=0, _dpRest=0;
+var _dpWsDiag={close:null,reason:'',err:'',opens:0,msgs:0,connectAt:0};
 var DP_WS_URL='wss://ws-subscriptions-clob.polymarket.com/ws/market';
 function _dpPxClass(c){return c==null?'dp-px na':(c<=89?'dp-px hi':'dp-px');}   // verde fix peste 89c; la 89c sau mai jos = rosu intermitent (zona de cumparare)
 function _dpWsOk(){return !!(_dpWs&&_dpWs.readyState===1&&Date.now()-_dpWsLast<25000);}
-function _dpWsDotHtml(){var ok=_dpWsOk();return '<span class="dp-ws '+(ok?'ok':'bad')+'" data-ws title="'+(ok?'WebSocket Polymarket: conectat':'WebSocket Polymarket: deconectat')+'"></span>';}
+function dpWsInfo(ev){
+  if(ev&&ev.stopPropagation)ev.stopPropagation();
+  var d=_dpWsDiag,st=_dpWs?['conectare…','conectat','se închide','închis'][_dpWs.readyState]:'fără conexiune';
+  var ago=_dpWsLast?Math.round((Date.now()-_dpWsLast)/1000)+' s':'niciodată';
+  try{alert('WebSocket Polymarket\nStare: '+st+(_dpWsOk()?' (OK)':' (NU merge)')+'\nTokenuri: '+Object.keys(_dpWsTok).length+'\nConectări reușite: '+d.opens+'\nMesaje primite: '+d.msgs+'\nUltimul mesaj: acum '+ago+'\nUltima închidere: '+(d.close==null?'—':d.close+' '+d.reason)+'\nEroare: '+(d.err||'—')+'\nÎncercări eșuate la rând: '+_dpWsFail);}catch(e){}
+}
+function _dpWsDotHtml(){var ok=_dpWsOk();return '<span class="dp-ws '+(ok?'ok':'bad')+'" data-ws onclick="dpWsInfo(event)" title="'+(ok?'WebSocket Polymarket: conectat':'WebSocket Polymarket: deconectat')+'"></span>';}
 function _dpPxHtml(fid){var c=_dpPx[fid];return '<span class="'+_dpPxClass(c)+'" data-px="'+fid+'" aria-label="Preț Polymarket">'+(c==null?'—':c+'c')+'</span>';}
 function _dpPxPaint(){
   var els=document.querySelectorAll('#dp-page-body [data-px]');
@@ -182,14 +189,14 @@ function _dpWsConnect(){
   var toks=Object.keys(_dpWsTok);if(!toks.length||_dpWs||typeof WebSocket==='undefined')return;
   var ws;try{ws=new WebSocket(DP_WS_URL);}catch(e){_dpWsFail++;_dpWsNext=Date.now()+Math.min(30000,2000*_dpWsFail);return;}
   _dpWs=ws;
-  ws.onopen=function(){_dpWsFail=0;_dpWsLast=Date.now();try{ws.send(JSON.stringify({assets_ids:Object.keys(_dpWsTok),type:'market',custom_feature_enabled:true}));}catch(e){}_dpPxPaint();};
+  ws.onopen=function(){_dpWsFail=0;_dpWsDiag.opens++;_dpWsLast=Date.now();try{ws.send(JSON.stringify({assets_ids:Object.keys(_dpWsTok),type:'market',custom_feature_enabled:true}));}catch(e){}_dpPxPaint();};
   ws.onmessage=function(ev){
-    _dpWsLast=Date.now();
+    _dpWsLast=Date.now();_dpWsDiag.msgs++;
     if(ev.data==='PONG')return;
     try{var d=JSON.parse(ev.data);if(Array.isArray(d))d.forEach(_dpWsMsg);else _dpWsMsg(d);_dpPxPaint();}catch(e){}
   };
-  var drop=function(){if(_dpWs===ws){_dpWs=null;_dpWsFail++;_dpWsNext=Date.now()+Math.min(30000,2000*_dpWsFail);_dpPxPaint();}};
-  ws.onclose=drop;ws.onerror=function(){try{ws.close();}catch(e){}drop();};
+  var drop=function(ev){if(ev&&ev.code!=null){_dpWsDiag.close=ev.code;_dpWsDiag.reason=ev.reason||'';}if(_dpWs===ws){_dpWs=null;_dpWsFail++;_dpWsNext=Date.now()+Math.min(30000,2000*_dpWsFail);_dpPxPaint();}};
+  ws.onclose=drop;ws.onerror=function(){_dpWsDiag.err='eroare de rețea sau refuzat (iOS/Polymarket)';try{ws.close();}catch(e){}drop();};
 }
 function _dpWsStop(){var w=_dpWs;_dpWs=null;if(w){try{w.onclose=null;w.onerror=null;w.close();}catch(e){}}}
 function _dpRestFetch(){
@@ -203,6 +210,7 @@ function _dpRestFetch(){
       if(it.c!=null&&!_dpWsOk())_dpPx[k]=it.c;          // REST doar cand WS nu merge (altfel WS e sursa)
       if(it.t){if(!_dpWsTok[it.t]){_dpWsTok[it.t]=[];fresh.push(it.t);}if(_dpWsTok[it.t].indexOf(k)<0)_dpWsTok[it.t].push(k);}
     });
+    if(!_dpWs&&Date.now()>=_dpWsNext)_dpWsConnect();
     if(fresh.length&&_dpWs&&_dpWs.readyState===1){try{_dpWs.send(JSON.stringify({assets_ids:fresh,operation:'subscribe'}));}catch(e){}}
     _dpPxPaint();
   }).catch(function(){});
