@@ -29,11 +29,12 @@ export function effectiveStake(entry, settings, ctx) {
   return Number(entry.stake ?? s.stake);
 }
 
-// Faza intrarii dupa ora: 'prematch' | 'live' | 'closed'. Minutul live e aproximativ (de la ora de start, fara pauza).
-export function entryPhase(entry, now = new Date()) {
+// Faza intrarii: 'prematch' | 'live' | 'closed'. liveMin = minutul REAL din feed-ul live (live_stats, scris de scanner din fluxul API); fara el, aproximare din ora de start.
+export function entryPhase(entry, now = new Date(), liveMin = null) {
   if (!entry.kickoff) return 'prematch';
-  const min = (now.getTime() - new Date(entry.kickoff).getTime()) / 60000;
-  if (min < 0) return 'prematch';
+  const approx = (now.getTime() - new Date(entry.kickoff).getTime()) / 60000;
+  if (approx < 0 && liveMin == null) return 'prematch';
+  const min = liveMin != null ? liveMin : approx;
   if (entry.live_to != null && min >= (entry.live_from ?? 0) && min <= entry.live_to) return 'live';
   return 'closed';
 }

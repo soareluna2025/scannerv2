@@ -55,36 +55,55 @@ async function main() {
     const x = settle(r.market, r.home_goals, r.away_goals, Number(r.trigger_price), Number(r.stake));
     await pool.query("UPDATE camera_entries SET result=$2, pnl=$3, status='settled' WHERE id=$1", [r.id, x.result, x.pnl]);
   }
-  // 2) Doar daca e START: evalueaza coada in ordine cronologica
-  const waiting = (await pool.query("SELECT e.*, l.slug FROM camera_entries e LEFT JOIN polymarket_links l ON l.fixture_id = e.fixture_id WHERE e.status='waiting' ORDER BY e.kickoff ASC NULLS LAST, e.id")).rows;
-  if (!s.running) return console.log(`[camera] ${new Date().toISOString()} STOP · in coada=${waiting.length}`);
+  // 2) Doar daca e START: evalueaza coada in ordine cronologica; ~55 s de polling la 5 s (prinde scaderile scurte de pret)
+  if (!s.running) return console.log(`[alohapoly] ${new Date().toISOString()} STOP`);
   const st = (await pool.query(`SELECT COALESCE(SUM(stake) FILTER (WHERE triggered_at::date = CURRENT_DATE),0) AS spent, COALESCE(SUM(stake) FILTER (WHERE status='triggered'),0) AS open, COALESCE(SUM(pnl),0) AS pnl FROM camera_entries WHERE status IN ('triggered','settled')`)).rows[0];
   const streak = (await pool.query("SELECT result FROM camera_entries WHERE result IS NOT NULL ORDER BY triggered_at DESC LIMIT 50")).rows;
   let consecutiveLosses = 0; for (const r of streak) { if (r.result === 'loss') consecutiveLosses++; else break; }
-  let spentToday = Number(st.spent), freeBalance = s.bankroll + Number(st.pnl) - Number(st.open);
+  const ctx = { spentToday: Number(st.spent), freeBalance: s.bankroll + Number(st.pnl) - Number(st.open), consecutiveLosses };
+  const tokens = new Map();   // cache slug|piata -> token (evita Gamma la fiecare 5 s)
+  const startT = Date.now();
+  do {
+    const s2 = await loadSettings();
+    if (!s2.running) break;
+    const left = await tick(s2, ctx, tokens);
+    if (!left) break;
+    await new Promise(r => setTimeout(r, 5000));
+  } while (Date.now() - startT < 52000);
+}
+
+// O trecere peste coada. Returneaza cate intrari au ramas in asteptare.
+async function tick(s, ctx, tokens) {
+  const waiting = (await pool.query("SELECT e.*, l.slug FROM camera_entries e LEFT JOIN polymarket_links l ON l.fixture_id = e.fixture_id WHERE e.status='waiting' ORDER BY e.kickoff ASC NULLS LAST, e.id")).rows;
+  if (!waiting.length) return 0;
+  // Minut real + scor din feed-ul live (scanner -> live_stats), doar daca e proaspat (< 3 min)
+  const live = new Map((await pool.query(`SELECT DISTINCT ON (fixture_id) fixture_id, elapsed FROM live_stats WHERE fixture_id = ANY($1) AND recorded_at > now() - interval '3 minutes' ORDER BY fixture_id, recorded_at DESC`, [waiting.map(w => w.fixture_id)])).rows.map(r => [Number(r.fixture_id), r.elapsed]));
   for (const e of waiting) {
     try {
-      const phase = entryPhase(e);
+      const phase = entryPhase(e, new Date(), live.has(Number(e.fixture_id)) ? live.get(Number(e.fixture_id)) : null);
       if (phase === 'closed') { await pool.query("UPDATE camera_entries SET status='expired' WHERE id=$1", [e.id]); continue; }
-      if (!e.slug) { await pool.query("UPDATE camera_entries SET note='fara link Polymarket' WHERE id=$1", [e.id]); continue; }
-      const { token, note } = await marketToken(e.slug, e.market);
-      if (!token) { await pool.query("UPDATE camera_entries SET note=$2 WHERE id=$1", [e.id, note]); continue; }
+      if (!e.slug) { await pool.query("UPDATE camera_entries SET note='fara link Polymarket' WHERE id=$1 AND note IS DISTINCT FROM 'fara link Polymarket'", [e.id]); continue; }
+      const ck = e.slug + '|' + e.market;
+      if (!tokens.has(ck)) tokens.set(ck, await marketToken(e.slug, e.market));
+      const { token, note } = tokens.get(ck);
+      if (!token) { await pool.query("UPDATE camera_entries SET note=$2 WHERE id=$1 AND note IS DISTINCT FROM $2", [e.id, note]); continue; }
       const book = await bookFor(token, e.pmax ?? s.pmax);
       await pool.query("UPDATE camera_entries SET last_price=$2, note=NULL WHERE id=$1", [e.id, book?.ask ?? null]);
-      const d = evaluate(e, book, s, { spentToday, spentOnMatch: 0, consecutiveLosses, freeBalance });
+      const d = evaluate(e, book, s, { ...ctx, spentOnMatch: 0 });
       if (!d.fire) continue;
-      spentToday += d.stake; freeBalance -= d.stake;
+      ctx.spentToday += d.stake; ctx.freeBalance -= d.stake;
       await pool.query("UPDATE camera_entries SET status='triggered', stake=$4, mode=$2, trigger_price=$3, triggered_at=now() WHERE id=$1", [e.id, s.mode, d.price, d.stake]);
-      if (s.mode === 'alert') await notify(`Camera: ${e.match_label} · ${e.market} la ${Math.round(d.price * 100)}c (țintă ${e.pmin}-${e.pmax}c). Miză: ${d.stake} USDC. Decizia e a ta.`);
-      console.log(`[camera] declansat #${e.id} ${e.match_label} ${e.market} @${d.price} stake=${d.stake} mode=${s.mode}`);
-    } catch (err) { console.error('[camera] eroare intrare', e.id, err.message); }
+      if (s.mode === 'alert') await notify(`AlohaPoly: ${e.match_label} · ${e.market} la ${Math.round(d.price * 100)}c (țintă ${e.pmin}-${e.pmax}c). Miză: ${d.stake} USDC. Decizia e a ta.`);
+      console.log(`[alohapoly] declansat #${e.id} ${e.match_label} ${e.market} @${d.price} stake=${d.stake} mode=${s.mode}`);
+    } catch (err) { console.error('[alohapoly] eroare intrare', e.id, err.message); }
   }
+  return waiting.length;
 }
 
 if (process.argv[1] && process.argv[1].endsWith('camera-monitor.js')) {
   if (process.argv[2] === '--test-telegram') {
-    notify('Camera: test Telegram OK. Alertele vor ajunge aici.').then(ok => { console.log(ok ? 'Telegram OK: mesaj trimis' : 'Telegram NEconfigurat sau respins (verifica token/chat id)'); pool.end(); });
+    notify('AlohaPoly: test Telegram OK. Alertele vor ajunge aici.').then(ok => { console.log(ok ? 'Telegram OK: mesaj trimis' : 'Telegram NEconfigurat sau respins (verifica token/chat id)'); pool.end(); });
   } else {
-    main().then(() => pool.end()).catch(e => { console.error('[camera] fatal', e.message); pool.end(); process.exit(1); });
+    main().then(() => pool.end()).catch(e => { console.error('[alohapoly] fatal', e.message); pool.end(); process.exit(1); });
   }
 }

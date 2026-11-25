@@ -1,7 +1,7 @@
 import { query } from './db.js';
 import { normSettings, MARKETS } from './utils/camera-core.js';
 
-// Camera — API intern (auth x-api-key, PROTECTED_API in server.js). Aloha executa DOAR intrarile puse de utilizator.
+// AlohaPoly (fosta Camera) — API intern (auth x-api-key, PROTECTED_API in server.js). Aloha executa DOAR intrarile puse de utilizator.
 export async function ensureCameraTables() {
   await query("CREATE TABLE IF NOT EXISTS camera_settings (k TEXT PRIMARY KEY, v JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT now())");
   await query("CREATE TABLE IF NOT EXISTS camera_entries (id SERIAL PRIMARY KEY, fixture_id BIGINT NOT NULL, market TEXT NOT NULL DEFAULT 'over05', match_label TEXT, kickoff TIMESTAMPTZ, stake NUMERIC, pmin INTEGER, pmax INTEGER, status TEXT NOT NULL DEFAULT 'waiting', mode TEXT, trigger_price NUMERIC, triggered_at TIMESTAMPTZ, last_price NUMERIC, result TEXT, pnl NUMERIC, note TEXT, created_at TIMESTAMPTZ DEFAULT now())");
