@@ -152,7 +152,23 @@ function dpMatch(fid){
   mdOpen(p.fixture_id,p.home_id,p.away_id,null);
   var ov=document.getElementById('md-overlay'); if(ov)ov.style.zIndex='520';
 }
-function dpOpen(){ var ov=document.getElementById('dp-overlay'); if(!ov)return; dpRenderPage(); ov.classList.add('open'); }
+function dpOpen(){ var ov=document.getElementById('dp-overlay'); if(!ov)return; dpRenderPage(); ov.classList.add('open'); dpPxStart(); }
+// ── Pret live Polymarket (Over 0.5, pret de cumparare in cenți) pe cardurile din Ponturi; reimprospatat la 5 s cat timp pagina e deschisa ──
+var _dpPx={}, _dpPxT=null;
+function _dpPxClass(c){return c==null?'dp-px na':(c>=89?'dp-px hi':'dp-px');}
+function _dpPxHtml(fid){var c=_dpPx[fid];return '<span class="'+_dpPxClass(c)+'" data-px="'+fid+'" aria-label="Preț Polymarket">'+(c==null?'—':c+'c')+'</span>';}
+function _dpPxPaint(){var els=document.querySelectorAll('#dp-page-body [data-px]');for(var i=0;i<els.length;i++){var c=_dpPx[els[i].getAttribute('data-px')];els[i].className=_dpPxClass(c);els[i].textContent=(c==null?'—':c+'c');}}
+function dpPxTick(){
+  var ov=document.getElementById('dp-overlay');
+  if(!ov||!ov.classList.contains('open')){clearInterval(_dpPxT);_dpPxT=null;return;}
+  if(document.hidden)return;
+  var ids=_dpPolyOnly().map(function(p){return p.fixture_id;}).slice(0,40);
+  if(!ids.length)return;
+  fetch('/api/polymarket-prices?ids='+ids.join(',')).then(function(r){return r.json();}).then(function(d){
+    if(d&&d.ok&&d.prices){Object.keys(d.prices).forEach(function(k){_dpPx[k]=d.prices[k].c;});_dpPxPaint();}
+  }).catch(function(){});
+}
+function dpPxStart(){dpPxTick();if(!_dpPxT)_dpPxT=setInterval(dpPxTick,5000);}
 function dpClose(){ var ov=document.getElementById('dp-overlay'); if(ov)ov.classList.remove('open'); }
 function _dpKo(p){return p.kickoff?Date.parse(p.kickoff):NaN;}
 function _dpCd(d){var s=Math.max(0,Math.floor(d/1000));var h=Math.floor(s/3600);var m=Math.floor(s%3600/60);s=s%60;var f=function(n){return (n<10?"0":"")+n;};return f(h)+":"+f(m)+":"+f(s);}
@@ -204,6 +220,7 @@ function dpRenderPage(){
     // Rând jos: stânga = butoane calendar (verde/roșu), dreapta = countdown + badge Polymarket.
     out+='<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:8px">'
       +(window.calEv?calEv.btns(p.fixture_id):'<span></span>')
+      +_dpPxHtml(p.fixture_id)
       +'<div style="display:flex;flex-direction:column;align-items:center;gap:14px;width:fit-content">'+_dpTimeHtml(p)+(typeof _pmInline==='function'?_pmInline(p.fixture_id):'')+'</div></div>';
     out+='</div>';
   });
