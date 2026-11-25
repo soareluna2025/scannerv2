@@ -24,8 +24,20 @@ async function bookFor(token, pmaxC) {
   const depth = asks.filter(a => a.p <= pmaxC / 100).reduce((t, a) => t + a.p * a.s, 0);
   return { ask: asks[0].p, depthAtOrBelowMax: depth };
 }
-async function notify(text) {
-  const t = process.env.TELEGRAM_BOT_TOKEN, c = process.env.TELEGRAM_CHAT_ID;
+// Telegram: variabilele pot sta in .env SAU in /root/.camera-telegram.env (supravietuieste deploy-ului GitHub Actions, care rescrie .env).
+import { readFileSync } from 'fs';
+function tgConf() {
+  let t = process.env.TELEGRAM_BOT_TOKEN, c = process.env.TELEGRAM_CHAT_ID;
+  if (!t || !c) {
+    try {
+      const f = Object.fromEntries(readFileSync('/root/.camera-telegram.env', 'utf8').split('\n').map(l => l.trim()).filter(l => l.includes('=') && !l.startsWith('#')).map(l => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
+      t = t || f.TELEGRAM_BOT_TOKEN; c = c || f.TELEGRAM_CHAT_ID;
+    } catch { /* fisier lipsa */ }
+  }
+  return { t, c };
+}
+export async function notify(text) {
+  const { t, c } = tgConf();
   if (!t || !c) return false;
   try { const r = await fetch(`https://api.telegram.org/bot${t}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: c, text }) }); return r.ok; } catch { return false; }
 }
@@ -65,4 +77,10 @@ async function main() {
     } catch (err) { console.error('[camera] eroare intrare', e.id, err.message); }
   }
 }
-main().then(() => pool.end()).catch(e => { console.error('[camera] fatal', e.message); pool.end(); process.exit(1); });
+if (process.argv[1] && process.argv[1].endsWith('camera-monitor.js')) {
+  if (process.argv[2] === '--test-telegram') {
+    notify('Camera: test Telegram OK. Alertele vor ajunge aici.').then(ok => { console.log(ok ? 'Telegram OK: mesaj trimis' : 'Telegram NEconfigurat sau respins (verifica token/chat id)'); pool.end(); });
+  } else {
+    main().then(() => pool.end()).catch(e => { console.error('[camera] fatal', e.message); pool.end(); process.exit(1); });
+  }
+}

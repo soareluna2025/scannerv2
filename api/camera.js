@@ -12,6 +12,18 @@ export async function loadSettings() {
   return normSettings(r.rows[0]?.v);
 }
 
+let _geo = { at: 0, v: null };
+// Semafor geoblock: verifica IP-ul SERVERULUI (nu al tau). Doar informativ; Camera nu plaseaza ordine.
+async function geoblock() {
+  if (Date.now() - _geo.at < 5 * 60 * 1000 && _geo.v) return _geo.v;
+  try {
+    const r = await fetch('https://polymarket.com/api/geoblock', { signal: AbortSignal.timeout(6000) });
+    const j = await r.json();
+    _geo = { at: Date.now(), v: { ok: true, blocked: !!j.blocked, country: j.country || null } };
+  } catch (e) { _geo = { at: Date.now(), v: { ok: false, blocked: null, country: null } }; }
+  return _geo.v;
+}
+
 export default async function handler(req, res) {
   try {
     await ensureCameraTables();
@@ -26,7 +38,8 @@ export default async function handler(req, res) {
         COUNT(*) FILTER (WHERE result='win') AS wins, COUNT(*) FILTER (WHERE result IS NOT NULL) AS settled,
         AVG(trigger_price) FILTER (WHERE result IS NOT NULL) AS avg_price
         FROM camera_entries`)).rows[0];
-      return res.status(200).json({ ok: true, settings, entries, stats: st });
+      const geo = await geoblock();
+      return res.status(200).json({ ok: true, settings, entries, stats: st, geo });
     }
     const b = req.body || {};
     if (b.action === 'settings') {

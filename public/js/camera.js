@@ -1,13 +1,13 @@
 // Camera — tablou de control. Aloha executa DOAR intrarile puse aici; moduri: Paper / Alerta (Live nu exista). Date prin /api/camera (x-api-key).
 (function(){
-var S=null,E=[],ST={},T=null;
+var S=null,E=[],ST={},T=null,G=null;
 function lsGet(k){try{return localStorage.getItem(k)||"";}catch(e){return "";}}
 function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 function key(){var k=lsGet("aloha_cal_key")||lsGet("aloha_admin_key");if(k)return k;try{k=(window.prompt("Cheie de acces (o singură dată pe acest dispozitiv):")||"").trim();}catch(e){}if(k)lsSet("aloha_cal_key",k);return k;}
 function api(method,body){var k=key();if(!k)return Promise.resolve({cancel:true});var o={method:method,headers:{"x-api-key":k}};if(body){o.headers["Content-Type"]="application/json";o.body=JSON.stringify(body);}
   return fetch("/api/camera",o).then(function(r){if(r.status===401){lsSet("aloha_cal_key","");return{unauth:true};}return r.json();});}
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
-function load(){return api("GET").then(function(j){if(j&&j.ok){S=j.settings;E=j.entries||[];ST=j.stats||{};}render(j);});}
+function load(){return api("GET").then(function(j){if(j&&j.ok){S=j.settings;E=j.entries||[];ST=j.stats||{};G=j.geo||null;}render(j);});}
 function save(patch){for(var k in patch)S[k]=patch[k];render();clearTimeout(T);T=setTimeout(function(){api("POST",{action:"settings",settings:patch});},400);}
 var SL=[["stake","Miza per intrare","USDC",1,100,1],["pmin","Preț intrare: minim","c",70,98,1],["pmax","Preț intrare: maxim","c",70,98,1],["dailyCap","Plafon zilnic total","USDC",10,500,10],["matchCap","Plafon per meci","USDC",1,100,1],["slip","Slippage maxim","c",0,5,1],["liq","Lichiditate minimă","USDC",0,500,10],["rate","Rata istorică minimă","%",70,99,1],["minute","Nu intra după minutul","'",0,90,5],["losses","Oprire după pierderi consecutive","",1,10,1]];
 var C={bg:"#171d25",bd:"#263040",mu:"#9aa7b5",ac:"#2dd4bf"};
@@ -19,6 +19,8 @@ function render(j){
   if(!S){el.innerHTML='<div style="padding:20px;color:'+C.mu+'">Se încarcă…</div>';return;}
   var h='<div style="padding:14px;display:flex;flex-direction:column;gap:14px">';
   h+='<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between"><div><div style="font-size:20px;font-weight:700">Camera</div><div style="font-size:12px;color:'+C.mu+'">Aloha execută doar ce pui tu aici. Live: oprit (geoblock).</div></div><button onclick="camStop()" style="min-height:44px;padding:8px 16px;border-radius:10px;border:0;font-weight:700;cursor:pointer;background:'+(S.stopped?C.ac:"#ef4444")+';color:'+(S.stopped?"#06201c":"#fff")+'">'+(S.stopped?"Repornește":"STOP TOT")+'</button></div>';
+  var gc=!G||!G.ok?["#2a2530","#b9a9c9","Geoblock: necunoscut"]:G.blocked?["#2a2112","#fbbf24","Server blocat ("+(G.country||"?")+") · execuție imposibilă de aici"]:["#10302b","#2dd4bf","Server eligibil ("+(G.country||"?")+")"];
+  h+='<div style="padding:8px 12px;border-radius:999px;background:'+gc[0]+';color:'+gc[1]+';font-size:12px;font-weight:600;align-self:flex-start">'+gc[2]+' · verifică IP-ul serverului, nu al tău</div>';
   if(S.stopped)h+='<div style="padding:10px 12px;border-radius:10px;background:#3a1517;border:1px solid #7f2a2f;color:#fecaca;font-size:13px;font-weight:600">OPRIT. Nicio intrare nu se declanșează.</div>';
   h+='<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">'+btn(S.mode==="paper","Paper","camMode('paper')")+btn(S.mode==="alert","Alertă Telegram","camMode('alert')")+'<span style="font-size:12px;color:'+C.mu+'">'+(S.mode==="paper"?"Notează ce ar fi cumpărat. Fără bani reali.":"Te anunță pe Telegram. Decizia e a ta.")+'</span></div>';
   var n=function(v){return Number(v||0).toFixed(2);};
