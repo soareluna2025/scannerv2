@@ -157,7 +157,7 @@ function dpOpen(){ var ov=document.getElementById('dp-overlay'); if(!ov)return; 
 // REST (/api/polymarket-prices) aduce tokenurile + preturile initiale si e plasa de siguranta cand WebSocket-ul pica. Punct in coltul cardului: verde = WS merge, rosu = nu merge.
 var _dpPx={}, _dpPxT=null, _dpWs=null, _dpWsTok={}, _dpWsLast=0, _dpWsNext=0, _dpWsFail=0, _dpWsN=0, _dpRest=0;
 var DP_WS_URL='wss://ws-subscriptions-clob.polymarket.com/ws/market';
-function _dpPxClass(c){return c==null?'dp-px na':(c>=89?'dp-px hi':'dp-px');}
+function _dpPxClass(c){return c==null?'dp-px na':(c<=89?'dp-px hi':'dp-px');}   // verde fix peste 89c; la 89c sau mai jos = rosu intermitent (zona de cumparare)
 function _dpWsOk(){return !!(_dpWs&&_dpWs.readyState===1&&Date.now()-_dpWsLast<25000);}
 function _dpWsDotHtml(){var ok=_dpWsOk();return '<span class="dp-ws '+(ok?'ok':'bad')+'" data-ws title="'+(ok?'WebSocket Polymarket: conectat':'WebSocket Polymarket: deconectat')+'"></span>';}
 function _dpPxHtml(fid){var c=_dpPx[fid];return '<span class="'+_dpPxClass(c)+'" data-px="'+fid+'" aria-label="Preț Polymarket">'+(c==null?'—':c+'c')+'</span>';}
