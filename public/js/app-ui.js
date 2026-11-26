@@ -221,20 +221,23 @@ function buildCardHtml(m,lgName){
   var _ex=m.fixture&&m.fixture.status&&m.fixture.status.extra;
   var _b=matchTimeBadge(_sh,mn,_ex);
   var o='';
-  o+='<div class="card'+(goodLg?' card-good-lg':badLg?' card-bad-lg':'')+'" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer">';
-  o+='<div class="card-league">';
+  o+='<div class="card lc'+(goodLg?' card-good-lg':badLg?' card-bad-lg':'')+'" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer">';
+  var _pmH=_pmInline(fid2,hg+ag);
+  o+='<div class="card-league lc-head'+(_pmH?' has-pm':'')+'">';
   o+='<div class="league-name"><button class="star-btn'+(isFav(fid2)?' active':'')+'" onclick="event.stopPropagation();toggleFav('+fid2+',this)">'+(isFav(fid2)?'⭐':'☆')+'</button>'+flag+(lgName||'')+lgBadge+'</div>';
-  o+='<div class="card-minute">'+_pmInline(fid2,hg+ag)+(_b.dot?'<div class="min-dot" style="background:'+_b.c+'"></div>':'')+'<div class="min-val" style="color:'+_b.c+'">'+_b.t+'</div></div>';
+  o+='<div class="card-minute">'+'<div class="lc-status">'+(_b.dot?'<span class="lc-live">LIVE</span><div class="min-dot" style="background:'+_b.c+'"></div>':'')+'<div class="min-val" style="color:'+_b.c+'">'+_b.t+'</div></div></div>'+(_pmH?'<div class="lc-pm">'+_pmH+'</div>':'');
   o+='</div>';
-  o+='<div class="card-teams">';
-  o+=mrRow(
-    {flag:tLogo(m.teams&&m.teams.home,32), name:htmlEsc((m.teams&&m.teams.home&&m.teams.home.name)||'—')+(hRed?' 🟥':'')},
-    {flag:tLogo(m.teams&&m.teams.away,32), name:htmlEsc((m.teams&&m.teams.away&&m.teams.away.name)||'—')+(aRed?' 🟥':'')},
-    mrScore(hg,ag)
-  );
+  o+='<div class="card-teams lc-teams">';
+  var _hN=htmlEsc((m.teams&&m.teams.home&&m.teams.home.name)||'—'),_aN=htmlEsc((m.teams&&m.teams.away&&m.teams.away.name)||'—');
+  o+='<div class="lc-row">'
+    +'<div class="lc-team lc-h">'+tLogo(m.teams&&m.teams.home,30)+'<span class="lc-name">'+_hN+'</span>'+(hRed?'<span class="lc-red">🟥</span>':'')+'</div>'
+    +'<div class="lc-score">'+mrScore(hg,ag)+'</div>'
+    +'<div class="lc-team lc-a">'+(aRed?'<span class="lc-red">🟥</span>':'')+'<span class="lc-name">'+_aN+'</span>'+tLogo(m.teams&&m.teams.away,30)+'</div>'
+    +'</div>';
   o+='</div>';
-  o+='<div class="card-footer">';
-  o+='<div class="ngp-row"><div class="ngp-label">Next Goal</div>';
+  o+='<div class="card-footer lc-foot">';
+  var _ngOk0=(typeof s.ng==='number')&&mn>=10;
+  o+='<div class="lc-ng'+(_ngOk0?'':' na')+'"><div class="ngp-row"><div class="ngp-label">Next Goal</div>';
   if(s.forte)o+='<div class="badge-forte">⚡ FORTE</div>';
   // [P21] „—" DOAR când lipsesc datele (ng absent) sau în primele 10 min (scanner
   // încă nesigur). Un NGP numeric real (inclusiv valori mici) se afișează ca atare,
@@ -249,16 +252,17 @@ function buildCardHtml(m,lgName){
   var _nh=(typeof m._ngHome==='number')?m._ngHome:null;
   var _na=(typeof m._ngAway==='number')?m._ngAway:null;
   if(_nh!==null&&_na!==null&&_ngHas&&mn>=10){
-    o+='<div style="display:flex;gap:12px;justify-content:center;margin-top:4px;font-size:10px;font-weight:700;color:var(--mu2)">'
+    o+='<div class="lc-ngt">'
       +'<span title="Gazdele dau următorul gol">🏠 '+Math.round(_nh)+'%</span>'
       +'<span title="Oaspeții dau următorul gol">✈️ '+Math.round(_na)+'%</span></div>';
   }
+  o+='</div>';
   var tg=hg+ag;var _cc=(m.league&&m.league.country||'').substring(0,3).toUpperCase();
   var ed=m.enrichData||null;
   // [P24] O SINGURĂ sursă pentru Over: valoarea din enrich când există; recalculul frontend
   // (mk) rămâne DOAR ca fallback când enrich lipsește. [P06] pctTxt → niciodată undefined%/NaN%.
   var _mov=function(ev,fb){ return pctTxt((ed&&ed[ev]!=null)?ed[ev]:fb); };
-  o+='<div class="markets">';
+  o+='<div class="markets lc-mk">';
   if(tg===0)o+='<div class="mkt">Over 0.5 <span>'+pctTxt(mk.over05)+'</span></div>';
   if(tg<2)o+='<div class="mkt">Over 1.5 <span>'+_mov('over15Prob',mk.over15)+'</span></div>';
   if(tg<3)o+='<div class="mkt">Over 2.5 <span>'+_mov('over25Prob',mk.over25)+'</span></div>';
@@ -266,6 +270,7 @@ function buildCardHtml(m,lgName){
   if(_cc)o+='<div class="mkt" style="color:var(--mu);margin-left:auto">('+_cc+')</div>';
   o+='</div>';
   if(ed){
+    o+='<div class="lc-enr">';
     var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
     if(ed.homeWin!=null)o+='<div class="enrich-row hda-row"><span class="hda-h" style="color:'+ec(ed.homeWin)+'">H:'+pctTxt(ed.homeWin)+'</span><span class="hda-d" style="color:'+ec(ed.draw)+'">D:'+pctTxt(ed.draw)+'</span><span class="hda-a" style="color:'+ec(ed.awayWin)+'">A:'+pctTxt(ed.awayWin)+'</span></div>';
     o+='<div class="enrich-row">';
@@ -282,6 +287,7 @@ function buildCardHtml(m,lgName){
     o+='<div class="enrich-row">';
     if(ed.homeScoreRate!=null)o+='<span class="enr" style="color:'+ec(ed.homeScoreRate)+'">Gazde '+ed.homeScoreRate+'%</span>';
     if(ed.awayScoreRate!=null)o+='<span class="enr" style="color:'+ec(ed.awayScoreRate)+'">Oaspeti '+ed.awayScoreRate+'%</span>';
+    o+='</div>';
     o+='</div>';
   }
   o+='</div></div>';
