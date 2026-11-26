@@ -4025,7 +4025,9 @@ window._pmLinks=window._pmLinks||{};
 function _pmInline(fid,goals){
   var sl=window._pmLinks&&window._pmLinks[fid];
   if(!sl)return '';
-  return _pmLivePx(fid,goals)+'<a href="https://polym.trade/event/'+encodeURIComponent(sl)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;padding:3px 7px;border-radius:8px;background:#1e40af;text-decoration:none;color:#fff;font-size:10px;font-weight:700;line-height:1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"><path d="M4 5l16-2v8L4 13zM4 13l16-2v8L4 21z"/></svg>Polymarket<svg width="10" height="10" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#22c55e"/><path d="M6.5 12.5l3.5 3.5 7.5-8" fill="none" stroke="#fff" stroke-width="3"/></svg></a>';
+  var _a='<a href="https://polym.trade/event/'+encodeURIComponent(sl)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;padding:3px 7px;border-radius:8px;background:#1e40af;text-decoration:none;color:#fff;font-size:10px;font-weight:700;line-height:1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"><path d="M4 5l16-2v8L4 13zM4 13l16-2v8L4 21z"/></svg>Polymarket<svg width="10" height="10" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#22c55e"/><path d="M6.5 12.5l3.5 3.5 7.5-8" fill="none" stroke="#fff" stroke-width="3"/></svg></a>';
+  if(goals===undefined)return _a;   // pre-meci/ponturi: neschimbat
+  return '<span style="display:inline-flex;flex-direction:column;align-items:center;gap:3px;margin-right:8px">'+_pmLivePx(fid,goals)+_a.replace('margin-right:8px;','position:relative;top:3px;margin-right:0;')+'</span>';
 }
 function _pmLoadLinks(){
   try{fetch('/api/polymarket-links').then(function(r){return r.json();}).then(function(d){if(d&&d.links)window._pmLinks=d.links;}).catch(function(){});}catch(e){}
@@ -4040,16 +4042,23 @@ function _pmLiveTxt(fid,g){
   var c=window._pmLivePxMap[fid];
   return c==null?'—':c+'c';
 }
+function _pmLiveCls(fid,g){
+  if(g>0)return 'pm-lpx na';
+  var c=window._pmLivePxMap[fid];
+  return (c!=null&&c<=85)?'pm-lpx lo':'pm-lpx';   // la 85c sau sub = rosu intermitent
+}
 function _pmLivePx(fid,goals){
   if(goals===undefined)return '';   // doar pe cardurile live (primesc numarul de goluri)
   var g=goals||0;
-  return '<span data-lpx="'+fid+'" data-g="'+g+'" style="margin-right:6px;font:800 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:'+(g>0?'var(--mu,#888)':'#22c55e')+'">'+_pmLiveTxt(fid,g)+'</span>';
+  return '<span class="'+_pmLiveCls(fid,g)+'" data-lpx="'+fid+'" data-g="'+g+'">'+_pmLiveTxt(fid,g)+'</span>';
 }
 function _pmLivePaint(){
   var els=document.querySelectorAll('[data-lpx]');
   for(var i=0;i<els.length;i++){
     var g=Number(els[i].getAttribute('data-g'))||0;
-    els[i].textContent=_pmLiveTxt(els[i].getAttribute('data-lpx'),g);
+    var f=els[i].getAttribute('data-lpx');
+    els[i].className=_pmLiveCls(f,g);
+    els[i].textContent=_pmLiveTxt(f,g);
   }
 }
 function _pmLiveTick(){

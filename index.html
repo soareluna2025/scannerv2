@@ -92,6 +92,10 @@
   .dp-px.na{color:var(--mu);font-weight:600}
   .dp-px.hi{color:#ef4444;animation:dp-blink .8s steps(2,start) infinite}
   @keyframes dp-blink{50%{opacity:.2}}
+  .pm-lpx{font:800 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#1e40af;text-align:center}
+  .pm-lpx.na{color:var(--mu,#888)}
+  .pm-lpx.lo{color:#ef4444;animation:dp-blink .8s steps(2,start) infinite}
+  @media (prefers-reduced-motion:reduce){.pm-lpx.lo{animation:none}}
   /* Punct WebSocket Polymarket, colt dreapta sus pe card: verde palpaie = merge, rosu palpaie = nu merge */
   #dp-page-body .wc-pont{position:relative}
   .dp-ws{position:absolute;top:12px;right:14px;width:7px;height:7px;border-radius:50%;animation:dp-ws-blink 1.2s ease-in-out infinite}
