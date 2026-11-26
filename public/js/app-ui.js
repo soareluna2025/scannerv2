@@ -224,7 +224,7 @@ function buildCardHtml(m,lgName){
   o+='<div class="card'+(goodLg?' card-good-lg':badLg?' card-bad-lg':'')+'" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer">';
   o+='<div class="card-league">';
   o+='<div class="league-name"><button class="star-btn'+(isFav(fid2)?' active':'')+'" onclick="event.stopPropagation();toggleFav('+fid2+',this)">'+(isFav(fid2)?'⭐':'☆')+'</button>'+flag+(lgName||'')+lgBadge+'</div>';
-  o+='<div class="card-minute">'+_pmInline(fid2)+(_b.dot?'<div class="min-dot" style="background:'+_b.c+'"></div>':'')+'<div class="min-val" style="color:'+_b.c+'">'+_b.t+'</div></div>';
+  o+='<div class="card-minute">'+_pmInline(fid2,hg+ag)+(_b.dot?'<div class="min-dot" style="background:'+_b.c+'"></div>':'')+'<div class="min-val" style="color:'+_b.c+'">'+_b.t+'</div></div>';
   o+='</div>';
   o+='<div class="card-teams">';
   o+=mrRow(
@@ -4022,13 +4022,49 @@ setInterval(function(){
 
 // PM-LIVE-BADGE: insigna Polymarket pe cartonasele LIVE (harta fixture_id -> slug din /api/polymarket-links)
 window._pmLinks=window._pmLinks||{};
-function _pmInline(fid){
+function _pmInline(fid,goals){
   var sl=window._pmLinks&&window._pmLinks[fid];
   if(!sl)return '';
-  return '<a href="https://polym.trade/event/'+encodeURIComponent(sl)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;padding:3px 7px;border-radius:8px;background:#1e40af;text-decoration:none;color:#fff;font-size:10px;font-weight:700;line-height:1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"><path d="M4 5l16-2v8L4 13zM4 13l16-2v8L4 21z"/></svg>Polymarket<svg width="10" height="10" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#22c55e"/><path d="M6.5 12.5l3.5 3.5 7.5-8" fill="none" stroke="#fff" stroke-width="3"/></svg></a>';
+  return _pmLivePx(fid,goals)+'<a href="https://polym.trade/event/'+encodeURIComponent(sl)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;padding:3px 7px;border-radius:8px;background:#1e40af;text-decoration:none;color:#fff;font-size:10px;font-weight:700;line-height:1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"><path d="M4 5l16-2v8L4 13zM4 13l16-2v8L4 21z"/></svg>Polymarket<svg width="10" height="10" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#22c55e"/><path d="M6.5 12.5l3.5 3.5 7.5-8" fill="none" stroke="#fff" stroke-width="3"/></svg></a>';
 }
 function _pmLoadLinks(){
   try{fetch('/api/polymarket-links').then(function(r){return r.json();}).then(function(d){if(d&&d.links)window._pmLinks=d.links;}).catch(function(){});}catch(e){}
 }
 _pmLoadLinks();
 setInterval(_pmLoadLinks,10*60*1000);
+
+// PM-LIVE-PRICE: pretul Polymarket (Over 0.5, best ask, cenți) pe cartonasele LIVE cu insigna Polymarket; daca s-a marcat deja un gol -> liniuta.
+window._pmLivePxMap=window._pmLivePxMap||{};
+function _pmLiveTxt(fid,g){
+  if(g>0)return '—';
+  var c=window._pmLivePxMap[fid];
+  return c==null?'—':c+'c';
+}
+function _pmLivePx(fid,goals){
+  if(goals===undefined)return '';   // doar pe cardurile live (primesc numarul de goluri)
+  var g=goals||0;
+  return '<span data-lpx="'+fid+'" data-g="'+g+'" style="margin-right:6px;font:800 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:'+(g>0?'var(--mu,#888)':'#22c55e')+'">'+_pmLiveTxt(fid,g)+'</span>';
+}
+function _pmLivePaint(){
+  var els=document.querySelectorAll('[data-lpx]');
+  for(var i=0;i<els.length;i++){
+    var g=Number(els[i].getAttribute('data-g'))||0;
+    els[i].textContent=_pmLiveTxt(els[i].getAttribute('data-lpx'),g);
+  }
+}
+function _pmLiveTick(){
+  if(document.hidden)return;
+  var els=document.querySelectorAll('[data-lpx]'),ids=[],seen={};
+  for(var i=0;i<els.length;i++){
+    var f=els[i].getAttribute('data-lpx');
+    if((Number(els[i].getAttribute('data-g'))||0)===0&&!seen[f]){seen[f]=1;ids.push(f);}   // cu gol deja marcat nu mai cerem pret
+  }
+  if(!ids.length)return;
+  fetch('/api/polymarket-prices?ids='+ids.slice(0,40).join(',')).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok||!d.prices)return;
+    Object.keys(d.prices).forEach(function(k){window._pmLivePxMap[k]=d.prices[k].c;});
+    _pmLivePaint();
+  }).catch(function(){});
+}
+setInterval(_pmLiveTick,5000);
+setTimeout(_pmLiveTick,1500);
