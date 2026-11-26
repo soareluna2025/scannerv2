@@ -145,25 +145,21 @@ async function apiFetch(path) {
 
 // ── DB helpers — copiate verbatim din cron/scan.js ────────────────────────────
 
-// Asigura coloanele ng_15min + ng_home/ng_away exista (idempotent, la boot).
-// ng_home/ng_away = NGP total împărțit pe echipe (splitNgp) → feed-ul le poate
-// servi ca piețe distincte „Gazde/Oaspeți dau următorul gol".
+// Asigura coloana ng_15min exista (idempotent, la boot).
 let _ng15ColumnEnsured = false;
 async function ensureNg15Column() {
   if (_ng15ColumnEnsured) return;
   try {
     await query(`ALTER TABLE match_snapshots ADD COLUMN IF NOT EXISTS ng_15min INTEGER`);
-    await query(`ALTER TABLE match_snapshots ADD COLUMN IF NOT EXISTS ng_home NUMERIC`);
-    await query(`ALTER TABLE match_snapshots ADD COLUMN IF NOT EXISTS ng_away NUMERIC`);
     _ng15ColumnEnsured = true;
   } catch (e) {
-    log(`ALTER TABLE ng_15min/ng_home/ng_away skipped: ${e.message}`);
+    log(`ALTER TABLE ng_15min skipped: ${e.message}`);
   }
 }
 
 // Împarte NGP total pe echipe proporțional cu xG-ul live (fallback 50/50 dacă xG=0).
-// FORMULĂ NESCHIMBATĂ — extrasă VERBATIM din saveLiveStats ca s-o refolosim identic
-// în snapshot/feed/alerte (o singură sursă a împărțirii). ngTotal<=0 → {null,null}.
+// Folosită DOAR de saveLiveStats: live_stats.ngp_home+ngp_away = NGP total (citit de enrich.js
+// pentru score4 live și de worldcup.js). Split-ul NU mai e afișat/alertat/servit în feed.
 function splitNgp(ngTotal, hxg, axg) {
   if (!(ngTotal > 0)) return { home: null, away: null };
   const h = Math.max(0, hxg || 0);
@@ -181,8 +177,8 @@ async function upsertSnapshot(row) {
     `INSERT INTO match_snapshots
        (fixture_id, league_id, home_team, away_team,
         status_short, minute, home_goals, away_goals,
-        ng, over15, outcome, ng_15min, ng_home, ng_away)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        ng, over15, outcome, ng_15min)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      ON CONFLICT (fixture_id) DO UPDATE SET
        status_short=EXCLUDED.status_short,
        minute=EXCLUDED.minute,
@@ -191,14 +187,11 @@ async function upsertSnapshot(row) {
        ng=EXCLUDED.ng,
        over15=EXCLUDED.over15,
        outcome=EXCLUDED.outcome,
-       ng_15min=EXCLUDED.ng_15min,
-       ng_home=EXCLUDED.ng_home,
-       ng_away=EXCLUDED.ng_away`,
+       ng_15min=EXCLUDED.ng_15min`,
     [
       row.fixture_id, row.league_id, row.home_team, row.away_team,
       row.status_short, row.minute, row.home_goals, row.away_goals,
       row.ng, row.over15, row.outcome || 'LIVE', row.ng_15min ?? null,
-      row.ng_home ?? null, row.ng_away ?? null,
     ]
   );
 }
@@ -662,20 +655,16 @@ async function scanLive10s() {
       liveCache[id].ngLast = ng;
       liveCache[id].ng15Last = ng15;
       const mk = calcMarkets(f);
-      // NGP pe echipe = split-ul NGP-ului AFIȘAT (smoothed) → ngHome+ngAway ≈ ng
-      // (consecvent cu totalul de pe card). Aceeași formulă ca live_stats.
-      const { home: ngHome, away: ngAway } = splitNgp(ng, f.hxg, f.axg);
-
       upsertSnapshot({
         fixture_id:   id,            league_id:  m.league?.id,
         home_team:    m.teams?.home?.name,       away_team: m.teams?.away?.name,
         status_short: sh,            minute:     currMin,
         home_goals:   currHome,      away_goals: currAway,
         ng,           over15: mk.over15,         outcome: 'LIVE',
-        ng_15min:     ng15,          ng_home: ngHome,          ng_away: ngAway,
+        ng_15min:     ng15,
       }).catch(e => log(`upsertSnapshot ${id}: ${e.message}`));
 
-      processedMatches.push({ ...m, _ng: ng, _ng15: ng15, _mk: mk, _ngHome: ngHome, _ngAway: ngAway });
+      processedMatches.push({ ...m, _ng: ng, _ng15: ng15, _mk: mk });
 
       // Alerte — poartă prag static 70; adaptiv opțional (flag ADAPTIVE_THRESHOLD).
       // OFF (default) → _ngThr=_o15Thr=70, zero query → comportament IDENTIC cu azi.
@@ -702,20 +691,6 @@ async function scanLive10s() {
           ).catch(() => {});
         } else {
           saveAlert(id, alertType, ng > _ngThr ? 'ng' : 'over15', msg, conf).catch(() => {});
-
-          // ── NGP pe echipe — alerte SEPARATE „Gazde/Oaspeți dau următorul gol" ──
-          // Split-ul NGP (ngHome/ngAway ≤ ng) trece pragul NGP adaptiv (_ngThr, ACELAȘI
-          // modul). Fiindcă ngHome+ngAway=ng, cel mult UNA depășește 70 (ng≤97). NGP =
-          // „gol DUPĂ alertă" → nicio tautologie de scor (ca NGP total). saveAlert
-          // dedup intern pe (fixture, alert_type, 2h). NGP total rămâne neatins mai sus.
-          if (typeof ngHome === 'number' && ngHome > _ngThr) {
-            const msgH = `${m.teams?.home?.name} vs ${m.teams?.away?.name} — Gazde marchează ${Math.round(ngHome)}% min ${currMin}`;
-            saveAlert(id, 'HIGH_NGP_HOME', 'ngp_home', msgH, ngHome / 100).catch(() => {});
-          }
-          if (typeof ngAway === 'number' && ngAway > _ngThr) {
-            const msgA = `${m.teams?.home?.name} vs ${m.teams?.away?.name} — Oaspeți marchează ${Math.round(ngAway)}% min ${currMin}`;
-            saveAlert(id, 'HIGH_NGP_AWAY', 'ngp_away', msgA, ngAway / 100).catch(() => {});
-          }
 
         // Track in predictions for header W/L/P counter
         if (ng > _ngThr && !liveCache[id]?.ngpAlertScore) {
