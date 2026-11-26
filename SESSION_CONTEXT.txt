@@ -7792,3 +7792,5 @@ NU implementa fără parcurgerea pașilor de mai sus.
 [25.11 12:00] - PONTURI: WebSocket REAL Polymarket (wss://ws-subscriptions-clob.polymarket.com/ws/market, custom_feature_enabled, PING la 10 s) in browser, doar citire; REST /api/polymarket-prices = tokenuri + plasa de siguranta; punct colt dreapta sus pe card: verde palpaie = WS merge, rosu palpaie = nu; pret verde, >=89c rosu+palpaie; SW v14 | Commit: vezi git log
 [25.11 12:10] - PONTURI: culoare pret corectata: verde fix peste 89c, la 89c sau sub = rosu intermitent; SW v15 | Commit: vezi git log
 [25.11 12:20] - PONTURI: punct WebSocket mai mic (7px) + diagnostic la atingere (stare, cod inchidere, eroare, mesaje), conectare WS imediat dupa REST; SW v16 | Commit: vezi git log
+[26.11 13:55] - LIVE: pret Polymarket Over 0.5 pe cardurile LIVE cu eticheta Polymarket (deasupra etichetei, albastru, rosu intermitent la <=85c, liniuta daca s-a marcat gol); SW v17-v18 | Commit: ccaf442, 5a928c0
+[26.11 21:05] - PONTURI: pagina revine la ordine cronologica (cele care incep mai repede sus), renuntat la ordinea dupa lambda; banda era deja cronologica; SW v19 | Commit: vezi git log

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alohascan-v18'; // bump: pret Polymarket live pe carduri LIVE — SW e cache-first
+const CACHE_NAME = 'alohascan-v19'; // bump: pret Polymarket live pe carduri LIVE — SW e cache-first
 
 // External API hostnames — never intercept these
 const BYPASS_HOSTS = [
