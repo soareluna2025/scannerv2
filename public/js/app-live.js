@@ -1,72 +1,7 @@
 // AlohaScan — app-live.js
 // Extras din index.html (Sprint 3 Pas 2, 28.05.2026)
-// Agent, Generator v2 (S1-S6), Favorites, Simulator, Splash, BILETE/ROI, INIT
+// Generator v2 (S1-S6), Favorites, Simulator, Splash, BILETE/ROI, INIT
 // Depinde de: app-state.js + app-ui.js
-
-// ── AGENT ─────────────────────────────────────────────────────
-var AG_MEM=[];
-function agUpdateStats(){
-  var ms=ST.ms;
-  var rec=ms.filter(function(m){return m._s&&m._s.ng>=CFG.MC;}).length;
-  var wr=loadWR();var p=wr.predictions;
-  var w=p.filter(function(x){return x.outcome==='WIN';}).length;
-  var l=p.filter(function(x){return x.outcome==='LOSS';}).length;
-  var t=w+l;var rate=t>0?Math.round(w/t*100)+'%':'—';
-  var topNg=ms.reduce(function(mx,m){return Math.max(mx,(m._s&&m._s.ng)||0);},0);
-  document.getElementById('ag-live').textContent=ms.length||'—';
-  document.getElementById('ag-rec').textContent=Math.min(rec,CFG.MD)+'/'+CFG.MD;
-  document.getElementById('ag-wr').textContent=rate;
-  document.getElementById('ag-ngp').textContent=topNg?topNg+'%':'—';
-}
-function agKey(e){if(e.key==='Enter')agSend();}
-function agAppend(role,text){
-  var msgs=document.getElementById('ag-msgs');
-  var t=new Date().toTimeString().slice(0,5);
-  var cls=role==='user'?'user':'bot';
-  var div=document.createElement('div');div.className='msg '+cls;
-  div.innerHTML='<div><div class="bubble">'+text.replace(/\n/g,'<br>')+'</div><div class="msg-time">'+t+'</div></div>';
-  msgs.appendChild(div);
-  setTimeout(function(){msgs.scrollTop=msgs.scrollHeight;},50);
-}
-function agTyping(){
-  var msgs=document.getElementById('ag-msgs');
-  var div=document.createElement('div');div.className='msg bot';div.id='ag-typing';
-  div.innerHTML='<div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>';
-  msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;
-}
-function agRemoveTyping(){var t=document.getElementById('ag-typing');if(t)t.remove();}
-function buildSysPrompt(){
-  var ms=ST.ms;
-  var top=ms.slice().sort(function(a,b){return((b._s&&b._s.ng)||0)-((a._s&&a._s.ng)||0);}).slice(0,10);
-  var mLines=top.map(function(m){
-    var s=m._s||{};
-    return (m.teams&&m.teams.home&&m.teams.home.name||'?')+' '+(m.goals&&m.goals.home||0)+'-'+(m.goals&&m.goals.away||0)+' '+(m.teams&&m.teams.away&&m.teams.away.name||'?')+' ['+s.mn+"' NGP:"+s.ng+'%]';
-  }).join('\n');
-  var wr=loadWR();var p=wr.predictions;
-  var w=p.filter(function(x){return x.outcome==='WIN';}).length;
-  var l=p.filter(function(x){return x.outcome==='LOSS';}).length;
-  return 'Ești AlohaScan AI, expert predicții fotbal live. Ora: '+new Date().toTimeString().slice(0,5)+'\n\nMECIURI LIVE TOP 10:\n'+mLines+'\n\nWIN RATE: W:'+w+' L:'+l+'\n\nRăspunde în română, concis și util.';
-}
-async function agSend(){
-  var inp=document.getElementById('ag-input');
-  var text=inp.value.trim();if(!text)return;
-  inp.value='';
-  agAppend('user',text);
-  AG_MEM.push({role:'user',content:text});
-  if(AG_MEM.length>10)AG_MEM=AG_MEM.slice(-10);
-  agTyping();
-  try{
-    var msgs=[{role:'system',content:buildSysPrompt()}].concat(AG_MEM);
-    var r=await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:msgs,max_tokens:500})});
-    var d=await r.json();
-    agRemoveTyping();
-    if(d.error){agAppend('bot','Eroare: '+d.error);return;}
-    var reply=d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content||'—';
-    agAppend('bot',reply);
-    AG_MEM.push({role:'assistant',content:reply});
-  }catch(e){agRemoveTyping();agAppend('bot','Eroare conexiune: '+e.message);}
-}
-
 
 // ── GENERATOR v2 ──────────────────────────────────────────────
 var GEN={tabIdx:0,open:false};       // stub — păstrat pentru genUpdateBadge

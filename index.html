@@ -163,8 +163,6 @@
   </div>
 
   <!-- TAB: SIMULATOR PERPETUALS -->
-  <div class="tab-content" id="tab-cam"><div id="cam-root"></div></div>
-
   <div class="tab-content" id="tab-sim">
     <div class="ps-seg ps-mode" role="group" aria-label="Tip simulator" style="margin-bottom:12px">
       <button type="button" id="ps-mode-perp" class="on">Perpetuals</button>
@@ -262,29 +260,6 @@
       </div>
     </div>
   </div>
-
-  <!-- TAB: AGENT -->
-  <div class="tab-content" id="tab-agent">
-    <div class="agent-stats" id="ag-stats">
-      <div class="ag-stat"><div class="ag-stat-v" id="ag-live">—</div><div class="ag-stat-l">Live</div></div>
-      <div class="ag-stat"><div class="ag-stat-v" id="ag-rec">—</div><div class="ag-stat-l">Recom.</div></div>
-      <div class="ag-stat"><div class="ag-stat-v" id="ag-wr">—</div><div class="ag-stat-l">Win Rate</div></div>
-      <div class="ag-stat"><div class="ag-stat-v" id="ag-ngp">—</div><div class="ag-stat-l">Top NGP</div></div>
-    </div>
-    <div class="agent-msgs" id="ag-msgs">
-      <div class="msg bot">
-        <div>
-          <div class="bubble">Bună! Sunt AlohaScan AI. Întreabă-mă despre meciurile live, predicții sau statistici.</div>
-          <div class="msg-time" id="ag-start-time">--:--</div>
-        </div>
-      </div>
-    </div>
-    <div class="agent-input-wrap">
-      <input class="agent-input" id="ag-input" placeholder="Întreabă ceva..." onkeydown="agKey(event)">
-      <button class="agent-send" onclick="agSend()">➤</button>
-    </div>
-  </div>
-
 
 </main>
 
@@ -553,10 +528,6 @@
     <span class="nav-icon">📅</span>
     <span class="nav-label">Pre-meci</span>
   </button>
-  <button class="nav-btn" id="nav-agent" onclick="setTab('agent')">
-    <span class="nav-icon">🤖</span>
-    <span class="nav-label">Agent</span>
-  </button>
   <button class="nav-btn" id="nav-fav" onclick="setTab('fav')">
     <span class="nav-icon" style="position:relative">⭐<span class="nav-fav-badge" id="fav-badge"></span></span>
     <span class="nav-label">Preferate</span>
@@ -564,10 +535,6 @@
   <button class="nav-btn" id="nav-gen" onclick="gen2Open()">
     <span class="nav-icon">⚡</span>
     <span class="nav-label">Generează</span>
-  </button>
-  <button class="nav-btn" id="nav-cam" onclick="setTab('cam')">
-    <span class="nav-icon">🎛️</span>
-    <span class="nav-label">AlohaPoly</span>
   </button>
   <button class="nav-btn" id="nav-sim" onclick="setTab('sim')">
     <span class="nav-icon">📈</span>
@@ -581,6 +548,5 @@
 <script src="/js/compus-sim.js"></script>
 <script src="/js/compus-cal.js"></script>
 <script src="/js/cal-events.js"></script>
-<script src="/js/camera.js"></script>
 </body>
 </html>

@@ -371,7 +371,6 @@ function tickClock(){
     d.toTimeString().slice(0,8);
 }
 setInterval(tickClock,1000);tickClock();
-document.getElementById('ag-start-time').textContent=new Date().toTimeString().slice(0,5);
 
 // ── NAVIGARE STACK (back întoarce la pagina anterioară, nu la meniu) ──
 var _navStack=[];
@@ -387,26 +386,15 @@ function navBack(){
 // ── TABS ─────────────────────────────────────────────────────
 function setTab(t){
   _navStack.length=0;   // schimbare tab principal → reset stack navigare
-  ['live','pre','agent','fav','cam','sim'].forEach(function(x){
+  ['live','pre','fav','sim'].forEach(function(x){
     document.getElementById('tab-'+x).classList.toggle('active',x===t);
     var nb=document.getElementById('nav-'+x);
     if(nb)nb.classList.toggle('active',x===t);
   });
   var pg=document.getElementById('page');
-  if(t==='agent'){
-    pg.style.display='flex';pg.style.flexDirection='column';
-    document.getElementById('tab-agent').style.display='flex';
-    document.getElementById('tab-agent').style.flexDirection='column';
-    document.getElementById('tab-agent').style.height='100%';
-    setTimeout(function(){var m=document.getElementById('ag-msgs');m.scrollTop=m.scrollHeight;},50);
-    agUpdateStats();
-  } else {
-    pg.style.display='';
-  }
   if(t==='fav'){
     renderFavs();
   }
-  if(t==='cam' && typeof camInit==='function')camInit();
   if(t==='sim' && typeof psInit==='function')psInit();   // Simulator Perpetuals (public/js/perp-sim.js)
   if (t === 'pre' && _pmMatches.length === 0) {
     // Bug fix: dacă userul a navigat pe altă zi în date picker (PM_DATE !== today),
@@ -1099,7 +1087,7 @@ function _ptrContext(){
   return {el:document.getElementById('page'), refresh:refreshCurrentPage};
 }
 function _ptrActiveTab(){
-  var tabs=['live','pre','agent','fav','sim'];
+  var tabs=['live','pre','fav','sim'];
   for(var i=0;i<tabs.length;i++){
     var nb=document.getElementById('nav-'+tabs[i]);
     if(nb&&nb.classList.contains('active'))return tabs[i];
@@ -1111,7 +1099,6 @@ function refreshCurrentPage(){
   if(t==='live'&&typeof loadLive==='function')loadLive();
   else if(t==='pre'&&typeof loadPM==='function')loadPM();
   else if(t==='fav'&&typeof renderFavs==='function')renderFavs();
-  else if(t==='agent'){ if(typeof agUpdateStats==='function')agUpdateStats(); }
   else if(t==='sim'){ /* calcul local — pull-to-refresh nu reîncarcă pagina */ }
   else window.location.reload();
 }
