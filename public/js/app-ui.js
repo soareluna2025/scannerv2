@@ -110,7 +110,9 @@ function connectWS(){
         // [P02] REMOVAL: scoate instant din lista LIVE meciurile terminate/ieșite.
         if(Array.isArray(msg.payload.removed)&&msg.payload.removed.length){
           var _rem={};msg.payload.removed.forEach(function(r){var rid=(r&&r.id!=null)?r.id:r;_rem[rid]=1;});
-          ST.ms=ST.ms.filter(function(x){return !(x.fixture&&_rem[x.fixture.id]);});
+          var _after=ST.ms.filter(function(x){return !(x.fixture&&_rem[x.fixture.id]);});
+          // Gardă: o „removal" care ar goli TOATĂ lista (≥3 meciuri) e suspectă → așteptăm LIVE_UPDATE-ul complet (≤30s)
+          if(!(_after.length===0&&ST.ms.length>=3))ST.ms=_after;
         }
         renderMatches();updateStats();
         if(msg.payload.ts)document.getElementById('s-upd').textContent=new Date(msg.payload.ts).toTimeString().slice(0,5);

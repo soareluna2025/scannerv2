@@ -63,6 +63,11 @@ async function fetchWithRetry(path, maxRetries = 2) {
         continue;
       }
       const d = await r.json();
+      // API-Football întoarce 200 + {errors:{...}, response:[]} la rate-limit/eroare internă.
+      // Înainte = „0 meciuri live" → scanner-ul trimitea removal pentru TOATE meciurile (ecran gol).
+      const errs = d && d.errors;
+      const hasErr = Array.isArray(errs) ? errs.length > 0 : (errs && typeof errs === 'object' && Object.keys(errs).length > 0);
+      if (hasErr) throw new Error('API errors: ' + JSON.stringify(errs).slice(0, 160));
       return d.response || [];
     } catch (e) {
       if (attempt === maxRetries) throw e;
@@ -483,6 +488,18 @@ async function scanLive10s() {
     const rawAll = await fetchWithRetry('/fixtures?live=all');
     const raw = rawAll.filter(m => isAllowedMatch(m, ALLOWED_LEAGUE_IDS));
     log(`live10s: ${rawAll.length} din API → ${raw.length} după filtrare`);
+
+    // Gardă anti-„blip": răspuns gol brusc cât timp aveam meciuri live → sărim ciclul (max 8 la rând = ~16s).
+    // Fără ea, un răspuns gol tranzitoriu trimitea removal pentru toate meciurile → cardurile „zboară".
+    if (rawAll.length === 0 && global._prevLiveIds instanceof Set && global._prevLiveIds.size > 0) {
+      global._emptyLiveStreak = (global._emptyLiveStreak || 0) + 1;
+      if (global._emptyLiveStreak <= 8) {
+        log(`live10s: răspuns gol #${global._emptyLiveStreak} (aveam ${global._prevLiveIds.size} meciuri) — ciclu sărit`);
+        return;
+      }
+    } else {
+      global._emptyLiveStreak = 0;
+    }
 
     // lastSeen: marchează FIECARE meci prezent în `raw` în ciclul curent — INDIFERENT
     // de throttling (LOW/MEDIUM sunt în `raw`, deci „văzute" → NU vor fi pruned). Folosit
