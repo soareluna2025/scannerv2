@@ -664,15 +664,11 @@
    Doar prezentare: 4 secțiuni (header · scor · NEXT GOAL · piețe), ~20–25% mai compact.
    Scoped pe .card.lc → nu atinge .pm-card, mrRow()/mrScore() partajate sau alte ecrane. */
 .card.lc{border-radius:16px;margin-bottom:10px;border-color:rgba(255,255,255,.07)}
-/* A — HEADER: stânga = ligă (rând 1) + status LIVE/minut/repriză (rând 2); dreapta = Polymarket (preț peste insignă) */
-.card.lc .lc-head{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"lg st";align-items:center;column-gap:8px;row-gap:5px;padding:8px 12px 7px}
-.card.lc .lc-head.has-pm{grid-template-areas:"lg pm" "st pm"}
-.card.lc .league-name{grid-area:lg;display:flex;align-items:center;gap:4px;min-width:0;font-size:10.5px;letter-spacing:.7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* A — HEADER: liga (stânga) + LIVE/repriză/minut (dreapta). Polymarket a coborât în rândul pieței. */
+.card.lc .lc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 9px}
+.card.lc .league-name{display:flex;align-items:center;gap:4px;min-width:0;flex:1;font-size:10.5px;letter-spacing:.7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card.lc .league-name .star-btn{font-size:18px;margin-right:2px}
-.card.lc .card-minute{grid-area:st;display:flex;min-width:0;justify-self:start}
-.card.lc .lc-head:not(.has-pm) .card-minute{justify-self:end}
-.card.lc .lc-pm{grid-area:pm;display:flex;align-items:center;justify-content:center}
-.card.lc .lc-pm>span{margin-right:0!important}
+.card.lc .card-minute{display:flex;flex-shrink:0}
 .card.lc .lc-status{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.06)}
 .card.lc .lc-live{font-size:8.5px;font-weight:900;letter-spacing:.8px;color:#ff4d6d}
 .card.lc .min-val{font-size:11px;white-space:nowrap}
@@ -712,3 +708,7 @@
   .card.lc .lc-score{min-width:66px}
   .card.lc .lc-score .mr-score{font-size:24px}
 }
+
+/* D (v2) — rând jos: [piață] [Polymarket: preț peste insignă] [țară] */
+.card.lc .markets{justify-content:space-between;align-items:center;overflow:visible}
+.card.lc .markets>span{margin-right:0!important}

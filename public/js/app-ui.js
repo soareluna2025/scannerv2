@@ -215,9 +215,9 @@ function buildCardHtml(m,lgName){
   var o='';
   o+='<div class="card lc'+(goodLg?' card-good-lg':badLg?' card-bad-lg':'')+'" onclick="mdOpen('+fid2+','+hid2+','+aid2+',this)" style="cursor:pointer">';
   var _pmH=_pmInline(fid2,hg+ag);
-  o+='<div class="card-league lc-head'+(_pmH?' has-pm':'')+'">';
+  o+='<div class="card-league lc-head">';
   o+='<div class="league-name"><button class="star-btn'+(isFav(fid2)?' active':'')+'" onclick="event.stopPropagation();toggleFav('+fid2+',this)">'+(isFav(fid2)?'⭐':'☆')+'</button>'+flag+(lgName||'')+lgBadge+'</div>';
-  o+='<div class="card-minute">'+'<div class="lc-status">'+(_b.dot?'<span class="lc-live">LIVE</span><div class="min-dot" style="background:'+_b.c+'"></div>':'')+'<div class="min-val" style="color:'+_b.c+'">'+_b.t+'</div></div></div>'+(_pmH?'<div class="lc-pm">'+_pmH+'</div>':'');
+  o+='<div class="card-minute">'+'<div class="lc-status">'+(_b.dot?'<span class="lc-live">LIVE</span><div class="min-dot" style="background:'+_b.c+'"></div>':'')+'<div class="min-val" style="color:'+_b.c+'">'+_b.t+'</div></div></div>';
   o+='</div>';
   o+='<div class="card-teams lc-teams">';
   var _hN=htmlEsc((m.teams&&m.teams.home&&m.teams.home.name)||'—'),_aN=htmlEsc((m.teams&&m.teams.away&&m.teams.away.name)||'—');
@@ -245,12 +245,15 @@ function buildCardHtml(m,lgName){
   // [P24] O SINGURĂ sursă pentru Over: valoarea din enrich când există; recalculul frontend
   // (mk) rămâne DOAR ca fallback când enrich lipsește. [P06] pctTxt → niciodată undefined%/NaN%.
   var _mov=function(ev,fb){ return pctTxt((ed&&ed[ev]!=null)?ed[ev]:fb); };
+  // O SINGURĂ piață: următoarea linie după scor (0-0→Over 0.5, 1-0→Over 1.5, 7-5→Over 12.5).
+  // Sursele rămân cele de până acum: enrich (1.5/2.5) cu fallback mk; de la 4 goluri în sus,
+  // „încă un gol" = mk.over05 (aceeași formulă mkt(1,lr), need=1).
+  var _nxLine=(tg+0.5).toFixed(1);
+  var _nxVal=(tg===0)?pctTxt(mk.over05):(tg===1)?_mov('over15Prob',mk.over15):(tg===2)?_mov('over25Prob',mk.over25):(tg===3)?pctTxt(mk.over35):pctTxt(mk.over05);
   o+='<div class="markets lc-mk">';
-  if(tg===0)o+='<div class="mkt">Over 0.5 <span>'+pctTxt(mk.over05)+'</span></div>';
-  if(tg<2)o+='<div class="mkt">Over 1.5 <span>'+_mov('over15Prob',mk.over15)+'</span></div>';
-  if(tg<3)o+='<div class="mkt">Over 2.5 <span>'+_mov('over25Prob',mk.over25)+'</span></div>';
-  if(tg>=3&&tg<4)o+='<div class="mkt">Over 3.5 <span>'+pctTxt(mk.over35)+'</span></div>';
-  if(_cc)o+='<div class="mkt" style="color:var(--mu);margin-left:auto">('+_cc+')</div>';
+  o+='<div class="mkt">Over '+_nxLine+' <span>'+_nxVal+'</span></div>';
+  o+=_pmH;   // Polymarket (preț Over 0.5 peste insignă; „—" dacă s-a marcat deja gol) între piață și țară
+  if(_cc)o+='<div class="mkt" style="color:var(--mu)">('+_cc+')</div>';
   o+='</div>';
   if(ed){
     o+='<div class="lc-enr">';
