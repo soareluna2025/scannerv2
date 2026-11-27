@@ -14,6 +14,15 @@ var _wsLastMsg=0;             // FIX 1: timestamp ultim mesaj WS — gate pollin
 
 var _staleMark=false;         // true când ultimul răspuns /api/football a fost eroare → ecranul poate fi vechi
 var _wsWatchdog=null;
+// Listă goală tranzitorie (API/scanner întoarce 0 meciuri o clipă) NU golește ecranul;
+// se acceptă doar dacă rămâne goală >90s consecutiv.
+var _emptySince=0;
+function _ignoreEmpty(n){
+  if(n>0){_emptySince=0;return false;}
+  if(!ST.ms.length)return false;
+  if(!_emptySince)_emptySince=Date.now();
+  return Date.now()-_emptySince<90000;
+}
 function updateWSState(state){
   var dot=document.getElementById('ws-dot');
   var lbl=document.getElementById('ws-label');
@@ -66,6 +75,7 @@ function connectWS(){
     try{
       var msg=JSON.parse(ev.data);
       if(msg.type==='LIVE_UPDATE'&&msg.payload&&Array.isArray(msg.payload.matches)){
+        if(_ignoreEmpty(msg.payload.matches.length))return;
         var _ed={};var _ngPrev={};var _ng15Prev={};ST.ms.forEach(function(m){
           var fid=m.fixture&&m.fixture.id;
           if(m.enrichData)_ed[fid]=m.enrichData;
@@ -187,6 +197,7 @@ async function loadLive(cb){
     if(_staleMark){_staleMark=false;updateWSState(_ws&&_ws.readyState===1?'connected':'connecting');}
     var raw=Array.isArray(d.response)?d.response:(Array.isArray(d)?d:[]);
     var _ed={};ST.ms.forEach(function(m){if(m.enrichData)_ed[m.fixture&&m.fixture.id]=m.enrichData;});
+    if(_ignoreEmpty(raw.length)){if(cb)cb(true);return;}
     ST.ms=raw.map(function(m){m._s=calcScore(m);var e=_ed[m.fixture&&m.fixture.id];if(e)m.enrichData=e;return m;});
     renderMatches();
     updateStats();
