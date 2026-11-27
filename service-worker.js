@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alohascan-v27'; // bump: SW network-first pt HTML/JS/CSS + rezilienta live
+const CACHE_NAME = 'alohascan-v28'; // bump: SW network-first pt HTML/JS/CSS + rezilienta live
 
 // External API hostnames — never intercept these
 const BYPASS_HOSTS = [
