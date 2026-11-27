@@ -420,6 +420,7 @@ function matchStatusLabel(m){
 
 function renderMatches(){
   if(typeof wcRenderFeatured==='function')wcRenderFeatured();  // card featured WC sus pe LIVE
+  if(typeof renderPoly==='function')renderPoly();               // tab PolyMarket (aceleași cartonașe, doar cu etichetă)
   var ms=ST.ms.filter(function(m){
     if(ST.score!=='all'){
       var hg=m.goals?m.goals.home||0:0;
@@ -477,6 +478,32 @@ function renderMatches(){
   document.getElementById('page').scrollTop=sy;
 }
 
+
+// ── TAB POLYMARKET ────────────────────────────────────────────
+// Aceleași cartonașe ca în LIVE (buildCardHtml), DOAR meciurile cu eticheta Polymarket
+// (fixture_id prezent în window._pmLinks, harta din /api/polymarket-links — aceeași sursă ca insigna din LIVE).
+function renderPoly(){
+  var tab=document.getElementById('tab-poly');
+  var list=document.getElementById('poly-list');
+  if(!tab||!list||!tab.classList.contains('active'))return;   // randăm doar cât tab-ul e vizibil
+  if(!ST.connected){
+    list.innerHTML='<div class="empty"><div class="empty-icon">🎯</div><div class="empty-t">PolyMarket</div><div class="empty-s">Conectează-te la LIVE ca să vezi meciurile cu etichetă Polymarket</div>'
+      +'<button class="btn-connect" style="margin-top:14px" onclick="connect()">CONECTARE</button></div>';
+    return;
+  }
+  var links=window._pmLinks||{};
+  var ms=ST.ms.filter(function(m){var f=m.fixture&&m.fixture.id;return f&&links[f];});
+  if(!ms.length){
+    list.innerHTML='<div class="empty"><div class="empty-icon">🎯</div><div class="empty-t">Niciun meci</div><div class="empty-s">Acum nu există meciuri live cu etichetă Polymarket</div></div>';
+    return;
+  }
+  ms.sort(function(a,b){return new Date((b.fixture&&b.fixture.date)||0)-new Date((a.fixture&&a.fixture.date)||0);});   // ca în LIVE: cel mai recent început sus
+  var html='<div class="pm-summary"><span class="pm-summary-t">'+ms.length+' meciuri live cu Polymarket</span></div>';
+  ms.forEach(function(m){html+=buildCardHtml(m,(m.league&&m.league.name)||'');});
+  var pg=document.getElementById('page');var sy=pg?pg.scrollTop:0;
+  list.innerHTML=html;
+  if(pg)pg.scrollTop=sy;
+}
 
 // ── PRE-MECI ──────────────────────────────────────────────────
 var PM_SENT=new Set();var PM_LOADED=false;
@@ -4072,7 +4099,7 @@ function _pmInline(fid,goals){
   return '<span style="display:inline-flex;flex-direction:column;align-items:center;gap:3px;margin-right:8px">'+_pmLivePx(fid,goals)+_a.replace('margin-right:8px;','position:relative;top:3px;margin-right:0;')+'</span>';
 }
 function _pmLoadLinks(){
-  try{fetch('/api/polymarket-links').then(function(r){return r.json();}).then(function(d){if(d&&d.links)window._pmLinks=d.links;}).catch(function(){});}catch(e){}
+  try{fetch('/api/polymarket-links').then(function(r){return r.json();}).then(function(d){if(d&&d.links){window._pmLinks=d.links;if(typeof renderPoly==='function')renderPoly();}}).catch(function(){});}catch(e){}
 }
 _pmLoadLinks();
 setInterval(_pmLoadLinks,10*60*1000);

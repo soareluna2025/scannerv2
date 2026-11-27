@@ -122,6 +122,11 @@
     </div>
   </div>
 
+  <!-- TAB: POLYMARKET (cartonașele LIVE care au eticheta Polymarket) -->
+  <div class="tab-content" id="tab-poly">
+    <div id="poly-list"></div>
+  </div>
+
   <!-- TAB: PRE-MECI -->
   <div class="tab-content" id="tab-pre">
     <!-- Date picker (Calendar) — navigare orice zi (trecut/azi/viitor) -->
@@ -527,6 +532,10 @@
   <button class="nav-btn" id="nav-pre" onclick="setTab('pre')">
     <span class="nav-icon">📅</span>
     <span class="nav-label">Pre-meci</span>
+  </button>
+  <button class="nav-btn" id="nav-poly" onclick="setTab('poly')">
+    <span class="nav-icon">🎯</span>
+    <span class="nav-label">PolyMarket</span>
   </button>
   <button class="nav-btn" id="nav-fav" onclick="setTab('fav')">
     <span class="nav-icon" style="position:relative">⭐<span class="nav-fav-badge" id="fav-badge"></span></span>
