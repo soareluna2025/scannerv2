@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alohascan-v22'; // bump: pret Polymarket live pe carduri LIVE — SW e cache-first
+const CACHE_NAME = 'alohascan-v23'; // bump: SW network-first pt HTML/JS/CSS + rezilienta live
 
 // External API hostnames — never intercept these
 const BYPASS_HOSTS = [
@@ -40,7 +40,28 @@ self.addEventListener('fetch', event => {
   // Let internal API routes and admin go through (always need fresh data)
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/admin')) return;
 
-  // Cache-first for everything else (static assets, index.html)
+  // Rețea-întâi pentru pagină + JS/CSS (ca un deploy să ajungă la primul reload, nu la al doilea);
+  // cache = doar rezervă offline / rețea lentă (>4s). Restul (imagini, fonturi) rămâne cache-first.
+  const isCode = request.mode === 'navigate' || request.destination === 'script' ||
+                 request.destination === 'style' || /\.(?:js|css|html)$/.test(url.pathname) || url.pathname === '/';
+  if (isCode) {
+    event.respondWith((() => {
+      const net = fetch(request).then(response => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+        }
+        return response;
+      });
+      const timeout = new Promise(resolve => setTimeout(() => resolve(null), 4000));
+      return Promise.race([net.catch(() => null), timeout]).then(r =>
+        r || caches.match(request).then(c => c || net.catch(() => (request.mode === 'navigate' ? caches.match('/') : Response.error())))
+      );
+    })());
+    return;
+  }
+
+  // Cache-first for everything else (static assets)
   event.respondWith(
     caches.match(request).then(cached => {
       if (cached) return cached;

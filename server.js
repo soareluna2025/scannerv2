@@ -330,6 +330,15 @@ wss.on('connection', (ws) => {
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('error', () => {});
+  // Clientul poate cere starea completă (la revenirea în aplicație): {type:'SYNC'}
+  ws.on('message', (raw) => {
+    try {
+      const m = JSON.parse(raw);
+      if (m && m.type === 'SYNC' && global.lastLiveData && ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: 'LIVE_UPDATE', payload: global.lastLiveData }));
+      }
+    } catch { /* PING și alte mesaje: ignorate */ }
+  });
   if (global.lastLiveData) {
     ws.send(JSON.stringify({ type: 'LIVE_UPDATE', payload: global.lastLiveData }));
   }
@@ -344,3 +353,7 @@ global.wsBroadcast = function (type, payload) {
     if (client.readyState === 1) client.send(msg);
   }
 };
+
+// Semn de viață la 10s: clientul declară conexiunea moartă după >35s fără NICIUN mesaj
+// (control frame-urile ping/pong nu sunt vizibile în JS-ul din browser).
+setInterval(() => { global.wsBroadcast('TICK', { ts: Date.now() }); }, 10000);

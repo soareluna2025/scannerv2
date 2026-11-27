@@ -12,6 +12,8 @@ var _wsReconnectDelay=1000;
 var _wsMaxDelay=30000;
 var _wsLastMsg=0;             // FIX 1: timestamp ultim mesaj WS — gate polling redundant
 
+var _staleMark=false;         // true când ultimul răspuns /api/football a fost eroare → ecranul poate fi vechi
+var _wsWatchdog=null;
 function updateWSState(state){
   var dot=document.getElementById('ws-dot');
   var lbl=document.getElementById('ws-label');
@@ -19,14 +21,37 @@ function updateWSState(state){
   if(!dot)return;
   ind.style.display='flex';
   dot.className='ws-dot '+state;
-  lbl.textContent=state==='connected'?'RT':state==='connecting'?'...':'OFF';
+  lbl.textContent=_staleMark?'VECHI':state==='connected'?'RT':state==='connecting'?'...':'OFF';
 }
+
+// ── REZILIENȚĂ LIVE: serverul trimite TICK la 10s; tăcere >35s = conexiune moartă ──
+var _WS_DEAD_MS=35000;
+function _wsForceReconnect(){
+  var old=_ws;_ws=null;
+  if(old){old.onopen=old.onmessage=old.onclose=old.onerror=null;try{old.close();}catch(_){}}
+  if(_wsHeartbeat){clearInterval(_wsHeartbeat);_wsHeartbeat=null;}
+  if(_wsReconnectTimer){clearTimeout(_wsReconnectTimer);_wsReconnectTimer=null;}
+  _wsReconnectDelay=1000;
+  connectWS();
+}
+function _wsResume(){
+  if(!ST.connected||document.hidden)return;
+  loadLive();                                              // stare completă imediat (nu așteaptă WS)
+  var dead=!_ws||_ws.readyState>1||(Date.now()-_wsLastMsg>_WS_DEAD_MS);
+  if(dead){_wsForceReconnect();return;}
+  try{_ws.send(JSON.stringify({type:'SYNC'}));}catch(_){_wsForceReconnect();}   // cere starea completă
+}
+document.addEventListener('visibilitychange',function(){if(!document.hidden)_wsResume();});
+window.addEventListener('pageshow',function(){_wsResume();});
+window.addEventListener('online',function(){_wsResume();});
+window.addEventListener('focus',function(){_wsResume();});
 
 function connectWS(){
   if(_ws&&(_ws.readyState===0||_ws.readyState===1))return;
   updateWSState('connecting');
   var proto=location.protocol==='https:'?'wss':'ws';
-  _ws=new WebSocket(proto+'://'+location.host);
+  var ws=_ws=new WebSocket(proto+'://'+location.host);
+  _wsLastMsg=Date.now();       // fereastra de grație pt noua conexiune (primește LIVE_UPDATE complet la open)
   _ws.onopen=function(){
     _wsReconnectDelay=1000;
     if(_wsReconnectTimer){clearTimeout(_wsReconnectTimer);_wsReconnectTimer=null;}
@@ -83,6 +108,7 @@ function connectWS(){
     }catch(_){}
   };
   _ws.onclose=function(){
+    if(_ws!==ws)return;        // socket vechi (înlocuit de _wsForceReconnect) — nu atinge conexiunea nouă
     _ws=null;
     if(_wsHeartbeat){clearInterval(_wsHeartbeat);_wsHeartbeat=null;}
     if(ST.connected&&!_wsReconnectTimer){
@@ -91,7 +117,7 @@ function connectWS(){
       _wsReconnectDelay=Math.min(_wsReconnectDelay*2,_wsMaxDelay);
     }
   };
-  _ws.onerror=function(){_ws.close();};
+  _ws.onerror=function(){try{ws.close();}catch(_){}};
 }
 
 function toggleConn(){
@@ -113,6 +139,11 @@ function connect(){
       document.getElementById('wr-bar').style.display='flex';
       fetchSupabaseWinRate();
       connectWS();
+      if(_wsWatchdog)clearInterval(_wsWatchdog);
+      _wsWatchdog=setInterval(function(){
+        if(!ST.connected||document.hidden)return;
+        if(!_ws||_ws.readyState>1||(Date.now()-_wsLastMsg>_WS_DEAD_MS))_wsForceReconnect();
+      },5000);
       // FIX 1: polling REST redundant când WS conectat și activ recent.
       // Skip fetch /api/football dacă WS a primit un mesaj în ultimele 60s.
       _autoIt=setInterval(function(){
@@ -131,6 +162,7 @@ function disconnect(){
   if(_wsHeartbeat){clearInterval(_wsHeartbeat);_wsHeartbeat=null;}
   _wsReconnectDelay=1000;
   clearInterval(_autoIt);
+  if(_wsWatchdog){clearInterval(_wsWatchdog);_wsWatchdog=null;}
   sessionStorage.removeItem('wasConnected');
   document.getElementById('connect-area').style.display='';
   document.getElementById('btn-conn').textContent='CONECTARE';
@@ -147,6 +179,12 @@ async function loadLive(cb){
     var r=await fetch('/api/football');
     if(!r.ok)throw new Error('HTTP '+r.status);
     var d=await r.json();
+    if(d&&d._debug&&d._debug.error){         // API-Football a dat eroare → NU înlocui/golește ecranul, marchează „VECHI"
+      _staleMark=true;updateWSState(_ws&&_ws.readyState===1?'connected':'connecting');
+      if(cb)cb(ST.ms.length>0);
+      return;
+    }
+    if(_staleMark){_staleMark=false;updateWSState(_ws&&_ws.readyState===1?'connected':'connecting');}
     var raw=Array.isArray(d.response)?d.response:(Array.isArray(d)?d:[]);
     var _ed={};ST.ms.forEach(function(m){if(m.enrichData)_ed[m.fixture&&m.fixture.id]=m.enrichData;});
     ST.ms=raw.map(function(m){m._s=calcScore(m);var e=_ed[m.fixture&&m.fixture.id];if(e)m.enrichData=e;return m;});
@@ -395,8 +433,7 @@ function renderMatches(){
   var list=document.getElementById('match-list');
 
   if(!ms.length){
-    // API returned nothing — keep existing DOM to avoid blank flash
-    if(!ST.ms.length) return;
+    // Lista goală e REALĂ (erorile API sunt filtrate în loadLive) → curăță cardurile vechi.
     list.innerHTML='<div class="empty"><div class="empty-icon">⚽</div><div class="empty-t">Niciun meci</div><div class="empty-s">Nu există meciuri pentru filtrele selectate</div></div>';
     return;
   }

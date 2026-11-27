@@ -789,14 +789,17 @@ async function scanLive10s() {
     // ── Delta broadcast — full la fiecare 5min, delta când sunt schimbări ────
     if (typeof global.wsBroadcast === 'function') {
       const now = Date.now();
+      // Full la 30s (era 5 min): un mesaj delta pierdut se auto-repară în cel mult 30s.
       const isFullUpdate = !global._lastFullBroadcast ||
-                           (now - global._lastFullBroadcast) > 5 * 60 * 1000;
+                           (now - global._lastFullBroadcast) > 30 * 1000;
 
       const changedMatches = visibleMatches.filter(m => {
         const fid = m.fixture?.id;
         if (!fid) return false;
+        // + extra (45+3→45+4) și NGP (treaptă de 2 puncte, ca să nu inundăm clienții).
         const snap = [m.goals?.home, m.goals?.away,
-                      m.fixture?.status?.elapsed, m.fixture?.status?.short].join('|');
+                      m.fixture?.status?.elapsed, m.fixture?.status?.extra, m.fixture?.status?.short,
+                      typeof m._ng === 'number' ? Math.round(m._ng / 2) : ''].join('|');
         if (_lastBroadcastSnap[fid] === snap) return false;
         _lastBroadcastSnap[fid] = snap;
         return true;
