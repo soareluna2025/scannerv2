@@ -152,6 +152,25 @@ function dpMatch(fid){
   mdOpen(p.fixture_id,p.home_id,p.away_id,null);
   var ov=document.getElementById('md-overlay'); if(ov)ov.style.zIndex='520';
 }
+// Steluță pe cartonașul din Ponturi → adaugă/scoate meciul din Favorite (același mecanism ca în Live/Pre-meci: _toggleFavCommon).
+// Datele pontului sunt convertite în formatul API-Football cerut de renderFavs.
+function toggleFavDp(fid,btn){
+  var p=null; for(var i=0;i<_dpPicks.length;i++){ if(_dpPicks[i].fixture_id==fid){p=_dpPicks[i];break;} }
+  if(!p)return;
+  var http=function(u){return (u && /^https?:/i.test(u))?u:null;};
+  var m={
+    fixture:{id:fid,date:p.kickoff||null},
+    teams:{
+      home:{id:p.home_id||null,name:p.home||'?',logo:http(p.home_logo)},
+      away:{id:p.away_id||null,name:p.away||'?',logo:http(p.away_logo)}
+    },
+    league:{id:p.league_id||null,name:p.league_name||'',flag:http(p.flag),logo:null},
+    goals:{home:0,away:0}
+  };
+  var isLive=!!(ST&&ST.ms&&ST.ms.some(function(x){return x.fixture&&x.fixture.id==fid;}));
+  var ctx=isFav(fid)?null:{market:p.market,minCota:null,cal:p.p_cal!=null?Math.round(p.p_cal*100):null};   // fără context când scoatem (altfel _toggleFavCommon doar actualizează)
+  _toggleFavCommon(fid,isLive?'live':'pre',m,null,btn,ctx);
+}
 function dpOpen(){ var ov=document.getElementById('dp-overlay'); if(!ov)return; dpRenderPage(); ov.classList.add('open'); dpPxStart(); }
 // ── Pret live Polymarket (Over 0.5, best ask in cenți) prin WebSocket REAL (wss://ws-subscriptions-clob.polymarket.com), doar citire publica.
 // REST (/api/polymarket-prices) aduce tokenurile + preturile initiale si e plasa de siguranta cand WebSocket-ul pica. Punct in coltul cardului: verde = WS merge, rosu = nu merge.
@@ -275,7 +294,10 @@ function dpRenderPage(){
     out+=_dpWsDotHtml();
     out+='<div class="wc-pont-match">'+logo(p.home_logo)+_dpEsc(p.home)+' vs '+logo(p.away_logo)+_dpEsc(p.away)+'</div>';
     out+='<div class="wc-pont-conf">'+conf+'</div>';
-    out+='<div class="wc-pont-market">Piață recomandată: <b style="color:var(--gold)">'+mk+'</b></div>';
+    var _fv=(typeof isFav==='function')&&isFav(p.fixture_id);
+    out+='<div class="wc-pont-market" style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+      +'<span>Piață recomandată: <b style="color:var(--gold)">'+mk+'</b></span>'
+      +'<button class="star-btn'+(_fv?' active':'')+'" style="margin:-8px -6px -8px 0" onclick="event.stopPropagation();toggleFavDp('+p.fixture_id+',this)">'+(_fv?'⭐':'☆')+'</button></div>';
     out+=lgRow;
     // Rând jos: stânga = butoane calendar (verde/roșu), dreapta = countdown + badge Polymarket.
     out+='<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:8px">'
