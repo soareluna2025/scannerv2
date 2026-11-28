@@ -877,8 +877,12 @@ function renderFavs(){
     }else{
       timeStr=m.fixture&&m.fixture.date?'<span style="font-size:10px;color:var(--mu)">🕐 '+new Date(m.fixture.date).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>':'';
     }
+    // λ de dinainte de meci (din pontul salvat; fallback: pontul de azi din _dpPicks pentru favoritele salvate înainte)
+    var lam=item.pickContext&&item.pickContext.lambda;
+    if(lam==null&&typeof _dpPicks!=='undefined'){for(var _i=0;_i<_dpPicks.length;_i++){if(_dpPicks[_i].fixture_id==fid){lam=_dpPicks[_i].lambda_total;break;}}}
+    var lamHtml=(lam!=null&&!isNaN(Number(lam)))?'<span style="position:absolute;top:10px;right:14px;font-size:13px;font-weight:700;color:var(--gold)">λ '+Number(lam).toFixed(2)+'</span>':'';
     var s='<div class="pm-card">';
-    s+='<div class="pm-header" style="cursor:pointer" onclick="mdOpen('+fid+','+hid+','+aid+',this)">';
+    s+='<div class="pm-header" style="cursor:pointer;position:relative" onclick="mdOpen('+fid+','+hid+','+aid+',this)">'+lamHtml;
     s+='<div class="pm-kickoff"><button class="star-btn active" onclick="event.stopPropagation();removeFav('+fid+')">⭐</button>'+flag+lg+' · '+timeStr+'</div>';
     s+='<div class="pm-teams">'+tLogo(m.teams&&m.teams.home,32)+'<span>'+hn+'</span><span style="color:var(--mu)">'+hg+' - '+ag+'</span>'+tLogo(m.teams&&m.teams.away,32)+'<span>'+an+'</span></div>';
     s+='</div>';

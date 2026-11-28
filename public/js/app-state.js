@@ -168,7 +168,7 @@ function toggleFavDp(fid,btn){
     goals:{home:0,away:0}
   };
   var isLive=!!(ST&&ST.ms&&ST.ms.some(function(x){return x.fixture&&x.fixture.id==fid;}));
-  var ctx=isFav(fid)?null:{market:p.market,minCota:null,cal:p.p_cal!=null?Math.round(p.p_cal*100):null};   // fără context când scoatem (altfel _toggleFavCommon doar actualizează)
+  var ctx=isFav(fid)?null:{market:p.market,minCota:null,cal:p.p_cal!=null?Math.round(p.p_cal*100):null,lambda:p.lambda_total!=null?Number(p.lambda_total):null};   // fără context când scoatem (altfel _toggleFavCommon doar actualizează)
   _toggleFavCommon(fid,isLive?'live':'pre',m,null,btn,ctx);
 }
 function dpOpen(){ var ov=document.getElementById('dp-overlay'); if(!ov)return; dpRenderPage(); ov.classList.add('open'); dpPxStart(); }
