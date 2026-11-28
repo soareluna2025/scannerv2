@@ -840,6 +840,24 @@ function exportFavsList(){
     window.prompt('Copierea automată nu a reușit. Ține apăsat pe text, selectează tot și apasă Copiază:',output);
   }
 }
+// Scor live pentru Preferate: ia meciul din ST.ms (conectat la LIVE) sau din /api/football (cache 25 s, când nu ești conectat).
+var _favLiveT=0;
+function _favFetchLive(){
+  if(ST.connected||Date.now()-_favLiveT<25000)return;
+  _favLiveT=Date.now();
+  fetch('/api/football').then(function(r){return r.ok?r.json():null;}).then(function(d){
+    if(!d||(d._debug&&d._debug.error))return;
+    var raw=Array.isArray(d.response)?d.response:(Array.isArray(d)?d:[]);
+    var c={};raw.forEach(function(m){if(m.fixture&&m.fixture.id)c[m.fixture.id]=m;});
+    window._favLiveCache=c;
+    var t=document.getElementById('tab-fav');
+    if(t&&t.classList.contains('active'))renderFavs();
+  }).catch(function(){});
+}
+function _favLiveOf(fid){
+  var lm=ST.ms.find(function(x){return x.fixture&&x.fixture.id===fid;});
+  return lm||(window._favLiveCache&&window._favLiveCache[fid])||null;
+}
 function renderFavs(){
   var d=loadFavs();
   var body=document.getElementById('fav-body');
@@ -848,14 +866,14 @@ function renderFavs(){
     body.innerHTML='<div class="empty"><div class="empty-icon">⭐</div><div class="empty-t">Niciun favorit</div><div class="empty-s">Apasă ⭐ pe orice meci pentru a-l salva</div></div>';
     return;
   }
+  _favFetchLive();
   var sp=body.scrollTop;
   var ec=function(v){return v==null?'#888':v>=70?'#22c55e':v>=50?'#f59e0b':'#ef4444';};
   function favCard(item){
     var m=item.m;if(!m)return '';
-    if(item.type==='live'){
-      var lm=ST.ms.find(function(x){return x.fixture&&x.fixture.id===item.fid;});
-      if(lm)m=lm;
-    }
+    var lm=_favLiveOf(item.fid);                    // meciul live (scor/minut real), indiferent cum a fost salvat
+    if(lm)m=lm;
+    var isLiveItem=!!lm||item.type==='live';
     var fid=item.fid;
     var hid=m.teams&&m.teams.home&&m.teams.home.id||0;
     var aid=m.teams&&m.teams.away&&m.teams.away.id||0;
@@ -863,11 +881,11 @@ function renderFavs(){
     var an=m.teams&&m.teams.away&&m.teams.away.name||'—';
     var lg=m.league&&m.league.name||'';
     var flag=m.league&&m.league.flag?'<img src="'+m.league.flag+'" style="width:12px;height:9px;object-fit:cover;border-radius:2px;margin-right:4px;">':'';
-    var ed=item.type==='live'?(m.enrichData||_genLiveEnrich[fid]||item.ed):(_pmEnrich[fid]||item.ed);
+    var ed=isLiveItem?(m.enrichData||_genLiveEnrich[fid]||_pmEnrich[fid]||item.ed):(_pmEnrich[fid]||item.ed);
     var hg=m.goals?m.goals.home||0:0;
     var ag=m.goals?m.goals.away||0:0;
     var timeStr='';
-    if(item.type==='live'){
+    if(isLiveItem){
       var mn=m.fixture&&m.fixture.status&&m.fixture.status.elapsed||0;
       var sh=m.fixture&&m.fixture.status&&m.fixture.status.short||'';
       var ex=m.fixture&&m.fixture.status&&m.fixture.status.extra;
@@ -896,8 +914,8 @@ function renderFavs(){
     return s;
   }
   var html='<div class="fav-header"><span class="fav-header-t">'+d.items.length+' meciuri salvate</span><div style="display:flex;gap:6px;align-items:center"><button onclick="exportFavsList()" style="background:#16a34a;color:#fff;border:0;border-radius:7px;padding:7px 9px;font-size:11px;font-weight:700">EXPORTĂ LISTA</button><button class="fav-clear-btn" onclick="clearAllFavs()">Sterge toate</button></div></div>';
-  var live=d.items.filter(function(x){return x.type==='live';});
-  var pre=d.items.filter(function(x){return x.type==='pre';});
+  var live=d.items.filter(function(x){return x.type==='live'||_favLiveOf(x.fid);});
+  var pre=d.items.filter(function(x){return x.type!=='live'&&!_favLiveOf(x.fid);});
   if(live.length){
     html+='<div class="pm-summary"><span class="pm-summary-t">⚽ LIVE ('+live.length+')</span></div>';
     html+=live.map(favCard).join('');

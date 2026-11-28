@@ -421,6 +421,8 @@ function matchStatusLabel(m){
 function renderMatches(){
   if(typeof wcRenderFeatured==='function')wcRenderFeatured();  // card featured WC sus pe LIVE
   if(typeof renderPoly==='function')renderPoly();               // tab PolyMarket (aceleași cartonașe, doar cu etichetă)
+  var _tf=document.getElementById('tab-fav');
+  if(_tf&&_tf.classList.contains('active')&&typeof renderFavs==='function')renderFavs();   // Preferate: scor/minut live la zi
   var ms=ST.ms.filter(function(m){
     if(ST.score!=='all'){
       var hg=m.goals?m.goals.home||0:0;
